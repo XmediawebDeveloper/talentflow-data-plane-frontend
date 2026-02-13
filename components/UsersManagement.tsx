@@ -234,12 +234,12 @@ const defaultPermissions: UserPermissions = {
 
 export default function UsersManagement({ currentUser, tenantId }: UsersManagementProps) {
   const dialog = useGlobalDialog();
-  const { user } = useAuth();
+  const { user, isTenantAdmin } = useAuth();
 
-  // Permission checks for CRUD operations
-  const canCreateUser = user?.permissions?.canCreateUsers ?? false;
-  const canUpdateUser = user?.permissions?.canUpdateUsers ?? false;
-  const canDeleteUser = user?.permissions?.canDeleteUsers ?? false;
+  // Permission checks for CRUD operations (bypass for tenant admin)
+  const canCreateUser = isTenantAdmin || (user?.permissions?.canCreateUsers ?? false);
+  const canUpdateUser = isTenantAdmin || (user?.permissions?.canUpdateUsers ?? false);
+  const canDeleteUser = isTenantAdmin || (user?.permissions?.canDeleteUsers ?? false);
 
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);

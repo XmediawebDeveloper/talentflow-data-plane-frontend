@@ -218,7 +218,7 @@ export default function AssessmentDetailsView({
                   <h1 className="text-2xl text-white font-semibold">
                     {assessment.jd_title || stripVersionFromTitle(assessment.title)} - Assessment
                   </h1>
-                  <VersionBadge title={assessment.title} size="md" variant="primary" />
+                  <VersionBadge version={assessment.version} size="md" variant="primary" />
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                     assessment.status === 'Active'
                       ? 'bg-gray-200/30 text-gray-100 border border-gray-300/30'
@@ -921,11 +921,11 @@ export default function AssessmentDetailsView({
                   onClick={async () => {
                     setActionLoading('export');
                     try {
-                      const blob = await assessmentService.exportResults(assessment.id, 'csv');
+                      const blob = await assessmentService.exportResults(assessment.id, 'excel');
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      a.download = `${assessment.title.replace(/[^a-z0-9]/gi, '_')}_results.csv`;
+                      a.download = `${assessment.title.replace(/[^a-z0-9]/gi, '_')}_results.xlsx`;
                       document.body.appendChild(a);
                       a.click();
                       window.URL.revokeObjectURL(url);

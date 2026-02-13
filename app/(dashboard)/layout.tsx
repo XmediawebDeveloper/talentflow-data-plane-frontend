@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
 import Header from '@/components/Header';
 import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
@@ -65,44 +65,45 @@ export default function DashboardLayout({
 
   // Initialize as undefined to show locked state until we know for sure
   const [subscriptionExpired, setSubscriptionExpired] = useState<boolean | undefined>(undefined);
+  const [accountSuspended, setAccountSuspended] = useState<boolean>(false);
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
 
-  // Initialize subscription status on mount from cache or tenant data
+  // Initialize subscription status immediately based on tenant data
   useEffect(() => {
     if (isLoading) return;
-
-    // Check localStorage for cached expired plan
-    const cachedExpiredPlan = localStorage.getItem('talentflow_expired_plan');
-    if (cachedExpiredPlan) {
-      try {
-        const data = JSON.parse(cachedExpiredPlan);
-        if (data.subscription_status === 'expired') {
-          console.log('[DASHBOARD] Found cached expired plan - locking menus');
-          setSubscriptionExpired(true);
-          return;
-        }
-      } catch (e) {
-        console.error('[DASHBOARD] Error parsing cached expired plan:', e);
-      }
-    }
 
     // Check tenant subscription status
     if (tenant?.subscription) {
       const status = tenant.subscription.status?.toLowerCase();
       const isExpired = status === 'expired' || status === 'inactive';
-      console.log('[DASHBOARD] Tenant subscription status:', status, 'isExpired:', isExpired);
-      setSubscriptionExpired(isExpired);
-    } else {
-      // No subscription data - assume not expired
-      setSubscriptionExpired(false);
+      const isSuspended = status === 'suspended';
+      console.log('[DASHBOARD] Tenant subscription status:', status, 'isExpired:', isExpired, 'isSuspended:', isSuspended);
+
+      if (isSuspended) {
+        // CRITICAL: Suspend accounts immediately - blocks all access except sign out
+        console.log('[DASHBOARD] Account SUSPENDED - blocking all access');
+        setAccountSuspended(true);
+        setSubscriptionExpired(false); // Suspended is different from expired
+      } else if (isExpired) {
+        // Immediately lock if tenant data says expired
+        console.log('[DASHBOARD] Locking menus - subscription expired');
+        setSubscriptionExpired(true);
+        setAccountSuspended(false);
+      } else if (status === 'active' || status === 'trial') {
+        // Immediately unlock if tenant says active/trial
+        console.log('[DASHBOARD] Unlocking menus - subscription active');
+        setSubscriptionExpired(false);
+        setAccountSuspended(false);
+      }
     }
   }, [isLoading, tenant]);
 
   // Listen for subscription-inactive events from API interceptor
+  // If API reports expired (even if tenant data said active), lock the menus
   useEffect(() => {
     const handleSubscriptionInactive = (event: CustomEvent<SubscriptionInactiveDetail>) => {
-      console.log('[DASHBOARD] Subscription inactive detected:', event.detail?.status);
+      console.log('[DASHBOARD] API reported subscription expired - locking menus:', event.detail?.status);
       setSubscriptionExpired(true);
     };
 
@@ -119,10 +120,21 @@ export default function DashboardLayout({
     };
   }, []);
 
+  // CRITICAL: Redirect suspended accounts to current-plan (blocking page)
+  // Suspended accounts can ONLY access current-plan page (which shows blocking UI)
+  useEffect(() => {
+    if (accountSuspended && pathname) {
+      if (pathname !== '/subscription/current-plan') {
+        console.log('[DASHBOARD] Account SUSPENDED, redirecting to current-plan from:', pathname);
+        router.push('/subscription/current-plan');
+      }
+    }
+  }, [accountSuspended, pathname, router]);
+
   // Redirect to current-plan page when subscription is expired and user is on a non-allowed page
   useEffect(() => {
-    // Only redirect if explicitly expired (not undefined/loading)
-    if (subscriptionExpired === true && pathname) {
+    // Only redirect if explicitly expired (not undefined/loading) and NOT suspended
+    if (subscriptionExpired === true && !accountSuspended && pathname) {
       const isAllowed = SUBSCRIPTION_ALLOWED_PATHS.some(path =>
         pathname === path || pathname.startsWith(path + '/')
       );
@@ -131,7 +143,7 @@ export default function DashboardLayout({
         router.push('/subscription/current-plan');
       }
     }
-  }, [subscriptionExpired, pathname, router]);
+  }, [subscriptionExpired, accountSuspended, pathname, router]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -296,7 +308,12 @@ export default function DashboardLayout({
           <SearchParamsErrorHandler />
         </Suspense>
         <div className="flex h-screen bg-gray-50">
-          <Sidebar user={user || undefined} tenant={tenant || undefined} subscriptionExpired={subscriptionExpired} />
+          <Sidebar
+            user={user || undefined}
+            tenant={tenant || undefined}
+            subscriptionExpired={subscriptionExpired}
+            accountSuspended={accountSuspended}
+          />
 
           <div className="flex-1 flex flex-col overflow-hidden">
             <Header

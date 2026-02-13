@@ -147,9 +147,9 @@ export default function ResumeScoringPage({
 }: ResumeScoringPageProps) {
   const router = useRouter();
 
-  // ✅ RBAC: Get user permissions
-  const { user } = useAuth();
-  const canRunScoring = user?.permissions?.canRunScoring ?? false;
+  // ✅ RBAC: Get user permissions (bypass for tenant admin)
+  const { user, isTenantAdmin } = useAuth();
+  const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
 
   // Use persistent scoring progress context
   const {

@@ -644,15 +644,29 @@ export const candidateService = {
     const browser = getBrowserInfo();
 
     try {
+      // SECURITY: Get verified email from sessionStorage (stored during identity verification)
+      const verifiedEmail = sessionStorage.getItem(`verified_email_${token}`);
+
+      if (!verifiedEmail) {
+        console.warn('[SECURITY] ⚠️ No verified email found - identity verification may have been skipped');
+      } else {
+        console.log('[SECURITY] ✅ Using verified email for start assessment');
+      }
+
       console.log('[CANDIDATE SERVICE] Starting assessment', {
         browser: browser.name,
         timestamp: new Date().toISOString(),
-        tokenPrefix: token.substring(0, 8)
+        tokenPrefix: token.substring(0, 8),
+        hasVerifiedEmail: !!verifiedEmail
       });
 
       const response = await retryApiCall(() =>
         candidateApi.post<StartAssessmentResponse>(
-          `/candidate/assessment/${token}/start`
+          `/candidate/assessment/${token}/start`,
+          {
+            candidate_email: verifiedEmail,  // SECURITY: Send verified email for validation
+            consent_accepted: true
+          }
         )
       );
 

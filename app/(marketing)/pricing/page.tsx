@@ -506,29 +506,39 @@ export default function PricingPage() {
         )}
 
         {/* Billing Toggle - No common discount, each plan shows its own */}
-        <div className="flex items-center justify-center gap-4 mb-16">
-          <span className={`text-lg ${!isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
-            Monthly
-          </span>
-          <button
-            onClick={() => setIsYearly(!isYearly)}
-            className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
-              isYearly
-                ? "bg-gray-800"
-                : "bg-gray-300 dark:bg-gray-600"
-            }`}
-            aria-label="Toggle billing period"
-          >
-            <span
-              className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                isYearly ? "translate-x-6" : "translate-x-0"
-              }`}
-            />
-          </button>
-          <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
-            Yearly
-          </span>
-        </div>
+        {(() => {
+          // Check if toggle should be disabled
+          const hasAnyMonthly = plans.some(plan => plan.monthlyPlanId || plan.monthlyPrice);
+          const hasAnyAnnual = plans.some(plan => plan.annualPlanId || plan.yearlyPrice);
+          const shouldDisableToggle = !hasAnyMonthly || !hasAnyAnnual;
+
+          return (
+            <div className="flex items-center justify-center gap-4 mb-16">
+              <span className={`text-lg ${!isYearly ? "text-gray-900 dark:text-white font-medium" : shouldDisableToggle ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400"}`}>
+                Monthly
+              </span>
+              <button
+                onClick={() => !shouldDisableToggle && setIsYearly(!isYearly)}
+                disabled={shouldDisableToggle}
+                className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none ${
+                  shouldDisableToggle
+                    ? "bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-50"
+                    : "focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 " + (isYearly ? "bg-gray-800" : "bg-gray-300 dark:bg-gray-600")
+                }`}
+                aria-label="Toggle billing period"
+              >
+                <span
+                  className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                    isYearly ? "translate-x-6" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : shouldDisableToggle ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400"}`}>
+                Yearly
+              </span>
+            </div>
+          );
+        })()}
 
         {/* Pricing Cards - Interactive Hover Design */}
         {(() => {
@@ -587,10 +597,10 @@ export default function PricingPage() {
 
           return (
             <div
-              className="relative max-w-6xl mx-auto"
+              className="relative max-w-[1800px] mx-auto px-6"
               onMouseLeave={() => setHoveredPlan(null)}
             >
-              <div className="relative flex flex-col lg:flex-row gap-6 items-stretch justify-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
                 {sortedPlans.map((plan) => {
                   const isTrialPlan = plan.id === 'free-trial';
                   const isHovered = hoveredPlan === plan.id;
@@ -601,14 +611,12 @@ export default function PricingPage() {
                   return (
                     <div
                       key={plan.id}
-                      className="relative flex-1"
+                      className="relative w-full"
                       onMouseEnter={() => setHoveredPlan(plan.id)}
                       style={{
-                        minWidth: '280px',
-                        maxWidth: '380px',
                         transition: 'all 0.3s ease-out',
-                        opacity: hasHoveredPlan && !isHovered ? 0.5 : 1,
-                        transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
+                        opacity: hasHoveredPlan && !isHovered ? 0.7 : 1,
+                        transform: isHovered ? 'translateY(-4px) scale(1.02)' : 'translateY(0) scale(1)',
                       }}
                     >
                       <Card
@@ -791,14 +799,46 @@ export default function PricingPage() {
                         <div className="flex-grow" />
 
                         {/* CTA Button */}
-                        <Link
-                          prefetch={false}
-                          href={isTrialPlan
-                            ? "/signup?plan=free_trial"
-                            : ((plan.monthlyPrice || plan.yearlyPrice)
-                                ? (() => {
-                                    const hasAnnual = !!plan.annualPlanId;
-                                    const hasMonthly = !!plan.monthlyPlanId;
+                        {(() => {
+                          // Check if selected billing option is available for this plan
+                          const hasAnnual = !!plan.annualPlanId || !!plan.yearlyPrice;
+                          const hasMonthly = !!plan.monthlyPlanId || !!plan.monthlyPrice;
+                          const isDisabled = !isTrialPlan && (
+                            (isYearly && !hasAnnual) || (!isYearly && !hasMonthly)
+                          );
+
+                          if (isDisabled) {
+                            return (
+                              <button
+                                disabled
+                                className="block w-full py-3 rounded-lg font-medium text-center transition-all duration-300 ease-out bg-gray-300 text-gray-500 cursor-not-allowed opacity-60"
+                              >
+                                Not Available
+                              </button>
+                            );
+                          }
+
+                          // Check if this is a contact sales plan (no pricing)
+                          const isContactSales = !isTrialPlan && !plan.monthlyPrice && !plan.yearlyPrice;
+
+                          if (isContactSales) {
+                            return (
+                              <Link
+                                prefetch={false}
+                                href="/contact"
+                                className="block w-full py-3 rounded-lg font-medium text-center border-2 border-gray-700 text-gray-700 dark:text-white dark:border-gray-400 hover:bg-gray-700 hover:text-white dark:hover:bg-gray-600 transition-all duration-300 ease-out"
+                              >
+                                Contact Sales
+                              </Link>
+                            );
+                          }
+
+                          return (
+                            <Link
+                              prefetch={false}
+                              href={isTrialPlan
+                                ? "/signup?plan=free_trial"
+                                : (() => {
                                     let actualPlanId: string;
                                     let actualBilling: string;
 
@@ -819,16 +859,17 @@ export default function PricingPage() {
                                       actualBilling = isYearly ? 'ANNUAL' : 'MONTHLY';
                                     }
                                     return `/signup?plan=${encodePlanId(actualPlanId)}&billing=${actualBilling}`;
-                                  })()
-                                : "/contact")}
-                          className={`
-                            block w-full py-3 rounded-lg font-medium text-center text-white
-                            transition-all duration-300 ease-out
-                            ${tierStyle.button}
-                          `}
-                        >
-                          {isTrialPlan ? 'Start Free Trial' : (plan.basePrice ? 'Get Started' : 'Contact Sales')}
-                        </Link>
+                                  })()}
+                              className={`
+                                block w-full py-3 rounded-lg font-medium text-center text-white
+                                transition-all duration-300 ease-out
+                                ${tierStyle.button}
+                              `}
+                            >
+                              {isTrialPlan ? 'Start Free Trial' : 'Get Started'}
+                            </Link>
+                          );
+                        })()}
                       </Card>
                     </div>
                   );
