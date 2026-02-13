@@ -65,19 +65,12 @@ export default function DashboardLayout({
 
   // Initialize as undefined to show locked state until we know for sure
   const [subscriptionExpired, setSubscriptionExpired] = useState<boolean | undefined>(undefined);
-  const unlockTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
 
-  // Initialize subscription status - keep locked until proven active
+  // Initialize subscription status immediately based on tenant data
   useEffect(() => {
     if (isLoading) return;
-
-    // Clear any existing timer
-    if (unlockTimerRef.current) {
-      clearTimeout(unlockTimerRef.current);
-      unlockTimerRef.current = null;
-    }
 
     // Check tenant subscription status
     if (tenant?.subscription) {
@@ -87,38 +80,21 @@ export default function DashboardLayout({
 
       if (isExpired) {
         // Immediately lock if tenant data says expired
+        console.log('[DASHBOARD] Locking menus - subscription expired');
         setSubscriptionExpired(true);
-      } else if (status === 'active') {
-        // If tenant says active, wait for API verification before unlocking
-        // Set a timer - if no SUBSCRIPTION_INACTIVE_EVENT fires within 2s, unlock menus
-        unlockTimerRef.current = setTimeout(() => {
-          console.log('[DASHBOARD] No subscription errors detected - unlocking menus');
-          setSubscriptionExpired(false);
-          unlockTimerRef.current = null;
-        }, 2000);
-
-        return () => {
-          if (unlockTimerRef.current) {
-            clearTimeout(unlockTimerRef.current);
-            unlockTimerRef.current = null;
-          }
-        };
+      } else if (status === 'active' || status === 'trial') {
+        // Immediately unlock if tenant says active/trial
+        console.log('[DASHBOARD] Unlocking menus - subscription active');
+        setSubscriptionExpired(false);
       }
     }
   }, [isLoading, tenant]);
 
   // Listen for subscription-inactive events from API interceptor
+  // If API reports expired (even if tenant data said active), lock the menus
   useEffect(() => {
     const handleSubscriptionInactive = (event: CustomEvent<SubscriptionInactiveDetail>) => {
-      console.log('[DASHBOARD] Subscription inactive detected:', event.detail?.status);
-
-      // Clear unlock timer if it exists (prevent unlocking after error)
-      if (unlockTimerRef.current) {
-        clearTimeout(unlockTimerRef.current);
-        unlockTimerRef.current = null;
-        console.log('[DASHBOARD] Cancelled unlock timer - subscription is expired');
-      }
-
+      console.log('[DASHBOARD] API reported subscription expired - locking menus:', event.detail?.status);
       setSubscriptionExpired(true);
     };
 
