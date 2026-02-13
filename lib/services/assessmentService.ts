@@ -79,6 +79,8 @@ export interface AssessmentListResponse {
 export interface InvitationCreate {
   candidate_name: string;
   candidate_email: string;
+  candidate_phone?: string;  // Optional phone number
+  invite_source?: string;  // Source: "Resume Scoring", "JD", "Assessment", "Internal DB", "Manual"
   resume_id?: string;
   custom_message?: string;
   expiry_days?: number;
@@ -91,6 +93,8 @@ export interface InvitationResponse {
   assessment_title: string;
   candidate_name: string;
   candidate_email: string;
+  candidate_phone?: string;
+  invite_source?: string;
   resume_id?: string;
   invitation_token: string;
   invitation_link?: string;
@@ -658,7 +662,7 @@ export const assessmentService = {
    */
   async exportResults(
     assessmentId: string,
-    format: ExportFormat = 'csv',
+    format: ExportFormat = 'excel',
     includeDetails: boolean = false,
     columns?: string[] // Pass enabled columns to backend
   ): Promise<Blob> {

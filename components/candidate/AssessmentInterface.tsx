@@ -22,7 +22,10 @@ import {
   Lock,
   Save,
   Monitor,
-  Loader2
+  Loader2,
+  WifiOff,
+  Wifi,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,6 +37,8 @@ import {
 import { HRQuestionView } from './questions/HRQuestionView';
 import { TechnicalQuestionView } from './questions/TechnicalQuestionView';
 import { CodingQuestionView } from './questions/CodingQuestionView';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useRetryQueue } from '@/hooks/useRetryQueue';
 
 interface Round {
   round_type: string;
@@ -119,8 +124,14 @@ export function AssessmentInterface({
   // Auto-save state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
-  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'offline' | 'retrying'>('idle');
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Network status and retry queue
+  const { isOnline, isSlowConnection, connectionType } = useNetworkStatus();
+  const { queueSize, isProcessing, addToQueue, processQueue } = useRetryQueue();
+  const [showNetworkBanner, setShowNetworkBanner] = useState(false);
+  const [lastSaveError, setLastSaveError] = useState<string | null>(null);
 
   // Global assessment timer (30 minutes)
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
@@ -195,7 +206,7 @@ export function AssessmentInterface({
 
       try {
         // Use the saveDraft method which sets is_draft: true automatically
-        await candidateService.saveDraft(token, currentQuestion.question_id, {
+        const response = await candidateService.saveDraft(token, currentQuestion.question_id, {
           text_response: answer.text_response,
           selected_options: answer.selected_options,
           code_submission: answer.code_submission,
@@ -215,19 +226,70 @@ export function AssessmentInterface({
 
         setLastAutoSaveTime(new Date());
         setAutoSaveStatus('saved');
+        setLastSaveError(null);
         console.log('[AUTO-SAVE] ✅ Draft saved successfully');
 
         // Reset status to idle after 2 seconds
         setTimeout(() => {
           setAutoSaveStatus('idle');
         }, 2000);
-      } catch (error) {
+      } catch (error: any) {
         console.error('[AUTO-SAVE] ❌ Failed to save draft:', error);
-        setAutoSaveStatus('error');
-        // Reset to idle after 3 seconds
-        setTimeout(() => {
-          setAutoSaveStatus('idle');
-        }, 3000);
+
+        // Check if it's a network error or time expired
+        const isTimeExpired = error?.response?.data?.detail?.error === 'TIME_EXPIRED';
+        const isNetworkError = !navigator.onLine || error?.code === 'ECONNABORTED' || error?.message?.includes('Network Error');
+
+        if (isTimeExpired) {
+          // Time expired - don't retry, just complete
+          console.log('[AUTO-SAVE] Time expired, triggering auto-complete');
+          setAutoSaveStatus('error');
+          setLastSaveError('Assessment time expired');
+          setTimeout(() => onComplete(), 1000);
+        } else if (isNetworkError) {
+          // Network error - queue for retry
+          console.log('[AUTO-SAVE] Network error, adding to retry queue');
+          setAutoSaveStatus('offline');
+          setLastSaveError('Connection lost. Will retry when online.');
+
+          // Capture current answer state for retry
+          const currentAnswer = { ...answer };
+          const currentQuestionId = currentQuestion.question_id;
+
+          addToQueue(
+            async () => {
+              await candidateService.saveDraft(token, currentQuestionId, {
+                text_response: currentAnswer.text_response,
+                selected_options: currentAnswer.selected_options,
+                code_submission: currentAnswer.code_submission,
+                language: currentAnswer.language,
+                time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
+              });
+            },
+            {
+              maxRetries: 3,
+              onSuccess: () => {
+                console.log('[RETRY-QUEUE] ✅ Queued save succeeded');
+                setAutoSaveStatus('saved');
+                setLastSaveError(null);
+                setTimeout(() => setAutoSaveStatus('idle'), 2000);
+              },
+              onFailure: (err) => {
+                console.error('[RETRY-QUEUE] ❌ Queued save failed after retries:', err);
+                setAutoSaveStatus('error');
+                setLastSaveError('Failed to save. Your answer is preserved locally.');
+              },
+              metadata: { questionNumber: currentQuestion.question_number }
+            }
+          );
+        } else {
+          // Other error - show error but don't queue
+          setAutoSaveStatus('error');
+          setLastSaveError(error?.response?.data?.detail?.message || 'Failed to save');
+          setTimeout(() => {
+            setAutoSaveStatus('idle');
+          }, 3000);
+        }
       } finally {
         setIsAutoSaving(false);
       }
@@ -249,6 +311,28 @@ export function AssessmentInterface({
     isAutoSaving,
     questionStartTime
   ]);
+
+  // 🌐 NETWORK STATUS: Monitor connection and retry queued requests
+  useEffect(() => {
+    if (!isOnline) {
+      console.log('[NETWORK] Connection lost - showing offline banner');
+      setShowNetworkBanner(true);
+      setAutoSaveStatus('offline');
+    } else {
+      console.log('[NETWORK] Connection restored - processing retry queue');
+      setShowNetworkBanner(false);
+
+      // Auto-retry queued requests when connection is restored
+      if (queueSize > 0) {
+        setAutoSaveStatus('retrying');
+        processQueue().then(() => {
+          if (queueSize === 0) {
+            setAutoSaveStatus('idle');
+          }
+        });
+      }
+    }
+  }, [isOnline, queueSize, processQueue]);
 
   // 🛡️ PROCTORING: Force Fullscreen on Start
   const enterFullscreen = async () => {
@@ -698,6 +782,7 @@ export function AssessmentInterface({
   const handleSubmitAndLock = async () => {
     if (isSubmitting || isCurrentAnswerLocked) return;
     setIsSubmitting(true);
+    setLastSaveError(null);
 
     try {
       await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
@@ -708,8 +793,25 @@ export function AssessmentInterface({
         newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: true });
         return newMap;
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to submit answer:', error);
+
+      // Check error type and show appropriate message
+      const isTimeExpired = error?.response?.data?.detail?.error === 'TIME_EXPIRED';
+      const isNetworkError = !navigator.onLine || error?.code === 'ECONNABORTED' || error?.message?.includes('Network Error');
+
+      if (isTimeExpired) {
+        setLastSaveError('Assessment time has expired. Your progress has been saved.');
+        alert('Assessment time has expired. The assessment will be auto-submitted.');
+        setTimeout(() => onComplete(), 1000);
+      } else if (isNetworkError) {
+        setLastSaveError('No internet connection. Your answer is saved locally and will be submitted when connection is restored.');
+        setAutoSaveStatus('offline');
+      } else {
+        const errorMsg = error?.response?.data?.detail?.message || error?.message || 'Failed to submit answer. Please try again.';
+        setLastSaveError(errorMsg);
+        alert(`Failed to submit answer: ${errorMsg}`);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1134,6 +1236,33 @@ export function AssessmentInterface({
 
       {/* Sticky Header Container */}
       <div className="sticky top-0 z-50">
+        {/* Network Status Banner */}
+        {!isOnline && (
+          <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <WifiOff className="w-4 h-4" />
+              <span className="text-sm font-medium">
+                No internet connection. Your answers are saved locally and will sync when connection is restored.
+              </span>
+            </div>
+            {queueSize > 0 && (
+              <span className="text-xs bg-white/20 px-2 py-1 rounded">
+                {queueSize} pending {queueSize === 1 ? 'save' : 'saves'}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Connection Restored Banner */}
+        {isOnline && queueSize > 0 && isProcessing && (
+          <div className="bg-blue-500 text-white px-4 py-2 flex items-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span className="text-sm font-medium">
+              Connection restored. Syncing {queueSize} pending {queueSize === 1 ? 'save' : 'saves'}...
+            </span>
+          </div>
+        )}
+
         {/* Main Header */}
         <header className="bg-white border-b border-gray-200 px-4 py-3">
           <div className="w-full px-2 lg:px-6 flex items-center justify-between">
@@ -1197,7 +1326,11 @@ export function AssessmentInterface({
 
               {/* Auto-Save Indicator */}
               {autoSaveStatus !== 'idle' && (
-                <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
+                <div className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${
+                  autoSaveStatus === 'offline' ? 'bg-amber-50 border border-amber-200' :
+                  autoSaveStatus === 'error' ? 'bg-red-50 border border-red-200' :
+                  'bg-gray-50 border border-gray-200'
+                }`}>
                   {autoSaveStatus === 'saving' && (
                     <>
                       <Loader2 className="w-3.5 h-3.5 text-gray-500 animate-spin" />
@@ -1208,6 +1341,18 @@ export function AssessmentInterface({
                     <>
                       <CheckCircle className="w-3.5 h-3.5 text-green-600" />
                       <span className="text-xs text-green-700">Saved</span>
+                    </>
+                  )}
+                  {autoSaveStatus === 'offline' && (
+                    <>
+                      <WifiOff className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="text-xs text-amber-700">Offline - will retry</span>
+                    </>
+                  )}
+                  {autoSaveStatus === 'retrying' && (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />
+                      <span className="text-xs text-blue-600">Retrying ({queueSize})...</span>
                     </>
                   )}
                   {autoSaveStatus === 'error' && (

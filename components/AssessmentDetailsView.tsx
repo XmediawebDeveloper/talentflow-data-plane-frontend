@@ -921,11 +921,11 @@ export default function AssessmentDetailsView({
                   onClick={async () => {
                     setActionLoading('export');
                     try {
-                      const blob = await assessmentService.exportResults(assessment.id, 'csv');
+                      const blob = await assessmentService.exportResults(assessment.id, 'excel');
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      a.download = `${assessment.title.replace(/[^a-z0-9]/gi, '_')}_results.csv`;
+                      a.download = `${assessment.title.replace(/[^a-z0-9]/gi, '_')}_results.xlsx`;
                       document.body.appendChild(a);
                       a.click();
                       window.URL.revokeObjectURL(url);
