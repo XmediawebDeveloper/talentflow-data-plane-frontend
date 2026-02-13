@@ -597,10 +597,10 @@ export default function PricingPage() {
 
           return (
             <div
-              className="relative max-w-6xl mx-auto"
+              className="relative max-w-[1600px] mx-auto px-4"
               onMouseLeave={() => setHoveredPlan(null)}
             >
-              <div className="relative flex flex-col lg:flex-row gap-6 items-stretch justify-center">
+              <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 auto-rows-fr">
                 {sortedPlans.map((plan) => {
                   const isTrialPlan = plan.id === 'free-trial';
                   const isHovered = hoveredPlan === plan.id;
