@@ -173,20 +173,14 @@ export default function ScoredResumesTable({
     // Score range filter
     const matchesScore = resume.scorePercentage >= filterScoreMin && resume.scorePercentage <= filterScoreMax;
 
-    // Date range filter - compare date portions in IST timezone
+    // Date range filter - compare date portions in IST (UTC+5:30)
     let matchesDate = true;
     if (filterDateFrom || filterDateTo) {
-      // Convert scored date to IST YYYY-MM-DD using Intl for reliable cross-browser output
       const d = new Date(resume.scoredDate);
       if (!isNaN(d.getTime())) {
-        const parts = new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'Asia/Kolkata',
-          year: 'numeric', month: '2-digit', day: '2-digit'
-        }).formatToParts(d);
-        const y = parts.find(p => p.type === 'year')?.value ?? '';
-        const m = parts.find(p => p.type === 'month')?.value ?? '';
-        const dd = parts.find(p => p.type === 'day')?.value ?? '';
-        const scoredDateIST = `${y}-${m}-${dd}`; // guaranteed YYYY-MM-DD
+        // Shift UTC to IST (+5h30m) then extract YYYY-MM-DD from ISO string
+        const istDate = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+        const scoredDateIST = istDate.toISOString().slice(0, 10);
         if (filterDateFrom) {
           matchesDate = matchesDate && scoredDateIST >= filterDateFrom;
         }
