@@ -506,29 +506,39 @@ export default function PricingPage() {
         )}
 
         {/* Billing Toggle - No common discount, each plan shows its own */}
-        <div className="flex items-center justify-center gap-4 mb-16">
-          <span className={`text-lg ${!isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
-            Monthly
-          </span>
-          <button
-            onClick={() => setIsYearly(!isYearly)}
-            className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 ${
-              isYearly
-                ? "bg-gray-800"
-                : "bg-gray-300 dark:bg-gray-600"
-            }`}
-            aria-label="Toggle billing period"
-          >
-            <span
-              className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
-                isYearly ? "translate-x-6" : "translate-x-0"
-              }`}
-            />
-          </button>
-          <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : "text-gray-500 dark:text-gray-400"}`}>
-            Yearly
-          </span>
-        </div>
+        {(() => {
+          // Check if toggle should be disabled
+          const hasAnyMonthly = plans.some(plan => plan.monthlyPlanId || plan.monthlyPrice);
+          const hasAnyAnnual = plans.some(plan => plan.annualPlanId || plan.yearlyPrice);
+          const shouldDisableToggle = !hasAnyMonthly || !hasAnyAnnual;
+
+          return (
+            <div className="flex items-center justify-center gap-4 mb-16">
+              <span className={`text-lg ${!isYearly ? "text-gray-900 dark:text-white font-medium" : shouldDisableToggle ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400"}`}>
+                Monthly
+              </span>
+              <button
+                onClick={() => !shouldDisableToggle && setIsYearly(!isYearly)}
+                disabled={shouldDisableToggle}
+                className={`relative w-14 h-8 rounded-full transition-colors duration-200 focus:outline-none ${
+                  shouldDisableToggle
+                    ? "bg-gray-200 dark:bg-gray-700 cursor-not-allowed opacity-50"
+                    : "focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 " + (isYearly ? "bg-gray-800" : "bg-gray-300 dark:bg-gray-600")
+                }`}
+                aria-label="Toggle billing period"
+              >
+                <span
+                  className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                    isYearly ? "translate-x-6" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <span className={`text-lg ${isYearly ? "text-gray-900 dark:text-white font-medium" : shouldDisableToggle ? "text-gray-400 dark:text-gray-500" : "text-gray-500 dark:text-gray-400"}`}>
+                Yearly
+              </span>
+            </div>
+          );
+        })()}
 
         {/* Pricing Cards - Interactive Hover Design */}
         {(() => {
