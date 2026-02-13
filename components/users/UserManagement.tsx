@@ -1919,7 +1919,7 @@ export default function UserManagement() {
                 <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Last Login
                 </th>
-                <th className="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -1975,16 +1975,33 @@ export default function UserManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <button
-                      onClick={() => handleToggleActive(user)}
-                      className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                        user.is_active
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {user.is_active ? 'Active' : 'Inactive'}
-                    </button>
+                    {/* Toggle Switch for Active/Inactive */}
+                    {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleToggleActive(user)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                            user.is_active ? 'bg-green-500' : 'bg-gray-300'
+                          }`}
+                          title={user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              user.is_active ? 'translate-x-6' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                        <span className={`text-xs font-medium ${user.is_active ? 'text-green-700' : 'text-gray-500'}`}>
+                          {user.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+                        user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {user.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -1993,9 +2010,9 @@ export default function UserManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center justify-end gap-2">
-                      {/* RBAC06: Feature Permissions button - Hide ONLY for tenant admins (Super Admin with all permissions) */}
-                      {user.role.toLowerCase() !== 'tenant_admin' && (
+                    <div className="flex items-center justify-center gap-2">
+                      {/* Feature Permissions button - HIDDEN for now as requested */}
+                      {/* {user.role.toLowerCase() !== 'tenant_admin' && (
                         <button
                           onClick={() => setFeaturePermissionUser(user)}
                           className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -2003,27 +2020,21 @@ export default function UserManagement() {
                         >
                           <Settings2 className="w-4 h-4" />
                         </button>
-                      )}
+                      )} */}
 
-                      {/* Hide Edit button ONLY for tenant admins and current user */}
+                      {/* Edit button - Disabled when user is inactive */}
                       {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
                         <button
-                          onClick={() => openEditModal(user)}
-                          className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                          title="Edit User"
+                          onClick={() => user.is_active && openEditModal(user)}
+                          disabled={!user.is_active}
+                          className={`p-2 rounded-lg transition-colors ${
+                            user.is_active
+                              ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100 cursor-pointer'
+                              : 'text-gray-300 cursor-not-allowed'
+                          }`}
+                          title={user.is_active ? 'Edit User' : 'Cannot edit inactive user'}
                         >
                           <Pencil className="w-4 h-4" />
-                        </button>
-                      )}
-
-                      {/* Hide Deactivate button ONLY for tenant admins and current user */}
-                      {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
-                        <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Deactivate User"
-                        >
-                          <Ban className="w-4 h-4" />
                         </button>
                       )}
                     </div>

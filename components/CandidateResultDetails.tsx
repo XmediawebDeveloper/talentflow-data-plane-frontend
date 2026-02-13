@@ -237,11 +237,11 @@ export default function CandidateResultDetails({
             <button
               onClick={async () => {
                 try {
-                  const blob = await assessmentService.exportResults(assessmentId, 'csv', true);
+                  const blob = await assessmentService.exportResults(assessmentId, 'excel', true);
                   const url = window.URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results_detailed.csv`;
+                  a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results_detailed.xlsx`;
                   document.body.appendChild(a);
                   a.click();
                   window.URL.revokeObjectURL(url);

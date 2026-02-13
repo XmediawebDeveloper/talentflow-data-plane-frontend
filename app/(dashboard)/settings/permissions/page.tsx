@@ -289,7 +289,7 @@ export default function PermissionsPage() {
                 >
                   <div className="flex items-center justify-between">
                     <p className="font-medium text-gray-900">{role.name}</p>
-                    {role.is_system && (
+                    {(role.is_system || role.code === 'recruiter') && (
                       <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">System</span>
                     )}
                   </div>
@@ -313,7 +313,7 @@ export default function PermissionsPage() {
                     <p className="text-sm text-gray-500">{selectedRole.description || 'No description'}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {!selectedRole.is_system && !isEditing && (
+                    {!selectedRole.is_system && !isEditing && selectedRole.code !== 'recruiter' && (
                       <button
                         onClick={startEditing}
                         className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
@@ -354,7 +354,7 @@ export default function PermissionsPage() {
                   </div>
                 </div>
 
-                {selectedRole.is_system && (
+                {(selectedRole.is_system || selectedRole.code === 'recruiter') && (
                   <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
                     System roles cannot be edited. They have predefined permissions.
                   </div>
@@ -383,7 +383,7 @@ export default function PermissionsPage() {
                                 <p className="font-medium text-gray-900 text-sm">{permission.name}</p>
                                 <p className="text-xs text-gray-500">{permission.code}</p>
                               </div>
-                              {isEditing && !selectedRole.is_system ? (
+                              {isEditing && !selectedRole.is_system && selectedRole.code !== 'recruiter' ? (
                                 <button
                                   onClick={() => togglePermission(permission.id)}
                                   className={`w-10 h-6 rounded-full transition-colors ${
