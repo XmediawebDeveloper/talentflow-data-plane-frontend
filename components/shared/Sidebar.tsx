@@ -49,6 +49,7 @@ interface SidebarProps {
   user?: User;
   tenant?: Tenant;
   subscriptionExpired?: boolean | undefined;  // undefined = loading/unknown (default to locked)
+  accountSuspended?: boolean;  // true = account suspended, block all navigation
 }
 
 // Paths allowed even when subscription is expired
@@ -75,7 +76,7 @@ interface NavSection {
   adminOnly?: boolean;
 }
 
-export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarProps) {
+export default function Sidebar({ user, tenant, subscriptionExpired, accountSuspended }: SidebarProps) {
   const pathname = usePathname();
   const [expandedSections, setExpandedSections] = useState<string[]>([
     'administration', 'recruitment', 'resume-management', 'evaluation',
@@ -436,6 +437,25 @@ export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarPr
             {/* Section Items */}
             <div className="space-y-0.5">
               {section.items.map((item) => {
+                // CRITICAL: Suspended accounts can ONLY access current-plan page
+                // Suspended blocks ALL navigation except current-plan
+                if (accountSuspended) {
+                  const isCurrentPlanPage = item.href === '/subscription/current-plan';
+                  if (!isCurrentPlanPage) {
+                    return (
+                      <div
+                        key={item.id}
+                        className="w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm text-red-400 cursor-not-allowed opacity-40"
+                        style={{ width: 'calc(100% - 16px)' }}
+                        title="Account suspended - Contact support for assistance"
+                      >
+                        <item.icon className="w-4 h-4 flex-shrink-0 text-red-300" />
+                        <span>{item.label}</span>
+                      </div>
+                    );
+                  }
+                }
+
                 // Lock menus if subscriptionExpired is true OR undefined (loading/unknown)
                 // Only unlock if explicitly false
                 const isItemAllowed = subscriptionExpired === false || SUBSCRIPTION_ALLOWED_PATHS.includes(item.href || '');
