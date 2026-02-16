@@ -147,13 +147,82 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     ));
   };
 
+  // Export format modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStep, setExportStep] = useState<'format' | 'scope'>('format');
+  const [selectedFormat, setSelectedFormat] = useState<'csv' | 'excel'>('excel');
+
   const handleExportExcel = () => {
-    console.log('Exporting to Excel:', {
-      results: selectedResults.length > 0 ? selectedResults : filteredResults.map(r => r.id),
-      columns: enabledColumns.map(c => c.id),
-      filters: { filterPassFail, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo }
-    });
-    toast.info(`Exporting ${selectedResults.length > 0 ? selectedResults.length : filteredResults.length} assessment results to Excel with ${enabledColumns.length} columns`);
+    setShowExportModal(true);
+  };
+
+  // Handle format selection - move to scope selection
+  const handleFormatSelect = (format: 'csv' | 'excel') => {
+    setSelectedFormat(format);
+    setExportStep('scope');
+  };
+
+  // Export current page only
+  const exportCurrentPage = async () => {
+    try {
+      const assessmentId = jobId;
+      const blob = await assessmentService.exportResults(
+        assessmentId,
+        selectedFormat,
+        false,
+        enabledColumns.map(c => c.id)
+      );
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
+      link.download = `${jobTitle.replace(/\s+/g, '_')}_CurrentPage_${new Date().toISOString().slice(0, 10)}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
+      toast.success(`Current page exported to ${formatName} successfully!`);
+      setShowExportModal(false);
+      setExportStep('format');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export results. Please try again.');
+    }
+  };
+
+  // Export all filtered results
+  const exportAllFiltered = async () => {
+    try {
+      const assessmentId = jobId;
+      const blob = await assessmentService.exportResults(
+        assessmentId,
+        selectedFormat,
+        false,
+        enabledColumns.map(c => c.id)
+      );
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
+      link.download = `${jobTitle.replace(/\s+/g, '_')}_AllResults_${new Date().toISOString().slice(0, 10)}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      const count = selectedResults.length > 0 ? selectedResults.length : filteredResults.length;
+      const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
+      toast.success(`All ${count} filtered results exported to ${formatName} successfully!`);
+      setShowExportModal(false);
+      setExportStep('format');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Failed to export results. Please try again.');
+    }
   };
 
   // AS-25: Individual PDF download
@@ -862,6 +931,157 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             >
               Clear selection
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Export Format & Scope Selection Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            {/* Step 1: Format Selection */}
+            {exportStep === 'format' && (
+              <>
+                <div className="flex items-center justify-between p-5 border-b border-gray-200">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Export Assessment Results</h3>
+                    <p className="text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowExportModal(false);
+                      setExportStep('format');
+                    }}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-5">
+                  <p className="text-sm text-gray-600 mb-4">Choose export format:</p>
+
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => handleFormatSelect('csv')}
+                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                    >
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                        <FileDown className="w-6 h-6 text-green-700" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <div className="font-medium text-gray-900">CSV Format</div>
+                        <div className="text-sm text-gray-500">Compatible with Excel, Google Sheets, and most spreadsheet apps</div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => handleFormatSelect('excel')}
+                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                    >
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                        <FileDown className="w-6 h-6 text-blue-700" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <div className="font-medium text-gray-900">Excel Format (XLSX)</div>
+                        <div className="text-sm text-gray-500">Native Excel format with better formatting and compatibility</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      setShowExportModal(false);
+                      setExportStep('format');
+                    }}
+                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 2: Scope Selection */}
+            {exportStep === 'scope' && (
+              <>
+                <div className="flex items-center justify-between p-5 border-b border-gray-200">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Export Scope</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Step 2 of 2: Choose what to export ({selectedFormat === 'csv' ? 'CSV' : 'Excel'})
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowExportModal(false);
+                      setExportStep('format');
+                    }}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-5">
+                  <p className="text-sm text-gray-600 mb-4">Select export scope:</p>
+
+                  <div className="space-y-3">
+                    {/* Current Page Option */}
+                    <button
+                      onClick={exportCurrentPage}
+                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                    >
+                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                        <FileDown className="w-6 h-6 text-purple-700" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <div className="font-medium text-gray-900">Current Page</div>
+                        <div className="text-sm text-gray-500">
+                          Export results visible on this page only
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* All Filtered Results Option */}
+                    <button
+                      onClick={exportAllFiltered}
+                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                    >
+                      <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                        <Download className="w-6 h-6 text-indigo-700" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <div className="font-medium text-gray-900">All Filtered Results</div>
+                        <div className="text-sm text-gray-500">
+                          Export all {filteredResults.length} results (includes completed, in-progress, and pending)
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 p-5 border-t border-gray-200">
+                  <button
+                    onClick={() => setExportStep('format')}
+                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowExportModal(false);
+                      setExportStep('format');
+                    }}
+                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

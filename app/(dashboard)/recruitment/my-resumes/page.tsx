@@ -2088,7 +2088,7 @@ export default function MyResumesPage() {
             onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
             onApplyToJob={handleApplyToJob}
             onDownload={handleBulkDownload}
-            onDelete={() => handleDeleteResumes(selectedResumes)}
+            onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
             onAssessment={hasPermission('canCreateAssessments') || isTenantAdmin ? handleAssessment : undefined}
             onArchive={() => handleArchiveResumes(selectedResumes)}
@@ -2167,9 +2167,9 @@ export default function MyResumesPage() {
               folders={folders}
               selectedFolder={selectedFolder}
               onSelectFolder={(folderId: string) => { setSelectedFolder(folderId); setCurrentPage(1); }}
-              onCreateFolder={handleCreateFolder}
-              onRenameFolder={handleRenameFolder}
-              onDeleteFolder={handleDeleteFolder}
+              onCreateFolder={hasPermission('canUploadResumes') || isTenantAdmin ? handleCreateFolder : undefined}
+              onRenameFolder={hasPermission('canUpdateResumes') || isTenantAdmin ? handleRenameFolder : undefined}
+              onDeleteFolder={hasPermission('canDeleteResumes') || isTenantAdmin ? handleDeleteFolder : undefined}
               onUploadToFolder={(folderId) => {
                 setSelectedFolder(folderId);
                 setIsUploadModalOpen(true);
@@ -2224,7 +2224,7 @@ export default function MyResumesPage() {
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
                   onApplyToJob={handleSingleResumeApplyToJob}
-                  onDelete={(id) => handleDelete(id)}
+                  onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
                   onMoveToFolder={handleMoveToFolder}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                   onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
@@ -2531,7 +2531,7 @@ export default function MyResumesPage() {
                             isLast={index === folderResumes.length - 1}
                             onSelect={handleSelectResume}
                             onQuickView={(r) => setQuickViewResume(r)}
-                            onDelete={handleDelete}
+                            onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? handleDelete : undefined}
                             onViewDetails={(r) => router.push(`/recruitment/resume-view/${r.id}`)}
                           />
                         ))}

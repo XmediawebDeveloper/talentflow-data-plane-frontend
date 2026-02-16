@@ -1643,7 +1643,31 @@ export default function UserManagement() {
       isEmpty: allPermissions.length === 0
     });
 
-    if (!editingUser) return;
+    if (!editingUser) {
+      console.error('[UPDATE USER] editingUser is null/undefined!');
+      toast.error('No user selected for editing. Please try again.');
+      return;
+    }
+
+    if (!editingUser.id) {
+      console.error('[UPDATE USER] editingUser.id is missing!', editingUser);
+      toast.error('Invalid user data. Please close and reopen the edit dialog.');
+      return;
+    }
+
+    // Verify the user still exists in the list before attempting update
+    const userStillExists = users.some(u => u.id === editingUser.id);
+    if (!userStillExists) {
+      console.error('[UPDATE USER] User no longer exists in the current list!', {
+        editingUserId: editingUser.id,
+        editingUserEmail: editingUser.email,
+        currentUserIds: users.map(u => u.id)
+      });
+      toast.error('This user no longer exists or has been removed. Refreshing list...');
+      resetEditModal();
+      loadUsers();
+      return;
+    }
 
     if (!editSelectedRoleId) {
       toast.error('Please select a role');
