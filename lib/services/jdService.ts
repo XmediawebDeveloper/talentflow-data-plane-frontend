@@ -569,6 +569,9 @@ export const jdService = {
     search?: string;
     page?: number;
     page_size?: number;
+    sort_by?: string;  // 'latest', 'score_desc', 'score_asc', 'name_asc', 'name_desc'
+    start_date?: string;  // Date filtering support
+    end_date?: string;    // Date filtering support
   }) {
     try {
       const response = await api.get(`/jd/${jdId}/scored-resumes`, { params });

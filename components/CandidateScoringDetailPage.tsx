@@ -151,7 +151,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               // Store the actual resume ID (different from score ID!)
               resumeId: actualResumeId,
               // Scoring-specific data
-              scorePercentage: Math.round(completeResumeData.overall_score || 0),
+              scorePercentage: Number((completeResumeData.overall_score || 0).toFixed(1)),  // Keep 1 decimal for consistency
               criteriaScores: completeResumeData.criteria_scores || {},
               scoreBreakdown: completeResumeData.score_breakdown || [],
               aiSummary: completeResumeData.ai_summary,
