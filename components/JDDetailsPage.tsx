@@ -498,6 +498,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
         search: searchQuery || undefined,
         page,
         page_size: pageSize,
+        sort_by: 'latest',  // Sort by latest scored first
       });
       setResumes(data);
     } catch (error) {

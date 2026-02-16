@@ -311,7 +311,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
           borderRadius: '24px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           width: '100%',
-          maxWidth: '1000px',
+          maxWidth: '1400px',
           maxHeight: '90vh',
           overflow: 'hidden',
           display: 'flex',

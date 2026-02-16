@@ -12,6 +12,7 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
+import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -1541,6 +1542,19 @@ function CurrentPlanContent() {
   const isActive = quotaSubscriptionStatus.toLowerCase() === 'active';
   const isExpiredSubscription = quotaSubscriptionStatus.toLowerCase() === 'expired' ||
                                  companySettings?.status?.toLowerCase() === 'expired';
+  const isSuspended = quotaSubscriptionStatus.toLowerCase() === 'suspended' ||
+                      companySettings?.subscription_status?.toLowerCase() === 'suspended' ||
+                      companySettings?.status?.toLowerCase() === 'suspended';
+
+  // Debug logging for suspended status
+  console.log('[CurrentPlan] Suspended check:', {
+    isSuspended,
+    quotaSubscriptionStatus,
+    companySettingsSubscriptionStatus: companySettings?.subscription_status,
+    companySettingsStatus: companySettings?.status,
+    tenantStatus: tenantStatus?.status
+  });
+
   // Use quotaSubscriptionStatus as source of truth for status badge
   // Get trial days remaining from quota-status API (single source of truth)
   const statusBadge = getStatusBadge(quotaSubscriptionStatus, companySettings?.payment_status, sharedQuotaData?.trial_info?.days_remaining);
@@ -1582,8 +1596,25 @@ function CurrentPlanContent() {
     );
   }
 
-  // Show pending account status
-  if (tenantStatus) {
+  // CRITICAL: Block suspended accounts completely (different from expired)
+  // Suspended accounts can only sign out or contact support
+  if (isSuspended || tenantStatus?.status === 'SUSPENDED') {
+    const suspensionReason = tenantStatus?.message ||
+      companySettings?.suspension_reason ||
+      'Your account has been suspended by the administrator. Please contact support for assistance.';
+    const suspendedAt = companySettings?.suspended_at || companySettings?.updated_at;
+
+    return (
+      <SuspendedAccountBlock
+        suspensionReason={suspensionReason}
+        suspendedAt={suspendedAt}
+        contactEmail="support@talentflow.com"
+      />
+    );
+  }
+
+  // Show pending account status (non-blocking banners)
+  if (tenantStatus && tenantStatus.status !== 'SUSPENDED') {
     const statusColors = {
       PENDING: { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800', icon: 'text-amber-500' },
       SUSPENDED: { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', icon: 'text-red-500' },

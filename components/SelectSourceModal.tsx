@@ -178,8 +178,41 @@ export default function SelectSourceModal({
   const handleSubmitForScoring = async () => {
     if (selectedResumes.length === 0) return;
 
+    // Check for already-scored resumes before proceeding
+    let resumesToScore = [...selectedResumes];
+    try {
+      const checkResult = await scoringService.checkExistingScores(jobId, resumesToScore);
+      if (checkResult.existing_count > 0) {
+        const alreadyScoredNames = checkResult.existing_scores
+          .map((s: any) => `${s.candidate_name} (${s.overall_score}%)`)
+          .join(', ');
+
+        if (checkResult.new_count === 0) {
+          // ALL resumes already scored - block entirely
+          toast.error(
+            `All ${checkResult.existing_count} resume(s) already scored for "${checkResult.jd_title}": ${alreadyScoredNames}`,
+            { duration: 6000 }
+          );
+          return;
+        }
+
+        // SOME already scored - warn and filter them out
+        toast.warning(
+          `${checkResult.existing_count} resume(s) already scored and will be skipped: ${alreadyScoredNames}`,
+          { duration: 5000 }
+        );
+        const existingIds = new Set(checkResult.existing_scores.map((s: any) => s.resume_id));
+        resumesToScore = resumesToScore.filter(id => !existingIds.has(id));
+
+        if (resumesToScore.length === 0) return;
+      }
+    } catch (error) {
+      console.error('Error checking existing scores:', error);
+      // Continue with scoring even if check fails
+    }
+
     // Initialize all items with 'queued' status immediately
-    const initialItems: ProgressItem[] = selectedResumes.map(resumeId => {
+    const initialItems: ProgressItem[] = resumesToScore.map(resumeId => {
       const resume = resumes.find(r => r.id === resumeId);
       return {
         resumeId,
@@ -189,7 +222,7 @@ export default function SelectSourceModal({
     });
 
     setProgressItems(initialItems);
-    setScoringStats({ queued: selectedResumes.length, processing: 0, completed: 0, failed: 0 });
+    setScoringStats({ queued: resumesToScore.length, processing: 0, completed: 0, failed: 0 });
     setShowProgressModal(true);
     setSubmitting(true);
     startTimeRef.current = new Date();
@@ -199,8 +232,8 @@ export default function SelectSourceModal({
     let failed = 0;
 
     // Score resumes one by one to show real-time progress
-    for (let i = 0; i < selectedResumes.length; i++) {
-      const resumeId = selectedResumes[i];
+    for (let i = 0; i < resumesToScore.length; i++) {
+      const resumeId = resumesToScore[i];
       const resume = resumes.find(r => r.id === resumeId);
       const candidateName = resume?.candidate_name || 'Unknown';
 
@@ -211,7 +244,7 @@ export default function SelectSourceModal({
           : item
       ));
       setScoringStats({
-        queued: selectedResumes.length - i - 1,
+        queued: resumesToScore.length - i - 1,
         processing: 1,
         completed,
         failed,
@@ -228,7 +261,7 @@ export default function SelectSourceModal({
             : item
         ));
         setScoringStats({
-          queued: selectedResumes.length - i - 1,
+          queued: resumesToScore.length - i - 1,
           processing: 0,
           completed,
           failed,
@@ -244,7 +277,7 @@ export default function SelectSourceModal({
             : item
         ));
         setScoringStats({
-          queued: selectedResumes.length - i - 1,
+          queued: resumesToScore.length - i - 1,
           processing: 0,
           completed,
           failed,

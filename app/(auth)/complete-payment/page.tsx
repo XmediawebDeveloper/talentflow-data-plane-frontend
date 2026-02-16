@@ -273,7 +273,7 @@ function CompletePaymentContent() {
       <div style={{ position: 'absolute', top: 80, left: 40, width: 288, height: 288, backgroundColor: '#93C5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
       <div style={{ position: 'absolute', top: 160, right: 40, width: 288, height: 288, backgroundColor: '#C4B5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
 
-      <div style={{ ...formCardStyle, maxWidth: 600, maxHeight: '90vh', overflowY: 'auto' }}>
+      <div style={{ ...formCardStyle, maxWidth: 900, maxHeight: '90vh', overflowY: 'auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
           <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #2563EB, #4338CA)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -360,7 +360,9 @@ function CompletePaymentContent() {
             <h4 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>Plan Quotas:</h4>
             <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                {Object.entries(planDetails.quotas).map(([key, value]) => (
+                {Object.entries(planDetails.quotas)
+                  .filter(([key]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key))
+                  .map(([key, value]) => (
                   <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid #E5E7EB' }}>
                     <span style={{ fontSize: 13, color: '#6B7280' }}>{getQuotaLabel(key)}</span>
                     <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{formatQuotaValue(key, value)}</span>

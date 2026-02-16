@@ -138,6 +138,10 @@ export default function AITalentMatchPage({
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [historyDateFrom, setHistoryDateFrom] = useState('');
   const [historyDateTo, setHistoryDateTo] = useState('');
+  const [historyFilterPhone, setHistoryFilterPhone] = useState('');
+  const [historyFilterLocation, setHistoryFilterLocation] = useState('');
+  const [historyFilterExpMin, setHistoryFilterExpMin] = useState<number | ''>('');
+  const [historyFilterExpMax, setHistoryFilterExpMax] = useState<number | ''>('');
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
   
   // Matching progress
@@ -708,19 +712,39 @@ export default function AITalentMatchPage({
   };
 
   const filteredHistory = matchHistory.filter(item => {
-    const matchesSearch = historySearchQuery === '' || 
+    const matchesSearch = historySearchQuery === '' ||
       item.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase());
-    
+
     const matchesDateFrom = !historyDateFrom || new Date(item.matchedAt) >= new Date(historyDateFrom);
     const matchesDateTo = !historyDateTo || new Date(item.matchedAt) <= new Date(historyDateTo);
-    
-    return matchesSearch && matchesDateFrom && matchesDateTo;
+
+    // Candidate-level filters: show history item if ANY candidate matches
+    const hasCandidateFilters = historyFilterPhone !== '' || historyFilterLocation !== '' || historyFilterExpMin !== '' || historyFilterExpMax !== '';
+    const matchesCandidateFilters = !hasCandidateFilters || item.matchedCandidates.some(candidate => {
+      const matchesPhone = historyFilterPhone === '' ||
+        (candidate.phone && (
+          candidate.phone.toLowerCase().includes(historyFilterPhone.toLowerCase()) ||
+          candidate.phone.replace(/[^0-9]/g, '').includes(historyFilterPhone.replace(/[^0-9]/g, ''))
+        ));
+      const matchesLocation = historyFilterLocation === '' ||
+        (candidate.location && candidate.location.toLowerCase().includes(historyFilterLocation.toLowerCase()));
+      const candidateExp = candidate.experience ? parseFloat(candidate.experience) : 0;
+      const matchesExpMin = historyFilterExpMin === '' || candidateExp >= historyFilterExpMin;
+      const matchesExpMax = historyFilterExpMax === '' || candidateExp <= historyFilterExpMax;
+      return matchesPhone && matchesLocation && matchesExpMin && matchesExpMax;
+    });
+
+    return matchesSearch && matchesDateFrom && matchesDateTo && matchesCandidateFilters;
   });
 
   const activeFiltersCount = [
     historySearchQuery !== '',
     historyDateFrom !== '',
     historyDateTo !== '',
+    historyFilterPhone !== '',
+    historyFilterLocation !== '',
+    historyFilterExpMin !== '',
+    historyFilterExpMax !== '',
   ].filter(Boolean).length;
 
   // View: History Details
@@ -1478,89 +1502,157 @@ export default function AITalentMatchPage({
         </div>
 
         {/* Search and Filter Bar */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={historySearchQuery}
-                  onChange={(e) => setHistorySearchQuery(e.target.value)}
-                  placeholder="Search by job title..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
-              </div>
-            </div>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={historySearchQuery}
+              onChange={(e) => setHistorySearchQuery(e.target.value)}
+              placeholder="Search by job title..."
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm bg-white"
+            />
+          </div>
 
+          <div className="relative">
             <button
               onClick={() => setShowHistoryFilters(!showHistoryFilters)}
-              className={`px-5 py-2.5 rounded-lg border-2 transition-all flex items-center gap-2 font-medium ${
+              className={`px-4 py-2.5 rounded-lg border transition-all flex items-center gap-2 text-sm font-medium ${
                 activeFiltersCount > 0
-                  ? 'bg-gray-50 border-gray-800 text-gray-900 shadow-sm'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-gray-900 border-gray-900 text-white'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
               }`}
             >
-              <Filter className="w-5 h-5" />
+              <Filter className="w-4 h-4" />
               Filters
               {activeFiltersCount > 0 && (
-                <span className="px-2 py-0.5 bg-gray-800 text-white rounded-full text-xs font-medium">
+                <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-bold bg-white text-gray-900">
                   {activeFiltersCount}
                 </span>
               )}
-              <ChevronDown className={`w-4 h-4 transition-transform ${showHistoryFilters ? 'rotate-180' : ''}`} />
             </button>
 
-            <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-              <span className="text-gray-800">{filteredHistory.length}</span> of {matchHistory.length} jobs
-            </div>
+            {/* Filter Popover */}
+            {showHistoryFilters && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setShowHistoryFilters(false)} />
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-40">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                    <span className="text-sm font-semibold text-gray-900">Filters</span>
+                    {activeFiltersCount > 0 && (
+                      <button
+                        onClick={() => {
+                          setHistorySearchQuery('');
+                          setHistoryDateFrom('');
+                          setHistoryDateTo('');
+                          setHistoryFilterPhone('');
+                          setHistoryFilterLocation('');
+                          setHistoryFilterExpMin('');
+                          setHistoryFilterExpMax('');
+                        }}
+                        className="text-xs text-gray-500 hover:text-gray-900 font-medium"
+                      >
+                        Reset all
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
+                    {/* Date Range */}
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">Date Range</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[11px] text-gray-400 mb-1 block">From</span>
+                          <input
+                            type="date"
+                            value={historyDateFrom}
+                            onChange={(e) => setHistoryDateFrom(e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-gray-400 mb-1 block">To</span>
+                          <input
+                            type="date"
+                            value={historyDateTo}
+                            onChange={(e) => setHistoryDateTo(e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mobile Number */}
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">Mobile No</label>
+                      <div className="relative">
+                        <Phone className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={historyFilterPhone}
+                          onChange={(e) => setHistoryFilterPhone(e.target.value)}
+                          placeholder="Search by mobile number"
+                          className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Location */}
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">Location</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={historyFilterLocation}
+                          onChange={(e) => setHistoryFilterLocation(e.target.value)}
+                          placeholder="Search by location"
+                          className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Experience */}
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">Experience (years)</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          value={historyFilterExpMin}
+                          onChange={(e) => setHistoryFilterExpMin(e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="Min"
+                          min={0}
+                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                        />
+                        <input
+                          type="number"
+                          value={historyFilterExpMax}
+                          onChange={(e) => setHistoryFilterExpMax(e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="Max"
+                          min={0}
+                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-4 py-3 border-t border-gray-100">
+                    <button
+                      onClick={() => setShowHistoryFilters(false)}
+                      className="w-full py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                    >
+                      Apply Filters
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Expanded Filters */}
-          {showHistoryFilters && (
-            <div className="mt-5 pt-5 border-t border-gray-200">
-              <div className="grid grid-cols-3 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Matched From
-                  </label>
-                  <input
-                    type="date"
-                    value={historyDateFrom}
-                    onChange={(e) => setHistoryDateFrom(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Matched To
-                  </label>
-                  <input
-                    type="date"
-                    value={historyDateTo}
-                    onChange={(e) => setHistoryDateTo(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <button
-                    onClick={() => {
-                      setHistorySearchQuery('');
-                      setHistoryDateFrom('');
-                      setHistoryDateTo('');
-                    }}
-                    disabled={activeFiltersCount === 0}
-                    className="w-full px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-medium"
-                  >
-                    <X className="w-4 h-4" />
-                    Clear All
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
+            <span className="text-gray-900 font-semibold">{filteredHistory.length}</span> / {matchHistory.length} jobs
+          </div>
         </div>
 
         {/* History List */}

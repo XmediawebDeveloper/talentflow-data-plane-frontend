@@ -7,6 +7,25 @@ import { scoringService } from '@/lib/services';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 
+// Helper function to convert backend match_status to frontend format
+const convertMatchStatus = (status: string | undefined): 'Exact Match' | 'Partial Match' | 'No Match' => {
+  if (!status) return 'Partial Match';
+
+  const normalized = status.toLowerCase().trim();
+
+  // Handle all possible backend formats
+  if (normalized === 'exact_match' || normalized === 'exact match' || normalized === 'excellent') {
+    return 'Exact Match';
+  } else if (normalized === 'partial_match' || normalized === 'partial match' || normalized === 'partial') {
+    return 'Partial Match';
+  } else if (normalized === 'no_match' || normalized === 'no match') {
+    return 'No Match';
+  }
+
+  // Default fallback
+  return 'Partial Match';
+};
+
 interface AttemptHistory {
   attemptNumber: number;
   timestamp: Date;
@@ -255,11 +274,7 @@ export default function ResumeScoringStatusPanel({
           // Update global context with success
           updateItemStatus(jobId, itemId, 'Scored successfully', {
             score: result.overall_score,
-            matchResult: result.match_status === 'exact_match' || result.match_status === 'Exact Match' ? 'Exact Match' :
-                         result.match_status === 'partial_match' || result.match_status === 'Partial Match' ? 'Partial Match' :
-                         result.match_status === 'no_match' || result.match_status === 'No Match' ? 'No Match' :
-                         result.overall_score >= 85 ? 'Exact Match' :
-                         result.overall_score >= 70 ? 'Partial Match' : 'No Match',
+            matchResult: convertMatchStatus(result.match_status),
             scoredDateTime: new Date().toISOString(),
           });
         } catch (error: any) {
