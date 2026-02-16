@@ -45,6 +45,55 @@ const containsMeaningfulText = (text: string): boolean => {
   return meaningfulWords.length >= 3;
 };
 
+const containsCodePatterns = (text: string): boolean => {
+  if (!text || !text.trim()) return false;
+
+  const lowerText = text.toLowerCase();
+
+  // Common programming keywords across multiple languages
+  const codeKeywords = [
+    'function', 'def ', 'class ', 'import ', 'export ', 'const ', 'let ', 'var ',
+    'return ', 'if ', 'else ', 'for ', 'while ', 'switch ', 'case ',
+    'async ', 'await ', 'try ', 'catch ', 'throw ', 'new ',
+    'public ', 'private ', 'protected ', 'static ', 'void ',
+    'int ', 'string ', 'boolean ', 'float ', 'double ',
+    'printf', 'cout', 'println', 'console.log', 'print(',
+    '__init__', 'self.', 'this.', '<?php', '#!/bin'
+  ];
+
+  // Check for programming keywords
+  const hasCodeKeywords = codeKeywords.some(keyword => lowerText.includes(keyword));
+
+  // Code-like patterns
+  const codePatterns = [
+    /\bdef\s+\w+\s*\(/,           // Python function: def foo(
+    /\bfunction\s+\w+\s*\(/,      // JS function: function foo(
+    /\(\s*\w+\s*\)\s*[:=]>/,      // Arrow function: (param) => or (param) ->
+    /\w+\s*\(\s*\w*\s*\)\s*\{/,   // Function with braces: foo() {
+    /\breturn\s+[^;]+;/,          // Return statement with semicolon
+    /\bimport\s+\w+\s+from/,      // ES6 import
+    /\bimport\s+[\w.]+/,          // Python import
+    /[{}\[\]]\s*[{}\[\]]/,        // Multiple consecutive brackets
+    /[=!<>]{2,3}/,                // Comparison operators: ==, ===, !==, etc.
+    /\w+\.\w+\s*\(/,              // Method calls: obj.method(
+    /\bvar\b|\blet\b|\bconst\b/,  // Variable declarations
+    /^\s*#include/m,              // C/C++ include
+    /^\s*package\s+\w+/m,         // Java/Go package
+    /\$\w+\s*=/,                  // PHP variables
+    /f["'].*\{.*\}["']/,          // f-strings: f"text {var}"
+  ];
+
+  // Check for code patterns
+  const hasCodePattern = codePatterns.some(pattern => pattern.test(text));
+
+  // Detect excessive use of special characters typical in code
+  const specialChars = text.match(/[(){}\[\];:<>]/g);
+  const specialCharRatio = specialChars ? specialChars.length / text.length : 0;
+  const hasExcessiveSpecialChars = specialCharRatio > 0.15; // More than 15% special chars
+
+  return hasCodeKeywords || hasCodePattern || hasExcessiveSpecialChars;
+};
+
 interface ExtractedData {
   mustHaveSkills: string[];
   mustHaveComments: string[];
@@ -1011,6 +1060,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    // Validate AI prompt does not contain code patterns
+    if (containsCodePatterns(aiPrompt)) {
+      toast.error({
+        title: 'Invalid AI Prompt',
+        description: 'AI prompt should describe a job role, not contain programming code or technical syntax.',
+      });
+      return;
+    }
+
     // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
     setIsStreaming(true);
@@ -1231,6 +1289,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       toast.error({
         title: 'Please enter a valid Job Description',
         description: 'JD must contain meaningful text, not just symbols or special characters.',
+      });
+      return;
+    }
+
+    // Validate JD does not contain code patterns
+    if (containsCodePatterns(jdText)) {
+      toast.error({
+        title: 'Invalid Job Description',
+        description: 'Job description should describe a job role, not contain programming code or technical syntax.',
       });
       return;
     }

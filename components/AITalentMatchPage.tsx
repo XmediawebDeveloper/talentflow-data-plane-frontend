@@ -1845,27 +1845,6 @@ export default function AITalentMatchPage({
               Back to Matched Jobs
             </button>
             <div className="flex items-center gap-3">
-              {selectedCandidates.length > 0 && (
-                <button
-                  onClick={() => {
-                    // Get selected candidate resume IDs
-                    const selectedResumes = filteredCandidates
-                      .filter(c => selectedCandidates.includes(c.id))
-                      .map(c => c.resumeId);
-
-                    // Store in sessionStorage for resume scoring page
-                    sessionStorage.setItem('scoringResumeIds', JSON.stringify(selectedResumes));
-                    sessionStorage.setItem('scoringJobId', selectedJob);
-
-                    // Navigate to resume scoring page
-                    router.push('/recruitment/resume-scoring');
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
-                >
-                  <Target className="w-4 h-4" />
-                  Score Selected ({selectedCandidates.length})
-                </button>
-              )}
               <button
                 onClick={() => {
                   // Keep the current JD and run new match
