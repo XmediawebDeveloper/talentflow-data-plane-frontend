@@ -457,26 +457,63 @@ export default function AITalentMatchPage({
       return;
     }
 
-    // MULTIPLE CANDIDATES: Use latest resume (resumeId) directly
+    // MULTIPLE CANDIDATES: Pre-check for already-scored resumes, then batch-score only new ones
     const resumeIds = selected.map(c => c.resumeId);
 
     try {
-      // Start async bulk scoring via Celery (background processing)
-      const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
+      // Check which resumes are already scored for this JD
+      let newResumeIds = resumeIds;
+      let alreadyScoredItems: Array<{ resumeId: string; candidateName: string; score?: number; matchStatus?: string; scoredAt?: string }> = [];
 
-      // Get candidate names for fallback display
-      const resumeItems = selected.map(c => ({
+      try {
+        const existingCheck = await scoringService.checkExistingScores(jobId, resumeIds);
+        if (existingCheck.existing_count > 0) {
+          const existingMap = new Map(existingCheck.existing_scores.map(s => [s.resume_id, s]));
+          alreadyScoredItems = existingCheck.existing_scores.map(s => ({
+            resumeId: s.resume_id,
+            candidateName: selected.find(c => c.resumeId === s.resume_id)?.name || s.candidate_name || 'Unknown',
+            score: s.overall_score,
+            matchStatus: s.match_status,
+            scoredAt: s.scored_at || undefined,
+          }));
+          newResumeIds = resumeIds.filter(id => !existingMap.has(id));
+        }
+      } catch (checkError) {
+        console.warn('[AITalentMatch] checkExistingScores failed, scoring all:', checkError);
+      }
+
+      // Get candidate names for progress display
+      const newSelected = selected.filter(c => newResumeIds.includes(c.resumeId));
+      const resumeItems = newSelected.map(c => ({
         resumeId: c.resumeId,
         candidateName: c.name || 'Unknown',
       }));
 
-      // Store batch info for the resume-scoring page to poll (including resume items for fallback)
+      if (newResumeIds.length === 0) {
+        // All already scored - use pendingScoringData path (no batch needed)
+        const pendingData = {
+          jobId: jobId,
+          jobTitle: jobTitle,
+          resumeIds: [],
+          resumeNames: [],
+          alreadyScoredItems: alreadyScoredItems,
+        };
+        sessionStorage.setItem('pendingScoringData', JSON.stringify(pendingData));
+        router.push(`/recruitment/resume-scoring?jd_id=${jobId}&start_scoring=true`);
+        return;
+      }
+
+      // Start async bulk scoring via Celery for new resumes only
+      const response = await scoringService.startBulkScoringAsync(jobId, newResumeIds);
+
+      // Store batch info including already-scored items for progress display
       const scoringData = {
         batchId: response.batch_id,
         jobId: response.jd_id,
         jobTitle: response.jd_title,
-        totalResumes: response.total_resumes,
+        totalResumes: response.total_resumes + alreadyScoredItems.length,
         resumeItems: resumeItems,
+        alreadyScoredItems: alreadyScoredItems,
       };
       sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
