@@ -881,25 +881,25 @@ export default function MyResumesPage() {
     setSelectedResumes(selected ? filteredResumes.map(r => r.id) : []);
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await resumeService.delete(id);
-      setResumes(prev => prev.filter(r => r.id !== id));
-      setSelectedResumes(prev => prev.filter(r => r !== id));
-    } catch (error) {
-      toast.error('Failed to delete resume');
-    }
-  };
+  const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[] } | null>(null);
 
-  const handleDeleteResumes = async (ids: string[]) => {
+  const executeDelete = async (ids: string[]) => {
     try {
       await Promise.all(ids.map(id => resumeService.delete(id)));
       setResumes(prev => prev.filter(r => !ids.includes(r.id)));
-      setSelectedResumes([]);
-      toast.success(`${ids.length} resume(s) deleted`);
+      setSelectedResumes(prev => prev.filter(r => !ids.includes(r)));
+      toast.success(ids.length === 1 ? 'Resume deleted' : `${ids.length} resume(s) deleted`);
     } catch (error) {
-      toast.error('Failed to delete resumes');
+      toast.error('Failed to delete resume(s)');
     }
+  };
+
+  const handleDelete = (id: string) => {
+    setDeleteConfirm({ ids: [id] });
+  };
+
+  const handleDeleteResumes = (ids: string[]) => {
+    setDeleteConfirm({ ids });
   };
 
   const handleMoveToFolder = async (resumeIds: string[], folderId: string) => {
@@ -3835,6 +3835,39 @@ export default function MyResumesPage() {
           }}
         />
       )}
+
+      {/* Delete Resume Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Resume{deleteConfirm && deleteConfirm.ids.length > 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                {deleteConfirm && deleteConfirm.ids.length > 1
+                  ? `You are about to permanently delete ${deleteConfirm.ids.length} resumes.`
+                  : 'You are about to permanently delete this resume.'}
+              </span>
+              <span className="block font-semibold text-red-600">
+                This action is irreversible and cannot be undone.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (deleteConfirm) {
+                  executeDelete(deleteConfirm.ids);
+                  setDeleteConfirm(null);
+                }
+              }}
+            >
+              Yes, Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Folder Confirmation Dialog */}
       <AlertDialog

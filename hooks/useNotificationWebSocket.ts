@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface WebSocketMessage {
-  type: 'new_notification' | 'notification_count' | 'connected' | 'pong';
+  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated';
   data?: any;
 }
 
@@ -15,6 +15,7 @@ interface UseNotificationWebSocketProps {
   token: string | null;
   onNewNotification?: (notification: any) => void;
   onCountUpdate?: (count: number) => void;
+  onPermissionsUpdated?: () => void;
   enabled?: boolean;
 }
 
@@ -46,6 +47,7 @@ export function useNotificationWebSocket({
   token,
   onNewNotification,
   onCountUpdate,
+  onPermissionsUpdated,
   enabled = true,
 }: UseNotificationWebSocketProps): UseNotificationWebSocketReturn {
   const [isConnected, setIsConnected] = useState(false);
@@ -61,6 +63,7 @@ export function useNotificationWebSocket({
   // Store callbacks in refs to avoid dependency issues
   const onNewNotificationRef = useRef(onNewNotification);
   const onCountUpdateRef = useRef(onCountUpdate);
+  const onPermissionsUpdatedRef = useRef(onPermissionsUpdated);
 
   useEffect(() => {
     onNewNotificationRef.current = onNewNotification;
@@ -69,6 +72,10 @@ export function useNotificationWebSocket({
   useEffect(() => {
     onCountUpdateRef.current = onCountUpdate;
   }, [onCountUpdate]);
+
+  useEffect(() => {
+    onPermissionsUpdatedRef.current = onPermissionsUpdated;
+  }, [onPermissionsUpdated]);
 
   const reconnect = useCallback(() => {
     reconnectAttemptsRef.current = 0;
@@ -156,6 +163,13 @@ export function useNotificationWebSocket({
 
               case 'pong':
                 // Keepalive response, no action needed
+                break;
+
+              case 'permissions_updated':
+                console.log('[WebSocket] Permissions updated - triggering refresh');
+                if (onPermissionsUpdatedRef.current) {
+                  onPermissionsUpdatedRef.current();
+                }
                 break;
             }
           } catch (e) {
