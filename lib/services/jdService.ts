@@ -665,6 +665,28 @@ export const jdService = {
     }
   },
 
+  /**
+   * Check assessment status for a JD to determine if deletion is allowed
+   * Returns whether JD has active assessments (draft/published) that block deletion
+   */
+  async checkAssessmentStatus(jdId: string): Promise<{
+    jd_id: string;
+    can_delete: boolean;
+    has_active_assessments: boolean;
+    has_only_completed: boolean;
+    active_count: number;
+    completed_count: number;
+    total_count: number;
+    status_breakdown: Record<string, number>;
+  }> {
+    try {
+      const response = await api.get(`/jd/${jdId}/assessment-status`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   // ==================== JD14: Downstream API ====================
 
   /**
