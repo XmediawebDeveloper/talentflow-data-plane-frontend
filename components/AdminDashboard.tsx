@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Building2, Users, Settings, Activity, FileText, Briefcase, Award, Loader2, Zap, ClipboardCheck, Video, Upload, UserCheck, CreditCard, Calendar, Shield, Layers, ArrowUpRight } from 'lucide-react';
+import { Building2, Users, Settings, Activity, FileText, Briefcase, Award, Loader2, Zap, ClipboardCheck, Video, Upload, UserCheck, CreditCard, Calendar, Shield, Layers, ArrowUpRight, Clock, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
 import { dashboardService, DashboardStats, RecentActivity, SubscriptionUnits, JDActivity } from '@/lib/services/dashboardService';
@@ -133,56 +133,127 @@ export default function AdminDashboard({
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-indigo-600" />
+              {quotaData?.is_trial ? (
+                <Sparkles className="w-5 h-5 text-amber-500" />
+              ) : (
+                <CreditCard className="w-5 h-5 text-indigo-600" />
+              )}
               <h2 className="text-lg font-semibold text-gray-900">Plan Overview</h2>
+              {quotaData?.is_trial && (
+                <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Free Trial</span>
+              )}
             </div>
             <button
               onClick={() => router.push('/subscription/current-plan')}
               className="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
             >
-              Manage Plan <ArrowUpRight className="w-3.5 h-3.5" />
+              {quotaData?.is_trial ? 'Upgrade Plan' : 'Manage Plan'} <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-4">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Current Plan</p>
-              <p className="text-sm font-semibold text-gray-900">
-                {quotaData?.plan_name || tenant?.subscription?.planName || '-'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Plan Tier</p>
-              <p className="text-sm font-semibold text-gray-900 capitalize">
-                {quotaData?.plan_info?.plan_tier || '-'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Status</p>
-              <p className="text-sm font-semibold capitalize">
-                <span className={
-                  (quotaData?.subscription_status || tenant?.subscription?.status) === 'active'
-                    ? 'text-green-700'
-                    : (quotaData?.subscription_status || tenant?.subscription?.status) === 'expired'
+
+          {/* Free Trial Layout */}
+          {quotaData?.is_trial ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-4">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Current Plan</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {quotaData?.plan_name || tenant?.subscription?.planName || 'Free Trial'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Trial Type</p>
+                <p className="text-sm font-semibold text-gray-900 capitalize">
+                  {quotaData?.trial_info?.trial_type?.toLowerCase() || 'standard'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Status</p>
+                <p className="text-sm font-semibold capitalize">
+                  <span className={
+                    (quotaData?.subscription_status || tenant?.subscription?.status) === 'expired'
                       ? 'text-red-700'
-                      : 'text-yellow-700'
-                }>
-                  {quotaData?.subscription_status || tenant?.subscription?.status || '-'}
-                </span>
-              </p>
+                      : (quotaData?.subscription_status || tenant?.subscription?.status) === 'suspended'
+                        ? 'text-red-700'
+                        : 'text-amber-600'
+                  }>
+                    {quotaData?.subscription_status || tenant?.subscription?.status || 'trial'}
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Days Remaining</p>
+                <p className="text-sm font-semibold">
+                  {quotaData?.trial_info?.days_remaining != null ? (
+                    <span className={
+                      quotaData.trial_info.days_remaining <= 3
+                        ? 'text-red-700'
+                        : quotaData.trial_info.days_remaining <= 7
+                          ? 'text-amber-600'
+                          : 'text-green-700'
+                    }>
+                      {quotaData.trial_info.days_remaining} {quotaData.trial_info.days_remaining === 1 ? 'day' : 'days'}
+                    </span>
+                  ) : (
+                    <span className="text-gray-900">-</span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Trial Ends</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {quotaData?.trial_info?.trial_end_date
+                    ? new Date(quotaData.trial_info.trial_end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : quotaData?.trial_end_date
+                      ? new Date(quotaData.trial_end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      : '-'}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Billing Period</p>
-              <p className="text-sm font-semibold text-gray-900 capitalize">
-                {quotaData?.plan_info?.billing_period?.toLowerCase() || '-'}
-              </p>
+          ) : (
+            /* Paid Plan Layout */
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-4">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Current Plan</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {quotaData?.plan_name || quotaData?.plan_info?.plan_name || tenant?.subscription?.planName || '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Plan Tier</p>
+                <p className="text-sm font-semibold text-gray-900 capitalize">
+                  {quotaData?.plan_info?.plan_tier || '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Status</p>
+                <p className="text-sm font-semibold capitalize">
+                  <span className={
+                    (quotaData?.subscription_status || tenant?.subscription?.status) === 'active'
+                      ? 'text-green-700'
+                      : (quotaData?.subscription_status || tenant?.subscription?.status) === 'expired'
+                        ? 'text-red-700'
+                        : (quotaData?.subscription_status || tenant?.subscription?.status) === 'suspended'
+                          ? 'text-red-700'
+                          : 'text-yellow-700'
+                  }>
+                    {quotaData?.subscription_status || tenant?.subscription?.status || '-'}
+                  </span>
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Billing Period</p>
+                <p className="text-sm font-semibold text-gray-900 capitalize">
+                  {quotaData?.plan_info?.billing_period?.toLowerCase() || '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Isolation</p>
+                <p className="text-sm font-semibold text-gray-900 capitalize">
+                  {(quotaData?.plan_info?.isolation_type || quotaData?.isolation_type || '-').toString().toLowerCase()}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Isolation</p>
-              <p className="text-sm font-semibold text-gray-900 capitalize">
-                {(quotaData?.plan_info?.isolation_type || quotaData?.isolation_type || '-').toString().toLowerCase()}
-              </p>
-            </div>
-          </div>
+          )}
         </div>
       )}
 

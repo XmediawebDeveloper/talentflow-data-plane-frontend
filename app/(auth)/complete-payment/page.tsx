@@ -41,6 +41,20 @@ function CompletePaymentContent() {
   const planId = searchParams.get('plan_id');
   const billingIntervalParam = searchParams.get('billing');
 
+  // Get user info for audit logging (from localStorage if user was previously logged in)
+  const getUserInfo = (): { user_id?: string; user_email?: string } => {
+    try {
+      const stored = localStorage.getItem('talentflow_user');
+      if (stored) {
+        const user = JSON.parse(stored);
+        return { user_id: user.id, user_email: user.email };
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    return {};
+  };
+
   const [billingInterval, setBillingInterval] = useState<'MONTHLY' | 'ANNUAL'>(
     billingIntervalParam === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'
   );
@@ -122,6 +136,7 @@ function CompletePaymentContent() {
           tenant_id: tenantId,
           plan_id: planDetails.id,
           billing_interval: billingInterval,
+          ...getUserInfo(),
         }),
       });
 
@@ -133,6 +148,21 @@ function CompletePaymentContent() {
 
       // Payment successful
       toast.success('Payment successful!', { description: 'Your plan is now active.' });
+
+      // Queue audit verification for initial payment (non-blocking)
+      try {
+        const mod = await import('@/lib/services/auditVerificationService');
+        const userInfo = getUserInfo();
+        mod.auditVerificationService.storePendingVerification({
+          action: 'subscription_upgrade',
+          entity_type: 'subscription',
+          entity_id: String(planDetails.id),
+          user_id: userInfo.user_id,
+          user_email: userInfo.user_email,
+          timestamp: new Date().toISOString(),
+        });
+        console.log('[AuditVerification] Queued initial payment verification');
+      } catch (e) { console.warn('[AuditVerification] Failed to queue:', e); }
 
       // Redirect to login
       setTimeout(() => {
