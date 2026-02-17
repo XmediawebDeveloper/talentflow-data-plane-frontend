@@ -918,6 +918,14 @@ export default function MyResumesPage() {
     }
   };
 
+  const handleDelete = (id: string) => {
+    setDeleteConfirm({ ids: [id] });
+  };
+
+  const handleDeleteResumes = (ids: string[]) => {
+    setDeleteConfirm({ ids });
+  };
+
   const handleMoveToFolder = async (resumeIds: string[], folderId: string) => {
     try {
       await Promise.all(resumeIds.map(id => resumeService.move(id, folderId)));

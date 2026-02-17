@@ -479,12 +479,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // ❌ REMOVED: Permission version polling (endpoint deleted)
-      // Permission updates now handled by:
-      // 1. Backend saves permissions → updates database
-      // 2. Frontend calls refreshUser() after save → fetches latest user data
-      // 3. refreshUser() dispatches 'permissions-updated' event → Sidebar re-renders
-      // No need for constant polling - event-driven is more efficient!
+      // Permission updates are now handled instantly via WebSocket push (permissions_updated event).
+      // This polling loop is kept only for activity tracking / idle detection.
+      // See: useNotificationWebSocket → onPermissionsUpdated → refreshUser()
     };
 
     const restartPolling = () => {
