@@ -793,11 +793,15 @@ export const assessmentService = {
   /**
    * 7. Export individual assessment report as PDF
    * AS-25: Individual PDF report generation
+   * If attemptId is provided, generates PDF for that specific candidate only.
    */
-  async exportPDF(assessmentId: string): Promise<Blob> {
+  async exportPDF(assessmentId: string, attemptId?: string): Promise<Blob> {
     try {
+      const params: any = {};
+      if (attemptId) params.attempt_id = attemptId;
       const response = await api.get(`/reports/export/assessment/${assessmentId}`, {
         responseType: 'blob',
+        params,
       });
       return response.data;
     } catch (error) {

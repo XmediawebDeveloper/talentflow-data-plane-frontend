@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2 } from 'lucide-react';
 import React from 'react';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ interface AssessmentResult {
   email: string;
   phone: string;
   assessmentName: string;
+  assessmentId?: string;
   totalScore: number;
   maxScore: number;
   scorePercentage: number;
@@ -28,6 +29,7 @@ interface AssessmentResult {
   }[];
   invitedDate: string;
   invitedBy: string;
+  status?: string; // completed, in_progress, pending
 }
 
 interface Column {
@@ -44,25 +46,31 @@ interface AssessmentResultsTableProps {
 
 export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1' }: AssessmentResultsTableProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [selectedResults, setSelectedResults] = useState<string[]>([]);
-  
-  // Filters
-  const [filterPassFail, setFilterPassFail] = useState<'all' | 'Pass' | 'Fail'>('all');
-  const [filterScoreMin, setFilterScoreMin] = useState('');
-  const [filterScoreMax, setFilterScoreMax] = useState('');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
 
-  // AS-24: Default columns configuration
+  // Filters (inline dropdowns matching AssessmentResults.tsx)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Pending'>('all');
+  const [filterPassFail, setFilterPassFail] = useState<'all' | 'Pass' | 'Fail'>('all');
+  const [roundFilters, setRoundFilters] = useState<{
+    technical?: 'all' | '50-70' | '70-90' | '90+';
+    coding?: 'all' | '50-70' | '70-90' | '90+';
+  }>({});
+
+  // Detect if any results have technical/coding rounds
+  const hasTechnicalRound = results.some(r => r.roundScores.some(rs => rs.roundName === 'Technical'));
+  const hasCodingRound = results.some(r => r.roundScores.some(rs => rs.roundName === 'Coding'));
+
+  // AS-24: Default columns configuration (dynamic based on available rounds)
   const defaultColumns: Column[] = [
     { id: 'candidateName', label: 'Candidate Name', enabled: true },
     { id: 'email', label: 'Email', enabled: true },
     { id: 'phone', label: 'Phone', enabled: true },
     { id: 'assessmentName', label: 'Assessment', enabled: true },
     { id: 'scorePercentage', label: 'Score %', enabled: true },
-    { id: 'passFail', label: 'Status', enabled: true },
+    ...(hasTechnicalRound ? [{ id: 'techScore', label: 'Tech Score', enabled: true }] : []),
+    ...(hasCodingRound ? [{ id: 'codingScore', label: 'Coding Score', enabled: true }] : []),
+    { id: 'passFail', label: 'Result', enabled: true },
     { id: 'completedDate', label: 'Completion Date', enabled: true },
     { id: 'completionTime', label: 'Time Taken', enabled: true },
     { id: 'invitedBy', label: 'Invited By', enabled: false },
@@ -106,23 +114,52 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
   const enabledColumns = columns.filter(col => col.enabled);
 
+  // Helper: extract round score percentage from roundScores array
+  const getRoundScore = (result: AssessmentResult, roundName: string): number | undefined => {
+    const round = result.roundScores.find(r => r.roundName === roundName);
+    return round ? (round.maxScore > 0 ? (round.score / round.maxScore) * 100 : 0) : undefined;
+  };
+
+  // Helper: check if score falls in range
+  const matchesScoreRange = (score: number | undefined, range: string): boolean => {
+    if (score === undefined) return false;
+    if (range === '50-70') return score >= 50 && score < 70;
+    if (range === '70-90') return score >= 70 && score < 90;
+    if (range === '90+') return score >= 90;
+    return true;
+  };
+
+  // Helper: determine display status from result
+  const getResultStatus = (result: AssessmentResult): string => {
+    if (result.status === 'completed' || result.completedDate !== 'In Progress') return 'Completed';
+    if (result.status === 'in_progress') return 'In Progress';
+    return 'Pending';
+  };
+
   // Filter results
   const filteredResults = results.filter(result => {
-    const matchesSearch = 
+    const matchesSearch =
       result.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       result.email.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesPassFail = filterPassFail === 'all' || result.passFail === filterPassFail;
-    
-    const matchesScoreRange = 
-      (!filterScoreMin || result.scorePercentage >= Number(filterScoreMin)) &&
-      (!filterScoreMax || result.scorePercentage <= Number(filterScoreMax));
-    
-    const matchesDateRange = 
-      (!filterDateFrom || new Date(result.completedDate) >= new Date(filterDateFrom)) &&
-      (!filterDateTo || new Date(result.completedDate) <= new Date(filterDateTo));
-    
-    return matchesSearch && matchesPassFail && matchesScoreRange && matchesDateRange;
+
+    // Status filter
+    const matchesStatus = statusFilter === 'all' || getResultStatus(result) === statusFilter;
+
+    // Tech score range filter
+    let matchesTech = true;
+    if (roundFilters.technical && roundFilters.technical !== 'all') {
+      matchesTech = matchesScoreRange(getRoundScore(result, 'Technical'), roundFilters.technical);
+    }
+
+    // Coding score range filter
+    let matchesCoding = true;
+    if (roundFilters.coding && roundFilters.coding !== 'all') {
+      matchesCoding = matchesScoreRange(getRoundScore(result, 'Coding'), roundFilters.coding);
+    }
+
+    return matchesSearch && matchesPassFail && matchesStatus && matchesTech && matchesCoding;
   });
 
   const handleSelectAll = () => {
@@ -142,9 +179,15 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   };
 
   const handleToggleColumn = (columnId: string) => {
-    setColumns(columns.map(col => 
+    setColumns(columns.map(col =>
       col.id === columnId ? { ...col, enabled: !col.enabled } : col
     ));
+  };
+
+  // Check if columns are customized (some unchecked)
+  const areColumnsCustomized = () => {
+    if (columns.length === 0) return false;
+    return columns.some(col => !col.enabled);
   };
 
   // Export format modal state
@@ -162,6 +205,16 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     setExportStep('scope');
   };
 
+  // Build filters object for export
+  const buildExportFilters = () => {
+    const filters: any = {};
+    if (searchTerm.trim()) filters.search = searchTerm.trim();
+    if (statusFilter !== 'all') filters.status_filter = statusFilter.toLowerCase().replace(' ', '_');
+    if (filterPassFail === 'Pass') filters.passed = true;
+    else if (filterPassFail === 'Fail') filters.passed = false;
+    return filters;
+  };
+
   // Export current page only
   const exportCurrentPage = async () => {
     try {
@@ -170,7 +223,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
         assessmentId,
         selectedFormat,
         false,
-        enabledColumns.map(c => c.id)
+        enabledColumns.map(c => c.id),
+        buildExportFilters()
       );
 
       const url = window.URL.createObjectURL(blob);
@@ -201,7 +255,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
         assessmentId,
         selectedFormat,
         false,
-        enabledColumns.map(c => c.id)
+        enabledColumns.map(c => c.id),
+        buildExportFilters()
       );
 
       const url = window.URL.createObjectURL(blob);
@@ -281,19 +336,17 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   };
 
   const clearFilters = () => {
+    setStatusFilter('all');
     setFilterPassFail('all');
-    setFilterScoreMin('');
-    setFilterScoreMax('');
-    setFilterDateFrom('');
-    setFilterDateTo('');
+    setRoundFilters({});
+    setSearchTerm('');
   };
 
-  const activeFiltersCount = 
+  const activeFiltersCount =
+    (statusFilter !== 'all' ? 1 : 0) +
     (filterPassFail !== 'all' ? 1 : 0) +
-    (filterScoreMin ? 1 : 0) +
-    (filterScoreMax ? 1 : 0) +
-    (filterDateFrom ? 1 : 0) +
-    (filterDateTo ? 1 : 0);
+    (roundFilters.technical && roundFilters.technical !== 'all' ? 1 : 0) +
+    (roundFilters.coding && roundFilters.coding !== 'all' ? 1 : 0);
 
   const getPassFailBadge = (status: 'Pass' | 'Fail') => {
     if (status === 'Pass') {
@@ -372,9 +425,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           </div>
         </div>
 
-        {/* Search and Filter Bar */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 relative">
+        {/* Search and Inline Filter Bar */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-[200px] relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -384,6 +437,86 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
             />
           </div>
+
+          {/* Status Filter */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending')}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+            >
+              <option value="all">All</option>
+              <option value="Completed">Completed</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Pending">Pending</option>
+            </select>
+          </div>
+
+          {/* Result (Pass/Fail) Filter */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-600 whitespace-nowrap">Result:</label>
+            <select
+              value={filterPassFail}
+              onChange={(e) => setFilterPassFail(e.target.value as 'all' | 'Pass' | 'Fail')}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+            >
+              <option value="all">All</option>
+              <option value="Pass">Pass</option>
+              <option value="Fail">Fail</option>
+            </select>
+          </div>
+
+          {/* Tech Score Filter (only if any result has Technical round) */}
+          {hasTechnicalRound && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 whitespace-nowrap">Tech:</label>
+              <select
+                value={roundFilters.technical || 'all'}
+                onChange={(e) => {
+                  const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
+                  setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
+                }}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+              >
+                <option value="all">All</option>
+                <option value="50-70">50-70%</option>
+                <option value="70-90">70-90%</option>
+                <option value="90+">90%+</option>
+              </select>
+            </div>
+          )}
+
+          {/* Coding Score Filter (only if any result has Coding round) */}
+          {hasCodingRound && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-600 whitespace-nowrap">Coding:</label>
+              <select
+                value={roundFilters.coding || 'all'}
+                onChange={(e) => {
+                  const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
+                  setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
+                }}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+              >
+                <option value="all">All</option>
+                <option value="50-70">50-70%</option>
+                <option value="70-90">70-90%</option>
+                <option value="90+">90%+</option>
+              </select>
+            </div>
+          )}
+
+          {/* Clear Filters */}
+          {activeFiltersCount > 0 && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+            >
+              <X className="w-4 h-4" />
+              Clear
+            </button>
+          )}
 
           {/* Column Selector */}
           <div className="relative">
@@ -397,8 +530,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
             {showColumnSelector && (
               <>
-                <div 
-                  className="fixed inset-0 z-10" 
+                <div
+                  className="fixed inset-0 z-10"
                   onClick={() => setShowColumnSelector(false)}
                 ></div>
                 <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-96 overflow-y-auto">
@@ -426,106 +559,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
               </>
             )}
           </div>
-
-          {/* Filter Toggle */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`px-4 py-2 text-sm border rounded-md transition-colors flex items-center gap-2 ${
-              showFilters || activeFiltersCount > 0
-                ? 'border-gray-300 text-gray-900 bg-gray-50'
-                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <Filter className="w-4 h-4" />
-            Filters
-            {activeFiltersCount > 0 && (
-              <span className="px-1.5 py-0.5 bg-gray-800 text-white rounded text-xs">
-                {activeFiltersCount}
-              </span>
-            )}
-          </button>
         </div>
-
-        {/* Filter Panel */}
-        {showFilters && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm text-gray-900">Filters</h3>
-              {activeFiltersCount > 0 && (
-                <button
-                  onClick={clearFilters}
-                  className="text-xs text-gray-800 hover:text-gray-900 flex items-center gap-1"
-                >
-                  <X className="w-3 h-3" />
-                  Clear All
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-4 gap-4">
-              {/* Pass/Fail Filter */}
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Status</label>
-                <select
-                  value={filterPassFail}
-                  onChange={(e) => setFilterPassFail(e.target.value as 'all' | 'Pass' | 'Fail')}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
-                >
-                  <option value="all">All</option>
-                  <option value="Pass">Pass</option>
-                  <option value="Fail">Fail</option>
-                </select>
-              </div>
-
-              {/* Score Range */}
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Min Score %</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="0"
-                  value={filterScoreMin}
-                  onChange={(e) => setFilterScoreMin(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Max Score %</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="100"
-                  value={filterScoreMax}
-                  onChange={(e) => setFilterScoreMax(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-700 mb-1">Completion Date From</label>
-                <input
-                  type="date"
-                  value={filterDateFrom}
-                  onChange={(e) => setFilterDateFrom(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
-              </div>
-
-              <div className="col-start-4">
-                <label className="block text-sm text-gray-700 mb-1">Completion Date To</label>
-                <input
-                  type="date"
-                  value={filterDateTo}
-                  onChange={(e) => setFilterDateTo(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Desktop Table View */}
@@ -630,6 +664,32 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                                 ({result.totalScore}/{result.maxScore})
                               </span>
                             </div>
+                          </td>
+                        );
+                      }
+                      if (col.id === 'techScore') {
+                        const techRound = result.roundScores.find(r => r.roundName === 'Technical');
+                        const techPct = techRound ? Math.round((techRound.score / techRound.maxScore) * 100) : null;
+                        return (
+                          <td key={col.id} className="py-3 px-4">
+                            {techPct !== null ? (
+                              <span className={`text-sm ${getScoreColor(techPct)}`}>{techPct}%</span>
+                            ) : (
+                              <span className="text-sm text-gray-400">-</span>
+                            )}
+                          </td>
+                        );
+                      }
+                      if (col.id === 'codingScore') {
+                        const codingRound = result.roundScores.find(r => r.roundName === 'Coding');
+                        const codingPct = codingRound ? Math.round((codingRound.score / codingRound.maxScore) * 100) : null;
+                        return (
+                          <td key={col.id} className="py-3 px-4">
+                            {codingPct !== null ? (
+                              <span className={`text-sm ${getScoreColor(codingPct)}`}>{codingPct}%</span>
+                            ) : (
+                              <span className="text-sm text-gray-400">-</span>
+                            )}
                           </td>
                         );
                       }
@@ -837,6 +897,26 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         {result.phone}
                       </div>
                     )}
+                    {enabledColumns.find(c => c.id === 'techScore') && (() => {
+                      const techRound = result.roundScores.find(r => r.roundName === 'Technical');
+                      const techPct = techRound ? Math.round((techRound.score / techRound.maxScore) * 100) : null;
+                      return techPct !== null ? (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <BarChart3 className="w-3 h-3" />
+                          Tech: <span className={getScoreColor(techPct)}>{techPct}%</span>
+                        </div>
+                      ) : null;
+                    })()}
+                    {enabledColumns.find(c => c.id === 'codingScore') && (() => {
+                      const codingRound = result.roundScores.find(r => r.roundName === 'Coding');
+                      const codingPct = codingRound ? Math.round((codingRound.score / codingRound.maxScore) * 100) : null;
+                      return codingPct !== null ? (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <BarChart3 className="w-3 h-3" />
+                          Coding: <span className={getScoreColor(codingPct)}>{codingPct}%</span>
+                        </div>
+                      ) : null;
+                    })()}
                     {enabledColumns.find(c => c.id === 'completedDate') && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-600">
                         <Calendar className="w-3 h-3" />
@@ -1026,40 +1106,69 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 </div>
 
                 <div className="p-5">
-                  <p className="text-sm text-gray-600 mb-4">Select export scope:</p>
+                  <p className="text-sm text-gray-600 mb-4">
+                    {selectedResults.length > 0
+                      ? `Export ${selectedResults.length} selected result${selectedResults.length !== 1 ? 's' : ''}:`
+                      : areColumnsCustomized()
+                        ? 'Export scope (with selected columns):'
+                        : 'Select export scope:'}
+                  </p>
 
                   <div className="space-y-3">
-                    {/* Current Page Option */}
-                    <button
-                      onClick={exportCurrentPage}
-                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
-                    >
-                      <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-                        <FileDown className="w-6 h-6 text-purple-700" />
-                      </div>
-                      <div className="text-left flex-1">
-                        <div className="font-medium text-gray-900">Current Page</div>
-                        <div className="text-sm text-gray-500">
-                          Export results visible on this page only
+                    {selectedResults.length > 0 ? (
+                      /* Candidates selected via checkbox → export only selected */
+                      <button
+                        onClick={exportAllFiltered}
+                        className="w-full flex items-center gap-4 p-4 border-2 border-indigo-500 rounded-lg hover:bg-indigo-50 transition-all group"
+                      >
+                        <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                          <Download className="w-6 h-6 text-indigo-700" />
                         </div>
-                      </div>
-                    </button>
-
-                    {/* All Filtered Results Option */}
-                    <button
-                      onClick={exportAllFiltered}
-                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
-                    >
-                      <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
-                        <Download className="w-6 h-6 text-indigo-700" />
-                      </div>
-                      <div className="text-left flex-1">
-                        <div className="font-medium text-gray-900">All Filtered Results</div>
-                        <div className="text-sm text-gray-500">
-                          Export all {filteredResults.length} results (includes completed, in-progress, and pending)
+                        <div className="text-left flex-1">
+                          <div className="font-medium text-gray-900">
+                            Export {selectedResults.length} Selected Result{selectedResults.length !== 1 ? 's' : ''}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            Export with {enabledColumns.length} columns
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                    ) : areColumnsCustomized() ? (
+                      /* No selection + columns customized → "All Filtered Results" with column count */
+                      <button
+                        onClick={exportAllFiltered}
+                        className="w-full flex items-center gap-4 p-4 border-2 border-indigo-500 rounded-lg hover:bg-indigo-50 transition-all group"
+                      >
+                        <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                          <Download className="w-6 h-6 text-indigo-700" />
+                        </div>
+                        <div className="text-left flex-1">
+                          <div className="font-medium text-gray-900">All Filtered Results</div>
+                          <div className="text-sm text-gray-500">
+                            Export all {filteredResults.length} results with {enabledColumns.length} selected columns
+                            <div className="text-xs text-indigo-600 mt-1">
+                              (includes completed, in-progress, and pending)
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ) : (
+                      /* No selection + all columns → "Current Page" */
+                      <button
+                        onClick={exportCurrentPage}
+                        className="w-full flex items-center gap-4 p-4 border-2 border-purple-500 rounded-lg hover:bg-purple-50 transition-all group"
+                      >
+                        <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                          <FileDown className="w-6 h-6 text-purple-700" />
+                        </div>
+                        <div className="text-left flex-1">
+                          <div className="font-medium text-gray-900">Current Page</div>
+                          <div className="text-sm text-gray-500">
+                            Export {filteredResults.length} results visible on this page
+                          </div>
+                        </div>
+                      </button>
+                    )}
                   </div>
                 </div>
 
