@@ -1,4 +1,4 @@
-import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database, AlertTriangle } from 'lucide-react';
+import { X, Mail, Plus, Trash2, Send, CheckCircle, Clock, FileText, Users, Upload, Database, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -365,7 +365,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   // Check if all candidates have valid name and email
   const isValid = candidates.every(c => c.name.trim() && c.email.trim() && isValidEmail(c.email));
 
-  const assessmentLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app'}/assessment/${assessment.id}`;
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app');
+  const assessmentLink = `${baseUrl}/assessment/take/<token>?c=<name>&r=<role>`;
 
   if (showSuccess) {
     return (
@@ -727,26 +728,16 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           {/* Assessment Link */}
           <div className="mb-6">
             <label className="text-gray-900 mb-2 block">Assessment Link</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={assessmentLink}
-                readOnly
-                className="flex-1 px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-600"
-              />
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(assessmentLink);
-                  toast.success('Link copied to clipboard!');
-                }}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-              >
-                <Copy className="w-4 h-4" />
-                Copy
-              </button>
+            <div
+              className="px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-500 select-none"
+              style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
+              onCopy={(e) => e.preventDefault()}
+              onCut={(e) => e.preventDefault()}
+            >
+              {assessmentLink}
             </div>
             <p className="text-xs text-gray-500 mt-1">
-              This unique link will be included in the email invitation
+              A unique personalized link will be generated for each candidate with their name and role
             </p>
           </div>
 

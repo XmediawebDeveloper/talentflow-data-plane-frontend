@@ -95,6 +95,7 @@ export interface InvitationResponse {
   candidate_email: string;
   candidate_phone?: string;
   invite_source?: string;
+  candidate_display_id?: string;
   resume_id?: string;
   invitation_token: string;
   invitation_link?: string;
@@ -115,6 +116,7 @@ export interface AssessmentAttemptResponse {
   candidate_email: string;
   candidate_phone?: string;
   invite_source?: string;
+  candidate_display_id?: string;
   assessment_title: string;
   jd_title: string;
   started_at?: string;
@@ -791,11 +793,15 @@ export const assessmentService = {
   /**
    * 7. Export individual assessment report as PDF
    * AS-25: Individual PDF report generation
+   * If attemptId is provided, generates PDF for that specific candidate only.
    */
-  async exportPDF(assessmentId: string): Promise<Blob> {
+  async exportPDF(assessmentId: string, attemptId?: string): Promise<Blob> {
     try {
+      const params: any = {};
+      if (attemptId) params.attempt_id = attemptId;
       const response = await api.get(`/reports/export/assessment/${assessmentId}`, {
         responseType: 'blob',
+        params,
       });
       return response.data;
     } catch (error) {

@@ -294,6 +294,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        // Permission version is now tracked via response headers (x-permission-version)
+        // and handled by the axios interceptor in api.ts - no polling needed
         // ❌ REMOVED: Permission version polling (was calling deleted /permission-version endpoint)
         // Permission updates now use event-driven approach via refreshUser() which dispatches 'permissions-updated' event
         // On hard refresh, user data is loaded from localStorage - permission updates happen via backend save + refreshUser()
@@ -320,27 +322,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AUTH] User validated with API');
         } catch (error: unknown) {
           // Check if this is a subscription inactive error (403)
-          // The modal event is already dispatched by axios interceptor
-          const axiosError = error as { response?: { status?: number; data?: { detail?: { error_code?: string } } } };
-          if (axiosError?.response?.status === 403 &&
-              axiosError?.response?.data?.detail?.error_code === 'SUBSCRIPTION_INACTIVE') {
+          // handleApiError throws ApiError with .status property, not AxiosError with .response
+          const apiError = error as { status?: number; message?: string };
+          const isSubscriptionInactive = apiError?.status === 403 &&
+            (apiError?.message?.includes('inactive') || apiError?.message?.includes('SUBSCRIPTION'));
+
+          if (isSubscriptionInactive) {
             // Check if user is on subscription page - they need to stay logged in to renew
             const isOnSubscriptionPage = typeof window !== 'undefined' &&
               window.location.pathname.includes('/subscription/current-plan');
 
             if (isOnSubscriptionPage) {
               console.warn('[AUTH] Subscription inactive but on subscription page, keeping session for renewal');
-              // Keep the user logged in so they can renew
               return;
             }
 
-            console.warn('[AUTH] Subscription inactive, clearing session');
-            clearTokens();
-            clearUserFromStorage();
-            clearTenantFromStorage();
-            setUser(null);
-            setTenant(null);
-            // Don't redirect - let the modal handle it
+            console.warn('[AUTH] Subscription inactive, keeping session for modal handling');
+            // Don't clear tokens - let the SUBSCRIPTION_INACTIVE event modal handle it
+            // The axios interceptor already dispatched the event
             return;
           }
           console.warn('[AUTH] API validation failed, using cached user:', error);
@@ -355,22 +354,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AUTH] Fetching current user from API...');
           const apiUserData = await authService.getCurrentUser();
           console.log('[AUTH] Got user data:', apiUserData);
-          console.log('[AUTH] API Permissions:', apiUserData.permissions);
-          console.log('[AUTH] 🔍 API has can_view_scoring:', apiUserData.permissions.can_view_scoring);
-          console.log('[AUTH] 🔍 API has can_view_ai_match:', apiUserData.permissions.can_view_ai_match);
           const userData = mapApiUserToUser(apiUserData);
-          console.log('[AUTH] Mapped Permissions:', userData.permissions);
-          console.log('[AUTH] 🔍 Mapped has canViewScoring:', userData.permissions.canViewScoring);
-          console.log('[AUTH] 🔍 Mapped has canViewAiMatch:', userData.permissions.canViewAiMatch);
           setUser(userData);
           setTenant(mockTenant);
           saveUserToStorage(userData);
-          console.log('[AUTH] ✅ Session restored with fresh permissions from API');
-        } catch (error) {
+          console.log('[AUTH] Session restored with fresh permissions from API');
+        } catch (error: unknown) {
           console.error('[AUTH] Session restore failed:', error);
-          clearTokens();
-          clearUserFromStorage();
-          clearTenantFromStorage();
+          // Only clear tokens for actual auth failures (401), not temporary errors
+          const apiError = error as { status?: number };
+          if (apiError?.status === 401) {
+            console.log('[AUTH] Token invalid (401), clearing session');
+            clearTokens();
+            clearUserFromStorage();
+            clearTenantFromStorage();
+          } else {
+            console.warn('[AUTH] Keeping tokens - error may be temporary:', apiError?.status);
+            // Don't clear tokens for 403, 500, network errors, etc.
+            // Let the user stay on the page and let specific error handlers deal with it
+          }
         }
       } else {
         console.log('[AUTH] No token found, skipping session restore');

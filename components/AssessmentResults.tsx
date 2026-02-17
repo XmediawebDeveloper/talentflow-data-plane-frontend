@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
@@ -21,6 +21,7 @@ interface AssessmentResultsProps {
 interface CandidateResult {
   id: string;
   invitation_id: string;  // For pending candidates without attempt
+  candidateDisplayId?: string;  // Per-tenant candidate ID (CID-01, CID-02, ...)
   name: string;
   email: string;
   phone?: string;
@@ -35,6 +36,10 @@ interface CandidateResult {
   status: 'Completed' | 'In Progress' | 'Pending';
   completedDate: string;
   duration: string;
+  sent_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  created_at?: string;
   sections: SectionResult[];
   round: number; // Added round tracking
   roundName?: string; // Optional round name
@@ -121,6 +126,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Dynamic columns based on assessment details
   const getDefaultColumns = (): ColumnConfig[] => {
     const baseColumns: ColumnConfig[] = [
+      { id: 'cid', label: 'CID', enabled: true },
       { id: 'candidate', label: 'Candidate', enabled: true },
       { id: 'email', label: 'Email', enabled: true },
       { id: 'jdTitle', label: 'JD Title', enabled: true },
@@ -138,6 +144,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
     baseColumns.push(
       { id: 'status', label: 'Status', enabled: true },
+      { id: 'timeline', label: 'Timeline', enabled: true },
       { id: 'completed', label: 'Completed', enabled: true },
       { id: 'duration', label: 'Duration', enabled: true }
     );
@@ -289,6 +296,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             return {
               id: item.id || item.invitation_id,  // Use invitation_id for pending
               invitation_id: item.invitation_id,
+              candidateDisplayId: item.candidate_display_id,
               name: item.candidate_name || 'Unknown',
               email: item.candidate_email || '',
               phone: item.candidate_phone || '',
@@ -300,6 +308,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               coding_score,
               hr_score,
               status,
+              sent_at: item.sent_at || undefined,
+              started_at: item.started_at || undefined,
+              completed_at: item.completed_at || undefined,
+              created_at: item.created_at || undefined,
               completedDate: (() => {
                 const dateStr = item.completed_at || item.started_at;
                 if (!dateStr) return status === 'Pending' ? 'Not started' : 'N/A';
@@ -368,6 +380,20 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   };
 
+  const formatTimelineDate = (dateStr: string | undefined) => {
+    if (!dateStr) return '';
+    const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
+    const date = new Date(dateWithZ);
+    return date.toLocaleString('en-US', {
+      timeZone: 'Asia/Kolkata',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
   // Handle delete result
   const handleDeleteResult = async (resultId: string, candidateName: string) => {
     if (!await dialog.confirm({ title: 'Delete Result', message: `Are you sure you want to delete the result for ${candidateName}? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) {
@@ -413,19 +439,20 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   };
 
-  // AS-25: Handle PDF download for individual result
-  const handleDownloadPDF = async (resultId: string) => {
+  // AS-25: Handle PDF download for individual candidate result
+  const handleDownloadPDF = async (candidateId: string, candidateName?: string) => {
     if (downloadingPDF) return;
 
-    setDownloadingPDF(resultId);
+    setDownloadingPDF(candidateId);
     try {
-      const blob = await assessmentService.exportPDF(resultId);
+      const blob = await assessmentService.exportPDF(assessmentId, candidateId);
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Assessment_Report_${resultId}.pdf`;
+      const safeName = candidateName?.replace(/[^a-zA-Z0-9]/g, '_') || candidateId;
+      link.download = `Assessment_Report_${safeName}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -977,6 +1004,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
                     />
                   </th>
+                  {isColumnEnabled('cid') && (
+                    <th className="text-left px-4 py-3 text-xs text-gray-600">CID</th>
+                  )}
                   {isColumnEnabled('candidate') && (
                     <th
                       className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
@@ -1048,6 +1078,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </div>
                     </th>
                   )}
+                  {isColumnEnabled('timeline') && (
+                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        Timeline
+                      </div>
+                    </th>
+                  )}
                   {isColumnEnabled('completed') && (
                     <th
                       className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
@@ -1096,6 +1134,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
                         />
                       </td>
+                      {isColumnEnabled('cid') && (
+                        <td className="px-4 py-4">
+                          <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                            {candidate.candidateDisplayId || '-'}
+                          </span>
+                        </td>
+                      )}
                       {isColumnEnabled('candidate') && (
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">
@@ -1165,6 +1210,36 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </span>
                         </td>
                       )}
+                      {isColumnEnabled('timeline') && (
+                        <td className="px-4 py-4 text-xs text-gray-500">
+                          <div className="space-y-1">
+                            {candidate.sent_at && (
+                              <div className="flex items-center gap-2">
+                                <Mail className="w-3 h-3 text-blue-500" />
+                                <span>Sent: {formatTimelineDate(candidate.sent_at)}</span>
+                              </div>
+                            )}
+                            {candidate.started_at && (
+                              <div className="flex items-center gap-2">
+                                <Play className="w-3 h-3 text-yellow-500" />
+                                <span>Started: {formatTimelineDate(candidate.started_at)}</span>
+                              </div>
+                            )}
+                            {candidate.completed_at && (
+                              <div className="flex items-center gap-2">
+                                <CheckCircle className="w-3 h-3 text-green-500" />
+                                <span>Completed: {formatTimelineDate(candidate.completed_at)}</span>
+                              </div>
+                            )}
+                            {!candidate.sent_at && !candidate.started_at && !candidate.completed_at && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-3 h-3 text-gray-400" />
+                                <span>{candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-'}</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      )}
                       {isColumnEnabled('completed') && (
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -1194,12 +1269,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {/* AS-25: PDF Download Button */}
                           {candidate.status === 'Completed' ? (
                             <button
-                              onClick={() => handleDownloadPDF(assessmentId)}
-                              disabled={downloadingPDF === assessmentId}
+                              onClick={() => handleDownloadPDF(candidate.id, candidate.name)}
+                              disabled={downloadingPDF === candidate.id}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
                             >
-                              {downloadingPDF === assessmentId ? (
+                              {downloadingPDF === candidate.id ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
                                 <Download className="w-3 h-3" />
