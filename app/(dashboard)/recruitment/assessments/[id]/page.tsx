@@ -70,6 +70,11 @@ export default function AssessmentDetailsPage() {
           published_at: response.published_at,
           created_at: response.created_at,
           updated_at: response.updated_at,
+          // JD-extracted metadata
+          jd_experience_level: response.jd_experience_level,
+          jd_complexity: response.jd_complexity,
+          jd_primary_domain: response.jd_primary_domain,
+          jd_skill_depth: response.jd_skill_depth || [],
         };
         setAssessment(mapped);
       } else {

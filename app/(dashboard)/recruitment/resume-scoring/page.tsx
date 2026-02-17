@@ -68,8 +68,9 @@ export default function ResumeScoringRoute() {
     items?: {
       resumeId: string;
       candidateName: string;
-      status: 'queued' | 'processing' | 'completed' | 'failed';
+      status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
       score?: number;
+      matchStatus?: string;
       errorMessage?: string;
     }[];
   } | null>(null);
@@ -109,34 +110,39 @@ export default function ResumeScoringRoute() {
 
       // Immediately fetch current batch status from API (don't wait for poll interval)
       const fetchInitialStatus = async () => {
-        // First, get candidate names from sessionStorage (always available from the page that started scoring)
         let storedResumeItems: { resumeId: string; candidateName: string }[] = [];
+        let alreadyScoredItems: { resumeId: string; candidateName: string; score?: number; matchStatus?: string }[] = [];
         try {
           const storedData = sessionStorage.getItem('pendingScoringBatch');
           if (storedData) {
             const data = JSON.parse(storedData);
             storedResumeItems = data.resumeItems || [];
-            console.log('[ResumeScoringRoute] Loaded candidate names from sessionStorage:', storedResumeItems.length);
+            alreadyScoredItems = data.alreadyScoredItems || [];
           }
         } catch (e) {
           console.error('[ResumeScoringRoute] Error reading sessionStorage:', e);
         }
 
-        // Create a map for quick lookup of candidate names by resumeId
         const candidateNameMap = new Map<string, string>();
         storedResumeItems.forEach(item => {
           candidateNameMap.set(item.resumeId, item.candidateName);
         });
 
+        const alreadyScoredProgressItems = alreadyScoredItems.map(item => ({
+          resumeId: item.resumeId,
+          candidateName: item.candidateName || 'Unknown',
+          status: 'already_scored' as const,
+          score: item.score,
+          matchStatus: item.matchStatus,
+        }));
+
         try {
           const status = await scoringService.getBatchStatus(batchIdParam);
-          console.log('[ResumeScoringRoute] Initial batch status:', status);
 
-          let items: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed'; score?: number; errorMessage?: string }[];
+          let batchItems: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored'; score?: number; matchStatus?: string; errorMessage?: string }[];
 
           if (status.items && status.items.length > 0) {
-            // Map items from API response, but use sessionStorage for candidate names if API has 'Unknown'
-            items = status.items.map(item => ({
+            batchItems = status.items.map((item: any) => ({
               resumeId: item.resume_id,
               candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
               status: item.status,
@@ -144,49 +150,49 @@ export default function ResumeScoringRoute() {
               errorMessage: item.error_message,
             }));
           } else if (storedResumeItems.length > 0) {
-            // API returned empty items, use sessionStorage items as placeholders
-            console.log('[ResumeScoringRoute] API returned empty items, using sessionStorage fallback');
-            items = storedResumeItems.map(item => ({
+            batchItems = storedResumeItems.map(item => ({
               resumeId: item.resumeId,
               candidateName: item.candidateName || 'Unknown',
               status: 'queued' as const,
             }));
           } else {
-            items = [];
+            batchItems = [];
           }
+
+          const allItems = [...alreadyScoredProgressItems, ...batchItems];
 
           setBatchProgress({
             jobId: status.jd_id,
             jobTitle: status.jd_title,
-            total: status.total || storedResumeItems.length,
+            total: (status.total || storedResumeItems.length) + alreadyScoredItems.length,
             queued: status.queued,
             processing: status.processing,
             completed: status.completed,
             failed: status.failed,
-            items: items,
+            items: allItems,
           });
         } catch (e) {
           console.error('[ResumeScoringRoute] Error fetching initial status:', e);
-          // Fallback to sessionStorage data if API fails
-          if (storedResumeItems.length > 0) {
+          if (storedResumeItems.length > 0 || alreadyScoredItems.length > 0) {
             try {
               const storedData = sessionStorage.getItem('pendingScoringBatch');
               if (storedData) {
                 const data = JSON.parse(storedData);
-                const items = storedResumeItems.map(item => ({
+                const batchItems = storedResumeItems.map(item => ({
                   resumeId: item.resumeId,
                   candidateName: item.candidateName || 'Unknown',
                   status: 'queued' as const,
                 }));
+                const allItems = [...alreadyScoredProgressItems, ...batchItems];
                 setBatchProgress({
                   jobId: data.jobId,
                   jobTitle: data.jobTitle,
                   total: data.totalResumes,
-                  queued: data.totalResumes,
+                  queued: data.totalResumes - alreadyScoredItems.length,
                   processing: 0,
                   completed: 0,
                   failed: 0,
-                  items: items,
+                  items: allItems,
                 });
               }
             } catch (e2) {
@@ -231,13 +237,15 @@ export default function ResumeScoringRoute() {
   useEffect(() => {
     if (!pendingBatchId) return;
 
-    // Get candidate names from sessionStorage once at the start of polling
+    // Get candidate names and already-scored items from sessionStorage once at the start of polling
     let storedResumeItems: { resumeId: string; candidateName: string }[] = [];
+    let alreadyScoredItems: { resumeId: string; candidateName: string; score?: number; matchStatus?: string; scoredAt?: string }[] = [];
     try {
       const storedData = sessionStorage.getItem('pendingScoringBatch');
       if (storedData) {
         const data = JSON.parse(storedData);
         storedResumeItems = data.resumeItems || [];
+        alreadyScoredItems = data.alreadyScoredItems || [];
       }
     } catch (e) {
       // Ignore sessionStorage errors
@@ -249,16 +257,24 @@ export default function ResumeScoringRoute() {
       candidateNameMap.set(item.resumeId, item.candidateName);
     });
 
+    // Pre-build already-scored items with fixed status
+    const alreadyScoredProgressItems = alreadyScoredItems.map(item => ({
+      resumeId: item.resumeId,
+      candidateName: item.candidateName || 'Unknown',
+      status: 'already_scored' as const,
+      score: item.score,
+      matchStatus: item.matchStatus,
+    }));
+
     const pollInterval = setInterval(async () => {
       try {
         const status = await scoringService.getBatchStatus(pendingBatchId);
-        console.log('[ResumeScoringRoute] Batch status:', status);
 
-        let items: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed'; score?: number; errorMessage?: string }[];
+        let batchItems: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored'; score?: number; matchStatus?: string; errorMessage?: string }[];
 
         if (status.items && status.items.length > 0) {
           // Map items from API response, but use sessionStorage for candidate names if API has 'Unknown'
-          items = status.items.map(item => ({
+          batchItems = status.items.map((item: any) => ({
             resumeId: item.resume_id,
             candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
             status: item.status,
@@ -267,24 +283,27 @@ export default function ResumeScoringRoute() {
           }));
         } else if (storedResumeItems.length > 0) {
           // API returned empty items, use sessionStorage items as placeholders
-          items = storedResumeItems.map(item => ({
+          batchItems = storedResumeItems.map(item => ({
             resumeId: item.resumeId,
             candidateName: item.candidateName || 'Unknown',
             status: 'queued' as const,
           }));
         } else {
-          items = [];
+          batchItems = [];
         }
+
+        // Merge batch items with already-scored items
+        const allItems = [...alreadyScoredProgressItems, ...batchItems];
 
         setBatchProgress({
           jobId: status.jd_id,
           jobTitle: status.jd_title,
-          total: status.total || storedResumeItems.length,
+          total: (status.total || storedResumeItems.length) + alreadyScoredItems.length,
           queued: status.queued,
           processing: status.processing,
           completed: status.completed,
           failed: status.failed,
-          items: items,
+          items: allItems,
         });
 
         // Stop polling when batch is complete
@@ -316,15 +335,16 @@ export default function ResumeScoringRoute() {
   }, [pendingBatchId]);
 
   const loadScoredHistory = async () => {
-    // Load scored history from the API - single call to get all scored resumes
+    // Load scored history sidebar from the API - only page 1 (sorted by created_at DESC)
+    // Recently scored items always appear on page 1. Full JD scores are loaded on-demand via loadJdScores.
     try {
-      // Use the optimized endpoint that gets all scores in one call
-      const allScoresResponse = await scoringService.getAllScoredResumes({ page_size: 100 });
+      const firstPage = await scoringService.getAllScoredResumes({ page_size: 500, page: 1 });
+      const allItems = firstPage.items || [];
 
       // Group scores by JD
       const scoresByJd = new Map<string, { jdTitle: string; scores: any[] }>();
 
-      for (const item of allScoresResponse.items) {
+      for (const item of allItems) {
         const jdId = item.jd_id;
         if (!scoresByJd.has(jdId)) {
           scoresByJd.set(jdId, { jdTitle: item.jd_title || 'Unknown Job', scores: [] });
@@ -434,6 +454,97 @@ export default function ResumeScoringRoute() {
       } catch (e) {
         console.error('Failed to load from localStorage:', e);
       }
+    }
+  };
+
+  // Load ALL scores for a specific JD on-demand via /jd/{jd_id} (paginated, deduped latest-per-resume)
+  const loadJdScores = async (jdId: string, jdTitle?: string) => {
+    try {
+      const firstPage = await scoringService.getJDScoredResumes(jdId, { page_size: 500, page: 1 });
+      let allItems = [...(firstPage.items || [])];
+
+      for (let page = 2; page <= (firstPage.total_pages || 1); page++) {
+        const nextPage = await scoringService.getJDScoredResumes(jdId, { page_size: 500, page });
+        allItems = allItems.concat(nextPage.items || []);
+      }
+
+      const scores = allItems.map((item: any) => {
+        const matchScore = Math.round(item.overall_score || 0);
+        let matchStatus = 'No Match';
+        if (item.match_status === 'exact_match' || item.match_status === 'Exact Match') {
+          matchStatus = 'Exact Match';
+        } else if (item.match_status === 'partial_match' || item.match_status === 'Partial Match') {
+          matchStatus = 'Partial Match';
+        } else if (item.match_status === 'no_match' || item.match_status === 'No Match') {
+          matchStatus = 'No Match';
+        } else if (matchScore >= 70) {
+          matchStatus = 'Exact Match';
+        } else if (matchScore >= 50) {
+          matchStatus = 'Partial Match';
+        }
+        return {
+          id: item.id,
+          resumeId: item.resume_id || '',
+          candidateName: item.candidate_name || 'Unknown',
+          candidateEmail: item.candidate_email || '',
+          email: item.candidate_email || '',
+          phone: item.phone || '',
+          overall_score: matchScore,
+          matchScore: matchScore,
+          matchStatus: matchStatus,
+          scorePercentage: matchScore,
+          scoredDate: item.created_at || new Date().toISOString(),
+          scoredBy: item.scored_by_name || item.scored_by || 'System',
+          version: item.resume_version || 1,
+          resumeVersion: item.resume_version || 1,
+          source: 'database',
+          status: 'completed',
+          errorReason: '',
+          experience: item.experience_years ? `${item.experience_years} years` : undefined,
+          education: item.education,
+          certifications: item.certifications || [],
+          aiSummary: item.ai_summary,
+          strengths: item.strengths || [],
+          gaps: item.gaps || [],
+          title: item.current_title,
+          currentCompany: item.current_company,
+          location: item.location,
+          skills: item.skills || [],
+          matchedSkills: item.matched_skills || item.skills || [],
+          missingSkills: item.missing_skills || item.gaps || [],
+          scoreBreakdown: item.score_breakdown || [],
+          criteriaScores: item.criteria_scores || {},
+          technicalSkills: item.technical_skills || item.skills || [],
+          softSkills: item.soft_skills || [],
+          experienceDetails: item.experience_details || [],
+          educationDetails: item.education_details || [],
+          languages: item.languages || [],
+          professionalSummary: item.professional_summary || item.ai_summary || '',
+        };
+      });
+
+      scores.sort((a: any, b: any) => (b.overall_score || 0) - (a.overall_score || 0));
+
+      setScoredHistory(prev => {
+        const existing = prev.find(h => h.jobId === jdId);
+        const title = jdTitle || existing?.jobTitle || 'Unknown Job';
+        const updatedEntry: ScoredResumeData = {
+          id: jdId,
+          jobId: jdId,
+          jobTitle: title,
+          scoredAt: scores[0]?.scoredDate ? new Date(scores[0].scoredDate) : (existing?.scoredAt || new Date()),
+          source: 'database' as const,
+          totalScored: firstPage.total || scores.length,
+          scoredResumes: scores,
+        };
+        if (existing) {
+          return prev.map(h => h.jobId === jdId ? updatedEntry : h);
+        } else {
+          return [updatedEntry, ...prev];
+        }
+      });
+    } catch (error) {
+      console.error('[loadJdScores] Failed to load scores for JD:', jdId, error);
     }
   };
 
@@ -566,6 +677,7 @@ export default function ResumeScoringRoute() {
       scoredHistory={scoredHistory}
       onSaveScores={saveScoredHistory}
       onRefreshHistory={loadScoredHistory}
+      onLoadJdScores={loadJdScores}
       onRefreshResumes={refreshResumes}
       initialJdId={initialJdId}
       initialScoreId={initialScoreId}

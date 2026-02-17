@@ -85,9 +85,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const { user, isTenantAdmin, hasPermission } = useAuth();
 
   // Permission checks for CRUD operations (bypass for tenant admin)
-  const canCreateAssessment = isTenantAdmin || (user?.permissions?.canCreateAssessment ?? false);
-  const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessment ?? false);
-  const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessment ?? false);
+  const canCreateAssessment = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
+  const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
+  const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
 
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');

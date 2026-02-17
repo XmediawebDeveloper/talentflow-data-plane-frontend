@@ -422,9 +422,90 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []); // Empty deps - only register once on mount
 
-  // Permission version updates are now handled via x-permission-version response header
-  // in the axios interceptor (api.ts) - no polling needed.
-  // The interceptor automatically refreshes tokens when permission version changes.
+  // ✅ SMART POLLING: Periodic permission version check with optimizations
+  // Checks if permission version changed on server with smart intervals
+  // Optimizations:
+  // - Only polls when tab is visible
+  // - Only polls when user is active (interacted in last 5 minutes)
+  // - Uses exponential backoff when idle
+  // - Stops polling after 30 minutes of inactivity
+  useEffect(() => {
+    if (!user) return;
+
+    let pollInterval = 5000; // Start with 5 seconds
+    let intervalId: NodeJS.Timeout | null = null;
+    let lastActivityTime = Date.now();
+    let consecutiveIdleChecks = 0;
+
+    // Update last activity time on user interaction
+    const updateActivity = () => {
+      lastActivityTime = Date.now();
+      consecutiveIdleChecks = 0;
+      // Reset to fast polling when user becomes active again
+      if (pollInterval > 5000) {
+        pollInterval = 5000;
+        restartPolling();
+      }
+    };
+
+    // Track user activity
+    if (typeof window !== 'undefined') {
+      window.addEventListener('mousemove', updateActivity);
+      window.addEventListener('keydown', updateActivity);
+      window.addEventListener('click', updateActivity);
+      window.addEventListener('scroll', updateActivity);
+    }
+
+    const checkPermissions = async () => {
+      // Skip if tab is not visible
+      if (typeof document !== 'undefined' && document.hidden) {
+        console.debug('[AUTH] Skipping poll - tab not visible');
+        return;
+      }
+
+      // Check if user has been inactive for > 30 minutes
+      const inactiveTime = Date.now() - lastActivityTime;
+      if (inactiveTime > 30 * 60 * 1000) {
+        console.log('[AUTH] Stopping polling - user inactive for 30+ minutes');
+        if (intervalId) clearInterval(intervalId);
+        return;
+      }
+
+      // Use exponential backoff for idle users (inactive > 5 minutes)
+      if (inactiveTime > 5 * 60 * 1000) {
+        consecutiveIdleChecks++;
+        if (consecutiveIdleChecks > 3 && pollInterval < 10000) {
+          pollInterval = Math.min(pollInterval * 2, 10000); // Max 10 seconds
+          console.log(`[AUTH] User idle, increasing poll interval to ${pollInterval/1000}s`);
+          restartPolling();
+        }
+      }
+
+      // Permission updates are now handled instantly via WebSocket push (permissions_updated event).
+      // This polling loop is kept only for activity tracking / idle detection.
+      // See: useNotificationWebSocket → onPermissionsUpdated → refreshUser()
+    };
+
+    const restartPolling = () => {
+      if (intervalId) clearInterval(intervalId);
+      intervalId = setInterval(checkPermissions, pollInterval);
+    };
+
+    // Start polling
+    restartPolling();
+    console.log(`[AUTH] 🔄 Smart polling started (${pollInterval/1000}s interval)`);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('mousemove', updateActivity);
+        window.removeEventListener('keydown', updateActivity);
+        window.removeEventListener('click', updateActivity);
+        window.removeEventListener('scroll', updateActivity);
+      }
+      console.log('[AUTH] Smart polling stopped');
+    };
+  }, [user]); // Re-run if user changes (login/logout)
 
   const login = (userData: User, tenantName?: string) => {
     console.log('[AUTH] Login called for:', userData.email, 'tenant:', tenantName);

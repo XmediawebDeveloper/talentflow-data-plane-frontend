@@ -47,7 +47,8 @@ export default function JDListPage() {
   const [total, setTotal] = useState(0);
   const [selectedJds, setSelectedJds] = useState<string[]>([]);
   // Track which JDs can be deleted (no active assessments)
-  const [jdDeletionStatus, setJdDeletionStatus] = useState<Record<string, { canDelete: boolean; activeCount: number }>>({});
+  // null = still checking, true = can delete, false = cannot delete (has active assessments)
+  const [jdDeletionStatus, setJdDeletionStatus] = useState<Record<string, { canDelete: boolean; activeCount: number } | null>>({});
 
   // FIX-003: State for inline JD creation/editing
   const [showJDSheet, setShowJDSheet] = useState(false);
@@ -173,16 +174,21 @@ export default function JDListPage() {
       setTotalPages(response.total_pages);
       setTotal(response.total);
 
+      // Initially mark all JDs as null (checking) — delete button hidden until confirmed safe
+      const initialStatusMap: Record<string, null> = {};
+      response.items.forEach((jd) => { initialStatusMap[jd.id] = null; });
+      setJdDeletionStatus(initialStatusMap);
+
       // Check assessment status for each JD to determine if deletion is allowed
       const deletionStatusChecks = await Promise.allSettled(
         response.items.map(async (jd) => {
           try {
-            const status = await jdService.checkAssessmentStatus(jd.id);
-            return { jdId: jd.id, canDelete: status.can_delete, activeCount: status.active_count };
+            const assessmentStatus = await jdService.checkAssessmentStatus(jd.id);
+            return { jdId: jd.id, canDelete: assessmentStatus.can_delete, activeCount: assessmentStatus.active_count };
           } catch (error) {
             console.error(`Failed to check assessment status for JD ${jd.id}:`, error);
-            // Default to allowing deletion if check fails (fail-safe)
-            return { jdId: jd.id, canDelete: true, activeCount: 0 };
+            // Fail-CLOSED: if check fails, do NOT allow deletion — safer than allowing it
+            return { jdId: jd.id, canDelete: false, activeCount: 0 };
           }
         })
       );
@@ -192,7 +198,7 @@ export default function JDListPage() {
         if (result.status === 'fulfilled') {
           statusMap[result.value.jdId] = {
             canDelete: result.value.canDelete,
-            activeCount: result.value.activeCount
+            activeCount: result.value.activeCount,
           };
         }
       });
@@ -256,13 +262,7 @@ export default function JDListPage() {
       fetchJDs();
       setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' });
     } catch (error: any) {
-      // Check if error is about active assessments
-      const errorDetail = error?.response?.data?.detail;
-      if (errorDetail && typeof errorDetail === 'object' && errorDetail.error_code === 'HAS_ACTIVE_ASSESSMENTS') {
-        toast.error(errorDetail.error || 'Cannot delete JD with active assessments');
-      } else {
-        toast.error('Failed to delete job description');
-      }
+      toast.error(error?.message || 'Failed to delete job description');
     } finally {
       setConfirmLoading(false);
     }
@@ -774,40 +774,49 @@ export default function JDListPage() {
                               Archive Job
                             </button>
                           )}
-                          {/* Delete action - Only show if NO active assessments */}
-                          {/* ✅ PERMISSION FIX: Only show Delete button if user has canDeleteJD permission AND no active assessments */}
-                          {jdPerms.canDelete && jdDeletionStatus[jd.id]?.canDelete && (
-                            <button
-                              onClick={() => {
-                                setConfirmDialog({
-                                  isOpen: true,
-                                  type: 'delete',
-                                  jdId: jd.id,
-                                  jdTitle: jd.title,
-                                });
-                                setActiveDropdown(null);
-                              }}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete
-                            </button>
-                          )}
-                          {/* Show info message if JD has active assessments */}
-                          {jdPerms.canDelete && !jdDeletionStatus[jd.id]?.canDelete && (
-                            <div className="w-full px-4 py-3 text-sm text-orange-700 bg-orange-50 border-t border-orange-100">
-                              <div className="flex items-start gap-2">
-                                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="font-medium">Cannot Delete</p>
-                                  <p className="text-xs mt-1">
-                                    This JD is linked to {jdDeletionStatus[jd.id]?.activeCount || 0} active assessment{jdDeletionStatus[jd.id]?.activeCount !== 1 ? 's' : ''}.
-                                    Complete or close the assessment{jdDeletionStatus[jd.id]?.activeCount !== 1 ? 's' : ''} to enable deletion.
-                                  </p>
+                          {/* Delete section — only shown if user has delete permission */}
+                          {jdPerms.canDelete && (() => {
+                            const delStatus = jdDeletionStatus[jd.id];
+
+                            // Still loading — show nothing (delete button stays hidden)
+                            if (delStatus === null || delStatus === undefined) return null;
+
+                            // Has active assessments — show ONLY the warning message, NO delete button
+                            if (!delStatus.canDelete) {
+                              return (
+                                <div className="w-full px-4 py-3 text-sm bg-orange-50 border-t border-orange-100">
+                                  <div className="flex items-start gap-2">
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-orange-500" />
+                                    <div>
+                                      <p className="font-semibold text-orange-800">Cannot Delete</p>
+                                      <p className="text-xs mt-0.5 text-orange-700">
+                                        This JD is linked to {delStatus.activeCount} active assessment{delStatus.activeCount !== 1 ? 's' : ''}. Once the assessment{delStatus.activeCount !== 1 ? 's are' : ' is'} completed, you can delete this JD.
+                                      </p>
+                                    </div>
+                                  </div>
                                 </div>
-                              </div>
-                            </div>
-                          )}
+                              );
+                            }
+
+                            // No active assessments — show delete button
+                            return (
+                              <button
+                                onClick={() => {
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    type: 'delete',
+                                    jdId: jd.id,
+                                    jdTitle: jd.title,
+                                  });
+                                  setActiveDropdown(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Delete
+                              </button>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>

@@ -66,8 +66,8 @@ interface ResumeTableProps {
   onSelectResume: (id: string) => void;
   onSelectAll: (selected: boolean) => void;
   onQuickView: (resume: Resume) => void;
-  onApplyToJob: (resume: Resume) => void;
-  onDelete: (id: string) => void;
+  onApplyToJob?: (resume: Resume) => void;
+  onDelete?: (id: string) => void;
   onMoveToFolder?: (resumeIds: string[], folderId: string) => void;
   folders?: Folder[];
   selectionMode?: boolean;
@@ -274,10 +274,10 @@ export default function ResumeTable({
           version: selectedVersion.version,
         };
         toast.success(`Applying with ${versionSelectorResume.name}'s resume (v${selectedVersion.version})`);
-        onApplyToJob(resumeWithSelectedVersion);
+        onApplyToJob?.(resumeWithSelectedVersion);
       } else {
         // Fallback to current resume if version not found
-        onApplyToJob(versionSelectorResume);
+        onApplyToJob?.(versionSelectorResume);
       }
       setVersionSelectorResume(null);
     }
@@ -501,13 +501,15 @@ export default function ResumeTable({
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => handleApplyToJob(resume)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Apply to Job"
-                      >
-                        <Briefcase className="w-4 h-4" />
-                      </button>
+                      {onApplyToJob && (
+                        <button
+                          onClick={() => handleApplyToJob(resume)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Apply to Job"
+                        >
+                          <Briefcase className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={async () => {
                           try {
@@ -759,10 +761,10 @@ export default function ResumeTable({
           candidateName={versionHistoryResume.name}
           versions={versionHistoryResume.versions}
           onClose={() => setVersionHistoryResume(null)}
-          onApplyToJob={(versionId) => {
+          onApplyToJob={onApplyToJob ? (versionId) => {
             setVersionHistoryResume(null);
             onApplyToJob(versionHistoryResume);
-          }}
+          } : undefined}
         />
       )}
 
@@ -1156,7 +1158,7 @@ export default function ResumeTable({
                 </button>
                 <button
                   onClick={() => {
-                    onDelete(selectedResumeForAction.id);
+                    onDelete?.(selectedResumeForAction.id);
                     toast.success('Resume deleted successfully');
                     setShowDeleteModal(false);
                     setSelectedResumeForAction(null);
