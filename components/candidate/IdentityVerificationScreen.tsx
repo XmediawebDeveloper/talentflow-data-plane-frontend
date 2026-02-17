@@ -53,6 +53,8 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
       if (data.verified) {
         // Store verification in session
         sessionStorage.setItem(`identity_verified_${token}`, 'true');
+        // SECURITY: Store verified email for use when starting assessment
+        sessionStorage.setItem(`verified_email_${token}`, candidateEmail.trim().toLowerCase());
         onVerified();
       } else {
         setError(data.message || 'Identity verification failed. Please check your email address.');

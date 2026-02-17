@@ -1,6 +1,8 @@
-import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2 } from 'lucide-react';
+import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
+import api from '@/lib/services/api';
+import { toast } from 'sonner';
 
 // Utility function to format date to IST (Asia/Kolkata timezone)
 function formatDateTimeIST(date: Date | string | undefined): { date: string; time: string } {
@@ -35,7 +37,7 @@ export interface ScoringProgressItem {
   jobTitle: string;  // Added: Which job this scoring belongs to
   jobId: string;     // Added: Job identifier
   source: 'Internal DB' | 'My Resumes';
-  status: 'Queued' | 'Scoring in progress' | 'Scored successfully' | 'Failed';
+  status: 'Queued' | 'Scoring in progress' | 'Scored successfully' | 'Failed' | 'Already Scored - Skipped';
   errorReason?: string;
   scoredDateTime?: Date;
   matchResult?: 'Exact Match' | 'Partial Match' | 'No Match';
@@ -62,10 +64,69 @@ export default function BulkScoringProgressModal({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
+  const [bulkRetrying, setBulkRetrying] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [completedTimes, setCompletedTimes] = useState<number[]>([]);
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
+
+  // Track start time when first item starts processing
+  useEffect(() => {
+    const hasStarted = progressData.some(item =>
+      item.status === 'Scoring in progress' || item.status === 'Scored successfully' || item.status === 'Failed'
+    );
+
+    if (hasStarted && !startTime) {
+      setStartTime(new Date());
+    }
+  }, [progressData, startTime]);
+
+  // Calculate average time per resume and ETA
+  const calculateETA = () => {
+    if (!startTime) return null;
+
+    const now = new Date();
+    const elapsedMinutes = (now.getTime() - startTime.getTime()) / (1000 * 60);
+
+    const completedOrFailed = progressData.filter(
+      item => item.status === 'Scored successfully' || item.status === 'Already Scored - Skipped' || item.status === 'Failed'
+    ).length;
+
+    const inProgress = progressData.filter(
+      item => item.status === 'Scoring in progress'
+    ).length;
+
+    // Show ETA as soon as first item starts processing
+    if (completedOrFailed === 0 && inProgress === 0) return null;
+
+    // Remaining resumes (including currently processing ones)
+    const remaining = progressData.filter(
+      item => item.status === 'Queued' || item.status === 'Scoring in progress'
+    ).length;
+
+    if (remaining === 0) return null;
+
+    // Calculate average time based on completed items, or use estimate if none completed yet
+    let avgTimePerResume: number;
+    if (completedOrFailed > 0) {
+      // Use actual average from completed items
+      avgTimePerResume = elapsedMinutes / completedOrFailed;
+    } else {
+      // First item still processing - estimate 2 minutes per resume as baseline
+      avgTimePerResume = 2;
+    }
+
+    // Calculate min and max estimates (±20% variance)
+    const estimatedMinutes = avgTimePerResume * remaining;
+    const minMinutes = Math.max(1, Math.floor(estimatedMinutes * 0.8));
+    const maxMinutes = Math.ceil(estimatedMinutes * 1.2);
+
+    return { minMinutes, maxMinutes, remaining };
+  };
+
+  const eta = calculateETA();
 
   // Handle retry for a failed item
   const handleRetry = async (item: ScoringProgressItem) => {
@@ -83,6 +144,44 @@ export default function BulkScoringProgressModal({
     }
   };
 
+  // Handle bulk retry for all failed items
+  const handleBulkRetryFailed = async () => {
+    if (!filterByJobId || bulkRetrying) return;
+
+    const failedItems = progressData.filter(item => item.status === 'Failed');
+    if (failedItems.length === 0) {
+      toast.info('No failed resumes to retry');
+      return;
+    }
+
+    setBulkRetrying(true);
+    try {
+      const scoreIds = failedItems.map(item => item.id);
+      const response = await api.post('/api/v1/scoring/retry/bulk', {
+        score_ids: scoreIds,
+        force: false
+      });
+
+      const result = response.data;
+      toast.success(`Retry complete: ${result.succeeded} succeeded, ${result.failed} failed, ${result.skipped} skipped`);
+
+      // Refresh the data by triggering individual retry callbacks if provided
+      if (onRetryFailed) {
+        for (const failedItem of failedItems) {
+          const resultItem = result.results.find((r: any) => r.score_id === failedItem.id);
+          if (resultItem && resultItem.status === 'SUCCESS') {
+            await onRetryFailed(failedItem);
+          }
+        }
+      }
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.detail || error?.message || 'Bulk retry failed';
+      toast.error(`Bulk retry failed: ${errorMsg}`);
+    } finally {
+      setBulkRetrying(false);
+    }
+  };
+
   // Get the job title if filtering by specific job
   const filteredJobTitle = filterByJobId
     ? progressData.find(item => item.jobId === filterByJobId)?.jobTitle
@@ -93,10 +192,11 @@ export default function BulkScoringProgressModal({
   const queuedCount = progressData.filter(item => item.status === 'Queued').length;
   const inProgressCount = progressData.filter(item => item.status === 'Scoring in progress').length;
   const completedCount = progressData.filter(item => item.status === 'Scored successfully').length;
+  const skippedCount = progressData.filter(item => item.status === 'Already Scored - Skipped').length;
   const failedCount = progressData.filter(item => item.status === 'Failed').length;
 
   // Calculate progress percentage
-  const progressPercentage = totalResumes > 0 ? Math.round(((completedCount + failedCount) / totalResumes) * 100) : 0;
+  const progressPercentage = totalResumes > 0 ? Math.round(((completedCount + skippedCount + failedCount) / totalResumes) * 100) : 0;
   const isAllComplete = queuedCount === 0 && inProgressCount === 0 && totalResumes > 0;
 
   // Filter data
@@ -108,6 +208,7 @@ export default function BulkScoringProgressModal({
       (statusFilter === 'queued' && item.status === 'Queued') ||
       (statusFilter === 'in-progress' && item.status === 'Scoring in progress') ||
       (statusFilter === 'completed' && item.status === 'Scored successfully') ||
+      (statusFilter === 'skipped' && item.status === 'Already Scored - Skipped') ||
       (statusFilter === 'failed' && item.status === 'Failed');
 
     const matchesSource = sourceFilter === 'all' ||
@@ -127,6 +228,8 @@ export default function BulkScoringProgressModal({
         return <Loader className="w-4 h-4 text-gray-700 animate-spin" />;
       case 'Scored successfully':
         return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+      case 'Already Scored - Skipped':
+        return <CheckCircle2 className="w-4 h-4 text-blue-500" />;
       case 'Failed':
         return <XCircle className="w-4 h-4 text-red-500" />;
       default:
@@ -142,6 +245,8 @@ export default function BulkScoringProgressModal({
         return 'bg-gray-100 text-gray-900 border-gray-300';
       case 'Scored successfully':
         return 'bg-green-100 text-green-700 border-green-300';
+      case 'Already Scored - Skipped':
+        return 'bg-blue-100 text-blue-700 border-blue-300';
       case 'Failed':
         return 'bg-red-100 text-red-700 border-red-300';
       default:
@@ -175,17 +280,10 @@ export default function BulkScoringProgressModal({
     }
 
     return (
-      <div className="flex flex-col gap-1">
-        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${badgeClass} w-fit`}>
-          {icon}
-          {displayText}
-        </span>
-        {score !== undefined && score > 0 && (
-          <span className="text-xs text-gray-500">
-            Score: {score.toFixed(1)}%
-          </span>
-        )}
-      </div>
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${badgeClass} w-fit`}>
+        {icon}
+        {displayText}
+      </span>
     );
   };
 
@@ -204,7 +302,7 @@ export default function BulkScoringProgressModal({
                   {filterByJobId && filteredJobTitle ? filteredJobTitle : 'Bulk Scoring'}
                 </h3>
                 <p className="text-xs text-gray-300">
-                  {completedCount + failedCount}/{totalResumes} processed
+                  {completedCount + skippedCount + failedCount}/{totalResumes} processed
                 </p>
               </div>
             </div>
@@ -234,34 +332,59 @@ export default function BulkScoringProgressModal({
                 style={{ width: `${totalResumes > 0 ? (completedCount / totalResumes) * 100 : 0}%` }}
               />
               <div
+                className="bg-blue-400 transition-all duration-500"
+                style={{ width: `${totalResumes > 0 ? (skippedCount / totalResumes) * 100 : 0}%` }}
+              />
+              <div
                 className="bg-red-500 transition-all duration-500"
                 style={{ width: `${totalResumes > 0 ? (failedCount / totalResumes) * 100 : 0}%` }}
               />
               <div
-                className="bg-blue-500 animate-pulse transition-all duration-500"
+                className="bg-gray-500 animate-pulse transition-all duration-500"
                 style={{ width: `${totalResumes > 0 ? (inProgressCount / totalResumes) * 100 : 0}%` }}
               />
             </div>
           </div>
 
           {/* Stats */}
-          <div className="flex items-center justify-between text-xs text-gray-300">
-            <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                Processing: {inProgressCount}
-              </span>
-              <span className="flex items-center gap-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                Done: {completedCount}
-              </span>
-              {failedCount > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-gray-300">
+              <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  Failed: {failedCount}
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  Processing: {inProgressCount}
                 </span>
-              )}
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  Done: {completedCount}
+                </span>
+                {skippedCount > 0 && (
+                  <span className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                    Skipped: {skippedCount}
+                  </span>
+                )}
+                {failedCount > 0 && (
+                  <span className="flex items-center gap-1">
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    Failed: {failedCount}
+                  </span>
+                )}
+              </div>
             </div>
+
+            {/* ETA in minimized view */}
+            {eta && !isAllComplete && (
+              <div className="flex items-center gap-1.5 text-xs text-blue-300">
+                <Clock className="w-3 h-3" />
+                <span>
+                  {eta.minMinutes === eta.maxMinutes
+                    ? `Approx. ${eta.minMinutes} min${eta.minMinutes > 1 ? 's' : ''} remaining`
+                    : `Approx. ${eta.minMinutes}–${eta.maxMinutes} min${eta.maxMinutes > 1 ? 's' : ''} remaining`
+                  }
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -282,7 +405,7 @@ export default function BulkScoringProgressModal({
                 {filterByJobId && filteredJobTitle ? filteredJobTitle : 'Bulk Scoring Progress'}
               </h2>
               <p className="text-sm text-gray-300">
-                {completedCount + failedCount}/{totalResumes} resumes processed
+                {completedCount + skippedCount + failedCount}/{totalResumes} resumes processed
               </p>
             </div>
           </div>
@@ -298,17 +421,32 @@ export default function BulkScoringProgressModal({
                     style={{ width: `${totalResumes > 0 ? (completedCount / totalResumes) * 100 : 0}%` }}
                   />
                   <div
+                    className="bg-blue-400 transition-all duration-500"
+                    style={{ width: `${totalResumes > 0 ? (skippedCount / totalResumes) * 100 : 0}%` }}
+                  />
+                  <div
                     className="bg-red-500 transition-all duration-500"
                     style={{ width: `${totalResumes > 0 ? (failedCount / totalResumes) * 100 : 0}%` }}
                   />
                   <div
-                    className="bg-blue-500 animate-pulse transition-all duration-500"
+                    className="bg-gray-500 animate-pulse transition-all duration-500"
                     style={{ width: `${totalResumes > 0 ? (inProgressCount / totalResumes) * 100 : 0}%` }}
                   />
                 </div>
               </div>
               {/* Percentage removed as per requirement */}
             </div>
+
+            {/* ETA Display */}
+            {eta && !isAllComplete && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm font-medium">
+                <Clock className="w-4 h-4" />
+                {eta.minMinutes === eta.maxMinutes
+                  ? `Approx. ${eta.minMinutes} min${eta.minMinutes > 1 ? 's' : ''} remaining`
+                  : `Approx. ${eta.minMinutes}–${eta.maxMinutes} min${eta.maxMinutes > 1 ? 's' : ''} remaining`
+                }
+              </div>
+            )}
 
             {isAllComplete && (
               <div className="flex items-center gap-1.5 px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-sm font-medium">
@@ -372,6 +510,17 @@ export default function BulkScoringProgressModal({
             <span className="text-sm font-medium">Done: <span className="font-bold">{completedCount}</span></span>
           </button>
           <button
+            onClick={() => setStatusFilter(statusFilter === 'skipped' ? 'all' : 'skipped')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer hover:shadow-md ${
+              statusFilter === 'skipped'
+                ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-400'
+                : 'bg-white text-gray-600 hover:bg-blue-50'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span className="text-sm font-medium">Skipped: <span className="font-bold">{skippedCount}</span></span>
+          </button>
+          <button
             onClick={() => setStatusFilter(statusFilter === 'failed' ? 'all' : 'failed')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer hover:shadow-md ${
               statusFilter === 'failed'
@@ -382,6 +531,31 @@ export default function BulkScoringProgressModal({
             <XCircle className="w-4 h-4" />
             <span className="text-sm font-medium">Failed: <span className="font-bold">{failedCount}</span></span>
           </button>
+          {/* Bulk Retry Button */}
+          {filterByJobId && onRetryFailed && failedCount > 0 && (
+            <button
+              onClick={handleBulkRetryFailed}
+              disabled={bulkRetrying}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all hover:shadow-md ${
+                bulkRetrying
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md'
+              }`}
+              title="Retry all failed resumes at once"
+            >
+              {bulkRetrying ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  <span className="text-sm font-medium">Retrying All...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  <span className="text-sm font-medium">Retry All Failed</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Preparing State - Show when all are queued and nothing started */}
@@ -435,6 +609,7 @@ export default function BulkScoringProgressModal({
                 <option value="queued">Queued</option>
                 <option value="in-progress">In Progress</option>
                 <option value="completed">Completed</option>
+                <option value="skipped">Skipped</option>
                 <option value="failed">Failed</option>
               </select>
             </div>

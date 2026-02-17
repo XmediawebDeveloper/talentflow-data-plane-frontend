@@ -48,7 +48,9 @@ import { User, Tenant } from '@/lib/types/tenant';
 interface SidebarProps {
   user?: User;
   tenant?: Tenant;
-  subscriptionExpired?: boolean;
+  subscriptionExpired?: boolean | undefined;  // undefined = loading/unknown (default to locked)
+  accountSuspended?: boolean;  // true = account suspended, block all navigation
+  onClose?: () => void;  // Close mobile menu
 }
 
 // Paths allowed even when subscription is expired
@@ -75,7 +77,7 @@ interface NavSection {
   adminOnly?: boolean;
 }
 
-export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarProps) {
+export default function Sidebar({ user, tenant, subscriptionExpired, accountSuspended, onClose }: SidebarProps) {
   const pathname = usePathname();
   const [expandedSections, setExpandedSections] = useState<string[]>([
     'administration', 'recruitment', 'resume-management', 'evaluation',
@@ -410,16 +412,28 @@ export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarPr
   };
 
   return (
-    <aside className="w-64 bg-gray-200 border-r border-gray-300 flex flex-col shadow-sm h-screen">
-      {/* Logo */}
-      <div className="p-4 border-b border-gray-200 bg-white">
-        <Link href="/dashboard" prefetch={false} className="flex items-center justify-center">
+    <aside className="w-64 sm:w-72 lg:w-64 bg-gray-200 border-r border-gray-300 flex flex-col shadow-lg lg:shadow-sm h-screen">
+      {/* Logo + Close Button */}
+      <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
+        <Link href="/dashboard" prefetch={false} className="flex items-center justify-center flex-1">
          <img
               src="/logos/talent_flow_logo.png"
               alt="TalentFlow"
-              className="h-10 w-auto"
+              className="h-8 sm:h-10 w-auto"
             />
         </Link>
+        {/* Close button for mobile */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="Close menu"
+          >
+            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -436,7 +450,28 @@ export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarPr
             {/* Section Items */}
             <div className="space-y-0.5">
               {section.items.map((item) => {
-                const isItemAllowed = !subscriptionExpired || SUBSCRIPTION_ALLOWED_PATHS.includes(item.href || '');
+                // CRITICAL: Suspended accounts can ONLY access current-plan page
+                // Suspended blocks ALL navigation except current-plan
+                if (accountSuspended) {
+                  const isCurrentPlanPage = item.href === '/subscription/current-plan';
+                  if (!isCurrentPlanPage) {
+                    return (
+                      <div
+                        key={item.id}
+                        className="w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm text-red-400 cursor-not-allowed opacity-40"
+                        style={{ width: 'calc(100% - 16px)' }}
+                        title="Account suspended - Contact support for assistance"
+                      >
+                        <item.icon className="w-4 h-4 flex-shrink-0 text-red-300" />
+                        <span>{item.label}</span>
+                      </div>
+                    );
+                  }
+                }
+
+                // Lock menus if subscriptionExpired is true OR undefined (loading/unknown)
+                // Only unlock if explicitly false
+                const isItemAllowed = subscriptionExpired === false || SUBSCRIPTION_ALLOWED_PATHS.includes(item.href || '');
 
                 if (!isItemAllowed) {
                   return (
@@ -457,14 +492,20 @@ export default function Sidebar({ user, tenant, subscriptionExpired }: SidebarPr
                     key={item.id}
                     href={item.href || '#'}
                     prefetch={false}
-                    className={`w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm transition-colors ${
+                    onClick={() => {
+                      // Close mobile menu when nav item is clicked
+                      if (onClose) {
+                        setTimeout(() => onClose(), 150);
+                      }
+                    }}
+                    className={`w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm sm:text-base lg:text-sm transition-colors ${
                       isActive(item.href)
                         ? 'bg-gray-800 text-white font-medium shadow-sm'
                         : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
                     }`}
                     style={{ width: 'calc(100% - 16px)' }}
                   >
-                    <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive(item.href) ? 'text-white' : 'text-gray-500'}`} />
+                    <item.icon className={`w-4 h-4 sm:w-5 sm:h-5 lg:w-4 lg:h-4 flex-shrink-0 ${isActive(item.href) ? 'text-white' : 'text-gray-500'}`} />
                     <span>{item.label}</span>
                   </Link>
                 );

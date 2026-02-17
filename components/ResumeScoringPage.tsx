@@ -15,6 +15,25 @@ import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { useAuth } from '@/components/providers/AuthProvider';
 
+// Helper function to convert backend match_status to frontend format
+const convertMatchStatus = (status: string | undefined): 'Exact Match' | 'Partial Match' | 'No Match' => {
+  if (!status) return 'Partial Match';
+
+  const normalized = status.toLowerCase().trim();
+
+  // Handle all possible backend formats
+  if (normalized === 'exact_match' || normalized === 'exact match' || normalized === 'excellent') {
+    return 'Exact Match';
+  } else if (normalized === 'partial_match' || normalized === 'partial match' || normalized === 'partial') {
+    return 'Partial Match';
+  } else if (normalized === 'no_match' || normalized === 'no match') {
+    return 'No Match';
+  }
+
+  // Default fallback
+  return 'Partial Match';
+};
+
 // Types
 interface Job {
   id: string;
@@ -79,6 +98,8 @@ interface AlreadyScoredItem {
   resumeId: string;
   candidateName: string;
   score: number;
+  scoredAt?: string;
+  matchStatus?: string;
 }
 
 interface PendingScoringData {
@@ -147,9 +168,9 @@ export default function ResumeScoringPage({
 }: ResumeScoringPageProps) {
   const router = useRouter();
 
-  // ✅ RBAC: Get user permissions
-  const { user } = useAuth();
-  const canRunScoring = user?.permissions?.canRunScoring ?? false;
+  // ✅ RBAC: Get user permissions (bypass for tenant admin)
+  const { user, isTenantAdmin } = useAuth();
+  const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
 
   // Use persistent scoring progress context
   const {
@@ -218,8 +239,10 @@ export default function ResumeScoringPage({
       jobTitle: jobTitle,
       jobId: jobId,
       source: 'Internal DB' as const,
-      status: item.status === 'completed' || item.status === 'already_scored'
+      status: item.status === 'completed'
         ? 'Scored successfully' as const
+        : item.status === 'already_scored'
+        ? 'Already Scored - Skipped' as const
         : item.status === 'failed'
         ? 'Failed' as const
         : item.status === 'processing'
@@ -227,7 +250,14 @@ export default function ResumeScoringPage({
         : 'Queued' as const,
       errorReason: item.errorMessage,
       score: item.score,
-      matchResult: item.score != null
+      scoredDateTime: item.status === 'already_scored' && item.scoredAt
+        ? new Date(item.scoredAt)
+        : item.status === 'completed'
+        ? new Date()
+        : undefined,
+      matchResult: item.status === 'already_scored' && item.matchStatus
+        ? convertMatchStatus(item.matchStatus)
+        : item.score != null
         ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
         : undefined,
     }));
@@ -474,12 +504,14 @@ export default function ResumeScoringPage({
     console.log('[ResumeScoringPage] Starting pending scoring for job:', jobTitle, 'with', resumeIds.length, 'new resumes,', alreadyScoredItems.length, 'already scored');
 
     // Build already-scored items for the progress modal
-    const alreadyScoredProgressItems: { resumeId: string; candidateName: string; status: 'already_scored'; score?: number }[] =
+    const alreadyScoredProgressItems: { resumeId: string; candidateName: string; status: 'already_scored'; score?: number; scoredAt?: string; matchStatus?: string }[] =
       alreadyScoredItems.map(item => ({
         resumeId: item.resumeId,
         candidateName: item.candidateName,
         status: 'already_scored' as const,
         score: item.score,
+        scoredAt: item.scoredAt,
+        matchStatus: item.matchStatus,
       }));
 
     // Create initial items array with candidate names - new ones start as queued
@@ -524,8 +556,10 @@ export default function ResumeScoringPage({
         jobTitle: jobTitle,
         jobId: jobId,
         source: 'Internal DB' as const,
-        status: item.status === 'completed' || item.status === 'already_scored'
+        status: item.status === 'completed'
           ? 'Scored successfully' as const
+          : item.status === 'already_scored'
+          ? 'Already Scored - Skipped' as const
           : item.status === 'failed'
           ? 'Failed' as const
           : item.status === 'processing'
@@ -533,7 +567,14 @@ export default function ResumeScoringPage({
           : 'Queued' as const,
         errorReason: item.errorMessage,
         score: item.score,
-        matchResult: item.score != null
+        scoredDateTime: item.status === 'already_scored' && item.scoredAt
+          ? new Date(item.scoredAt)
+          : item.status === 'completed'
+          ? new Date()
+          : undefined,
+        matchResult: item.status === 'already_scored' && item.matchStatus
+          ? convertMatchStatus(item.matchStatus)
+          : item.score != null
           ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
           : undefined,
       }));
@@ -568,7 +609,7 @@ export default function ResumeScoringPage({
           // Update persistent context with success
           updateItemStatus(jobId, itemId, 'Scored successfully', {
             score: result?.overall_score || result?.score || 0,
-            matchResult: result?.match_status || 'Partial Match',
+            matchResult: convertMatchStatus(result?.match_status),
             scoredDateTime: new Date().toISOString(),
           });
         } catch (err) {
@@ -1149,58 +1190,49 @@ export default function ResumeScoringPage({
                     : p
                 ));
 
-                // Check quota before retry
-                const quotaResponse = await api.get('/usage/quota-status');
-                const quotas = quotaResponse.data?.data?.quotas;
-                const remainingUnits = quotas?.RS?.total_remaining || 0;
+                // ✅ NEW: Use retry endpoint
+                const retryResponse = await api.post('/api/v1/scoring/retry/single', {
+                  score_id: item.id,
+                  force: false
+                });
 
-                if (remainingUnits < 1) {
+                const retryData = retryResponse.data;
+
+                if (retryData.status === 'SUCCESS') {
+                  // Update item with success status
                   setProgressData(prev => prev.map(p =>
                     p.id === item.id
-                      ? { ...p, status: 'Failed' as const, errorReason: 'Insufficient scoring units' }
+                      ? {
+                          ...p,
+                          status: 'Scored successfully' as const,
+                          errorReason: undefined,
+                          scoredDateTime: new Date(),
+                          matchResult: convertMatchStatus(retryData.match_status),
+                          score: retryData.overall_score
+                        }
                       : p
                   ));
-                  toast.error('Insufficient scoring units for retry');
-                  return;
+
+                  toast.success(retryData.message || `Successfully scored ${item.candidateName}`);
+                } else if (retryData.status === 'SKIPPED') {
+                  setProgressData(prev => prev.map(p =>
+                    p.id === item.id
+                      ? { ...p, status: 'Already Scored - Skipped' as const }
+                      : p
+                  ));
+                  toast.info(retryData.message);
+                } else {
+                  throw new Error(retryData.message || 'Retry failed');
                 }
-
-                // Retry scoring
-                await scoringService.scoreResume(item.jobId, item.resumeId);
-
-                // Fetch updated score
-                const historyResponse = await jdService.getScoredResumes(item.jobId);
-                const scoredResume = historyResponse.resumes?.find(r => r.resume_id === item.resumeId);
-
-                // Update item with success status
-                setProgressData(prev => prev.map(p =>
-                  p.id === item.id
-                    ? {
-                        ...p,
-                        status: 'Scored successfully' as const,
-                        errorReason: undefined,
-                        scoredDateTime: new Date(),
-                        matchResult: scoredResume
-                          ? (scoredResume.match_status === 'exact_match' || scoredResume.match_status === 'Exact Match' ? 'Exact Match'
-                             : scoredResume.match_status === 'partial_match' || scoredResume.match_status === 'Partial Match' ? 'Partial Match'
-                             : scoredResume.match_status === 'no_match' || scoredResume.match_status === 'No Match' ? 'No Match'
-                             : scoredResume.overall_score >= 85 ? 'Exact Match'
-                             : scoredResume.overall_score >= 70 ? 'Partial Match'
-                             : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
-                          : undefined,
-                        score: scoredResume?.overall_score
-                      }
-                    : p
-                ));
-
-                toast.success(`Successfully scored ${item.candidateName}`);
               } catch (error: any) {
+                const errorMsg = error?.response?.data?.detail || error?.response?.data?.message || error?.message || 'Retry failed';
                 // Update item with failure status
                 setProgressData(prev => prev.map(p =>
                   p.id === item.id
                     ? {
                         ...p,
                         status: 'Failed' as const,
-                        errorReason: error?.message || 'Retry failed'
+                        errorReason: typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)
                       }
                     : p
                 ));
@@ -1667,23 +1699,23 @@ export default function ResumeScoringPage({
                 return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                    className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow"
                   >
-                    <div className="flex items-start gap-4">
+                    <div className="flex flex-col sm:flex-row items-start gap-4">
                       {/* Scoring icon - like AI Talent Match */}
                       <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
                         <Target className="w-6 h-6 text-white" />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 w-full">
                         {/* Title row with job details - like JD card */}
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                           {jobDetails?.job_id && (
-                            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-medium border border-blue-200 flex-shrink-0">
+                            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-xs sm:text-sm font-medium border border-blue-200 flex-shrink-0">
                               {jobDetails.job_id}
                             </span>
                           )}
                           <h3
-                            className="text-lg font-semibold text-blue-600 cursor-pointer hover:text-blue-800 hover:underline transition-colors"
+                            className="text-base sm:text-lg font-semibold text-blue-600 cursor-pointer hover:text-blue-800 hover:underline transition-colors"
                             onClick={() => {
                               setSelectedHistoryItem(item);
                               setViewMode('details');
@@ -1720,7 +1752,7 @@ export default function ResumeScoringPage({
                         </div>
 
                         {/* Metadata row - like JD card */}
-                        <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
+                        <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 mb-3 flex-wrap">
                           {jobDetails?.department && (
                             <span className="flex items-center gap-1">
                               <Briefcase className="w-4 h-4" />
@@ -1769,7 +1801,7 @@ export default function ResumeScoringPage({
                       </div>
 
                       {/* Action buttons - right side */}
-                      <div className="flex flex-col gap-2 flex-shrink-0">
+                      <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1798,9 +1830,9 @@ export default function ResumeScoringPage({
                             setShowJobTitleColumn(false);
                             setShowProgressModal(true);
                           }}
-                          className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-1.5"
+                          className="px-3 sm:px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-xs sm:text-sm font-medium flex items-center gap-1.5 justify-center w-full"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
                           View Progress
                         </button>
                         <button
@@ -1812,7 +1844,7 @@ export default function ResumeScoringPage({
                             } catch (e) {}
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
-                          className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
+                          className="px-3 sm:px-4 py-2 border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 hover:border-gray-400 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center justify-center w-full"
                         >
                           View Details
                         </button>
@@ -1828,9 +1860,9 @@ export default function ResumeScoringPage({
                   key={item.id}
                   className="bg-white rounded-xl border-2 transition-all p-6 group border-gray-200 hover:border-gray-400 hover:shadow-lg"
                 >
-                  <div className="flex items-start gap-6">
+                  <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
                     <div
-                      className="flex-1 min-w-0 cursor-pointer"
+                      className="flex-1 min-w-0 cursor-pointer w-full"
                       onClick={() => {
                         setSelectedHistoryItem(item);
                         setViewMode('details');
@@ -1949,16 +1981,16 @@ export default function ResumeScoringPage({
                       </div>
                     </div>
 
-                    <div className="flex-shrink-0 text-center">
-                      <div className="text-sm text-gray-600 mb-2 font-medium">Avg Score</div>
-                      <div className={`text-4xl font-bold mb-2 ${getScoreColor(avgScore)}`}>
+                    <div className="flex-shrink-0 text-center w-full sm:w-auto">
+                      <div className="text-xs sm:text-sm text-gray-600 mb-2 font-medium">Avg Score</div>
+                      <div className={`text-3xl sm:text-4xl font-bold mb-2 ${getScoreColor(avgScore)}`}>
                         {avgScore}%
                       </div>
                       <div className={`inline-block px-3 py-1.5 rounded-full text-xs border font-medium ${getScoreBgColor(avgScore)}`}>
                         {getScoreLabel(avgScore)}
                       </div>
 
-                      <div className="mt-4 flex flex-col gap-2">
+                      <div className="mt-4 flex flex-col gap-2 w-full">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1987,9 +2019,9 @@ export default function ResumeScoringPage({
                             setShowJobTitleColumn(false);
                             setShowProgressModal(true);
                           }}
-                          className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-1.5 justify-center"
+                          className="px-3 sm:px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-xs sm:text-sm font-medium flex items-center gap-1.5 justify-center w-full"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
                           View Progress
                         </button>
                         <button
@@ -2003,10 +2035,10 @@ export default function ResumeScoringPage({
                             }
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
-                          className="text-gray-800 hover:text-gray-900 text-sm font-medium flex items-center gap-1 justify-center cursor-pointer"
+                          className="px-3 sm:px-4 py-2 border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 hover:border-gray-400 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center gap-1 justify-center cursor-pointer w-full"
                         >
                           View Details
-                          <ArrowLeft className="w-4 h-4 rotate-180 hover:translate-x-1 transition-transform" />
+                          <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 rotate-180 hover:translate-x-1 transition-transform" />
                         </button>
                       </div>
                     </div>
@@ -2093,58 +2125,49 @@ export default function ResumeScoringPage({
                     : p
                 ));
 
-                // Check quota before retry
-                const quotaResponse = await api.get('/usage/quota-status');
-                const quotas = quotaResponse.data?.data?.quotas;
-                const remainingUnits = quotas?.RS?.total_remaining || 0;
+                // ✅ NEW: Use retry endpoint
+                const retryResponse = await api.post('/api/v1/scoring/retry/single', {
+                  score_id: item.id,
+                  force: false
+                });
 
-                if (remainingUnits < 1) {
+                const retryData = retryResponse.data;
+
+                if (retryData.status === 'SUCCESS') {
+                  // Update item with success status
                   setProgressData(prev => prev.map(p =>
                     p.id === item.id
-                      ? { ...p, status: 'Failed' as const, errorReason: 'Insufficient scoring units' }
+                      ? {
+                          ...p,
+                          status: 'Scored successfully' as const,
+                          errorReason: undefined,
+                          scoredDateTime: new Date(),
+                          matchResult: convertMatchStatus(retryData.match_status),
+                          score: retryData.overall_score
+                        }
                       : p
                   ));
-                  toast.error('Insufficient scoring units for retry');
-                  return;
+
+                  toast.success(retryData.message || `Successfully scored ${item.candidateName}`);
+                } else if (retryData.status === 'SKIPPED') {
+                  setProgressData(prev => prev.map(p =>
+                    p.id === item.id
+                      ? { ...p, status: 'Already Scored - Skipped' as const }
+                      : p
+                  ));
+                  toast.info(retryData.message);
+                } else {
+                  throw new Error(retryData.message || 'Retry failed');
                 }
-
-                // Retry scoring
-                await scoringService.scoreResume(item.jobId, item.resumeId);
-
-                // Fetch updated score
-                const historyResponse = await jdService.getScoredResumes(item.jobId);
-                const scoredResume = historyResponse.resumes?.find(r => r.resume_id === item.resumeId);
-
-                // Update item with success status
-                setProgressData(prev => prev.map(p =>
-                  p.id === item.id
-                    ? {
-                        ...p,
-                        status: 'Scored successfully' as const,
-                        errorReason: undefined,
-                        scoredDateTime: new Date(),
-                        matchResult: scoredResume
-                          ? (scoredResume.match_status === 'exact_match' || scoredResume.match_status === 'Exact Match' ? 'Exact Match'
-                             : scoredResume.match_status === 'partial_match' || scoredResume.match_status === 'Partial Match' ? 'Partial Match'
-                             : scoredResume.match_status === 'no_match' || scoredResume.match_status === 'No Match' ? 'No Match'
-                             : scoredResume.overall_score >= 85 ? 'Exact Match'
-                             : scoredResume.overall_score >= 70 ? 'Partial Match'
-                             : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match'
-                          : undefined,
-                        score: scoredResume?.overall_score
-                      }
-                    : p
-                ));
-
-                toast.success(`Successfully scored ${item.candidateName}`);
               } catch (error: any) {
+                const errorMsg = error?.response?.data?.detail || error?.response?.data?.message || error?.message || 'Retry failed';
                 // Update item with failure status
                 setProgressData(prev => prev.map(p =>
                   p.id === item.id
                     ? {
                         ...p,
                         status: 'Failed' as const,
-                        errorReason: error?.message || 'Retry failed'
+                        errorReason: typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)
                       }
                     : p
                 ));
@@ -2164,7 +2187,7 @@ export default function ResumeScoringPage({
       <div className="max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <button
             onClick={() => {
               setViewMode('history');
@@ -2172,21 +2195,21 @@ export default function ResumeScoringPage({
               setResumeSource(null);
               setSelectedResumes([]);
             }}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
             title="Back"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold text-gray-900">Score Resumes</h1>
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Score Resumes</h1>
               {availableUnits !== null && (
-                <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
+                <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs sm:text-sm font-medium rounded-full w-fit">
                   {availableUnits.toLocaleString()} units
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-500 mt-0.5">Select a job and let AI match the best candidates</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Select a job and let AI match the best candidates</p>
           </div>
         </div>
       </div>
@@ -2316,6 +2339,8 @@ export default function ResumeScoringPage({
                   resumeId: s.resume_id,
                   candidateName: s.candidate_name || 'Unknown',
                   score: s.overall_score || 0,
+                  scoredAt: s.scored_at,
+                  matchStatus: s.match_status,
                 }));
 
                 // Filter out already-scored, keep only new ones
@@ -2455,50 +2480,46 @@ export default function ResumeScoringPage({
                   : p
               ));
 
-              // Check quota before retry
-              const quotaResponse = await api.get('/usage/quota-status');
-              const quotas = quotaResponse.data?.data?.quotas;
-              const remainingUnits = quotas?.RS?.total_remaining || 0;
+              // ✅ NEW: Use retry endpoint instead of direct scoring
+              const retryResponse = await api.post('/api/v1/scoring/retry/single', {
+                score_id: item.id,
+                force: false
+              });
 
-              if (remainingUnits < 1) {
+              const retryData = retryResponse.data;
+
+              if (retryData.status === 'SUCCESS') {
+                // Update item with success status
                 setProgressData(prev => prev.map(p =>
                   p.id === item.id
-                    ? { ...p, status: 'Failed' as const, errorReason: 'Insufficient scoring units' }
+                    ? {
+                        ...p,
+                        status: 'Scored successfully' as const,
+                        errorReason: undefined,
+                        scoredDateTime: new Date(),
+                        matchResult: convertMatchStatus(retryData.match_status),
+                        score: retryData.overall_score
+                      }
                     : p
                 ));
-                toast.error('Insufficient scoring units for retry');
-                return;
+
+                toast.success(retryData.message || `Successfully scored ${item.candidateName}`);
+              } else if (retryData.status === 'SKIPPED') {
+                // Already scored
+                setProgressData(prev => prev.map(p =>
+                  p.id === item.id
+                    ? { ...p, status: 'Already Scored - Skipped' as const }
+                    : p
+                ));
+                toast.info(retryData.message);
+              } else {
+                // Failed
+                throw new Error(retryData.message || 'Retry failed');
               }
-
-              // Retry scoring
-              console.log('[Retry] Calling scoreResume with jobId:', item.jobId, 'resumeId:', item.resumeId);
-              const scoreResult = await scoringService.scoreResume(item.jobId, item.resumeId);
-              console.log('[Retry] Score result:', scoreResult);
-
-              // Update item with success status using the direct result
-              setProgressData(prev => prev.map(p =>
-                p.id === item.id
-                  ? {
-                      ...p,
-                      status: 'Scored successfully' as const,
-                      errorReason: undefined,
-                      scoredDateTime: new Date(),
-                      matchResult: scoreResult.match_status === 'exact_match' || scoreResult.match_status === 'Exact Match' ? 'Exact Match' as const
-                                 : scoreResult.match_status === 'partial_match' || scoreResult.match_status === 'Partial Match' ? 'Partial Match' as const
-                                 : scoreResult.match_status === 'no_match' || scoreResult.match_status === 'No Match' ? 'No Match' as const
-                                 : scoreResult.overall_score >= 85 ? 'Exact Match' as const
-                                 : scoreResult.overall_score >= 70 ? 'Partial Match' as const
-                                 : 'No Match' as const,
-                      score: scoreResult.overall_score
-                    }
-                  : p
-              ));
-
-              toast.success(`Successfully scored ${item.candidateName}`);
             } catch (error: any) {
               console.error('[Retry] Error:', error);
               // Extract detailed error message
-              const errorDetail = error?.response?.data?.detail || error?.message || 'Retry failed';
+              const errorDetail = error?.response?.data?.detail || error?.response?.data?.message || error?.message || 'Retry failed';
               const errorMsg = typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail);
 
               // Update item with failure status

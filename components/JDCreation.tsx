@@ -45,6 +45,83 @@ const containsMeaningfulText = (text: string): boolean => {
   return meaningfulWords.length >= 3;
 };
 
+const containsCodePatterns = (text: string): boolean => {
+  if (!text || !text.trim()) return false;
+
+  const lowerText = text.toLowerCase();
+
+  // Programming language names that are ALLOWED in job descriptions
+  // These should NOT trigger the code validation
+  const allowedProgrammingTerms = [
+    'c#', 'c++', 'c ', ' c', // C family languages (with spaces to avoid false matches)
+    'java', 'javascript', 'typescript',
+    'python', 'ruby', 'php',
+    'go', 'golang', 'rust', 'swift', 'kotlin',
+    'scala', 'perl', 'r programming',
+    '.net', 'dotnet', 'net', 'asp.net', 'asp', 'vb.net', // .NET variations
+    'node.js', 'nodejs', 'node',
+    'react', 'reactjs', 'angular', 'angularjs', 'vue', 'vuejs', 'svelte',
+    'sql', 'nosql', 'mongodb', 'postgresql', 'mysql', 'sqlite', 'oracle',
+    'html', 'css', 'sass', 'scss', 'less',
+    'spring boot', 'spring', 'django', 'flask', 'express', 'fastapi',
+    'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'jenkins', 'gitlab', 'github',
+    'redux', 'graphql', 'rest api', 'api', 'webpack', 'babel',
+  ];
+
+  // Create a sanitized version of text with allowed terms removed
+  // This prevents programming language names from triggering false positives
+  let sanitizedText = text;
+  allowedProgrammingTerms.forEach(term => {
+    const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    sanitizedText = sanitizedText.replace(regex, ' ');
+  });
+
+  const sanitizedLowerText = sanitizedText.toLowerCase();
+
+  // Common programming keywords across multiple languages
+  const codeKeywords = [
+    'function', 'def ', 'import ', 'export ', 'const ', 'let ', 'var ',
+    'return ', 'if ', 'else ', 'for ', 'while ', 'switch ', 'case ',
+    'async ', 'await ', 'try ', 'catch ', 'throw ',
+    'public ', 'private ', 'protected ', 'static ', 'void ',
+    'int ', 'boolean ', 'float ', 'double ',
+    'printf', 'cout', 'println', 'console.log', 'print(',
+    '__init__', 'self.', 'this.', '<?php', '#!/bin'
+  ];
+
+  // Check for programming keywords in sanitized text
+  const hasCodeKeywords = codeKeywords.some(keyword => sanitizedLowerText.includes(keyword));
+
+  // Code-like patterns
+  const codePatterns = [
+    /\bdef\s+\w+\s*\(/,           // Python function: def foo(
+    /\bfunction\s+\w+\s*\(/,      // JS function: function foo(
+    /\(\s*\w+\s*\)\s*[:=]>/,      // Arrow function: (param) => or (param) ->
+    /\w+\s*\(\s*\w*\s*\)\s*\{/,   // Function with braces: foo() {
+    /\breturn\s+[^;]+;/,          // Return statement with semicolon
+    /\bimport\s+\w+\s+from/,      // ES6 import
+    /\bimport\s+[\w.]+/,          // Python import
+    /[{}\[\]]\s*[{}\[\]]/,        // Multiple consecutive brackets
+    /[=!<>]{2,3}/,                // Comparison operators: ==, ===, !==, etc.
+    /\w+\.\w+\s*\(/,              // Method calls: obj.method(
+    /\bvar\b|\blet\b|\bconst\b/,  // Variable declarations
+    /^\s*#include/m,              // C/C++ include
+    /^\s*package\s+\w+/m,         // Java/Go package
+    /\$\w+\s*=/,                  // PHP variables
+    /f["'].*\{.*\}["']/,          // f-strings: f"text {var}"
+  ];
+
+  // Check for code patterns in sanitized text
+  const hasCodePattern = codePatterns.some(pattern => pattern.test(sanitizedText));
+
+  // Detect excessive use of special characters typical in code
+  const specialChars = sanitizedText.match(/[(){}\[\];:<>]/g);
+  const specialCharRatio = specialChars ? specialChars.length / sanitizedText.length : 0;
+  const hasExcessiveSpecialChars = specialCharRatio > 0.15; // More than 15% special chars
+
+  return hasCodeKeywords || hasCodePattern || hasExcessiveSpecialChars;
+};
+
 interface ExtractedData {
   mustHaveSkills: string[];
   mustHaveComments: string[];
@@ -1011,6 +1088,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    // Validate AI prompt does not contain code patterns
+    if (containsCodePatterns(aiPrompt)) {
+      toast.error({
+        title: 'Invalid AI Prompt',
+        description: 'AI prompt should describe a job role, not contain programming code or technical syntax.',
+      });
+      return;
+    }
+
     // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
     setIsStreaming(true);
@@ -1234,6 +1320,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       });
       return;
     }
+
+    // Note: Removed code pattern validation here since AI-generated content is trusted
+    // Validation only applies to AI prompt input, not the generated JD content
 
     // Check if any Stage 1 field has changed since last extraction
     // If user has proceeded to review and comes back to Stage 1:

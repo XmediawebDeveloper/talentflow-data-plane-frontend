@@ -84,7 +84,7 @@ interface UsageDashboardProps {
 
 // Map quota_type to display names - defined at module level for use in processing
 const quotaTypeToModuleMap: Record<string, string> = {
-  'RU': 'Resume Upload',
+  'RU': 'Resume Storage',
   'RS': 'Resume Scoring',
   'AS': 'Assessment',
   'AIU': 'AI Interview',
@@ -1140,7 +1140,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   onChange={(e) => setRecordForm({ ...recordForm, quota_type: e.target.value as RecordUsageRequest['quota_type'] })}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
                 >
-                  <option value="RU">Resume Upload (RU)</option>
+                  <option value="RU">Resume Storage (RU)</option>
                   <option value="RS">Resume Scoring (RS)</option>
                   <option value="AS">Assessment (AS)</option>
                   <option value="AIU">AI Interview Unit (AIU)</option>

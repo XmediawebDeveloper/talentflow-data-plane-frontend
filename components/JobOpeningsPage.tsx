@@ -40,11 +40,11 @@ export default function JobOpeningsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // ✅ RBAC: Get user permissions
-  const { user } = useAuth();
-  const canCreateJd = user?.permissions?.canCreateJD ?? false;
-  const canUpdateJd = user?.permissions?.canUpdateJD ?? false;
-  const canDeleteJd = user?.permissions?.canDeleteJD ?? false;
+  // ✅ RBAC: Get user permissions (bypass for tenant admin)
+  const { user, isTenantAdmin } = useAuth();
+  const canCreateJd = isTenantAdmin || (user?.permissions?.canCreateJD ?? false);
+  const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJD ?? false);
+  const canDeleteJd = isTenantAdmin || (user?.permissions?.canDeleteJD ?? false);
 
   const [jobs, setJobs] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -227,15 +227,15 @@ export default function JobOpeningsPage() {
   };
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
+    <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Job Openings</h1>
             <p className="text-sm text-gray-500 mt-1">Manage and track all your job postings</p>
           </div>
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-col items-stretch md:items-end gap-1 w-full md:w-auto">
             <button
               onClick={() => {
                 if (!canCreateJd) {
@@ -273,59 +273,59 @@ export default function JobOpeningsPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Total Jobs</p>
-                <p className="text-2xl font-semibold text-gray-900">{stats.totalJobs}</p>
+        <div className="grid grid-cols-4 gap-1.5 sm:gap-3 md:gap-4 mb-6">
+          <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
+            <div className="flex flex-col gap-1 sm:gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[9px] sm:text-xs md:text-sm text-gray-500 leading-tight">Total Jobs</p>
+                <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Briefcase className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800" />
+                </div>
               </div>
-              <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-gray-800" />
-              </div>
+              <p className="text-sm sm:text-xl md:text-2xl font-semibold text-gray-900 whitespace-nowrap">{stats.totalJobs}</p>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Active</p>
-                <p className="text-2xl font-semibold text-green-600">{stats.activeJobs}</p>
+          <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
+            <div className="flex flex-col gap-1 sm:gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[9px] sm:text-xs md:text-sm text-gray-500 leading-tight">Active</p>
+                <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-green-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-green-600" />
+                </div>
               </div>
-              <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
+              <p className="text-sm sm:text-xl md:text-2xl font-semibold text-green-600 whitespace-nowrap">{stats.activeJobs}</p>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Drafts</p>
-                <p className="text-2xl font-semibold text-yellow-600">{stats.draftJobs}</p>
+          <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
+            <div className="flex flex-col gap-1 sm:gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[9px] sm:text-xs md:text-sm text-gray-500 leading-tight">Drafts</p>
+                <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-yellow-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-yellow-600" />
+                </div>
               </div>
-              <div className="w-12 h-12 bg-yellow-50 rounded-xl flex items-center justify-center">
-                <FileText className="w-6 h-6 text-yellow-600" />
-              </div>
+              <p className="text-sm sm:text-xl md:text-2xl font-semibold text-yellow-600 whitespace-nowrap">{stats.draftJobs}</p>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Applicants</p>
-                <p className="text-2xl font-semibold text-gray-800">{stats.totalApplicants}</p>
+          <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
+            <div className="flex flex-col gap-1 sm:gap-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[9px] sm:text-xs md:text-sm text-gray-500 leading-tight">Applicants</p>
+                <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Users className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800" />
+                </div>
               </div>
-              <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center">
-                <Users className="w-6 h-6 text-gray-800" />
-              </div>
+              <p className="text-sm sm:text-xl md:text-2xl font-semibold text-gray-800 whitespace-nowrap">{stats.totalApplicants}</p>
             </div>
           </div>
         </div>
 
         {/* Search and Filters */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-4">
             {/* Search */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -339,12 +339,12 @@ export default function JobOpeningsPage() {
             </div>
 
             {/* Filter Tabs */}
-            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+            <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1 rounded-lg">
               {filters.map((filter) => (
                 <button
                   key={filter.key}
                   onClick={() => { setActiveFilter(filter.key); setCurrentPage(1); }}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  className={`px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors ${
                     activeFilter === filter.key
                       ? 'bg-white text-gray-900 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
@@ -561,12 +561,12 @@ export default function JobOpeningsPage() {
                 </div>
 
                 {/* Footer */}
-                <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <Users className="w-4 h-4 text-gray-400" />
+                <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs sm:text-sm">
+                    <Users className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
                     <span className="text-gray-600">{job.applicants_count || 0} applicants</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
                     {/* Edit Button */}
                     <button
                       onClick={() => {
@@ -577,22 +577,22 @@ export default function JobOpeningsPage() {
                         router.push(`/recruitment/jd-creation?id=${job.id}`);
                       }}
                       disabled={!canUpdateJd}
-                      className={`flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors border ${
+                      className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors border flex-1 sm:flex-initial justify-center ${
                         canUpdateJd
                           ? 'text-gray-600 hover:bg-gray-100 border-gray-200 cursor-pointer'
                           : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-60'
                       }`}
                       title={!canUpdateJd ? 'You do not have permission to edit job descriptions' : ''}
                     >
-                      <Edit2 className="w-4 h-4" />
+                      <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
                       Edit
                     </button>
                     {/* View Button */}
                     <button
                       onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                      className="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 flex-1 sm:flex-initial justify-center"
                     >
-                      <Eye className="w-4 h-4" />
+                      <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
                       View
                     </button>
                   </div>
@@ -603,51 +603,52 @@ export default function JobOpeningsPage() {
         ) : (
           /* List View */
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Job Title</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Job Title</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">Department</th>
                   {/* Location column hidden for now */}
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Experience</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Applicants</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Created</th>
-                  <th className="text-right px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Experience</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Applicants</th>
+                  <th className="text-left px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden lg:table-cell">Created</th>
+                  <th className="text-right px-3 sm:px-6 py-3 sm:py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {jobs.map((job) => (
                   <tr key={job.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4">
                       <button
                         onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
-                        className="font-medium text-gray-900 hover:text-gray-800 transition-colors text-left"
+                        className="font-medium text-xs sm:text-sm text-gray-900 hover:text-gray-800 transition-colors text-left"
                       >
                         {job.title}
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 hidden sm:table-cell">
                       {job.department || '-'}
                     </td>
                     {/* Location column hidden for now */}
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600 hidden md:table-cell">
                       {getExperienceText(job.experience_min, job.experience_max)}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4">
                       {getStatusBadge(job.status)}
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                        <Users className="w-4 h-4 text-gray-400" />
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 hidden lg:table-cell">
+                      <div className="flex items-center gap-1.5 text-xs sm:text-sm text-gray-600">
+                        <Users className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
                         <span>{job.applicants_count || 0}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-500 hidden lg:table-cell">
                       {formatDate(job.created_at)}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="px-2 sm:px-6 py-3 sm:py-4 text-right">
+                      <div className="flex items-center justify-end gap-0.5 sm:gap-2">
                         {/* Edit Button */}
                         <button
                           onClick={() => {
@@ -658,23 +659,24 @@ export default function JobOpeningsPage() {
                             router.push(`/recruitment/jd-creation?id=${job.id}`);
                           }}
                           disabled={!canUpdateJd}
-                          className={`flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg transition-colors border ${
+                          className={`flex items-center justify-center gap-0 sm:gap-1 p-1 sm:px-2.5 sm:py-1.5 text-xs sm:text-sm rounded transition-colors border ${
                             canUpdateJd
                               ? 'text-gray-600 hover:bg-gray-100 border-gray-200 cursor-pointer'
                               : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-60'
                           }`}
-                          title={!canUpdateJd ? 'You do not have permission to edit job descriptions' : ''}
+                          title={!canUpdateJd ? 'You do not have permission to edit job descriptions' : 'Edit'}
                         >
-                          <Edit2 className="w-4 h-4" />
-                          Edit
+                          <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          <span className="hidden sm:inline">Edit</span>
                         </button>
                         {/* View Button */}
                         <button
                           onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                          className="flex items-center justify-center gap-0 sm:gap-1 p-1 sm:px-2.5 sm:py-1.5 text-xs sm:text-sm text-gray-600 hover:bg-gray-100 rounded transition-colors border border-gray-200"
+                          title="View"
                         >
-                          <Eye className="w-4 h-4" />
-                          View
+                          <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          <span className="hidden sm:inline">View</span>
                         </button>
                         {/* More Actions Dropdown */}
                         <div className="relative">
@@ -683,9 +685,10 @@ export default function JobOpeningsPage() {
                               e.stopPropagation();
                               setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
-                            className="p-2 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
+                            className="p-1 sm:p-2 hover:bg-gray-100 rounded transition-colors border border-gray-200"
+                            title="More actions"
                           >
-                            <MoreVertical className="w-4 h-4 text-gray-500" />
+                            <MoreVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />
                           </button>
                           {activeDropdown === job.id && (
                             <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
@@ -764,13 +767,14 @@ export default function JobOpeningsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-6">
-            <p className="text-sm text-gray-600">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+            <p className="text-xs sm:text-sm text-gray-600">
               Showing {(currentPage - 1) * 12 + 1} to {Math.min(currentPage * 12, total)} of {total} jobs
             </p>
             <div className="flex items-center gap-2">

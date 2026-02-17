@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
+import { getPreviousPlan } from '@/lib/services/subscriptionService';
+import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -85,6 +87,7 @@ interface DisplayPlan {
   id: string;
   numericId: number;
   name: string;
+  tier: string;  // Plan tier: STARTER, PROFESSIONAL, ENTERPRISE
   description: string;
   price: number | null;
   currency: string;
@@ -240,6 +243,27 @@ const getGradientForPlan = (planName: string, tier: string): string => {
   if (name.includes('enterprise') || name.includes('premium') || tierLower === 'enterprise') return "from-gray-800 to-gray-900";
   if (name.includes('business') || name.includes('professional') || name.includes('pro') || tierLower === 'professional') return "from-gray-700 to-gray-800";
   return "from-gray-600 to-gray-700";
+};
+
+/**
+ * Compare plan tiers to determine upgrade/downgrade
+ * Returns: 1 if targetTier is higher (upgrade), -1 if lower (downgrade), 0 if same
+ */
+const comparePlanTiers = (currentTier: string | undefined, targetTier: string | undefined): number => {
+  if (!currentTier || !targetTier) return 0;
+
+  const tierOrder: Record<string, number> = {
+    'starter': 1,
+    'professional': 2,
+    'enterprise': 3,
+  };
+
+  const currentLevel = tierOrder[currentTier.toLowerCase()] || 0;
+  const targetLevel = tierOrder[targetTier.toLowerCase()] || 0;
+
+  if (targetLevel > currentLevel) return 1;  // Upgrade
+  if (targetLevel < currentLevel) return -1; // Downgrade
+  return 0; // Same tier
 };
 
 const formatCurrency = (amount: number | undefined | null, currency: string): string => {
@@ -470,11 +494,11 @@ function CurrentPlanContent() {
   // Downgrade warning modal state
   const [showDowngradeWarning, setShowDowngradeWarning] = useState(false);
   const [downgradeWarningData, setDowngradeWarningData] = useState<{
-    activeUsers: number;
-    newPlanMaxSeats: number;
-    usersToDeactivate: number;
-    newPlanName: string;
-    actionRequired?: string;
+    currentPlanName: string;
+    targetPlanName: string;
+    overages: any[];
+    nearLimitQuotas?: any[];
+    targetPlan?: DisplayPlan;
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Partial<PaymentFormData>>({});
 
@@ -552,50 +576,134 @@ function CurrentPlanContent() {
       // The sharedQuotaData comes from QuotaContext which is fetched once at dashboard layout level
       const quotaData: any = sharedQuotaData;
       console.log('[CurrentPlan] Using shared quota data from context:', quotaData ? 'available' : 'not yet loaded');
+      console.log('[CurrentPlan] quotaData:', quotaData);
+      console.log('[CurrentPlan] quotaLoading:', quotaLoading);
 
       // Check is_trial from quota-status API (handle both boolean and string)
       const isTrial = quotaData?.is_trial === true || quotaData?.is_trial === 'true' || quotaData?.quota_source === 'FREE_TRIAL';
 
+      // Determine if subscription is expired (use local variable, not state)
+      let localSubscriptionStatus = 'active';
+
       // Set subscription status early (even if quotas are missing)
       if (isTrial) {
+        localSubscriptionStatus = 'trial';
         setQuotaSubscriptionStatus('trial');
         console.log('[CurrentPlan] Setting subscription_status as trial (is_trial detected)');
       } else if (quotaData) {
         // Not on trial - set to active (or use API status if available)
         const status = quotaData.subscription_status || 'active';
+        localSubscriptionStatus = status;
         setQuotaSubscriptionStatus(status);
         console.log('[CurrentPlan] Setting subscription_status as:', status, '(is_trial:', quotaData.is_trial, ')');
+      } else {
+        // quotaData is null - subscription is expired
+        localSubscriptionStatus = 'expired';
       }
 
-      // If quota-status API failed (likely due to expired subscription), fetch plan details from company-settings
-      if (!quotaData) {
-        console.log('[CurrentPlan] Quota-status API failed - fetching expired plan details from company-settings');
+      // Check if subscription is expired by date (trial or paid)
+      // Backend may return status='trial' even when trial_end_date is in the past
+      let isExpiredByDate = false;
+      const now = new Date();
+
+      if (quotaData?.trial_end_date) {
+        const trialEndDate = new Date(quotaData.trial_end_date);
+        if (trialEndDate < now) {
+          console.log('[CurrentPlan] Trial has expired by date:', quotaData.trial_end_date);
+          isExpiredByDate = true;
+        }
+      } else if (quotaData?.plan_expiry_date) {
+        const planExpiryDate = new Date(quotaData.plan_expiry_date);
+        if (planExpiryDate < now) {
+          console.log('[CurrentPlan] Plan has expired by date:', quotaData.plan_expiry_date);
+          isExpiredByDate = true;
+        }
+      } else if (quotaData?.billing_period?.end) {
+        const billingEndDate = new Date(quotaData.billing_period.end);
+        if (billingEndDate < now) {
+          console.log('[CurrentPlan] Billing period has expired by date:', quotaData.billing_period.end);
+          isExpiredByDate = true;
+        }
+      }
+
+      // If subscription is expired (by status or by date), fetch previous plan from Control Plane
+      // This is the single source of truth for expired users (trial or paid)
+      const shouldFetchPreviousPlan = localSubscriptionStatus === 'expired' ||
+                                       quotaData?.subscription_status === 'expired' ||
+                                       isExpiredByDate;
+
+      // Track if we loaded data from previous-plan API (to skip quota-status overwrite)
+      let loadedFromPreviousPlan = false;
+
+      if (shouldFetchPreviousPlan && user?.tenantId) {
+        console.log('[CurrentPlan] Subscription expired - fetching previous plan from Control Plane');
         setQuotaSubscriptionStatus('expired');
 
-        // Fetch actual plan details from company-settings (local tenant DB) as fallback
         try {
-          const csResponse = await api.get('/settings/company-settings');
-          const csData = csResponse.data?.data || csResponse.data;
-          if (csData) {
-            console.log('[CurrentPlan] Got expired plan details from company-settings:', csData);
-            setCompanySettings(prev => ({
-              ...(prev || {}),
-              ...csData,
-              // Force expired status
-              subscription_status: 'expired',
-              status: 'expired',
-            } as CompanySettings));
+          // Single source of truth: Control Plane previous-plan API
+          const previousPlanResponse = await getPreviousPlan(user.tenantId);
+          const previousPlanData = previousPlanResponse?.data || previousPlanResponse;
+
+          if (previousPlanData) {
+            console.log('[CurrentPlan] Got previous plan details from Control Plane:', previousPlanData);
+
+            // Extract expired plan details from Control Plane response
+            // Response structure: { expired_plan: { plan_name, credits: {...}, start_date, end_date } }
+            const expiredPlan = previousPlanData.expired_plan;
+            const previousPaid = previousPlanData.previous_plan; // For paid plans that expired
+
+            // Use expired_plan if available (free trial), otherwise use previous_plan (paid plan)
+            const planDetails = expiredPlan || previousPaid;
+
+            if (planDetails) {
+              const isFreeTrial = planDetails.plan_type === 'FREE_TRIAL';
+              const credits = planDetails.credits || {};
+
+              setCompanySettings({
+                current_plan_name: planDetails.plan_name || 'Unknown Plan',
+                current_plan_id: planDetails.plan_id || null,
+                subscription_status: 'expired',
+                status: 'expired',
+                // Set both plan dates AND trial dates so UI can display correctly
+                // For trials: plan_start/expiry should match trial dates for display
+                plan_expiry_date: planDetails.end_date,
+                plan_start_date: planDetails.start_date,
+                trial_end_date: isFreeTrial ? planDetails.end_date : null,
+                trial_start_date: isFreeTrial ? planDetails.start_date : null,
+                // Map credits to quota fields
+                max_resume_searches: credits.RS || 0,
+                max_assessments: credits.AS || 0,
+                max_ai_interviews: credits.AIU || 0,
+                max_resume_uploads: credits.RU || 0,
+                max_seats: credits.max_seats || 0,
+                max_jobs: credits.max_jobs || 0,
+                storage_limit_gb: credits.storage_gb || 0,
+                payment_status: 'expired',
+              } as CompanySettings);
+
+              // Mark that we loaded data from previous-plan API
+              loadedFromPreviousPlan = true;
+            } else {
+              // No plan details available - set minimal expired state
+              console.warn('[CurrentPlan] No expired plan details available in response');
+              setCompanySettings(prev => ({
+                ...(prev || {}),
+                subscription_status: 'expired',
+                status: 'expired',
+              } as CompanySettings));
+            }
           } else {
-            // No company settings data - set minimal expired state
+            // No previous plan data - set minimal expired state
+            console.warn('[CurrentPlan] No previous plan data available');
             setCompanySettings(prev => ({
               ...(prev || {}),
               subscription_status: 'expired',
               status: 'expired',
             } as CompanySettings));
           }
-        } catch (csError) {
-          console.error('[CurrentPlan] Failed to fetch company-settings fallback:', csError);
-          // Set expired status without zeroing data
+        } catch (previousPlanError) {
+          console.error('[CurrentPlan] Failed to fetch previous plan:', previousPlanError);
+          // Set minimal expired state on error
           setCompanySettings(prev => ({
             ...(prev || {}),
             subscription_status: 'expired',
@@ -605,14 +713,18 @@ function CurrentPlanContent() {
         // Don't set error - allow user to select a plan to renew
       }
 
-      if (quotaData?.quotas || quotaData) {
+      // Only bind quota-status data if we didn't load from previous-plan API
+      // (previous-plan is the source of truth for expired users)
+      if (!loadedFromPreviousPlan && (quotaData?.quotas || quotaData)) {
+        console.log('[CurrentPlan] Using quota-status data (active subscription)');
 
         // Update company settings with data from quota-status API
         const quotas = quotaData.quotas || {};
 
         // For FREE TRIAL: Get dates from root level (backend returns trial_start_date/trial_end_date at root)
-        const trialStartDate = quotaData.trial_start_date || quotaData.trial_info?.trial_start_date || null;
-        const trialEndDate = quotaData.trial_end_date || quotaData.trial_info?.trial_end_date || null;
+        // Use billing_period as fallback when trial_info is missing
+        const trialStartDate = quotaData.trial_start_date || quotaData.trial_info?.trial_start_date || quotaData.billing_period?.start || null;
+        const trialEndDate = quotaData.trial_end_date || quotaData.trial_info?.trial_end_date || quotaData.billing_period?.end || null;
 
         // For PAID PLAN: Get dates from root level (plan_start_date, plan_expiry_date) or billing_period
         const planStartDate = quotaData.plan_start_date || quotaData.billing_period?.start || null;
@@ -665,25 +777,39 @@ function CurrentPlanContent() {
           setCurrentPlanBillingPeriod(quotaData.plan_info.billing_period);
           console.log('[CurrentPlan] Billing period:', quotaData.plan_info.billing_period, ', billing_interval:', quotaData.plan_info.billing_interval);
         }
+      } else if (loadedFromPreviousPlan) {
+        console.log('[CurrentPlan] Skipping quota-status data binding - using previous-plan data as source of truth');
       }
+
+      // Check if subscription is expired to reduce wasteful API calls
+      // Use local variable instead of state (state updates are async)
+      const isSubscriptionExpired = localSubscriptionStatus === 'expired' ||
+                                    quotaData?.subscription_status === 'expired';
+
+      console.log('[CurrentPlan] isExpired check:', isSubscriptionExpired, 'localSubscriptionStatus:', localSubscriptionStatus);
 
       // Fetch plan settings (yearly discount, database extra charge)
-      try {
-        const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
-        if (planSettingsResponse.ok) {
-          const planSettingsResult = await planSettingsResponse.json();
-          const settings = planSettingsResult.data || planSettingsResult;
-          setPlanSettings({
-            yearlyDiscountPercentage: settings.yearlyDiscountPercentage,
-            databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice,
-          });
-          console.log('[CurrentPlan] Plan settings:', settings);
+      // Skip if expired to reduce wasteful API calls logged in Admin Panel
+      if (!isSubscriptionExpired) {
+        try {
+          const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
+          if (planSettingsResponse.ok) {
+            const planSettingsResult = await planSettingsResponse.json();
+            const settings = planSettingsResult.data || planSettingsResult;
+            setPlanSettings({
+              yearlyDiscountPercentage: settings.yearlyDiscountPercentage,
+              databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice,
+            });
+            console.log('[CurrentPlan] Plan settings:', settings);
+          }
+        } catch (planSettingsError) {
+          console.log('Could not fetch plan settings');
         }
-      } catch (planSettingsError) {
-        console.log('Could not fetch plan settings');
+      } else {
+        console.log('[CurrentPlan] Skipping plan-settings API call - subscription expired');
       }
 
-      // NOTE: All plan data now comes from /usage/quota-status API (Admin API)
+      // NOTE: All plan data now comes from /usage/quota-status API (Admin API) or previous-plan API (for expired users)
       // No need to call /settings/company-settings - quota-status is the single source of truth
       console.log('[CurrentPlan] Using quota-status API as single source of truth for plan data');
 
@@ -694,6 +820,7 @@ function CurrentPlanContent() {
       }
 
       // Fetch plans from backend API (which proxies to external API)
+      // Always fetch to show renewal options even if expired
       const plansResponse = await fetch(`${API_URL}/subscription/public/plans`);
       if (!plansResponse.ok) {
         throw new Error('Failed to fetch plans');
@@ -748,6 +875,7 @@ function CurrentPlanContent() {
             id: String(basePlan.id),
             numericId: basePlan.id,
             name: groupedPlan.plan_name,
+            tier: groupedPlan.plan_tier,  // STARTER, PROFESSIONAL, ENTERPRISE
             description: groupedPlan.description,
             price: monthly?.base_price ?? null,
             currency: basePlan.currency,
@@ -794,6 +922,16 @@ function CurrentPlanContent() {
   // Fetch queued upgrades
   const fetchQueuedUpgrades = async () => {
     try {
+      // Skip if subscription is expired to reduce wasteful API calls
+      // If sharedQuotaData is null, it means quota-status API failed (likely expired)
+      const isExpired = !sharedQuotaData ||
+                       sharedQuotaData?.subscription_status === 'expired';
+
+      if (isExpired) {
+        console.log('[CurrentPlan] Skipping queued-upgrades API call - subscription expired or quota unavailable');
+        return;
+      }
+
       const token = localStorage.getItem('accessToken');
       if (!token) return;
 
@@ -1045,6 +1183,98 @@ function CurrentPlanContent() {
       setError('Cannot select a plan without a price');
       return;
     }
+
+    // Check if this is a downgrade
+    const tierComparison = comparePlanTiers(
+      companySettings?.current_plan_tier || currentPlan?.tier,
+      plan.tier
+    );
+
+    if (tierComparison === -1) {
+      // It's a downgrade - check for quota overages
+      const overages: any[] = [];
+      const nearLimit: any[] = [];
+
+      // Get current usage from quotaData
+      const currentUsage = {
+        resumes: sharedQuotaData?.quotas?.RU?.subscription?.used || 0,
+        seats: sharedQuotaData?.quotas?.max_seats?.subscription?.used || 0,
+        assessments: sharedQuotaData?.quotas?.AS?.subscription?.used || 0,
+        ai_interviews: sharedQuotaData?.quotas?.AIU?.subscription?.used || 0,
+      };
+
+      // Get target plan limits (use monthly or annual quotas based on toggle)
+      const targetQuotas = isYearly ? (plan.annualQuotas || plan.quotas) : (plan.monthlyQuotas || plan.quotas);
+      const targetLimits = {
+        resumes: targetQuotas?.RU || targetQuotas?.resume_uploads || targetQuotas?.resume_storage || 0,
+        seats: targetQuotas?.max_seats || 0,
+        assessments: targetQuotas?.AS || targetQuotas?.assessments || 0,
+        ai_interviews: targetQuotas?.AIU || targetQuotas?.ai_interviews || targetQuotas?.ai_interview || 0,
+      };
+
+      // Check Resume Storage
+      if (currentUsage.resumes > targetLimits.resumes) {
+        overages.push({
+          quotaType: 'resume_storage',
+          quotaLabel: 'Resume Storage',
+          currentUsage: currentUsage.resumes,
+          newPlanLimit: targetLimits.resumes,
+          overage: currentUsage.resumes - targetLimits.resumes,
+          unit: 'resumes',
+        });
+      } else if (targetLimits.resumes > 0) {
+        const percentageUsed = (currentUsage.resumes / targetLimits.resumes) * 100;
+        if (percentageUsed >= 75) {
+          nearLimit.push({
+            quotaType: 'resume_storage',
+            quotaLabel: 'Resume Storage',
+            currentUsage: currentUsage.resumes,
+            newPlanLimit: targetLimits.resumes,
+            remaining: targetLimits.resumes - currentUsage.resumes,
+            percentageUsed,
+            unit: 'resumes',
+          });
+        }
+      }
+
+      // Check Team Seats
+      if (currentUsage.seats > targetLimits.seats) {
+        overages.push({
+          quotaType: 'max_seats',
+          quotaLabel: 'Team Seats',
+          currentUsage: currentUsage.seats,
+          newPlanLimit: targetLimits.seats,
+          overage: currentUsage.seats - targetLimits.seats,
+          unit: 'users',
+        });
+      } else if (targetLimits.seats > 0) {
+        const percentageUsed = (currentUsage.seats / targetLimits.seats) * 100;
+        if (percentageUsed >= 75) {
+          nearLimit.push({
+            quotaType: 'max_seats',
+            quotaLabel: 'Team Seats',
+            currentUsage: currentUsage.seats,
+            newPlanLimit: targetLimits.seats,
+            remaining: targetLimits.seats - currentUsage.seats,
+            percentageUsed,
+            unit: 'users',
+          });
+        }
+      }
+
+      // Show downgrade warning modal
+      setDowngradeWarningData({
+        currentPlanName: companySettings?.current_plan_name || currentPlan?.name || 'Current Plan',
+        targetPlanName: plan.name,
+        overages,
+        nearLimitQuotas: nearLimit,
+        targetPlan: plan, // Store plan for later use
+      });
+      setShowDowngradeWarning(true);
+      return;
+    }
+
+    // It's an upgrade or same tier - proceed normally
     setSelectedPlanForPayment(plan);
     setModalStep('isolation');
     setIsolationType('schema'); // Default to schema (checkbox unchecked)
@@ -1312,6 +1542,19 @@ function CurrentPlanContent() {
   const isActive = quotaSubscriptionStatus.toLowerCase() === 'active';
   const isExpiredSubscription = quotaSubscriptionStatus.toLowerCase() === 'expired' ||
                                  companySettings?.status?.toLowerCase() === 'expired';
+  const isSuspended = quotaSubscriptionStatus.toLowerCase() === 'suspended' ||
+                      companySettings?.subscription_status?.toLowerCase() === 'suspended' ||
+                      companySettings?.status?.toLowerCase() === 'suspended';
+
+  // Debug logging for suspended status
+  console.log('[CurrentPlan] Suspended check:', {
+    isSuspended,
+    quotaSubscriptionStatus,
+    companySettingsSubscriptionStatus: companySettings?.subscription_status,
+    companySettingsStatus: companySettings?.status,
+    tenantStatus: tenantStatus?.status
+  });
+
   // Use quotaSubscriptionStatus as source of truth for status badge
   // Get trial days remaining from quota-status API (single source of truth)
   const statusBadge = getStatusBadge(quotaSubscriptionStatus, companySettings?.payment_status, sharedQuotaData?.trial_info?.days_remaining);
@@ -1353,8 +1596,25 @@ function CurrentPlanContent() {
     );
   }
 
-  // Show pending account status
-  if (tenantStatus) {
+  // CRITICAL: Block suspended accounts completely (different from expired)
+  // Suspended accounts can only sign out or contact support
+  if (isSuspended || tenantStatus?.status === 'SUSPENDED') {
+    const suspensionReason = tenantStatus?.message ||
+      companySettings?.suspension_reason ||
+      'Your account has been suspended by the administrator. Please contact support for assistance.';
+    const suspendedAt = companySettings?.suspended_at || companySettings?.updated_at;
+
+    return (
+      <SuspendedAccountBlock
+        suspensionReason={suspensionReason}
+        suspendedAt={suspendedAt}
+        contactEmail="support@talentflow.com"
+      />
+    );
+  }
+
+  // Show pending account status (non-blocking banners)
+  if (tenantStatus && tenantStatus.status !== 'SUSPENDED') {
     const statusColors = {
       PENDING: { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800', icon: 'text-amber-500' },
       SUSPENDED: { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', icon: 'text-red-500' },
@@ -2224,7 +2484,17 @@ function CurrentPlanContent() {
 
                     <button
                       onClick={() => handleChoosePlan(plan)}
-                      disabled={isCurrentForToggle || isSelectingPlan || isSelectedPending || (!plan.monthlyPrice && !plan.annualPrice) || queuedUpgrades.length > 0}
+                      disabled={
+                        isCurrentForToggle ||
+                        isSelectingPlan ||
+                        isSelectedPending ||
+                        (!plan.monthlyPrice && !plan.annualPrice) ||
+                        queuedUpgrades.length > 0 ||
+                        // Disable if viewing yearly but only monthly available
+                        (isYearly && !plan.annualPrice && plan.monthlyPrice) ||
+                        // Disable if viewing monthly but only yearly available
+                        (!isYearly && !plan.monthlyPrice && plan.annualPrice)
+                      }
                       className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
                         isCurrentForToggle || isSelectedPending
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
@@ -2232,6 +2502,9 @@ function CurrentPlanContent() {
                             ? "bg-amber-100 text-amber-600 cursor-not-allowed"
                             : (!plan.monthlyPrice && !plan.annualPrice)
                               ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                              : // Also gray out when billing cycle not available
+                                (isYearly && !plan.annualPrice && plan.monthlyPrice) || (!isYearly && !plan.monthlyPrice && plan.annualPrice)
+                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                               : plan.popular
                                 ? "bg-gray-800 text-white hover:bg-gray-700"
                                 : "border border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -2245,11 +2518,17 @@ function CurrentPlanContent() {
                         'Upgrade Queued'
                       ) : (!plan.monthlyPrice && !plan.annualPrice) ? (
                         'Contact Sales'
+                      ) : (isYearly && !plan.annualPrice && plan.monthlyPrice) ? (
+                        'Yearly Not Available'
+                      ) : (!isYearly && !plan.monthlyPrice && plan.annualPrice) ? (
+                        'Monthly Not Available'
                       ) : isOnTrial || isLocked || isExpiredSubscription ? (
                         'Choose Plan'
-                      ) : (
-                        'Upgrade'
-                      )}
+                      ) : (() => {
+                        // Compare tiers to show Upgrade or Downgrade
+                        const tierComparison = comparePlanTiers(currentPlan?.tier, plan.tier);
+                        return tierComparison === -1 ? 'Downgrade' : 'Upgrade';
+                      })()}
                     </button>
                   </Card>
                   </div>
@@ -2970,11 +3249,26 @@ function CurrentPlanContent() {
             setShowDowngradeWarning(false);
             setDowngradeWarningData(null);
           }}
-          activeUsers={downgradeWarningData.activeUsers}
-          newPlanMaxSeats={downgradeWarningData.newPlanMaxSeats}
-          usersToDeactivate={downgradeWarningData.usersToDeactivate}
-          newPlanName={downgradeWarningData.newPlanName}
-          actionRequired={downgradeWarningData.actionRequired}
+          onConfirm={() => {
+            // User confirmed downgrade - open payment modal
+            if (downgradeWarningData.targetPlan) {
+              setSelectedPlanForPayment(downgradeWarningData.targetPlan);
+              setModalStep('isolation');
+              setIsolationType('schema');
+              setIsNewTenant(false);
+              setTransactionResult(null);
+              setError(null);
+              setShowPaymentModal(true);
+            }
+            // Close downgrade warning modal
+            setShowDowngradeWarning(false);
+            setDowngradeWarningData(null);
+          }}
+          currentPlanName={downgradeWarningData.currentPlanName}
+          targetPlanName={downgradeWarningData.targetPlanName}
+          overages={downgradeWarningData.overages}
+          nearLimitQuotas={downgradeWarningData.nearLimitQuotas}
+          isDowngrading={false}
         />
       )}
     </main>

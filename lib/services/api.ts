@@ -320,6 +320,64 @@ api.interceptors.response.use(
       }
     }
 
+    // ✅ Check if quota-status response has expired trial/plan dates
+    if (response.config.url?.includes('/usage/quota-status')) {
+      const quotaData = response.data?.data || response.data;
+      if (!quotaData) {
+        return response; // No data to check
+      }
+
+      const now = new Date();
+
+      // Check trial expiry
+      if (quotaData.trial_end_date) {
+        const trialEndDate = new Date(quotaData.trial_end_date);
+        if (trialEndDate < now) {
+          console.log('[API] Trial has expired by date:', quotaData.trial_end_date);
+          dispatchSubscriptionInactiveEvent({
+            error_code: 'SUBSCRIPTION_INACTIVE',
+            message: 'Your trial has expired. Please upgrade to continue.',
+            status: 'EXPIRED',
+            expired_at: quotaData.trial_end_date,
+            action_required: 'upgrade_plan',
+            support_email: 'support@talentflow.com',
+          });
+        }
+      }
+
+      // Check plan expiry (if no trial date)
+      if (!quotaData.trial_end_date && quotaData.plan_expiry_date) {
+        const planExpiryDate = new Date(quotaData.plan_expiry_date);
+        if (planExpiryDate < now) {
+          console.log('[API] Plan has expired by date:', quotaData.plan_expiry_date);
+          dispatchSubscriptionInactiveEvent({
+            error_code: 'SUBSCRIPTION_INACTIVE',
+            message: 'Your subscription has expired. Please renew to continue.',
+            status: 'EXPIRED',
+            expired_at: quotaData.plan_expiry_date,
+            action_required: 'renew_subscription',
+            support_email: 'support@talentflow.com',
+          });
+        }
+      }
+
+      // Check billing period end (fallback)
+      if (!quotaData.trial_end_date && !quotaData.plan_expiry_date && quotaData.billing_period?.end) {
+        const billingEndDate = new Date(quotaData.billing_period.end);
+        if (billingEndDate < now) {
+          console.log('[API] Billing period has expired:', quotaData.billing_period.end);
+          dispatchSubscriptionInactiveEvent({
+            error_code: 'SUBSCRIPTION_INACTIVE',
+            message: 'Your subscription has expired. Please renew to continue.',
+            status: 'EXPIRED',
+            expired_at: quotaData.billing_period.end,
+            action_required: 'renew_subscription',
+            support_email: 'support@talentflow.com',
+          });
+        }
+      }
+    }
+
     return response;
   },
   (error) => Promise.reject(error)

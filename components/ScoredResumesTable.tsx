@@ -5,6 +5,7 @@ import ColumnCustomizationModal from './ColumnCustomizationModal';
 import InviteToAssessmentModal from './InviteToAssessmentModal';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
@@ -15,12 +16,13 @@ const DEFAULT_COLUMNS = [
   { id: 'phone', label: 'Phone', enabled: true },
   { id: 'matchStatus', label: 'Match Status', enabled: true },
   { id: 'scorePercentage', label: 'Score %', enabled: true },
-  { id: 'experience', label: 'Experience', enabled: false },
+  { id: 'experience', label: 'Experience', enabled: true },  // Enable by default
   { id: 'education', label: 'Education', enabled: false },
   { id: 'certifications', label: 'Certifications', enabled: false },
   { id: 'scoredDate', label: 'Scored Date', enabled: true },
   { id: 'version', label: 'Version', enabled: true },
   { id: 'scoredBy', label: 'Scored By', enabled: true },
+  { id: 'tenantName', label: 'Tenant Name', enabled: true },  // Add tenant column
 ];
 
 interface ScoredResume {
@@ -60,6 +62,9 @@ interface ScoredResume {
   // For global view
   jobTitle?: string;
   jdId?: string;
+  // Tenant info
+  tenantName?: string;
+  tenantId?: string;
 }
 
 interface ScoredResumesTableProps {
@@ -85,6 +90,7 @@ export default function ScoredResumesTable({
   onSelectAll,
   isGlobalView = false
 }: ScoredResumesTableProps) {
+  const { tenant } = useAuth();  // Get tenant info from auth context
   const [showColumnModal, setShowColumnModal] = useState(false);
   const [internalSelectedResumes, setInternalSelectedResumes] = useState<string[]>([]);
 
@@ -159,10 +165,20 @@ export default function ScoredResumesTable({
 
   const enabledColumns = availableColumns.filter(col => col.enabled);
 
+  // Add tenant name to all resumes (from auth context)
+  // Remove "Organization: " prefix if present
+  const cleanTenantName = tenant?.name?.replace(/^Organization:\s*/i, '') || 'N/A';
+
+  const resumesWithTenant = resumes.map(resume => ({
+    ...resume,
+    tenantName: cleanTenantName,
+    tenantId: tenant?.id
+  }));
+
   // Filtering logic
-  const filteredResumes = resumes.filter(resume => {
+  const filteredResumes = resumesWithTenant.filter(resume => {
     // Search filter
-    const matchesSearch = 
+    const matchesSearch =
       resume.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resume.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resume.phone.includes(searchTerm);
@@ -173,13 +189,21 @@ export default function ScoredResumesTable({
     // Score range filter
     const matchesScore = resume.scorePercentage >= filterScoreMin && resume.scorePercentage <= filterScoreMax;
 
-    // Date range filter
+    // Date range filter - compare date portions in IST (UTC+5:30)
     let matchesDate = true;
-    if (filterDateFrom) {
-      matchesDate = matchesDate && new Date(resume.scoredDate) >= new Date(filterDateFrom);
-    }
-    if (filterDateTo) {
-      matchesDate = matchesDate && new Date(resume.scoredDate) <= new Date(filterDateTo);
+    if (filterDateFrom || filterDateTo) {
+      const d = new Date(resume.scoredDate);
+      if (!isNaN(d.getTime())) {
+        // Shift UTC to IST (+5h30m) then extract YYYY-MM-DD from ISO string
+        const istDate = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+        const scoredDateIST = istDate.toISOString().slice(0, 10);
+        if (filterDateFrom) {
+          matchesDate = matchesDate && scoredDateIST >= filterDateFrom;
+        }
+        if (filterDateTo) {
+          matchesDate = matchesDate && scoredDateIST <= filterDateTo;
+        }
+      }
     }
 
     // Recruiter filter
@@ -276,6 +300,8 @@ export default function ScoredResumesTable({
         return `${d.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} ${d.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true })}`;
       case 'scoredBy':
         return resume.scoredBy || '';
+      case 'tenantName':
+        return resume.tenantName || '';
       default:
         return '';
     }
@@ -378,6 +404,19 @@ export default function ScoredResumesTable({
   };
 
   const handleExportExcel = () => {
+    // Validation 1: Check if any resumes are available
+    if (filteredResumes.length === 0) {
+      toast.warning('No resumes available to export');
+      return;
+    }
+
+    // Validation 2: Must select at least one candidate
+    if (selectedResumes.length === 0) {
+      toast.warning('Please select at least one candidate to export');
+      return;  // ✅ BLOCK export
+    }
+
+    // Selection valid - proceed with export
     setShowExportModal(true);
   };
 
@@ -390,11 +429,14 @@ export default function ScoredResumesTable({
 
     setDownloadingId(resumeId);
     try {
-      const blob = await scoringService.downloadScorecard(resumeId);
+      const rawBlob = await scoringService.downloadScorecard(resumeId);
+      // Ensure blob has correct MIME type for cross-platform PDF rendering
+      const blob = new Blob([rawBlob], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${resume.candidateName.replace(/\s+/g, '_')}_Screening_Report.pdf`;
+      const safeCandidateName = (resume.candidateName || 'Candidate').replace(/[^\w\s\-]/g, '').trim().replace(/\s+/g, '_') || 'Candidate';
+      link.download = `${safeCandidateName}_Screening_Report.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -413,11 +455,13 @@ export default function ScoredResumesTable({
 
     setBulkDownloading(true);
     try {
-      const blob = await scoringService.exportScorecards(selectedResumes);
+      const rawBlob = await scoringService.exportScorecards(selectedResumes);
+      // Ensure blob has correct MIME type for cross-platform compatibility
+      const blob = new Blob([rawBlob], { type: 'application/zip' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
+      const safeName = jobTitle.replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_') || 'Scorecards';
       link.download = `${safeName}_Scorecards.zip`;
       document.body.appendChild(link);
       link.click();
@@ -865,6 +909,13 @@ export default function ScoredResumesTable({
                     return (
                       <td key={col.id} className="py-3 px-4">
                         <div className="text-sm text-gray-600">{resume.scoredBy}</div>
+                      </td>
+                    );
+                  }
+                  if (col.id === 'tenantName') {
+                    return (
+                      <td key={col.id} className="py-3 px-4">
+                        <div className="text-sm text-gray-600">{resume.tenantName || 'N/A'}</div>
                       </td>
                     );
                   }

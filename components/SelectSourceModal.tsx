@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users, Database, Search, CheckSquare, Square, Loader2, Mail, Phone, Briefcase, MapPin, Calendar, Target, ArrowLeft, FolderOpen, ChevronRight, ChevronDown, Folder, Clock, CheckCircle2, XCircle, User, Timer, Minus, RotateCcw } from 'lucide-react';
+import { X, Users, Database, Search, CheckSquare, Square, Loader2, Mail, Phone, Briefcase, MapPin, Calendar, Target, ArrowLeft, FolderOpen, ChevronRight, ChevronDown, Folder, Clock, CheckCircle2, XCircle, User, Timer, Minus, RotateCcw, Upload } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { resumeService, folderService, Resume, Folder as FolderType } from '@/lib/services/resumeService';
@@ -8,12 +8,14 @@ import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
+import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
+import UploadModal from './UploadModal';
 
-// Progress item interface
+// Progress item interface (internal)
 interface ProgressItem {
   resumeId: string;
   candidateName: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
   errorMessage?: string;
 }
@@ -32,7 +34,7 @@ export default function SelectSourceModal({
   onScoringComplete
 }: SelectSourceModalProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, tenant } = useAuth();
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
@@ -52,13 +54,22 @@ export default function SelectSourceModal({
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressItems, setProgressItems] = useState<ProgressItem[]>([]);
   const [scoringStats, setScoringStats] = useState({ queued: 0, processing: 0, completed: 0, failed: 0 });
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const startTimeRef = useRef<Date | null>(null);
+
+  // Upload modal state
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Fetch resumes and folders on mount and tab change
   useEffect(() => {
     fetchData();
   }, [activeTab]);
+
+  // Auto-expand all folders when they load
+  useEffect(() => {
+    if (folders.length > 0) {
+      const allFolderIds = folders.map(f => f.id);
+      setExpandedFolders(allFolderIds);
+    }
+  }, [folders]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -74,6 +85,19 @@ export default function SelectSourceModal({
       if (activeTab === 'my-resumes') {
         try {
           const folderData = await folderService.list();
+          console.log('[SelectSourceModal] Fetched folders:', folderData);
+          console.log('[SelectSourceModal] Folders count:', folderData?.length || 0);
+
+          // Log each folder's details
+          folderData?.forEach((folder, index) => {
+            console.log(`[SelectSourceModal] Folder ${index + 1}:`, {
+              id: folder.id,
+              name: folder.name,
+              parent_id: folder.parent_id,
+              resume_count: folder.resume_count
+            });
+          });
+
           setFolders(folderData || []);
         } catch (e) {
           console.error('Failed to fetch folders:', e);
@@ -152,34 +176,45 @@ export default function SelectSourceModal({
     setSelectedFolder('all');
   };
 
-  // Timer effect for elapsed time
-  useEffect(() => {
-    if (!showProgressModal || scoringStats.queued === 0 && scoringStats.processing === 0) return;
-
-    const interval = setInterval(() => {
-      if (startTimeRef.current) {
-        const now = new Date();
-        const diff = Math.floor((now.getTime() - startTimeRef.current.getTime()) / 1000);
-        setElapsedSeconds(diff);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [showProgressModal, scoringStats.queued, scoringStats.processing]);
-
-  // Format elapsed time
-  const formatElapsedTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   // Submit for scoring with progress tracking
   const handleSubmitForScoring = async () => {
     if (selectedResumes.length === 0) return;
 
+    // Check for already-scored resumes before proceeding
+    let resumesToScore = [...selectedResumes];
+    try {
+      const checkResult = await scoringService.checkExistingScores(jobId, resumesToScore);
+      if (checkResult.existing_count > 0) {
+        const alreadyScoredNames = checkResult.existing_scores
+          .map((s: any) => `${s.candidate_name} (${s.overall_score}%)`)
+          .join(', ');
+
+        if (checkResult.new_count === 0) {
+          // ALL resumes already scored - block entirely
+          toast.error(
+            `All ${checkResult.existing_count} resume(s) already scored for "${checkResult.jd_title}": ${alreadyScoredNames}`,
+            { duration: 6000 }
+          );
+          return;
+        }
+
+        // SOME already scored - warn and filter them out
+        toast.warning(
+          `${checkResult.existing_count} resume(s) already scored and will be skipped: ${alreadyScoredNames}`,
+          { duration: 5000 }
+        );
+        const existingIds = new Set(checkResult.existing_scores.map((s: any) => s.resume_id));
+        resumesToScore = resumesToScore.filter(id => !existingIds.has(id));
+
+        if (resumesToScore.length === 0) return;
+      }
+    } catch (error) {
+      console.error('Error checking existing scores:', error);
+      // Continue with scoring even if check fails
+    }
+
     // Initialize all items with 'queued' status immediately
-    const initialItems: ProgressItem[] = selectedResumes.map(resumeId => {
+    const initialItems: ProgressItem[] = resumesToScore.map(resumeId => {
       const resume = resumes.find(r => r.id === resumeId);
       return {
         resumeId,
@@ -189,18 +224,16 @@ export default function SelectSourceModal({
     });
 
     setProgressItems(initialItems);
-    setScoringStats({ queued: selectedResumes.length, processing: 0, completed: 0, failed: 0 });
+    setScoringStats({ queued: resumesToScore.length, processing: 0, completed: 0, failed: 0 });
     setShowProgressModal(true);
     setSubmitting(true);
-    startTimeRef.current = new Date();
-    setElapsedSeconds(0);
 
     let completed = 0;
     let failed = 0;
 
     // Score resumes one by one to show real-time progress
-    for (let i = 0; i < selectedResumes.length; i++) {
-      const resumeId = selectedResumes[i];
+    for (let i = 0; i < resumesToScore.length; i++) {
+      const resumeId = resumesToScore[i];
       const resume = resumes.find(r => r.id === resumeId);
       const candidateName = resume?.candidate_name || 'Unknown';
 
@@ -211,7 +244,7 @@ export default function SelectSourceModal({
           : item
       ));
       setScoringStats({
-        queued: selectedResumes.length - i - 1,
+        queued: resumesToScore.length - i - 1,
         processing: 1,
         completed,
         failed,
@@ -228,7 +261,7 @@ export default function SelectSourceModal({
             : item
         ));
         setScoringStats({
-          queued: selectedResumes.length - i - 1,
+          queued: resumesToScore.length - i - 1,
           processing: 0,
           completed,
           failed,
@@ -244,7 +277,7 @@ export default function SelectSourceModal({
             : item
         ));
         setScoringStats({
-          queued: selectedResumes.length - i - 1,
+          queued: resumesToScore.length - i - 1,
           processing: 0,
           completed,
           failed,
@@ -254,7 +287,6 @@ export default function SelectSourceModal({
 
     // All done
     setSubmitting(false);
-    startTimeRef.current = null;
 
     if (completed > 0) {
       toast.success(`${completed} resume(s) scored successfully${failed > 0 ? `, ${failed} failed` : ''}`);
@@ -307,6 +339,63 @@ export default function SelectSourceModal({
     }
   };
 
+  // Handle resume upload
+  const handleUpload = async (files: File[], folderId?: string) => {
+    try {
+      // Upload the first file (UploadModal handles single file uploads)
+      if (files.length === 0) {
+        return {
+          success: false,
+          error: 'No file provided'
+        };
+      }
+
+      const file = files[0];
+      const response = await resumeService.upload(file, folderId);
+
+      // Refresh resumes list
+      await fetchData();
+
+      return {
+        success: true,
+        resumeId: response.id,
+        candidateName: response.candidate_name
+      };
+    } catch (error: any) {
+      console.error('Upload error:', error);
+      return {
+        success: false,
+        error: error.message || 'Upload failed'
+      };
+    }
+  };
+
+  // Handle upload complete - auto-select the uploaded resume
+  const handleUploadComplete = () => {
+    setShowUploadModal(false);
+    fetchData(); // Refresh the list
+  };
+
+  // Handle auto-select after upload
+  const handleAutoSelectAfterUpload = async (resumeId: string, candidateName: string) => {
+    // Close upload modal
+    setShowUploadModal(false);
+
+    // Refresh the list to include the new resume
+    await fetchData();
+
+    // Auto-select the uploaded resume
+    setSelectedResumes(prev => {
+      if (!prev.includes(resumeId)) {
+        return [...prev, resumeId];
+      }
+      return prev;
+    });
+
+    // Show success message
+    toast.success(`Resume uploaded! "${candidateName}" is now selected. Add more or click "Score Resumes" to continue.`);
+  };
+
   // Toggle folder expansion
   const toggleFolder = (id: string) => {
     setExpandedFolders(prev =>
@@ -322,7 +411,37 @@ export default function SelectSourceModal({
 
   // Render folder tree
   const renderFolderTree = (parentId?: string, level: number = 0) => {
-    const childFolders = folders.filter(f => f.parent_id === parentId && !(f.name.toLowerCase() === 'root' && !f.parent_id));
+    // Find root folder first
+    const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && (!f.parent_id || f.parent_id === null));
+    const rootId = rootFolder?.id;
+
+    // If no parentId specified, show all non-root folders
+    let childFolders: typeof folders;
+    if (parentId === undefined) {
+      // Show all folders except root itself
+      childFolders = folders.filter(f => {
+        // Skip root folder
+        if (f.name.toLowerCase() === 'root' && (!f.parent_id || f.parent_id === null)) {
+          return false;
+        }
+
+        // Include folders that are:
+        // 1. Children of root (parent_id === rootId)
+        // 2. OR have no parent/null parent (top-level folders)
+        // 3. OR have empty string parent
+        if (rootId) {
+          return f.parent_id === rootId || !f.parent_id || f.parent_id === null || f.parent_id === '';
+        } else {
+          return !f.parent_id || f.parent_id === null || f.parent_id === '';
+        }
+      });
+    } else {
+      // Show children of specified parent
+      childFolders = folders.filter(f => f.parent_id === parentId);
+    }
+
+    console.log('[SelectSourceModal] renderFolderTree - parentId:', parentId, 'rootId:', rootId, 'folders.length:', folders.length, 'childFolders:', childFolders.length);
+    console.log('[SelectSourceModal] childFolders names:', childFolders.map(f => f.name));
 
     return childFolders.map(folder => {
       const isExpanded = expandedFolders.includes(folder.id);
@@ -453,7 +572,7 @@ export default function SelectSourceModal({
         {/* Content Area */}
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar - Folder Tree (Only for My Resumes) */}
-          {activeTab === 'my-resumes' && folders.length > 0 && (
+          {activeTab === 'my-resumes' && (
             <div className="w-56 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0">
               <div className="p-4">
                 <h3 className="text-xs font-medium text-gray-500 uppercase mb-3 px-3">Folders</h3>
@@ -479,9 +598,16 @@ export default function SelectSourceModal({
                 </button>
 
                 {/* Folder Tree */}
-                <div className="space-y-1">
-                  {renderFolderTree(undefined, 0)}
-                </div>
+                {folders.length > 0 ? (
+                  <div className="space-y-1">
+                    {renderFolderTree(undefined, 0)}
+                  </div>
+                ) : (
+                  <div className="px-3 py-4 text-xs text-gray-500 text-center">
+                    <p className="mb-2">No folders yet</p>
+                    <p className="text-gray-400">Create folders from My Resumes page</p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -501,6 +627,16 @@ export default function SelectSourceModal({
                     className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+                {/* Upload Resume button - only for My Resumes tab */}
+                {activeTab === 'my-resumes' && (
+                  <button
+                    onClick={() => setShowUploadModal(true)}
+                    className="px-4 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Upload Resume
+                  </button>
+                )}
                 <button
                   onClick={handleSelectAll}
                   disabled={filteredResumes.length === 0}
@@ -726,183 +862,48 @@ export default function SelectSourceModal({
         </div>
       </div>
 
-      {/* Progress Modal */}
+      {/* Progress Modal - Using BulkScoringProgressModal */}
       {showProgressModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-gray-900 to-gray-800 text-white flex-shrink-0">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Target className="w-5 h-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-lg font-bold truncate">Scoring: {jobTitle}</h2>
-                  <p className="text-sm text-gray-300">{scoringStats.completed}/{progressItems.length} resumes scored</p>
-                </div>
-              </div>
+        <BulkScoringProgressModal
+          onClose={handleCloseProgress}
+          progressData={progressItems.map((item): ScoringProgressItem => ({
+            id: item.resumeId,
+            resumeId: item.resumeId,
+            candidateName: item.candidateName,
+            jobTitle: jobTitle,
+            jobId: jobId,
+            source: activeTab === 'internal-db' ? 'Internal DB' : 'My Resumes',
+            status: item.status === 'queued' ? 'Queued' :
+                    item.status === 'processing' ? 'Scoring in progress' :
+                    item.status === 'completed' ? 'Scored successfully' :
+                    item.status === 'already_scored' ? 'Already Scored - Skipped' :
+                    'Failed',
+            errorReason: item.errorMessage,
+            scoredDateTime: item.status === 'completed' ? new Date() : undefined,
+            matchResult: item.status === 'completed' && item.score !== undefined
+              ? (item.score >= 80 ? 'Exact Match' : item.score >= 60 ? 'Partial Match' : 'No Match')
+              : undefined,
+            score: item.score,
+          }))}
+          filterByJobId={jobId}
+          showJobTitleColumn={false}
+          onRetryFailed={async (scoringItem) => {
+            await handleRetryFailed(scoringItem.resumeId);
+          }}
+        />
+      )}
 
-              <div className="flex items-center gap-4 flex-shrink-0">
-                {/* Timer */}
-                {(scoringStats.queued > 0 || scoringStats.processing > 0) && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/10 rounded-lg">
-                    <Timer className="w-3.5 h-3.5 text-gray-300" />
-                    <span className="text-xs font-mono text-gray-200">{formatElapsedTime(elapsedSeconds)}</span>
-                  </div>
-                )}
-
-                {/* Progress bar */}
-                <div className="hidden md:flex items-center gap-2">
-                  <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full transition-all duration-500 ${scoringStats.queued === 0 && scoringStats.processing === 0 ? 'bg-green-500' : 'bg-blue-500'}`}
-                      style={{ width: `${progressItems.length > 0 ? ((scoringStats.completed + scoringStats.failed) / progressItems.length * 100) : 0}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-semibold w-10">
-                    {progressItems.length > 0 ? Math.round((scoringStats.completed + scoringStats.failed) / progressItems.length * 100) : 0}%
-                  </span>
-                </div>
-
-                <button
-                  onClick={handleCloseProgress}
-                  disabled={submitting}
-                  className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors disabled:opacity-50"
-                  title="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Stats Row */}
-            <div className="flex flex-wrap items-center gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-gray-400" />
-                <span className="text-sm text-gray-600">Queue: <span className="font-semibold text-gray-900">{scoringStats.queued}</span></span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Loader2 className={`w-3.5 h-3.5 text-blue-500 ${scoringStats.processing > 0 ? 'animate-spin' : ''}`} />
-                <span className="text-sm text-gray-600">Processing: <span className="font-semibold text-blue-600">{scoringStats.processing}</span></span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                <span className="text-sm text-gray-600">Done: <span className="font-semibold text-green-600">{scoringStats.completed}</span></span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <XCircle className="w-3.5 h-3.5 text-red-500" />
-                <span className="text-sm text-gray-600">Failed: <span className="font-semibold text-red-600">{scoringStats.failed}</span></span>
-              </div>
-
-              {scoringStats.queued === 0 && scoringStats.processing === 0 && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium ml-auto">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Complete
-                </div>
-              )}
-            </div>
-
-            {/* Resume List */}
-            <div className="flex-1 overflow-y-auto min-h-0">
-              {progressItems.length > 0 ? (
-                <div className="divide-y divide-gray-100">
-                  {progressItems.map((item, index) => (
-                    <div
-                      key={item.resumeId}
-                      className={`flex items-center gap-4 px-6 py-3 border-l-4 ${
-                        item.status === 'processing' ? 'bg-blue-50 border-l-blue-500' :
-                        item.status === 'completed' ? 'bg-green-50 border-l-green-500' :
-                        item.status === 'failed' ? 'bg-red-50 border-l-red-500' :
-                        'bg-gray-50 border-l-gray-300'
-                      }`}
-                    >
-                      {/* Icon */}
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                        item.status === 'processing' ? 'bg-blue-100' :
-                        item.status === 'completed' ? 'bg-green-100' :
-                        item.status === 'failed' ? 'bg-red-100' :
-                        'bg-gray-100'
-                      }`}>
-                        <User className={`w-5 h-5 ${
-                          item.status === 'processing' ? 'text-blue-600' :
-                          item.status === 'completed' ? 'text-green-600' :
-                          item.status === 'failed' ? 'text-red-600' :
-                          'text-gray-500'
-                        }`} />
-                      </div>
-
-                      {/* Name */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {item.candidateName}
-                        </p>
-                        {item.status === 'failed' && item.errorMessage && (
-                          <p className="text-xs text-red-500 truncate">{item.errorMessage}</p>
-                        )}
-                      </div>
-
-                      {/* Status */}
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {item.status === 'queued' && <Clock className="w-4 h-4 text-gray-400" />}
-                        {item.status === 'processing' && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
-                        {item.status === 'completed' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                        {item.status === 'failed' && <XCircle className="w-4 h-4 text-red-500" />}
-                        <span className={`text-sm font-medium ${
-                          item.status === 'processing' ? 'text-blue-600' :
-                          item.status === 'completed' ? 'text-green-600' :
-                          item.status === 'failed' ? 'text-red-600' :
-                          'text-gray-500'
-                        }`}>
-                          {item.status === 'queued' ? 'Queued' :
-                           item.status === 'processing' ? 'Processing...' :
-                           item.status === 'completed' ? 'Scored' :
-                           'Failed'}
-                        </span>
-                      </div>
-
-                      {/* Score */}
-                      {item.status === 'completed' && item.score !== undefined && (
-                        <div className="flex items-center gap-1 px-3 py-1 bg-green-100 rounded-full flex-shrink-0">
-                          <span className="text-sm font-bold text-green-700">{item.score}%</span>
-                        </div>
-                      )}
-
-                      {/* Retry button */}
-                      {item.status === 'failed' && !submitting && (
-                        <button
-                          onClick={() => handleRetryFailed(item.resumeId)}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 flex-shrink-0"
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                          Retry
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-                  <Target className="w-12 h-12 mb-3 text-gray-300" />
-                  <p className="text-sm">Preparing resumes for scoring...</p>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            {scoringStats.queued === 0 && scoringStats.processing === 0 && (
-              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex-shrink-0">
-                <div className="flex items-center justify-end">
-                  <button
-                    onClick={handleCloseProgress}
-                    className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <UploadModal
+          folders={folders}
+          tenant={tenant}
+          uploadSection="my-resumes"
+          onClose={() => setShowUploadModal(false)}
+          onUpload={handleUpload}
+          onUploadComplete={handleUploadComplete}
+          onScoreResume={handleAutoSelectAfterUpload}
+        />
       )}
     </div>
   );

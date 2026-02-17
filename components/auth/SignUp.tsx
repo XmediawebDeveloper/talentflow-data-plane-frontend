@@ -1091,7 +1091,9 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               <h4 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>Plan Quotas:</h4>
               <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  {Object.entries(selectedPlanDetails.quotas).map(([key, value]) => (
+                  {Object.entries(selectedPlanDetails.quotas)
+                    .filter(([key]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key))
+                    .map(([key, value]) => (
                     <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid #E5E7EB' }}>
                       <span style={{ fontSize: 13, color: '#6B7280' }}>{getQuotaLabel(key)}</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{formatQuotaValue(key, value)}</span>

@@ -296,7 +296,10 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     setLoadingScoredResumes(true);
     try {
       console.log('[JobDetailView] Fetching scored resumes for JD:', job.id);
-      const response = await jdService.getScoredResumes(job.id, { page_size: 100 });
+      const response = await jdService.getScoredResumes(job.id, {
+        page_size: 100,
+        sort_by: 'latest'  // Always get latest scores first
+      });
       console.log('[JobDetailView] Scored resumes response:', response);
 
       // Convert API response to ScoredResume format
@@ -320,12 +323,16 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           email: item.candidate_email || '',
           phone: item.phone || '',
           matchStatus: matchStatus,
-          scorePercentage: Math.round(item.overall_score || 0),
+          scorePercentage: Number((item.overall_score || 0).toFixed(1)),  // Keep 1 decimal for consistency
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by || item.scored_by_name || 'System',
           experience: item.experience_years ? `${item.experience_years} years` : undefined,
           education: item.education,
           certifications: item.certifications || [],
+          version: item.resume_version || 1,  // Resume version tracking
+          resumeVersion: item.resume_version || 1,  // Resume version tracking (alternative field name)
+          tenantName: item.tenant_name || item.tenantName,  // Tenant information
+          tenantId: item.tenant_id || item.tenantId,
           aiSummary: item.ai_summary,
           strengths: item.strengths || [],
           gaps: item.gaps || [],

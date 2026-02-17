@@ -667,6 +667,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(userData);
       saveUserToStorage(userData);
       console.log('[AUTH] User data refreshed');
+
+      // ✅ Dispatch event to notify UI components (like Sidebar) to re-render
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('permissions-updated'));
+        console.log('[AUTH] Dispatched permissions-updated event after refresh');
+      }
     } catch (error) {
       console.error('[AUTH] Failed to refresh user:', error);
     }

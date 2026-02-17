@@ -149,7 +149,7 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
 type AssessmentStep =
   | 'loading'
   | 'error'
-  | 'identity_verification'  // Security: Verify candidate identity before consent
+  // | 'identity_verification'  // DISABLED: Identity verification removed - candidates can directly attend
   | 'landing'
   | 'consent'
   | 'system_check'
@@ -332,7 +332,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     // GUARD 3: Check current step using REF (not state - avoids stale closure)
     const currentStep = stepRef.current;
     const activeFlowSteps: AssessmentStep[] = [
-      'identity_verification',
+      // 'identity_verification',  // DISABLED: Identity verification removed
       'system_check',
       'generating_questions',
       'assessment',
@@ -369,8 +369,8 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
       });
       setAssessmentInfo(info);
 
-      // Check identity verification status (from session storage)
-      const isIdentityVerified = sessionStorage.getItem(`identity_verified_${token}`) === 'true';
+      // DISABLED: Identity verification removed - candidates can directly attend
+      // const isIdentityVerified = sessionStorage.getItem(`identity_verified_${token}`) === 'true';
 
       // Determine initial step based on status
       if (info.attempt_status === 'completed') {
@@ -393,10 +393,11 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
             setStepSafe('completed');
           }
         }
-      } else if (!isIdentityVerified) {
-        // Identity not verified - require verification first
-        console.log('[DEBUG] Identity not verified - showing verification screen');
-        setStepSafe('identity_verification');
+      // DISABLED: Identity verification removed - candidates can directly attend
+      // } else if (!isIdentityVerified) {
+      //   // Identity not verified - require verification first
+      //   console.log('[DEBUG] Identity not verified - showing verification screen');
+      //   setStepSafe('identity_verification');
       } else if (info.can_resume) {
         // Can resume existing attempt
         console.log('[DEBUG] Can resume - fetching current question');
@@ -495,21 +496,22 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
     }
   };
 
-  const handleIdentityVerified = () => {
-    // Identity verified successfully - proceed to consent or next step
-    console.log('[DEBUG] Identity verified, proceeding to next step');
-
-    if (!assessmentInfo?.consent_accepted) {
-      // Need to accept consent
-      setStepSafe('consent');
-    } else if (assessmentInfo?.can_start) {
-      // Consent already accepted, show landing
-      setStepSafe('landing');
-    } else if (assessmentInfo?.can_resume) {
-      // Can resume assessment directly
-      loadAssessmentInfo();
-    }
-  };
+  // DISABLED: Identity verification removed - candidates can directly attend
+  // const handleIdentityVerified = () => {
+  //   // Identity verified successfully - proceed to consent or next step
+  //   console.log('[DEBUG] Identity verified, proceeding to next step');
+  //
+  //   if (!assessmentInfo?.consent_accepted) {
+  //     // Need to accept consent
+  //     setStepSafe('consent');
+  //   } else if (assessmentInfo?.can_start) {
+  //     // Consent already accepted, show landing
+  //     setStepSafe('landing');
+  //   } else if (assessmentInfo?.can_resume) {
+  //     // Can resume assessment directly
+  //     loadAssessmentInfo();
+  //   }
+  // };
 
   const handleConsentAccept = async () => {
     try {
@@ -1001,13 +1003,14 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
         />
       );
 
-      case 'identity_verification':
-        return (
-          <IdentityVerificationScreen
-            token={token}
-            onVerified={handleIdentityVerified}
-          />
-        );
+      // DISABLED: Identity verification removed - candidates can directly attend
+      // case 'identity_verification':
+      //   return (
+      //     <IdentityVerificationScreen
+      //       token={token}
+      //       onVerified={handleIdentityVerified}
+      //     />
+      //   );
 
     case 'landing':
       return (

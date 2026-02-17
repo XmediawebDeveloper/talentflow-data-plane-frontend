@@ -565,7 +565,34 @@ export default function ResumeDatabasePage() {
     const selectedJob = jobs.find(j => j.id === jobId);
 
     try {
-      // Start async bulk scoring via Celery
+      // Check for already-scored resumes before proceeding
+      const checkResult = await scoringService.checkExistingScores(jobId, resumeIds);
+
+      if (checkResult.existing_count > 0) {
+        const alreadyScoredNames = checkResult.existing_scores
+          .map((s: any) => `${s.candidate_name} (${s.overall_score}%)`)
+          .join(', ');
+
+        if (checkResult.new_count === 0) {
+          // ALL resumes already scored - block entirely
+          toast.error(
+            `All ${checkResult.existing_count} resume(s) already scored for "${checkResult.jd_title}": ${alreadyScoredNames}`,
+            { duration: 6000 }
+          );
+          return;
+        }
+
+        // Some already scored, some new - alert and continue with only new ones
+        toast.warning(
+          `${checkResult.existing_count} resume(s) already scored and will be skipped: ${alreadyScoredNames}`,
+          { duration: 5000 }
+        );
+        // Filter to only new (unscored) resume IDs
+        const existingIds = new Set(checkResult.existing_scores.map((s: any) => s.resume_id));
+        resumeIds = resumeIds.filter(id => !existingIds.has(id));
+      }
+
+      // Start async bulk scoring via Celery (only for new/unscored resumes)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
       // Get candidate names for the selected resumes

@@ -30,6 +30,7 @@ interface ShareAssessmentModalProps {
     jd_version?: number; // JD version number
   };
   prefilledCandidates?: CandidateEmail[]; // Optional pre-filled candidates from resume selection
+  inviteSource?: string; // Source context: "Resume Scoring", "JD", "Assessment", "Internal DB", "Manual"
   additionalAssessments?: Array<{
     id: string;
     title: string;
@@ -47,6 +48,7 @@ interface CandidateEmail {
   id: string;
   name: string;
   email: string;
+  phone?: string; // Phone number
   source?: 'manual' | 'database'; // Track source
   resumeId?: string; // Link to resume if from database
 }
@@ -61,7 +63,7 @@ interface Resume {
   skills: string[];
 }
 
-export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, additionalAssessments }: ShareAssessmentModalProps) {
+export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, additionalAssessments }: ShareAssessmentModalProps) {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -264,6 +266,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             const candidateData = validCandidates.map(c => ({
               candidate_name: c.name,
               candidate_email: c.email,
+              candidate_phone: c.phone,
+              invite_source: inviteSource || (c.source === 'database' ? 'Internal DB' : 'Manual'),
               resume_id: c.resumeId,
             }));
 
@@ -304,6 +308,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         await assessmentService.invite(assessment.id, {
           candidate_name: validCandidates[0].name,
           candidate_email: validCandidates[0].email,
+          candidate_phone: validCandidates[0].phone,
+          invite_source: inviteSource || (validCandidates[0].source === 'database' ? 'Internal DB' : 'Manual'),
           resume_id: validCandidates[0].resumeId,
           custom_message: customMessage,
           expiry_days: expiryDays,
@@ -313,6 +319,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         const candidateData = validCandidates.map(c => ({
           candidate_name: c.name,
           candidate_email: c.email,
+          candidate_phone: c.phone,
+          invite_source: inviteSource || (c.source === 'database' ? 'Internal DB' : 'Manual'),
           resume_id: c.resumeId,
         }));
         await assessmentService.bulkInvite(assessment.id, {
@@ -438,7 +446,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               <h2 className="text-white">Share Assessment via Email</h2>
               <div className="flex items-center gap-2">
                 <p className="text-gray-100 text-sm">{assessmentTitleForEmail}</p>
-                <VersionBadge title={assessment.title} size="sm" variant="success" />
+                <VersionBadge version={assessment.version} size="sm" variant="success" />
               </div>
             </div>
           </div>
@@ -466,7 +474,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     </span>
                   )}
                   <span className="text-gray-900">{assessmentTitleForEmail}</span>
-                  <VersionBadge title={assessment.title} size="sm" variant="secondary" />
+                  <VersionBadge version={assessment.version} size="sm" variant="secondary" />
                   {allAssessments.length > 1 && (
                     <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
                       +{allAssessments.length - 1} more

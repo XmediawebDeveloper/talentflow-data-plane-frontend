@@ -79,6 +79,8 @@ export interface AssessmentListResponse {
 export interface InvitationCreate {
   candidate_name: string;
   candidate_email: string;
+  candidate_phone?: string;  // Optional phone number
+  invite_source?: string;  // Source: "Resume Scoring", "JD", "Assessment", "Internal DB", "Manual"
   resume_id?: string;
   custom_message?: string;
   expiry_days?: number;
@@ -91,6 +93,8 @@ export interface InvitationResponse {
   assessment_title: string;
   candidate_name: string;
   candidate_email: string;
+  candidate_phone?: string;
+  invite_source?: string;
   resume_id?: string;
   invitation_token: string;
   invitation_link?: string;
@@ -654,13 +658,24 @@ export const assessmentService = {
   /**
    * 3. Export assessment results
    * Returns blob for file download
-   * ✅ UPDATED: Now accepts enabled columns list to match UI column visibility
+   * ✅ UPDATED: Now accepts enabled columns, filters, and sorting
    */
   async exportResults(
     assessmentId: string,
-    format: ExportFormat = 'csv',
+    format: ExportFormat = 'excel',
     includeDetails: boolean = false,
-    columns?: string[] // Pass enabled columns to backend
+    columns?: string[], // Pass enabled columns to backend
+    filters?: {
+      search?: string;
+      status_filter?: string;
+      passed?: boolean;
+      score_min?: number;
+      score_max?: number;
+    },
+    sorting?: {
+      sort_by?: string;
+      sort_order?: string;
+    }
   ): Promise<Blob> {
     try {
       const params: any = { format, include_details: includeDetails };
@@ -669,6 +684,23 @@ export const assessmentService = {
       if (columns && columns.length > 0) {
         params.columns = columns.join(',');
         console.log('[EXPORT API] Exporting columns:', params.columns);
+      }
+
+      // Include filters if provided
+      if (filters) {
+        if (filters.search) params.search = filters.search;
+        if (filters.status_filter) params.status_filter = filters.status_filter;
+        if (filters.passed !== undefined) params.passed = filters.passed;
+        if (filters.score_min !== undefined) params.score_min = filters.score_min;
+        if (filters.score_max !== undefined) params.score_max = filters.score_max;
+        console.log('[EXPORT API] Applying filters:', filters);
+      }
+
+      // Include sorting if provided
+      if (sorting) {
+        if (sorting.sort_by) params.sort_by = sorting.sort_by;
+        if (sorting.sort_order) params.sort_order = sorting.sort_order;
+        console.log('[EXPORT API] Applying sorting:', sorting);
       }
 
       const response = await api.get(`/assessments/${assessmentId}/results/export`, {

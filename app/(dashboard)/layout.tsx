@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { useEffect, useState, useCallback, Suspense } from 'react';
+import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
 import Header from '@/components/Header';
 import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
@@ -62,14 +62,51 @@ export default function DashboardLayout({
   const { user, tenant, isAuthenticated, isLoading, logout, isTenantAdmin } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [subscriptionExpired, setSubscriptionExpired] = useState(false);
+
+  // Initialize as undefined to show locked state until we know for sure
+  const [subscriptionExpired, setSubscriptionExpired] = useState<boolean | undefined>(undefined);
+  const [accountSuspended, setAccountSuspended] = useState<boolean>(false);
+
+  // Mobile menu state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
 
+  // Initialize subscription status immediately based on tenant data
+  useEffect(() => {
+    if (isLoading) return;
+
+    // Check tenant subscription status
+    if (tenant?.subscription) {
+      const status = tenant.subscription.status?.toLowerCase();
+      const isExpired = status === 'expired' || status === 'inactive';
+      const isSuspended = status === 'suspended';
+      console.log('[DASHBOARD] Tenant subscription status:', status, 'isExpired:', isExpired, 'isSuspended:', isSuspended);
+
+      if (isSuspended) {
+        // CRITICAL: Suspend accounts immediately - blocks all access except sign out
+        console.log('[DASHBOARD] Account SUSPENDED - blocking all access');
+        setAccountSuspended(true);
+        setSubscriptionExpired(false); // Suspended is different from expired
+      } else if (isExpired) {
+        // Immediately lock if tenant data says expired
+        console.log('[DASHBOARD] Locking menus - subscription expired');
+        setSubscriptionExpired(true);
+        setAccountSuspended(false);
+      } else if (status === 'active' || status === 'trial') {
+        // Immediately unlock if tenant says active/trial
+        console.log('[DASHBOARD] Unlocking menus - subscription active');
+        setSubscriptionExpired(false);
+        setAccountSuspended(false);
+      }
+    }
+  }, [isLoading, tenant]);
+
   // Listen for subscription-inactive events from API interceptor
+  // If API reports expired (even if tenant data said active), lock the menus
   useEffect(() => {
     const handleSubscriptionInactive = (event: CustomEvent<SubscriptionInactiveDetail>) => {
-      console.log('[DASHBOARD] Subscription inactive detected:', event.detail?.status);
+      console.log('[DASHBOARD] API reported subscription expired - locking menus:', event.detail?.status);
       setSubscriptionExpired(true);
     };
 
@@ -86,9 +123,21 @@ export default function DashboardLayout({
     };
   }, []);
 
+  // CRITICAL: Redirect suspended accounts to current-plan (blocking page)
+  // Suspended accounts can ONLY access current-plan page (which shows blocking UI)
+  useEffect(() => {
+    if (accountSuspended && pathname) {
+      if (pathname !== '/subscription/current-plan') {
+        console.log('[DASHBOARD] Account SUSPENDED, redirecting to current-plan from:', pathname);
+        router.push('/subscription/current-plan');
+      }
+    }
+  }, [accountSuspended, pathname, router]);
+
   // Redirect to current-plan page when subscription is expired and user is on a non-allowed page
   useEffect(() => {
-    if (subscriptionExpired && pathname) {
+    // Only redirect if explicitly expired (not undefined/loading) and NOT suspended
+    if (subscriptionExpired === true && !accountSuspended && pathname) {
       const isAllowed = SUBSCRIPTION_ALLOWED_PATHS.some(path =>
         pathname === path || pathname.startsWith(path + '/')
       );
@@ -97,7 +146,7 @@ export default function DashboardLayout({
         router.push('/subscription/current-plan');
       }
     }
-  }, [subscriptionExpired, pathname, router]);
+  }, [subscriptionExpired, accountSuspended, pathname, router]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -257,12 +306,35 @@ export default function DashboardLayout({
 
   return (
     <QuotaProvider>
-      <SessionTimeoutProvider>
+      <SessionTimeoutProvider skipSettingsLoad={subscriptionExpired !== false}>
         <Suspense fallback={null}>
           <SearchParamsErrorHandler />
         </Suspense>
         <div className="flex h-screen bg-gray-50">
-          <Sidebar user={user || undefined} tenant={tenant || undefined} subscriptionExpired={subscriptionExpired} />
+          {/* Mobile Menu Overlay */}
+          {isMobileMenuOpen && (
+            <div
+              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+          )}
+
+          {/* Sidebar - Hidden on mobile, slide-in overlay when open */}
+          <div
+            className={`
+              fixed lg:static inset-y-0 left-0 z-50
+              transform transition-transform duration-300 ease-in-out
+              ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+            `}
+          >
+            <Sidebar
+              user={user || undefined}
+              tenant={tenant || undefined}
+              subscriptionExpired={subscriptionExpired}
+              accountSuspended={accountSuspended}
+              onClose={() => setIsMobileMenuOpen(false)}
+            />
+          </div>
 
           <div className="flex-1 flex flex-col overflow-hidden">
             <Header
@@ -270,6 +342,8 @@ export default function DashboardLayout({
               tenant={tenant}
               onLogout={logout}
               onOpenSettings={() => router.push('/settings')}
+              onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              isMobileMenuOpen={isMobileMenuOpen}
             />
 
             <div className="flex-1 overflow-y-auto">

@@ -68,8 +68,8 @@ export default function AITalentMatchPage({
   const searchParams = useSearchParams();
   const { hasPermission, isTenantAdmin, user } = useAuth();
 
-  // ✅ RBAC: Check if user can run AI match operations
-  const canRunAiMatch = user?.permissions?.canRunAiMatch ?? false;
+  // ✅ RBAC: Check if user can run AI match operations (bypass for tenant admin)
+  const canRunAiMatch = isTenantAdmin || (user?.permissions?.canRunAiMatch ?? false);
 
 
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'results'>('history');
@@ -138,6 +138,10 @@ export default function AITalentMatchPage({
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [historyDateFrom, setHistoryDateFrom] = useState('');
   const [historyDateTo, setHistoryDateTo] = useState('');
+  const [historyFilterPhone, setHistoryFilterPhone] = useState('');
+  const [historyFilterLocation, setHistoryFilterLocation] = useState('');
+  const [historyFilterExpMin, setHistoryFilterExpMin] = useState<number | ''>('');
+  const [historyFilterExpMax, setHistoryFilterExpMax] = useState<number | ''>('');
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
   
   // Matching progress
@@ -708,19 +712,39 @@ export default function AITalentMatchPage({
   };
 
   const filteredHistory = matchHistory.filter(item => {
-    const matchesSearch = historySearchQuery === '' || 
+    const matchesSearch = historySearchQuery === '' ||
       item.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase());
-    
+
     const matchesDateFrom = !historyDateFrom || new Date(item.matchedAt) >= new Date(historyDateFrom);
     const matchesDateTo = !historyDateTo || new Date(item.matchedAt) <= new Date(historyDateTo);
-    
-    return matchesSearch && matchesDateFrom && matchesDateTo;
+
+    // Candidate-level filters: show history item if ANY candidate matches
+    const hasCandidateFilters = historyFilterPhone !== '' || historyFilterLocation !== '' || historyFilterExpMin !== '' || historyFilterExpMax !== '';
+    const matchesCandidateFilters = !hasCandidateFilters || item.matchedCandidates.some(candidate => {
+      const matchesPhone = historyFilterPhone === '' ||
+        (candidate.phone && (
+          candidate.phone.toLowerCase().includes(historyFilterPhone.toLowerCase()) ||
+          candidate.phone.replace(/[^0-9]/g, '').includes(historyFilterPhone.replace(/[^0-9]/g, ''))
+        ));
+      const matchesLocation = historyFilterLocation === '' ||
+        (candidate.location && candidate.location.toLowerCase().includes(historyFilterLocation.toLowerCase()));
+      const candidateExp = candidate.experience ? parseFloat(candidate.experience) : 0;
+      const matchesExpMin = historyFilterExpMin === '' || candidateExp >= historyFilterExpMin;
+      const matchesExpMax = historyFilterExpMax === '' || candidateExp <= historyFilterExpMax;
+      return matchesPhone && matchesLocation && matchesExpMin && matchesExpMax;
+    });
+
+    return matchesSearch && matchesDateFrom && matchesDateTo && matchesCandidateFilters;
   });
 
   const activeFiltersCount = [
     historySearchQuery !== '',
     historyDateFrom !== '',
     historyDateTo !== '',
+    historyFilterPhone !== '',
+    historyFilterLocation !== '',
+    historyFilterExpMin !== '',
+    historyFilterExpMax !== '',
   ].filter(Boolean).length;
 
   // View: History Details
@@ -736,7 +760,7 @@ export default function AITalentMatchPage({
 
       <main className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-white">
         {/* Header Section - Sticky */}
-        <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm p-6">
+        <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm p-4 sm:p-6">
           {/* Back Button & Title */}
           {(() => {
             // Check if job is disabled
@@ -748,7 +772,7 @@ export default function AITalentMatchPage({
 
             return (
               <>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
                   <button
                     onClick={() => {
                       setViewMode('history');
@@ -777,35 +801,35 @@ export default function AITalentMatchPage({
                         }
                       }}
                       disabled={!canRunAiMatch}
-                      className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2 ${
+                      className={`px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center justify-center gap-2 w-full sm:w-auto ${
                         canRunAiMatch
                           ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
                           : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
                       }`}
                       title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
                     >
-                      <Sparkles className="w-4 h-4" />
+                      <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
                       Run AI Match
                     </button>
                   )}
                 </div>
 
                 {/* Job Info Card */}
-                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
-                      <Sparkles className="w-6 h-6 text-white" />
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 sm:p-4 mb-4">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+                      <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <h1 className="text-xl text-gray-900 font-semibold">{selectedHistoryItem.jobTitle}</h1>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <h1 className="text-base sm:text-xl text-gray-900 font-semibold">{selectedHistoryItem.jobTitle}</h1>
                         {isJobDisabled && (
                           <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full border border-red-200">
                             Disabled
                           </span>
                         )}
                       </div>
-                <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600 mt-1">
                   <span className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
                     {new Date(selectedHistoryItem.matchedAt).toLocaleDateString('en-US', {
@@ -829,34 +853,34 @@ export default function AITalentMatchPage({
 
           {/* Filters & Search */}
           <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search candidates..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm"
                 />
               </div>
               <select
                 value={filterThreshold}
                 onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm"
               >
                 <option value={0}>All Matches</option>
                 <option value={50}>50%+ Match</option>
                 <option value={70}>70%+ Match</option>
                 <option value={85}>85%+ Match</option>
               </select>
-              <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
+              <div className="text-xs sm:text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
                 {filteredCandidates.length} candidates
               </div>
               {selectedCandidates.length > 0 && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   {availableUnits !== null && selectedCandidates.length > availableUnits && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg w-full sm:w-auto">
                       <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                       <span className="text-xs text-amber-700 font-medium">
                         Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
@@ -867,30 +891,30 @@ export default function AITalentMatchPage({
                   <button
                       onClick={handleSubmitToScoring}
                       disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
-                    className={`px-4 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${
+                    className={`px-3 sm:px-4 py-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial ${
                       availableUnits !== null && selectedCandidates.length > availableUnits
                         ? 'bg-gray-400 cursor-not-allowed opacity-50'
                         : 'bg-gray-800 hover:bg-gray-900'
                     }`}
                     >
-                      <Target className="w-4 h-4" />
+                      <Target className="w-3 h-3 sm:w-4 sm:h-4" />
                       Score ({selectedCandidates.length})
                     </button>
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
                       onClick={handleAssessment}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-sm flex items-center gap-2"
+                      className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial"
                     >
-                      <ClipboardList className="w-4 h-4" />
+                      <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />
                       Assessment ({selectedCandidates.length})
                     </button>
                   )}
                 </>
-              </div>
+                </div>
               )}
             </div>
             {/* Additional Filters */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <input
                 type="text"
                 value={filterPhone}
@@ -1478,89 +1502,157 @@ export default function AITalentMatchPage({
         </div>
 
         {/* Search and Filter Bar */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={historySearchQuery}
-                  onChange={(e) => setHistorySearchQuery(e.target.value)}
-                  placeholder="Search by job title..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
-              </div>
-            </div>
+        <div className="flex items-center gap-3 mb-6">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={historySearchQuery}
+              onChange={(e) => setHistorySearchQuery(e.target.value)}
+              placeholder="Search by job title..."
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm bg-white"
+            />
+          </div>
 
+          <div className="relative">
             <button
               onClick={() => setShowHistoryFilters(!showHistoryFilters)}
-              className={`px-5 py-2.5 rounded-lg border-2 transition-all flex items-center gap-2 font-medium ${
+              className={`px-4 py-2.5 rounded-lg border transition-all flex items-center gap-2 text-sm font-medium ${
                 activeFiltersCount > 0
-                  ? 'bg-gray-50 border-gray-800 text-gray-900 shadow-sm'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-gray-900 border-gray-900 text-white'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
               }`}
             >
-              <Filter className="w-5 h-5" />
+              <Filter className="w-4 h-4" />
               Filters
               {activeFiltersCount > 0 && (
-                <span className="px-2 py-0.5 bg-gray-800 text-white rounded-full text-xs font-medium">
+                <span className="min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[10px] font-bold bg-white text-gray-900">
                   {activeFiltersCount}
                 </span>
               )}
-              <ChevronDown className={`w-4 h-4 transition-transform ${showHistoryFilters ? 'rotate-180' : ''}`} />
             </button>
 
-            <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-              <span className="text-gray-800">{filteredHistory.length}</span> of {matchHistory.length} jobs
-            </div>
+            {/* Filter Popover */}
+            {showHistoryFilters && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setShowHistoryFilters(false)} />
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-40">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                    <span className="text-sm font-semibold text-gray-900">Filters</span>
+                    {activeFiltersCount > 0 && (
+                      <button
+                        onClick={() => {
+                          setHistorySearchQuery('');
+                          setHistoryDateFrom('');
+                          setHistoryDateTo('');
+                          setHistoryFilterPhone('');
+                          setHistoryFilterLocation('');
+                          setHistoryFilterExpMin('');
+                          setHistoryFilterExpMax('');
+                        }}
+                        className="text-xs text-gray-500 hover:text-gray-900 font-medium"
+                      >
+                        Reset all
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
+                    {/* Date Range */}
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">Date Range</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[11px] text-gray-400 mb-1 block">From</span>
+                          <input
+                            type="date"
+                            value={historyDateFrom}
+                            onChange={(e) => setHistoryDateFrom(e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                          />
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-gray-400 mb-1 block">To</span>
+                          <input
+                            type="date"
+                            value={historyDateTo}
+                            onChange={(e) => setHistoryDateTo(e.target.value)}
+                            className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mobile Number */}
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">Mobile No</label>
+                      <div className="relative">
+                        <Phone className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={historyFilterPhone}
+                          onChange={(e) => setHistoryFilterPhone(e.target.value)}
+                          placeholder="Search by mobile number"
+                          className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Location */}
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">Location</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={historyFilterLocation}
+                          onChange={(e) => setHistoryFilterLocation(e.target.value)}
+                          placeholder="Search by location"
+                          className="w-full pl-8 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Experience */}
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2 block">Experience (years)</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="number"
+                          value={historyFilterExpMin}
+                          onChange={(e) => setHistoryFilterExpMin(e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="Min"
+                          min={0}
+                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                        />
+                        <input
+                          type="number"
+                          value={historyFilterExpMax}
+                          onChange={(e) => setHistoryFilterExpMax(e.target.value === '' ? '' : Number(e.target.value))}
+                          placeholder="Max"
+                          min={0}
+                          className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 bg-white text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-4 py-3 border-t border-gray-100">
+                    <button
+                      onClick={() => setShowHistoryFilters(false)}
+                      className="w-full py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                    >
+                      Apply Filters
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Expanded Filters */}
-          {showHistoryFilters && (
-            <div className="mt-5 pt-5 border-t border-gray-200">
-              <div className="grid grid-cols-3 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Matched From
-                  </label>
-                  <input
-                    type="date"
-                    value={historyDateFrom}
-                    onChange={(e) => setHistoryDateFrom(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Matched To
-                  </label>
-                  <input
-                    type="date"
-                    value={historyDateTo}
-                    onChange={(e) => setHistoryDateTo(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <button
-                    onClick={() => {
-                      setHistorySearchQuery('');
-                      setHistoryDateFrom('');
-                      setHistoryDateTo('');
-                    }}
-                    disabled={activeFiltersCount === 0}
-                    className="w-full px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-medium"
-                  >
-                    <X className="w-4 h-4" />
-                    Clear All
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <div className="text-sm text-gray-500 bg-gray-50 px-3 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
+            <span className="text-gray-900 font-semibold">{filteredHistory.length}</span> / {matchHistory.length} jobs
+          </div>
         </div>
 
         {/* History List */}
@@ -1592,18 +1684,18 @@ export default function AITalentMatchPage({
                     setViewMode('details');
                     updateUrlParams({ jdId: item.jobId, view: 'details' });
                   }}
-                  className="bg-white rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all p-6 cursor-pointer group"
+                  className="bg-white rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all p-4 sm:p-6 cursor-pointer group"
                   role="button"
                   tabIndex={0}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     {/* Job Info */}
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
-                        <Sparkles className="w-6 h-6 text-white" />
+                    <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                        <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
                           {jobData?.jobId && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
                               {jobData.jobId}
@@ -1624,12 +1716,12 @@ export default function AITalentMatchPage({
                             </span>
                           )}
                         </div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-gray-800 transition-colors">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 group-hover:text-gray-800 transition-colors">
                           {item.jobTitle}
                         </h3>
-                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                           <span className="flex items-center gap-1.5">
-                            <Clock className="w-4 h-4" />
+                            <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
                             {new Date(item.matchedAt).toLocaleDateString('en-US', {
                               month: 'short',
                               day: 'numeric',
@@ -1637,7 +1729,7 @@ export default function AITalentMatchPage({
                             })}
                           </span>
                           <span className="flex items-center gap-1.5">
-                            <User className="w-4 h-4" />
+                            <User className="w-3 h-3 sm:w-4 sm:h-4" />
                             {item.totalMatches} matches
                           </span>
                         </div>
@@ -1654,10 +1746,10 @@ export default function AITalentMatchPage({
                         setViewMode('details');
                         updateUrlParams({ jdId: item.jobId, view: 'details' });
                       }}
-                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium"
+                      className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 font-medium text-xs sm:text-sm w-full sm:w-auto"
                     >
                       View Details
-                      <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
+                      <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
                     </button>
                   </div>
                 </div>
@@ -1753,27 +1845,6 @@ export default function AITalentMatchPage({
               Back to Matched Jobs
             </button>
             <div className="flex items-center gap-3">
-              {selectedCandidates.length > 0 && (
-                <button
-                  onClick={() => {
-                    // Get selected candidate resume IDs
-                    const selectedResumes = filteredCandidates
-                      .filter(c => selectedCandidates.includes(c.id))
-                      .map(c => c.resumeId);
-
-                    // Store in sessionStorage for resume scoring page
-                    sessionStorage.setItem('scoringResumeIds', JSON.stringify(selectedResumes));
-                    sessionStorage.setItem('scoringJobId', selectedJob);
-
-                    // Navigate to resume scoring page
-                    router.push('/recruitment/resume-scoring');
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
-                >
-                  <Target className="w-4 h-4" />
-                  Score Selected ({selectedCandidates.length})
-                </button>
-              )}
               <button
                 onClick={() => {
                   // Keep the current JD and run new match
@@ -1823,34 +1894,34 @@ export default function AITalentMatchPage({
 
           {/* Filters & Search */}
           <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search candidates..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm"
                 />
               </div>
               <select
                 value={filterThreshold}
                 onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm"
               >
                 <option value={0}>All Matches</option>
                 <option value={50}>50%+ Match</option>
                 <option value={70}>70%+ Match</option>
                 <option value={85}>85%+ Match</option>
               </select>
-              <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
+              <div className="text-xs sm:text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
                 {filteredCandidates.length} candidates
               </div>
               {selectedCandidates.length > 0 && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   {availableUnits !== null && selectedCandidates.length > availableUnits && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg w-full sm:w-auto">
                       <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                       <span className="text-xs text-amber-700 font-medium">
                         Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
@@ -1861,30 +1932,30 @@ export default function AITalentMatchPage({
                   <button
                       onClick={handleSubmitToScoring}
                       disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
-                    className={`px-4 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${
+                    className={`px-3 sm:px-4 py-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial ${
                       availableUnits !== null && selectedCandidates.length > availableUnits
                         ? 'bg-gray-400 cursor-not-allowed opacity-50'
                         : 'bg-gray-800 hover:bg-gray-900'
                     }`}
                     >
-                      <Target className="w-4 h-4" />
+                      <Target className="w-3 h-3 sm:w-4 sm:h-4" />
                       Score ({selectedCandidates.length})
                     </button>
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
                       onClick={handleAssessment}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-sm flex items-center gap-2"
+                      className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial"
                     >
-                      <ClipboardList className="w-4 h-4" />
+                      <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />
                       Assessment ({selectedCandidates.length})
                     </button>
                   )}
                 </>
-              </div>
+                </div>
               )}
             </div>
             {/* Additional Filters */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <input
                 type="text"
                 value={filterPhone}

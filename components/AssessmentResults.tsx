@@ -107,6 +107,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
   const [showColumnSelector, setShowColumnSelector] = useState(false);
 
+  // Export format modal state
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStep, setExportStep] = useState<'format' | 'scope'>('format');
+  const [selectedFormat, setSelectedFormat] = useState<'csv' | 'excel'>('excel');
+
   interface ColumnConfig {
     id: string;
     label: string;
@@ -187,6 +192,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   };
 
   const enabledColumnsCount = columns.filter(c => c.enabled).length;
+
+  // Check if columns are customized (different from default)
+  const areColumnsCustomized = () => {
+    if (columns.length === 0) return false;
+    // Check if any column is disabled
+    return columns.some(col => !col.enabled);
+  };
 
   // Fetch assessment details to determine enabled rounds
   useEffect(() => {
@@ -452,12 +464,131 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   };
 
+  // Handle format selection - move to scope selection
+  const handleFormatSelect = (format: 'csv' | 'excel') => {
+    setSelectedFormat(format);
+    setExportStep('scope');
+  };
+
+  // Export current page only
+  const handleExportCurrentPage = async () => {
+    try {
+      const enabledColumnIds = columns
+        .filter(col => col.enabled)
+        .map(col => col.id);
+
+      console.log('[EXPORT] Exporting current page with columns:', enabledColumnIds);
+
+      // Get current page candidates
+      const currentPageCandidates = paginatedCandidates;
+
+      // Build filters object (same as all filtered)
+      const filters: any = {};
+      if (searchQuery.trim()) filters.search = searchQuery.trim();
+      if (statusFilter !== 'all') filters.status_filter = statusFilter.toLowerCase().replace(' ', '_');
+      if (passFailFilter === 'pass') filters.passed = true;
+      else if (passFailFilter === 'fail') filters.passed = false;
+
+      // Build sorting object
+      const sorting = {
+        sort_by: sortField,
+        sort_order: sortDirection,
+      };
+
+      const blob = await assessmentService.exportResults(
+        assessmentId,
+        selectedFormat,
+        false,
+        enabledColumnIds,
+        filters,
+        sorting
+      );
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
+      link.download = `${assessmentTitle.replace(/\s+/g, '_')}_CurrentPage_${new Date().toISOString().slice(0, 10)}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
+      toast.success(`Current page exported to ${formatName} successfully! (${currentPageCandidates.length} results)`);
+      setShowExportModal(false);
+      setExportStep('format');
+    } catch (error) {
+      console.error('Failed to export current page:', error);
+      toast.error('Failed to export results. Please try again.');
+    }
+  };
+
+  // Export all filtered results
+  const handleExportAllFiltered = async () => {
+    try {
+      const enabledColumnIds = columns
+        .filter(col => col.enabled)
+        .map(col => col.id);
+
+      console.log('[EXPORT] Exporting all filtered results with columns:', enabledColumnIds);
+
+      // Build filters object
+      const filters: any = {};
+      if (searchQuery.trim()) filters.search = searchQuery.trim();
+      if (statusFilter !== 'all') filters.status_filter = statusFilter.toLowerCase().replace(' ', '_');
+      if (passFailFilter === 'pass') filters.passed = true;
+      else if (passFailFilter === 'fail') filters.passed = false;
+
+      // Build sorting object
+      const sorting = {
+        sort_by: sortField,
+        sort_order: sortDirection,
+      };
+
+      console.log('[EXPORT] Filters:', filters);
+      console.log('[EXPORT] Sorting:', sorting);
+
+      const blob = await assessmentService.exportResults(
+        assessmentId,
+        selectedFormat,
+        false,
+        enabledColumnIds,
+        filters,
+        sorting
+      );
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
+      link.download = `${assessmentTitle.replace(/\s+/g, '_')}_AllResults_${new Date().toISOString().slice(0, 10)}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
+      toast.success(`All filtered results exported to ${formatName} successfully! (${filteredCandidates.length} results including in-progress)`);
+      setShowExportModal(false);
+      setExportStep('format');
+    } catch (error) {
+      console.error('Failed to export all results:', error);
+      toast.error('Failed to export results. Please try again.');
+    }
+  };
+
   const getScoreColor = (percentage: number) => {
     if (percentage >= 80) return 'text-green-600';
     if (percentage >= 60) return 'text-gray-800';
     if (percentage >= 40) return 'text-yellow-600';
     return 'text-red-600';
   };
+
+  // Reset to page 1 when filters change (MUST be before any early returns)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, passFailFilter, roundFilters]);
 
   // Use API results only (no mock data)
   const displayResults = candidateResults;
@@ -473,11 +604,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       </div>
     );
   }
-
-  // Reset to page 1 when filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, statusFilter, passFailFilter, roundFilters]);
 
   // AS-23: Handle sort toggle
   const handleSort = (field: 'name' | 'score' | 'status' | 'date') => {
@@ -612,39 +738,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </button>
               )}
               <button
-                onClick={async () => {
-                  try {
-                    // Get list of enabled column IDs to pass to backend
-                    const enabledColumnIds = columns
-                      .filter(col => col.enabled)
-                      .map(col => col.id);
-
-                    console.log('[EXPORT] Exporting with columns:', enabledColumnIds);
-
-                    const blob = await assessmentService.exportResults(
-                      assessmentId,
-                      'excel', // Changed to excel for better formatting
-                      false, // include_details
-                      enabledColumnIds // Pass enabled columns
-                    );
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${assessmentTitle.replace(/\s+/g, '_')}_results.xlsx`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                    toast.success('Results exported successfully!');
-                  } catch (error) {
-                    console.error('Failed to export results:', error);
-                    toast.error('Failed to export results. Please try again.');
-                  }
-                }}
+                onClick={() => setShowExportModal(true)}
                 className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
               >
                 <FileText className="w-5 h-5" />
-                Export to Excel
+                Export Results
               </button>
             </div>
           </div>
@@ -1201,6 +1299,166 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           )}
         </div>
       </div>
+
+      {/* Export Format & Scope Selection Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            {/* Step 1: Format Selection */}
+            {exportStep === 'format' && (
+              <>
+                <div className="flex items-center justify-between p-5 border-b border-gray-200">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Export Assessment Results</h3>
+                    <p className="text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowExportModal(false);
+                      setExportStep('format');
+                    }}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-5">
+                  <p className="text-sm text-gray-600 mb-4">Choose export format:</p>
+
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => handleFormatSelect('csv')}
+                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                    >
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
+                        <FileText className="w-6 h-6 text-green-700" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <div className="font-medium text-gray-900">CSV Format</div>
+                        <div className="text-sm text-gray-500">Compatible with Excel, Google Sheets, and most spreadsheet apps</div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => handleFormatSelect('excel')}
+                      className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
+                    >
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+                        <FileText className="w-6 h-6 text-blue-700" />
+                      </div>
+                      <div className="text-left flex-1">
+                        <div className="font-medium text-gray-900">Excel Format (XLSX)</div>
+                        <div className="text-sm text-gray-500">Native Excel format with better formatting and compatibility</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      setShowExportModal(false);
+                      setExportStep('format');
+                    }}
+                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Step 2: Scope Selection */}
+            {exportStep === 'scope' && (
+              <>
+                <div className="flex items-center justify-between p-5 border-b border-gray-200">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Export Scope</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Step 2 of 2: Choose what to export ({selectedFormat === 'csv' ? 'CSV' : 'Excel'})
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowExportModal(false);
+                      setExportStep('format');
+                    }}
+                    className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-5">
+                  <p className="text-sm text-gray-600 mb-4">
+                    {areColumnsCustomized()
+                      ? 'Export scope (with selected columns):'
+                      : 'Select export scope:'}
+                  </p>
+
+                  <div className="space-y-3">
+                    {/* Show "All Filtered Results" if columns are customized */}
+                    {areColumnsCustomized() ? (
+                      <button
+                        onClick={handleExportAllFiltered}
+                        className="w-full flex items-center gap-4 p-4 border-2 border-indigo-500 rounded-lg hover:bg-indigo-50 transition-all group"
+                      >
+                        <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                          <Users className="w-6 h-6 text-indigo-700" />
+                        </div>
+                        <div className="text-left flex-1">
+                          <div className="font-medium text-gray-900">All Filtered Results</div>
+                          <div className="text-sm text-gray-500">
+                            Export all {filteredCandidates.length} results with {enabledColumnsCount} selected columns
+                            <div className="text-xs text-indigo-600 mt-1">
+                              (includes completed, in-progress, and pending)
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ) : (
+                      /* Show "Current Page" if columns are NOT customized */
+                      <button
+                        onClick={handleExportCurrentPage}
+                        className="w-full flex items-center gap-4 p-4 border-2 border-purple-500 rounded-lg hover:bg-purple-50 transition-all group"
+                      >
+                        <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                          <FileText className="w-6 h-6 text-purple-700" />
+                        </div>
+                        <div className="text-left flex-1">
+                          <div className="font-medium text-gray-900">Current Page</div>
+                          <div className="text-sm text-gray-500">
+                            Export {paginatedCandidates.length} results visible on this page
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 p-5 border-t border-gray-200">
+                  <button
+                    onClick={() => setExportStep('format')}
+                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowExportModal(false);
+                      setExportStep('format');
+                    }}
+                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
