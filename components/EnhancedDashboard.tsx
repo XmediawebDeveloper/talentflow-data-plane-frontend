@@ -405,14 +405,14 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   };
 
   return (
-    <div className="space-y-6 p-8 bg-gray-50">
+    <div className="space-y-6 p-4 md:p-8 bg-gray-50">
       {/* Welcome Banner */}
       <WelcomeBanner user={user} tenant={tenant} />
 
       {/* JD Status Boxes */}
       <Card className="border-gray-200">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-lg font-semibold text-gray-900">Job Description Status</CardTitle>
               <CardDescription className="text-gray-600">
@@ -431,7 +431,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             {/* Published JDs */}
             <div
               className="p-4 rounded-lg border-2 border-green-200 bg-green-50 hover:border-green-300 transition-all cursor-pointer"
@@ -539,7 +539,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               <span className="ml-2 text-gray-600">Loading quota data...</span>
             </div>
           ) : quotaStatusData?.quotas && quotaStatusData.quotas.length > 0 ? (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {quotaStatusData.quotas.slice(0, 4).map((quota) => {
                 const isUnlimited = quota.limit === -1;
                 const progressColor = quota.is_exhausted
@@ -770,7 +770,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             <CardDescription className="text-gray-600">Common tasks to get you started</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
               {canCreateJD && (
                 <Button
                   variant="outline"

@@ -2036,24 +2036,25 @@ export default function MyResumesPage() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 p-8 bg-gray-50">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-semibold text-gray-900">My Resume Database</h1>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
+    <main className="flex-1 p-4 sm:p-6 md:p-8 bg-gray-50">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div className="w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">My Resume Database</h1>
+            <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium bg-blue-100 text-blue-700">
               {totalItems} Resumes
             </span>
           </div>
-          <p className="text-sm text-gray-600">Resumes uploaded by you</p>
+          <p className="text-xs sm:text-sm text-gray-600">Resumes uploaded by you</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={() => setIsUploadHistoryModalOpen(true)}
-            className="relative flex items-center gap-2 bg-white text-gray-700 px-4 py-2.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors"
+            className="relative flex items-center justify-center gap-1.5 sm:gap-2 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors text-xs sm:text-sm flex-1 sm:flex-initial"
           >
-            <History className="w-5 h-5" />
-            Upload History
+            <History className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Upload History</span>
+            <span className="sm:hidden">History</span>
             {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
               <span className="absolute -top-1 -right-1 flex h-5 w-5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -2067,14 +2068,15 @@ export default function MyResumesPage() {
             onClick={() => setIsUploadModalOpen(true)}
             disabled={!hasPermission('canUploadResumes')}
             title={!hasPermission('canUploadResumes') ? 'You do not have permission to upload resumes. Contact your administrator.' : 'Upload Resume'}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-md transition-colors ${
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-md transition-colors text-xs sm:text-sm flex-1 sm:flex-initial ${
               hasPermission('canUploadResumes')
                 ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
             }`}
           >
-            <Plus className="w-5 h-5" />
-            Upload Resume
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Upload Resume</span>
+            <span className="sm:hidden">Upload</span>
           </button>
         </div>
       </div>
@@ -2086,7 +2088,7 @@ export default function MyResumesPage() {
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
-            onApplyToJob={handleApplyToJob}
+            onApplyToJob={hasPermission('canRunScoring') || isTenantAdmin ? handleApplyToJob : undefined}
             onDownload={handleBulkDownload}
             onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
@@ -2096,8 +2098,8 @@ export default function MyResumesPage() {
           />
         )}
 
-        <div className="flex items-center justify-between border-b border-gray-200">
-          <div className="flex-1">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b border-gray-200">
+          <div className="flex-1 border-b sm:border-b-0 sm:border-r border-gray-200">
             <SearchFilterBarCompact
               searchQuery={searchQuery}
               onSearchChange={handleSearchChange}
@@ -2108,36 +2110,36 @@ export default function MyResumesPage() {
             />
           </div>
           {/* View Toggle */}
-          <div className="flex items-center gap-1 px-4 py-3 border-l border-gray-200">
-            <span className="text-xs text-gray-500 mr-2">View:</span>
+          <div className="flex items-center justify-center gap-1 px-3 sm:px-4 py-2 sm:py-3">
+            <span className="text-xs text-gray-500 mr-1 sm:mr-2">View:</span>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
                 viewMode === 'list'
                   ? 'bg-gray-800 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
               title="List View"
             >
-              <List className="w-4 h-4" />
+              <List className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             <button
               onClick={() => setViewMode('card')}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
                 viewMode === 'card'
                   ? 'bg-gray-800 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
               title="Card View"
             >
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
         </div>
 
         {/* Search Results Summary */}
         {appliedSearchQuery && (
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+          <div className="px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-500" />
               <span className="text-sm text-gray-700">
@@ -2223,7 +2225,7 @@ export default function MyResumesPage() {
                   onSelectResume={handleSelectResume}
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
-                  onApplyToJob={handleSingleResumeApplyToJob}
+                  onApplyToJob={hasPermission('canRunScoring') || isTenantAdmin ? handleSingleResumeApplyToJob : undefined}
                   onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
                   onMoveToFolder={handleMoveToFolder}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
@@ -2247,7 +2249,7 @@ export default function MyResumesPage() {
           </div>
         ) : (
           // Card View - Folders as Cards with Breadcrumb Navigation
-          <div className="p-6">
+          <div className="p-3 sm:p-4 md:p-6">
             {(() => {
               // Get current folder data and children
               const currentFolderData = cardViewFolder ? getFolderById(cardViewFolder) : null;
@@ -2300,7 +2302,7 @@ export default function MyResumesPage() {
                 <>
                   {/* Breadcrumb Navigation */}
                   {(cardViewFolder !== null || breadcrumbPath.length > 0) && (
-                    <div className="flex items-center gap-2 mb-6 text-sm">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-4 sm:mb-6 text-xs sm:text-sm">
                       <button
                         onClick={() => navigateToFolder(null)}
                         className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline transition-colors"
@@ -2340,8 +2342,8 @@ export default function MyResumesPage() {
 
                   {/* Current Folder Header (when inside a folder) */}
                   {cardViewFolder !== null && cardViewFolder !== 'uncategorized' && cardViewFolder !== 'all' && currentFolderData && (
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                    <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId
                           ? 'bg-amber-100'
                           : currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
@@ -2349,22 +2351,22 @@ export default function MyResumesPage() {
                             : 'bg-blue-100'
                       }`}>
                         {currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId ? (
-                          <Archive className="w-6 h-6 text-amber-600" />
+                          <Archive className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
                         ) : (
-                          <FolderOpen className={`w-6 h-6 ${
+                          <FolderOpen className={`w-5 h-5 sm:w-6 sm:h-6 ${
                             currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
                               ? 'text-green-600'
                               : 'text-blue-600'
                           }`} />
                         )}
                       </div>
-                      <div>
-                        <h2 className="font-semibold text-gray-900 text-lg">
+                      <div className="min-w-0 flex-1">
+                        <h2 className="font-semibold text-gray-900 text-base sm:text-lg truncate">
                           {currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
                             ? 'Root (Default)'
                             : currentFolderData.name}
                         </h2>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-xs sm:text-sm text-gray-500">
                           {foldersToDisplay.length > 0 && `${foldersToDisplay.length} subfolder${foldersToDisplay.length !== 1 ? 's' : ''}`}
                           {foldersToDisplay.length > 0 && folderResumes.length > 0 && ' • '}
                           {folderResumes.length > 0 && `${folderResumes.length} resume${folderResumes.length !== 1 ? 's' : ''}`}
@@ -2376,13 +2378,13 @@ export default function MyResumesPage() {
 
                   {/* All Resumes Header */}
                   {cardViewFolder === 'all' && (
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <LayoutGrid className="w-6 h-6 text-blue-600" />
+                    <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                       </div>
-                      <div>
-                        <h2 className="font-semibold text-gray-900 text-lg">All Resumes</h2>
-                        <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
+                      <div className="min-w-0">
+                        <h2 className="font-semibold text-gray-900 text-base sm:text-lg">All Resumes</h2>
+                        <p className="text-xs sm:text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
                   )}
@@ -2402,11 +2404,11 @@ export default function MyResumesPage() {
 
                   {/* Subfolders Grid (if any) */}
                   {(foldersToDisplay.length > 0 || cardViewFolder === null) && (
-                    <div className="mb-6">
+                    <div className="mb-4 sm:mb-6">
                       {cardViewFolder !== null && (
-                        <h3 className="text-sm font-medium text-gray-700 mb-3">Subfolders</h3>
+                        <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Subfolders</h3>
                       )}
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                         {/* All Resumes card at root level */}
                         {cardViewFolder === null && (
                           <div
@@ -2416,15 +2418,15 @@ export default function MyResumesPage() {
                               setBreadcrumbPath([]);
                             }}
                           >
-                            <div className="flex items-center gap-3 p-4">
-                              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <LayoutGrid className="w-6 h-6 text-blue-600" />
+                            <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
+                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                               </div>
-                              <div className="flex-1">
-                                <h3 className="font-semibold text-gray-900">All Resumes</h3>
-                                <p className="text-sm text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">All Resumes</h3>
+                                <p className="text-xs sm:text-sm text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
                               </div>
-                              <ChevronRight className="w-5 h-5 text-gray-400" />
+                              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
                             </div>
                           </div>
                         )}
@@ -2459,15 +2461,15 @@ export default function MyResumesPage() {
                               setBreadcrumbPath([]);
                             }}
                           >
-                            <div className="flex items-center gap-3 p-4">
-                              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                                <Folder className="w-6 h-6 text-gray-600" />
+                            <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
+                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Folder className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
                               </div>
-                              <div className="flex-1">
-                                <h3 className="font-semibold text-gray-900">Uncategorized</h3>
-                                <p className="text-sm text-gray-500">{unfolderedResumes.length} resume{unfolderedResumes.length !== 1 ? 's' : ''}</p>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">Uncategorized</h3>
+                                <p className="text-xs sm:text-sm text-gray-500">{unfolderedResumes.length} resume{unfolderedResumes.length !== 1 ? 's' : ''}</p>
                               </div>
-                              <ChevronRight className="w-5 h-5 text-gray-400" />
+                              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
                             </div>
                           </div>
                         )}
@@ -2494,8 +2496,9 @@ export default function MyResumesPage() {
                           )}
                           {/* Resumes Table */}
                       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="overflow-x-auto">
                         {/* Table Header */}
-                        <div className="grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[1200px]">
                           <div></div>
                           <div className="flex items-center">
                             <input
@@ -2535,6 +2538,7 @@ export default function MyResumesPage() {
                             onViewDetails={(r) => router.push(`/recruitment/resume-view/${r.id}`)}
                           />
                         ))}
+                        </div>
                       </div>
                         </div>
                       )}

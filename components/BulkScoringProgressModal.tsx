@@ -94,18 +94,29 @@ export default function BulkScoringProgressModal({
       item => item.status === 'Scored successfully' || item.status === 'Already Scored - Skipped' || item.status === 'Failed'
     ).length;
 
-    // Require at least 3 processed items for more accurate ETA
-    if (completedOrFailed < 3) return null;
+    const inProgress = progressData.filter(
+      item => item.status === 'Scoring in progress'
+    ).length;
 
-    // Average time per resume in minutes
-    const avgTimePerResume = elapsedMinutes / completedOrFailed;
+    // Show ETA as soon as first item starts processing
+    if (completedOrFailed === 0 && inProgress === 0) return null;
 
-    // Remaining resumes
+    // Remaining resumes (including currently processing ones)
     const remaining = progressData.filter(
       item => item.status === 'Queued' || item.status === 'Scoring in progress'
     ).length;
 
     if (remaining === 0) return null;
+
+    // Calculate average time based on completed items, or use estimate if none completed yet
+    let avgTimePerResume: number;
+    if (completedOrFailed > 0) {
+      // Use actual average from completed items
+      avgTimePerResume = elapsedMinutes / completedOrFailed;
+    } else {
+      // First item still processing - estimate 2 minutes per resume as baseline
+      avgTimePerResume = 2;
+    }
 
     // Calculate min and max estimates (±20% variance)
     const estimatedMinutes = avgTimePerResume * remaining;

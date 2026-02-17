@@ -260,18 +260,8 @@ export const authService = {
     }
   },
 
-  /**
-   * ✅ NEW: Check current permission version from server
-   * Used during hard refresh to detect if permissions have changed
-   */
-  async checkPermissionVersion(): Promise<{ permission_version: number }> {
-    try {
-      const response = await api.get<{ permission_version: number }>('/auth/permission-version');
-      return response.data;
-    } catch (error) {
-      throw new Error(handleApiError(error));
-    }
-  },
+  // ❌ REMOVED: checkPermissionVersion() - endpoint was removed from backend
+  // Permission updates now use event-driven approach via window.dispatchEvent('permissions-updated')
 
   /**
    * ✅ NEW: Refresh access token using refresh token

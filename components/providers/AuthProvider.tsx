@@ -296,6 +296,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Permission version is now tracked via response headers (x-permission-version)
         // and handled by the axios interceptor in api.ts - no polling needed
+        // ❌ REMOVED: Permission version polling (was calling deleted /permission-version endpoint)
+        // Permission updates now use event-driven approach via refreshUser() which dispatches 'permissions-updated' event
+        // On hard refresh, user data is loaded from localStorage - permission updates happen via backend save + refreshUser()
 
         console.log('[AUTH] Restored user from localStorage:', storedUser.email);
         setUser(storedUser);

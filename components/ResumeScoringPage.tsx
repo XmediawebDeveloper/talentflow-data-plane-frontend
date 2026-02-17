@@ -1699,23 +1699,23 @@ export default function ResumeScoringPage({
                 return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                    className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow"
                   >
-                    <div className="flex items-start gap-4">
+                    <div className="flex flex-col sm:flex-row items-start gap-4">
                       {/* Scoring icon - like AI Talent Match */}
                       <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
                         <Target className="w-6 h-6 text-white" />
                       </div>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 w-full">
                         {/* Title row with job details - like JD card */}
-                        <div className="flex items-center gap-3 mb-2">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                           {jobDetails?.job_id && (
-                            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-medium border border-blue-200 flex-shrink-0">
+                            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-xs sm:text-sm font-medium border border-blue-200 flex-shrink-0">
                               {jobDetails.job_id}
                             </span>
                           )}
                           <h3
-                            className="text-lg font-semibold text-blue-600 cursor-pointer hover:text-blue-800 hover:underline transition-colors"
+                            className="text-base sm:text-lg font-semibold text-blue-600 cursor-pointer hover:text-blue-800 hover:underline transition-colors"
                             onClick={() => {
                               setSelectedHistoryItem(item);
                               setViewMode('details');
@@ -1752,7 +1752,7 @@ export default function ResumeScoringPage({
                         </div>
 
                         {/* Metadata row - like JD card */}
-                        <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
+                        <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 mb-3 flex-wrap">
                           {jobDetails?.department && (
                             <span className="flex items-center gap-1">
                               <Briefcase className="w-4 h-4" />
@@ -1801,7 +1801,7 @@ export default function ResumeScoringPage({
                       </div>
 
                       {/* Action buttons - right side */}
-                      <div className="flex flex-col gap-2 flex-shrink-0">
+                      <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1830,9 +1830,9 @@ export default function ResumeScoringPage({
                             setShowJobTitleColumn(false);
                             setShowProgressModal(true);
                           }}
-                          className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-1.5"
+                          className="px-3 sm:px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-xs sm:text-sm font-medium flex items-center gap-1.5 justify-center w-full"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
                           View Progress
                         </button>
                         <button
@@ -1844,7 +1844,7 @@ export default function ResumeScoringPage({
                             } catch (e) {}
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
-                          className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
+                          className="px-3 sm:px-4 py-2 border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 hover:border-gray-400 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center justify-center w-full"
                         >
                           View Details
                         </button>
@@ -1860,9 +1860,9 @@ export default function ResumeScoringPage({
                   key={item.id}
                   className="bg-white rounded-xl border-2 transition-all p-6 group border-gray-200 hover:border-gray-400 hover:shadow-lg"
                 >
-                  <div className="flex items-start gap-6">
+                  <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
                     <div
-                      className="flex-1 min-w-0 cursor-pointer"
+                      className="flex-1 min-w-0 cursor-pointer w-full"
                       onClick={() => {
                         setSelectedHistoryItem(item);
                         setViewMode('details');
@@ -1981,16 +1981,16 @@ export default function ResumeScoringPage({
                       </div>
                     </div>
 
-                    <div className="flex-shrink-0 text-center">
-                      <div className="text-sm text-gray-600 mb-2 font-medium">Avg Score</div>
-                      <div className={`text-4xl font-bold mb-2 ${getScoreColor(avgScore)}`}>
+                    <div className="flex-shrink-0 text-center w-full sm:w-auto">
+                      <div className="text-xs sm:text-sm text-gray-600 mb-2 font-medium">Avg Score</div>
+                      <div className={`text-3xl sm:text-4xl font-bold mb-2 ${getScoreColor(avgScore)}`}>
                         {avgScore}%
                       </div>
                       <div className={`inline-block px-3 py-1.5 rounded-full text-xs border font-medium ${getScoreBgColor(avgScore)}`}>
                         {getScoreLabel(avgScore)}
                       </div>
 
-                      <div className="mt-4 flex flex-col gap-2">
+                      <div className="mt-4 flex flex-col gap-2 w-full">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -2019,9 +2019,9 @@ export default function ResumeScoringPage({
                             setShowJobTitleColumn(false);
                             setShowProgressModal(true);
                           }}
-                          className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center gap-1.5 justify-center"
+                          className="px-3 sm:px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-xs sm:text-sm font-medium flex items-center gap-1.5 justify-center w-full"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
                           View Progress
                         </button>
                         <button
@@ -2035,10 +2035,10 @@ export default function ResumeScoringPage({
                             }
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
-                          className="text-gray-800 hover:text-gray-900 text-sm font-medium flex items-center gap-1 justify-center cursor-pointer"
+                          className="px-3 sm:px-4 py-2 border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 hover:border-gray-400 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center gap-1 justify-center cursor-pointer w-full"
                         >
                           View Details
-                          <ArrowLeft className="w-4 h-4 rotate-180 hover:translate-x-1 transition-transform" />
+                          <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 rotate-180 hover:translate-x-1 transition-transform" />
                         </button>
                       </div>
                     </div>
@@ -2187,7 +2187,7 @@ export default function ResumeScoringPage({
       <div className="max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <button
             onClick={() => {
               setViewMode('history');
@@ -2195,21 +2195,21 @@ export default function ResumeScoringPage({
               setResumeSource(null);
               setSelectedResumes([]);
             }}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
             title="Back"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold text-gray-900">Score Resumes</h1>
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Score Resumes</h1>
               {availableUnits !== null && (
-                <span className="px-3 py-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-full">
+                <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs sm:text-sm font-medium rounded-full w-fit">
                   {availableUnits.toLocaleString()} units
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-500 mt-0.5">Select a job and let AI match the best candidates</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Select a job and let AI match the best candidates</p>
           </div>
         </div>
       </div>
