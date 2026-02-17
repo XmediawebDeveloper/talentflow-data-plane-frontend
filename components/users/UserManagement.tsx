@@ -1203,6 +1203,7 @@ export default function UserManagement() {
       }
 
       const data = await response.json();
+      console.log('[LOAD USERS] Raw data from API:', data.users?.slice(0, 2) || data.slice(0, 2));
       const mappedUsers: ApiUser[] = (data.users || data).map((user: any) => ({
         id: user.id.toString(),
         name: user.name || user.full_name,
@@ -1787,6 +1788,30 @@ export default function UserManagement() {
         return;
       }
 
+      // ✅ CRITICAL FIX: Parse response and update user in state immediately
+      const updatedUserData = await response.json();
+      console.log('[UPDATE USER] ✅ Response received:', updatedUserData);
+      console.log('[UPDATE USER] ✅ Updated role:', updatedUserData.role);
+
+      // Update the user in local state immediately (don't wait for loadUsers)
+      setUsers(prevUsers => {
+        const updated = prevUsers.map(user =>
+          user.id === editingUser.id
+            ? {
+                ...user,
+                ...updatedUserData,
+                role: updatedUserData.role, // Explicitly update role
+                name: updatedUserData.name,
+                email: updatedUserData.email,
+                permissions: updatedUserData.permissions,
+                permission_ids: updatedUserData.permission_ids,
+              }
+            : user
+        );
+        console.log('[UPDATE USER] 🔄 State updated, user role is now:', updated.find(u => u.id === editingUser.id)?.role);
+        return updated;
+      });
+
       toast.success('User updated successfully');
 
       // If the updated user is the current logged-in user, refresh their session
@@ -1798,6 +1823,8 @@ export default function UserManagement() {
       }
 
       resetEditModal();
+
+      // Also refresh the list from server to ensure consistency
       loadUsers();
     } catch (error: any) {
       console.error('Error updating user:', error);

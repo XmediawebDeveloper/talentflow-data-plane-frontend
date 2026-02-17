@@ -517,6 +517,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           tenant_id: createdTenantId,
           plan_id: selectedPlanDetails.id,
           billing_interval: billingInterval,
+          user_email: form.adminEmail,
         }),
       });
 

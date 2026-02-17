@@ -103,12 +103,13 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
     if (permission === 'canViewInternalDB' || permission === 'canAccessInternalDB') {
       return user.permissions.canAccessInternalDB === true || user.permissions.canViewInternalDB === true;
     }
-    // New granular permissions with fallback to RUN permissions for backward compatibility
+    // New granular permissions - Show menu if user has EITHER view OR run permission
+    // Hide menu only if BOTH view and run permissions are false
     if (permission === 'canViewScoring') {
-      return user.permissions.canRunScoring === true;  // Fallback: if can run, can view
+      return user.permissions.canViewScoring === true || user.permissions.canRunScoring === true;
     }
     if (permission === 'canViewAiMatch') {
-      return user.permissions.canRunAiMatch === true;  // Fallback: if can run, can view
+      return user.permissions.canViewAiMatch === true || user.permissions.canRunAiMatch === true;
     }
 
     return false;
@@ -244,6 +245,9 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
     },
   ];
 
+  // Default menus that should ALWAYS be visible for all users (except role restrictions)
+  const defaultMenuIds = ['dashboard', 'support-tickets', 'job-openings', 'my-resumes'];
+
   // Filter nav items based on RBAC01-07 roles, permissions, and features
   const filterNavItems = (items: NavItem[]): NavItem[] => {
     return items.filter(item => {
@@ -263,6 +267,10 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
 
       // RBAC03: Billing access items are only for admin/billing_manager
       if (item.billingAccess && !isBillingManager) return false;
+
+      // ✅ DEFAULT MENUS: These 4 menus are always visible (bypass permission/feature checks)
+      // - View Dashboard, View JD (Job Openings), View My Resumes, View Support
+      if (defaultMenuIds.includes(item.id)) return true;
 
       // RBAC06: Feature flag check - if feature is specified, user must have it
       if (item.feature && !hasFeature(item.feature)) return false;

@@ -246,10 +246,16 @@ function JobDetailsContent() {
   const handleDelete = async (job: Job) => {
     try {
       await jdService.delete(job.id);
-      toast.success(`"${job.title}" has been deleted`);
+      toast.success(`"${job.title}" has been deleted successfully`);
       router.push('/recruitment/job-openings');
-    } catch (error) {
-      toast.error('Failed to delete job');
+    } catch (error: any) {
+      // Check if error is about active assessments
+      const errorDetail = error?.response?.data?.detail;
+      if (errorDetail && typeof errorDetail === 'object' && errorDetail.error_code === 'HAS_ACTIVE_ASSESSMENTS') {
+        toast.error(errorDetail.error || 'Cannot delete JD with active assessments');
+      } else {
+        toast.error('Failed to delete job description');
+      }
     }
   };
 

@@ -539,6 +539,20 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       console.log('[UsageDashboard] Addon purchase result:', result);
       setAddonPurchaseSuccess(`Successfully added ${totalCredits} Units to your ${cleanName}!`);
 
+      // Queue audit verification for addon purchase (non-blocking)
+      try {
+        const mod = await import('@/lib/services/auditVerificationService');
+        mod.auditVerificationService.storePendingVerification({
+          action: 'addon_purchase',
+          entity_type: 'addon',
+          entity_id: String(selectedAddon.id),
+          user_id: user?.id,
+          user_email: user?.email,
+          timestamp: new Date().toISOString(),
+        });
+        console.log('[AuditVerification] Queued addon purchase verification');
+      } catch (e) { console.warn('[AuditVerification] Failed to queue:', e); }
+
       // Refresh quota data to show updated credits after a short delay
       setTimeout(async () => {
         console.log('[UsageDashboard] Refreshing quota data after addon purchase...');

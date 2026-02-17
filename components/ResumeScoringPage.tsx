@@ -17,7 +17,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 
 // Helper function to convert backend match_status to frontend format
 const convertMatchStatus = (status: string | undefined): 'Exact Match' | 'Partial Match' | 'No Match' => {
-  if (!status) return 'Partial Match';
+  if (!status) return 'No Match';
 
   const normalized = status.toLowerCase().trim();
 
@@ -31,7 +31,7 @@ const convertMatchStatus = (status: string | undefined): 'Exact Match' | 'Partia
   }
 
   // Default fallback
-  return 'Partial Match';
+  return 'No Match';
 };
 
 // Types
@@ -113,8 +113,9 @@ interface PendingScoringData {
 interface BatchProgressItem {
   resumeId: string;
   candidateName: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
+  matchStatus?: string;
   errorMessage?: string;
 }
 
@@ -136,6 +137,7 @@ interface ResumeScoringPageProps {
   scoredHistory?: ScoredResumeData[];
   onSaveScores?: (data: ScoredResumeData) => void;
   onRefreshHistory?: () => Promise<void>;
+  onLoadJdScores?: (jdId: string, jdTitle?: string) => Promise<void>;
   onRefreshResumes?: () => Promise<void>;
   onNavigateToAITalentMatch?: (jobId: string) => void;
   onBack?: () => void;
@@ -155,6 +157,7 @@ export default function ResumeScoringPage({
   scoredHistory = [],
   onSaveScores,
   onRefreshHistory,
+  onLoadJdScores,
   onRefreshResumes,
   onNavigateToAITalentMatch,
   onBack,
@@ -190,6 +193,8 @@ export default function ResumeScoringPage({
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'candidateView'>('history');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<ScoredResumeData | null>(null);
   const [isWaitingForInitialJd, setIsWaitingForInitialJd] = useState(false);
+  // After scoring completes & history refreshes, auto-navigate to this JD's details
+  const [pendingAutoSelectJdId, setPendingAutoSelectJdId] = useState<string | null>(null);
 
   // Track if we've already handled the initialJdId to prevent re-triggering
   const [initialJdHandled, setInitialJdHandled] = useState(false);
@@ -402,6 +407,8 @@ export default function ResumeScoringPage({
         if (historyItem) {
           console.log('[ResumeScoringPage] Found history item for JD, auto-opening:', historyItem.jobTitle);
           setSelectedHistoryItem(historyItem);
+          // Load full scores for this JD dynamically
+          onLoadJdScores?.(historyItem.jobId, historyItem.jobTitle);
 
           // If we also have a score_id, open the candidate view directly
           if (initialScoreId && historyItem.scoredResumes) {
@@ -451,6 +458,28 @@ export default function ResumeScoringPage({
       }
     }
   }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs]);
+
+  // After scoring completes: auto-navigate to details view once scoredHistory is refreshed
+  useEffect(() => {
+    if (!pendingAutoSelectJdId) return;
+    const historyItem = scoredHistory.find(h => h.jobId === pendingAutoSelectJdId);
+    if (historyItem) {
+      setSelectedHistoryItem(historyItem);
+      setViewMode('details');
+      setPendingAutoSelectJdId(null);
+      // Load full scores for this JD dynamically
+      onLoadJdScores?.(historyItem.jobId, historyItem.jobTitle);
+    }
+  }, [pendingAutoSelectJdId, scoredHistory]);
+
+  // Sync selectedHistoryItem when scoredHistory is updated (e.g. after loadJdScores completes)
+  useEffect(() => {
+    if (!selectedHistoryItem) return;
+    const updated = scoredHistory.find(h => h.jobId === selectedHistoryItem.jobId);
+    if (updated && updated !== selectedHistoryItem) {
+      setSelectedHistoryItem(updated);
+    }
+  }, [scoredHistory]);
 
   // Timeout for waiting state - don't wait forever for history to load
   useEffect(() => {
@@ -639,9 +668,11 @@ export default function ResumeScoringPage({
       if (onRefreshHistory) {
         console.log('[ResumeScoringPage] Refreshing scored history...');
         await onRefreshHistory();
-        console.log('[ResumeScoringPage] Scored history refreshed, updating URL');
-        // Update URL without full page reload
-        router.push(`/recruitment/resume-scoring?jd_id=${jobId}`);
+        console.log('[ResumeScoringPage] Scored history refreshed, navigating to results');
+        setShowProgressModal(false);
+        // Trigger auto-navigation to the details view for this JD
+        setPendingAutoSelectJdId(jobId);
+        router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
       } else {
         // Fallback: Refresh page after a short delay
         setTimeout(() => {
@@ -670,9 +701,11 @@ export default function ResumeScoringPage({
     }
 
     // Check if this update shows completion
+    // already_scored items count toward total but not toward completed/failed from backend
+    const alreadyScoredCount = (batchProgress.items || []).filter(i => i.status === 'already_scored').length;
     const isComplete = batchProgress.queued === 0 &&
                        batchProgress.processing === 0 &&
-                       (batchProgress.completed + batchProgress.failed) === batchProgress.total &&
+                       (batchProgress.completed + batchProgress.failed + alreadyScoredCount) === batchProgress.total &&
                        batchProgress.total > 0;
 
     // Mark job as complete to prevent future updates
@@ -689,6 +722,7 @@ export default function ResumeScoringPage({
       status: item.status,
       score: item.score,
       errorMessage: item.errorMessage,
+      matchStatus: item.matchStatus || item.match_status,
     }));
 
     // Convert to BulkScoringProgressModal format
@@ -701,6 +735,8 @@ export default function ResumeScoringPage({
       source: 'Internal DB' as const,
       status: item.status === 'completed'
         ? 'Scored successfully' as const
+        : item.status === 'already_scored'
+        ? 'Already Scored - Skipped' as const
         : item.status === 'failed'
         ? 'Failed' as const
         : item.status === 'processing'
@@ -708,7 +744,9 @@ export default function ResumeScoringPage({
         : 'Queued' as const,
       errorReason: item.errorMessage,
       score: item.score,
-      matchResult: item.score != null
+      matchResult: item.matchStatus
+        ? convertMatchStatus(item.matchStatus)
+        : item.score != null
         ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
         : undefined,
     }));
@@ -723,7 +761,26 @@ export default function ResumeScoringPage({
       shownJobsRef.current.add(batchProgress.jobId);
       setShowProgressModal(true);
     }
-  }, [batchProgress]);
+
+    // When batch scoring completes, refresh history and navigate to show scored resumes
+    if (isComplete && onRefreshHistory) {
+      console.log('[ResumeScoringPage] Batch complete - refreshing history and showing results');
+      const jobId = batchProgress.jobId;
+      // Small delay to ensure backend has committed all scores before fetching
+      setTimeout(() => {
+        onRefreshHistory().then(() => {
+          setShowProgressModal(false);
+          // Trigger auto-navigation to the details view for this JD
+          setPendingAutoSelectJdId(jobId);
+          router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
+        }).catch((err) => {
+          console.error('[ResumeScoringPage] Failed to refresh history after batch:', err);
+          setShowProgressModal(false);
+          setViewMode('history');
+        });
+      }, 1500);
+    }
+  }, [batchProgress, onRefreshHistory, router]);
 
   // Split resumes - myResumes are all user-uploaded resumes, databaseResumes are all resumes
   // Include locally uploaded resumes (from the modal) to keep them visible without page refresh
@@ -1571,7 +1628,7 @@ export default function ResumeScoringPage({
             </button>
 
             <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-              <span className="text-gray-800">{filteredHistory.length}</span> of {scoredHistory.length} jobs
+              <span className="text-gray-800">{displayHistory.length}</span> of {scoredHistory.length + (processingEntry ? 1 : 0)} jobs
             </div>
           </div>
 
@@ -1681,9 +1738,9 @@ export default function ResumeScoringPage({
         </div>
 
         {/* History List or Empty State */}
-        {filteredHistory.length > 0 ? (
+        {displayHistory.length > 0 ? (
           <div className={historyViewMode === 'grid' ? 'grid gap-5' : 'space-y-4'}>
-            {filteredHistory.map((item) => {
+            {displayHistory.map((item) => {
               const avgScore = item.scoredResumes.length > 0
                 ? Math.round(item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length)
                 : 0;
@@ -1719,6 +1776,7 @@ export default function ResumeScoringPage({
                             onClick={() => {
                               setSelectedHistoryItem(item);
                               setViewMode('details');
+                              onLoadJdScores?.(item.jobId, item.jobTitle);
                               try {
                                 localStorage.setItem('lastViewedScoringJdId', item.jobId);
                               } catch (e) {}
@@ -1839,6 +1897,7 @@ export default function ResumeScoringPage({
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
+                            onLoadJdScores?.(item.jobId, item.jobTitle);
                             try {
                               localStorage.setItem('lastViewedScoringJdId', item.jobId);
                             } catch (e) {}
@@ -1866,6 +1925,7 @@ export default function ResumeScoringPage({
                       onClick={() => {
                         setSelectedHistoryItem(item);
                         setViewMode('details');
+                        onLoadJdScores?.(item.jobId, item.jobTitle);
                         router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                       }}
                     >
@@ -2028,6 +2088,7 @@ export default function ResumeScoringPage({
                           onClick={() => {
                             setSelectedHistoryItem(item);
                             setViewMode('details');
+                            onLoadJdScores?.(item.jobId, item.jobTitle);
                             try {
                               localStorage.setItem('lastViewedScoringJdId', item.jobId);
                             } catch (e) {
