@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Search,
   Hash,
@@ -25,6 +25,7 @@ import chatService, {
   ChannelMember,
   ChatPermissions,
 } from '@/lib/services/chatService';
+import { getTokens } from '@/lib/services/api';
 import userService, { ApiUser } from '@/lib/services/userService';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useSearchParams } from 'next/navigation';
@@ -75,6 +76,90 @@ export default function TeamChatPage() {
     if (selectedChannel) {
       fetchMessages(selectedChannel.id);
     }
+  }, [selectedChannel?.id]);
+
+  // WebSocket connection for real-time messaging
+  useEffect(() => {
+    if (!selectedChannel) return;
+
+    const { accessToken } = getTokens();
+    if (!accessToken) return;
+
+    // Connect WebSocket for the selected channel
+    chatService.connectWebSocket(selectedChannel.id, accessToken);
+
+    // Register message handler for incoming real-time events
+    const unsubscribe = chatService.onMessage((data: any) => {
+      if (!data || !data.type) return;
+
+      switch (data.type) {
+        case 'message': {
+          // New message received from another user
+          if (data.message) {
+            setMessages((prev) => {
+              // Avoid duplicate messages
+              if (prev.some((m) => m.id === data.message.id)) return prev;
+              return [...prev, data.message];
+            });
+            // Update channel's last message in sidebar
+            const channelId = data.message.channel_id;
+            setChannels((prev) =>
+              prev.map((ch) =>
+                ch.id === channelId
+                  ? { ...ch, last_message: data.message.content, last_message_by: data.message.user_name }
+                  : ch
+              )
+            );
+            setDirectMessages((prev) =>
+              prev.map((dm) =>
+                dm.id === channelId
+                  ? { ...dm, last_message: data.message.content, last_message_by: data.message.user_name }
+                  : dm
+              )
+            );
+            // Auto-mark as read since user is viewing this channel
+            chatService.markAsRead(selectedChannel.id);
+          }
+          break;
+        }
+        case 'message_update': {
+          if (data.message) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === data.message.id ? data.message : m))
+            );
+          }
+          break;
+        }
+        case 'message_deleted': {
+          if (data.message_id) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === data.message_id ? { ...m, is_deleted: true, content: '[Message deleted]' } : m
+              )
+            );
+          }
+          break;
+        }
+        case 'reaction_add':
+        case 'reaction_remove': {
+          // Refresh messages to get updated reactions
+          if (selectedChannel) {
+            fetchMessages(selectedChannel.id);
+          }
+          break;
+        }
+        case 'typing': {
+          // Could add typing indicator UI in the future
+          break;
+        }
+      }
+    });
+
+    // Cleanup: disconnect WebSocket and unsubscribe handler when channel changes or unmount
+    return () => {
+      unsubscribe();
+      chatService.disconnectWebSocket();
+    };
   }, [selectedChannel?.id]);
 
   const fetchPermissions = async () => {
@@ -135,16 +220,20 @@ export default function TeamChatPage() {
       await chatService.markAsRead(channelId);
 
       // Update unread count in local state after marking as read
-      setChannels(prev => prev.map(ch =>
-        ch.id === channelId ? { ...ch, unread_count: 0 } : ch
-      ));
-      setDirectMessages(prev => prev.map(dm =>
-        dm.id === channelId ? { ...dm, unread_count: 0 } : dm
-      ));
-      // Recalculate total unread
-      setTotalUnread(prev => {
-        const channel = [...channels, ...directMessages].find(c => c.id === channelId);
-        return Math.max(0, prev - (channel?.unread_count || 0));
+      setChannels(prev => {
+        const updated = prev.map(ch =>
+          ch.id === channelId ? { ...ch, unread_count: 0 } : ch
+        );
+        // Recalculate total unread from updated channel lists
+        setDirectMessages(prevDMs => {
+          const updatedDMs = prevDMs.map(dm =>
+            dm.id === channelId ? { ...dm, unread_count: 0 } : dm
+          );
+          const newTotal = [...updated, ...updatedDMs].reduce((sum, c) => sum + (c.unread_count || 0), 0);
+          setTotalUnread(newTotal);
+          return updatedDMs;
+        });
+        return updated;
       });
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -587,78 +676,117 @@ export default function TeamChatPage() {
                   <p className="text-sm">Start the conversation!</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {messages.map((message) => (
-                    <div key={message.id} className="group flex gap-3 relative">
-                      {/* Avatar */}
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                        {message.user_initials}
-                      </div>
+                <div className="space-y-3">
+                  {messages.map((message) => {
+                    const isSender = message.user_id === currentUser?.id;
+                    return (
+                      <div
+                        key={message.id}
+                        className={`group flex gap-2.5 ${isSender ? 'flex-row-reverse' : 'flex-row'}`}
+                      >
+                        {/* Avatar */}
+                        <div
+                          className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
+                            isSender
+                              ? 'bg-gradient-to-br from-gray-800 to-gray-950 text-white'
+                              : 'bg-gradient-to-br from-gray-500 to-gray-700 text-white'
+                          }`}
+                        >
+                          {message.user_initials}
+                        </div>
 
-                      {/* Message Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-gray-900">{message.user_name}</span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(message.created_at).toLocaleString()}
-                          </span>
-                          {message.is_pinned && (
-                            <span className="flex items-center gap-1 text-xs text-amber-600">
-                              <Pin className="w-3 h-3" /> Pinned
+                        {/* Message Bubble */}
+                        <div className={`max-w-[70%] ${isSender ? 'items-end' : 'items-start'}`}>
+                          <div
+                            className={`px-4 py-2.5 rounded-2xl ${
+                              isSender
+                                ? 'bg-gray-800 text-white rounded-tr-sm'
+                                : 'bg-gray-100 text-gray-900 rounded-tl-sm'
+                            }`}
+                          >
+                            {/* Sender name for received messages */}
+                            {!isSender && (
+                              <p className="text-xs font-semibold mb-1 text-gray-600">
+                                {message.user_name}
+                              </p>
+                            )}
+                            <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                              {message.is_deleted ? '[Message deleted]' : message.content}
+                            </p>
+                          </div>
+
+                          {/* Timestamp & badges */}
+                          <div
+                            className={`flex items-center gap-1.5 mt-1 px-1 ${
+                              isSender ? 'justify-end' : 'justify-start'
+                            }`}
+                          >
+                            <span className="text-[11px] text-gray-400">
+                              {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
-                          )}
-                          {message.is_edited && (
-                            <span className="text-xs text-gray-400">(edited)</span>
+                            {message.is_pinned && (
+                              <span className="flex items-center gap-0.5 text-[11px] text-amber-500">
+                                <Pin className="w-3 h-3" /> Pinned
+                              </span>
+                            )}
+                            {message.is_edited && (
+                              <span className="text-[11px] text-gray-400">(edited)</span>
+                            )}
+                          </div>
+
+                          {/* Reactions */}
+                          {message.reactions.length > 0 && (
+                            <div
+                              className={`flex flex-wrap gap-1.5 mt-1 ${
+                                isSender ? 'justify-end' : 'justify-start'
+                              }`}
+                            >
+                              {message.reactions.map((reaction, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => handleAddReaction(message.id, reaction.emoji)}
+                                  className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm transition-colors"
+                                  title={reaction.users.join(', ')}
+                                >
+                                  <span>{reaction.emoji}</span>
+                                  <span className="text-gray-600">{reaction.count}</span>
+                                </button>
+                              ))}
+                              <div className="relative">
+                                <button
+                                  onClick={() =>
+                                    setShowEmojiPicker(
+                                      showEmojiPicker === message.id ? null : message.id
+                                    )
+                                  }
+                                  className="p-1 hover:bg-gray-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Smile className="w-4 h-4 text-gray-500" />
+                                </button>
+                                {showEmojiPicker === message.id && (
+                                  <div
+                                    className={`absolute bottom-full mb-1 p-2 bg-white border border-gray-200 rounded-lg shadow-lg flex gap-1 z-10 ${
+                                      isSender ? 'right-0' : 'left-0'
+                                    }`}
+                                  >
+                                    {quickEmojis.map((emoji) => (
+                                      <button
+                                        key={emoji}
+                                        onClick={() => handleAddReaction(message.id, emoji)}
+                                        className="p-1.5 hover:bg-gray-100 rounded text-lg"
+                                      >
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
-                        <p className="text-gray-700 whitespace-pre-wrap">
-                          {message.is_deleted ? '[Message deleted]' : message.content}
-                        </p>
-
-                        {/* Reactions */}
-                        {message.reactions.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5 mt-2">
-                            {message.reactions.map((reaction, idx) => (
-                              <button
-                                key={idx}
-                                onClick={() => handleAddReaction(message.id, reaction.emoji)}
-                                className="flex items-center gap-1 px-2 py-0.5 bg-gray-100 hover:bg-gray-200 rounded-full text-sm transition-colors"
-                                title={reaction.users.join(', ')}
-                              >
-                                <span>{reaction.emoji}</span>
-                                <span className="text-gray-600">{reaction.count}</span>
-                              </button>
-                            ))}
-                            <div className="relative">
-                              <button
-                                onClick={() =>
-                                  setShowEmojiPicker(
-                                    showEmojiPicker === message.id ? null : message.id
-                                  )
-                                }
-                                className="p-1 hover:bg-gray-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <Smile className="w-4 h-4 text-gray-500" />
-                              </button>
-                              {showEmojiPicker === message.id && (
-                                <div className="absolute bottom-full left-0 mb-1 p-2 bg-white border border-gray-200 rounded-lg shadow-lg flex gap-1 z-10">
-                                  {quickEmojis.map((emoji) => (
-                                    <button
-                                      key={emoji}
-                                      onClick={() => handleAddReaction(message.id, emoji)}
-                                      className="p-1.5 hover:bg-gray-100 rounded text-lg"
-                                    >
-                                      {emoji}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                   <div ref={messagesEndRef} />
                 </div>
               )}
