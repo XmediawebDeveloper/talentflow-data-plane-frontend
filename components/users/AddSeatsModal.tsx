@@ -172,6 +172,23 @@ export default function AddSeatsModal({
       }
 
       toast.success(`Successfully added ${totalSeats} seat${totalSeats > 1 ? 's' : ''} to your account!`);
+
+      // Queue audit verification for seats purchase (non-blocking)
+      try {
+        const mod = await import('@/lib/services/auditVerificationService');
+        const stored = localStorage.getItem('talentflow_user');
+        const u = stored ? JSON.parse(stored) : {};
+        mod.auditVerificationService.storePendingVerification({
+          action: 'seats_purchase',
+          entity_type: 'seats',
+          entity_id: String(totalSeats),
+          user_id: u.id,
+          user_email: u.email,
+          timestamp: new Date().toISOString(),
+        });
+        console.log('[AuditVerification] Queued seats purchase verification');
+      } catch (e) { console.warn('[AuditVerification] Failed to queue:', e); }
+
       onSuccess?.();
       onClose();
     } catch (err: any) {

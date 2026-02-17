@@ -454,6 +454,9 @@ function CurrentPlanContent() {
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
 
+  // Check if user already has dedicated database isolation (cannot be downgraded)
+  const hasDedicatedDatabase = sharedQuotaData?.plan_info?.isolation_type?.toUpperCase() === 'DATABASE';
+
   // Get encoded plan from URL (from login redirect after signup)
   const encodedPlanFromUrl = searchParams.get('plan');
 
@@ -977,6 +980,8 @@ function CurrentPlanContent() {
         body: JSON.stringify({
           queued_upgrade_id: selectedQueuedUpgrade.id,
           terms_accepted: true,
+          user_id: user?.id,
+          user_email: user?.email,
         }),
       });
 
@@ -1060,7 +1065,9 @@ function CurrentPlanContent() {
 
       const token = localStorage.getItem('accessToken');
       const reasonParam = encodeURIComponent(cancelReason.trim() || 'Cancelled by user');
-      const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}?reason=${reasonParam}`, {
+      const userIdParam = user?.id ? `&user_id=${encodeURIComponent(user.id)}` : '';
+      const userEmailParam = user?.email ? `&user_email=${encodeURIComponent(user.email)}` : '';
+      const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}?reason=${reasonParam}${userIdParam}${userEmailParam}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1277,7 +1284,7 @@ function CurrentPlanContent() {
     // It's an upgrade or same tier - proceed normally
     setSelectedPlanForPayment(plan);
     setModalStep('isolation');
-    setIsolationType('schema'); // Default to schema (checkbox unchecked)
+    setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
     setIsNewTenant(false); // Always use existing
     // Keep the current billing period toggle state (isYearly remains as-is)
     setTransactionResult(null);
@@ -1356,6 +1363,8 @@ function CurrentPlanContent() {
         database_per_tenant: isolationType === 'database',
         external_transaction_id: transactionId,
         billing_interval: actualBillingInterval,
+        user_id: user?.id,
+        user_email: user?.email,
       };
 
       console.log('Calling API:', apiUrl);
@@ -1401,6 +1410,20 @@ function CurrentPlanContent() {
         const result = data.data || data;
         setTransactionResult(result);
         setModalStep('result');
+
+        // Queue audit verification for plan activation (non-blocking)
+        try {
+          const mod = await import('@/lib/services/auditVerificationService');
+          mod.auditVerificationService.storePendingVerification({
+            action: result.queued ? 'plan_upgrade' : 'subscription_upgrade',
+            entity_type: 'subscription',
+            entity_id: String(planId),
+            user_id: user?.id,
+            user_email: user?.email,
+            timestamp: new Date().toISOString(),
+          });
+          console.log('[AuditVerification] Queued plan purchase verification');
+        } catch (e) { console.warn('[AuditVerification] Failed to queue:', e); }
 
         // PS02 Fix: Show toast notification for payment success
         if (result.queued) {
@@ -1883,7 +1906,7 @@ function CurrentPlanContent() {
                           onClick={() => {
                             setSelectedPlanForPayment(currentPlan);
                             setModalStep('isolation');
-                            setIsolationType('schema');
+                            setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
                             setIsNewTenant(false);
                             setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
                             setTransactionResult(null);
@@ -1940,7 +1963,7 @@ function CurrentPlanContent() {
                           onClick={() => {
                             setSelectedPlanForPayment(currentPlan);
                             setModalStep('isolation');
-                            setIsolationType('schema');
+                            setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
                             setIsNewTenant(false);
                             setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
                             setTransactionResult(null);
@@ -2706,22 +2729,38 @@ function CurrentPlanContent() {
                 )}
 
                 {/* Dedicated Database Checkbox - Available for both Monthly and Annual */}
-                <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
-                  isolationType === 'database' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'
+                <label className={`flex items-start gap-3 p-4 border-2 rounded-xl transition-colors ${
+                  hasDedicatedDatabase
+                    ? 'border-amber-500 bg-amber-50 cursor-not-allowed opacity-80'
+                    : isolationType === 'database'
+                      ? 'border-amber-500 bg-amber-50 cursor-pointer'
+                      : 'border-gray-200 hover:bg-gray-50 cursor-pointer'
                 }`}>
                   <input
                     type="checkbox"
                     checked={isolationType === 'database'}
-                    onChange={(e) => setIsolationType(e.target.checked ? 'database' : 'schema')}
-                    className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                    onChange={(e) => {
+                      if (!hasDedicatedDatabase) {
+                        setIsolationType(e.target.checked ? 'database' : 'schema');
+                      }
+                    }}
+                    disabled={hasDedicatedDatabase}
+                    className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500 disabled:cursor-not-allowed"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <Database className="w-5 h-5 text-amber-600" />
                       <span className="font-medium text-gray-900">Dedicated Database</span>
+                      {hasDedicatedDatabase && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                          Active
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-gray-500 mt-1">
-                      Get your own dedicated database for enhanced isolation and performance
+                      {hasDedicatedDatabase
+                        ? 'Your organization already uses a dedicated database. This cannot be changed.'
+                        : 'Get your own dedicated database for enhanced isolation and performance'}
                     </p>
                     <p className="text-sm text-amber-600 font-medium mt-1">
                       +{formatCurrency(planSettings?.databasePerTenantMonthlyPrice || 5000, selectedPlanForPayment?.currency || 'INR')}/month
@@ -3254,7 +3293,7 @@ function CurrentPlanContent() {
             if (downgradeWarningData.targetPlan) {
               setSelectedPlanForPayment(downgradeWarningData.targetPlan);
               setModalStep('isolation');
-              setIsolationType('schema');
+              setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
               setIsNewTenant(false);
               setTransactionResult(null);
               setError(null);
