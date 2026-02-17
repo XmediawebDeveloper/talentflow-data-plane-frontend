@@ -97,6 +97,11 @@ export interface ChatPermissions {
 class ChatService {
   private ws: WebSocket | null = null;
   private messageHandlers: ((data: any) => void)[] = [];
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private currentChannelId: string | null = null;
+  private currentToken: string | null = null;
 
   /**
    * Get chat permissions for current user
@@ -341,10 +346,25 @@ class ChatService {
    * Connect to WebSocket for real-time updates
    */
   connectWebSocket(channelId: string, token: string): void {
-    if (this.ws) {
-      this.ws.close();
+    // Clear any pending reconnect
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
     }
 
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+
+    this.currentChannelId = channelId;
+    this.currentToken = token;
+    this.reconnectAttempts = 0;
+
+    this._connect(channelId, token);
+  }
+
+  private _connect(channelId: string, token: string): void {
     // Auto-detect WebSocket protocol based on page protocol
     const getWsBaseUrl = () => {
       if (process.env.NEXT_PUBLIC_WS_URL) {
@@ -362,7 +382,8 @@ class ChatService {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      console.log('[ChatService] WebSocket connected');
+      console.log('[ChatService] WebSocket connected to channel', channelId);
+      this.reconnectAttempts = 0;
     };
 
     this.ws.onmessage = (event) => {
@@ -374,8 +395,17 @@ class ChatService {
       }
     };
 
-    this.ws.onclose = () => {
-      console.log('[ChatService] WebSocket disconnected');
+    this.ws.onclose = (event) => {
+      console.log('[ChatService] WebSocket disconnected', event.code);
+      // Auto-reconnect if not intentionally closed (code 1000) and still on same channel
+      if (event.code !== 1000 && this.currentChannelId === channelId && this.reconnectAttempts < this.maxReconnectAttempts) {
+        const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+        console.log(`[ChatService] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+        this.reconnectTimer = setTimeout(() => {
+          this.reconnectAttempts++;
+          this._connect(channelId, token);
+        }, delay);
+      }
     };
 
     this.ws.onerror = (error) => {
@@ -387,8 +417,14 @@ class ChatService {
    * Disconnect WebSocket
    */
   disconnectWebSocket(): void {
+    this.currentChannelId = null;
+    this.currentToken = null;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     if (this.ws) {
-      this.ws.close();
+      this.ws.close(1000, 'Client disconnect');
       this.ws = null;
     }
   }
