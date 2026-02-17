@@ -21,6 +21,7 @@ interface AssessmentResultsProps {
 interface CandidateResult {
   id: string;
   invitation_id: string;  // For pending candidates without attempt
+  candidateDisplayId?: string;  // Per-tenant candidate ID (CID-01, CID-02, ...)
   name: string;
   email: string;
   phone?: string;
@@ -121,6 +122,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Dynamic columns based on assessment details
   const getDefaultColumns = (): ColumnConfig[] => {
     const baseColumns: ColumnConfig[] = [
+      { id: 'cid', label: 'CID', enabled: true },
       { id: 'candidate', label: 'Candidate', enabled: true },
       { id: 'email', label: 'Email', enabled: true },
       { id: 'jdTitle', label: 'JD Title', enabled: true },
@@ -289,6 +291,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             return {
               id: item.id || item.invitation_id,  // Use invitation_id for pending
               invitation_id: item.invitation_id,
+              candidateDisplayId: item.candidate_display_id,
               name: item.candidate_name || 'Unknown',
               email: item.candidate_email || '',
               phone: item.candidate_phone || '',
@@ -977,6 +980,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
                     />
                   </th>
+                  {isColumnEnabled('cid') && (
+                    <th className="text-left px-4 py-3 text-xs text-gray-600">CID</th>
+                  )}
                   {isColumnEnabled('candidate') && (
                     <th
                       className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
@@ -1096,6 +1102,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
                         />
                       </td>
+                      {isColumnEnabled('cid') && (
+                        <td className="px-4 py-4">
+                          <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                            {candidate.candidateDisplayId || '-'}
+                          </span>
+                        </td>
+                      )}
                       {isColumnEnabled('candidate') && (
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-3">

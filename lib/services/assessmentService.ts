@@ -95,6 +95,7 @@ export interface InvitationResponse {
   candidate_email: string;
   candidate_phone?: string;
   invite_source?: string;
+  candidate_display_id?: string;
   resume_id?: string;
   invitation_token: string;
   invitation_link?: string;
@@ -115,6 +116,7 @@ export interface AssessmentAttemptResponse {
   candidate_email: string;
   candidate_phone?: string;
   invite_source?: string;
+  candidate_display_id?: string;
   assessment_title: string;
   jd_title: string;
   started_at?: string;

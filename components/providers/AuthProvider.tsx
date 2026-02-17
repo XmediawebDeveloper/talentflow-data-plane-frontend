@@ -294,59 +294,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // ✅ NEW: Check permission version on page load (hard refresh)
-        // This ensures permissions are fresh even when user hits F5
-        try {
-          const accessToken = localStorage.getItem('accessToken');
-          const storedVersion = localStorage.getItem('permission_version');
-
-          if (accessToken && storedVersion) {
-            // Make a lightweight API call to check server's permission version
-            const versionCheckResponse = await authService.checkPermissionVersion();
-            const serverVersion = versionCheckResponse.permission_version;
-            const currentVersion = parseInt(storedVersion, 10);
-
-            if (serverVersion > currentVersion) {
-              console.log(`[AUTH] Permission version outdated on hard refresh: ${currentVersion} → ${serverVersion}`);
-              console.log('[AUTH] Refreshing token to get updated permissions...');
-
-              // Refresh token to get latest permissions
-              const refreshToken = localStorage.getItem('refreshToken');
-              if (refreshToken) {
-                const refreshResponse = await authService.refreshToken(refreshToken);
-                // Token will be automatically updated by setTokens call in authService
-
-                // Fetch updated user data with new permissions
-                const apiUserData = await authService.getCurrentUser();
-                const userData = mapApiUserToUser(apiUserData);
-                // Preserve lastLogin and createdAt from cached user if API doesn't return them
-                if (!userData.lastLogin && storedUser.lastLogin) {
-                  userData.lastLogin = storedUser.lastLogin;
-                }
-                if (!userData.createdAt && storedUser.createdAt) {
-                  userData.createdAt = storedUser.createdAt;
-                }
-                setUser(userData);
-                saveUserToStorage(userData);
-                setTenant(storedTenant || mockTenant);
-                console.log('[AUTH] Permissions refreshed on hard refresh ✅');
-
-                // ✅ Dispatch event to notify UI components (like Sidebar) to re-render
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('permissions-updated'));
-                }
-
-                setIsLoading(false);
-                return;
-              }
-            } else {
-              console.log('[AUTH] Permission version up to date:', currentVersion);
-            }
-          }
-        } catch (versionError) {
-          console.warn('[AUTH] Permission version check failed, continuing with cached permissions:', versionError);
-          // Don't block - fall through to normal restore
-        }
+        // Permission version is now tracked via response headers (x-permission-version)
+        // and handled by the axios interceptor in api.ts - no polling needed
 
         console.log('[AUTH] Restored user from localStorage:', storedUser.email);
         setUser(storedUser);
@@ -370,27 +319,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AUTH] User validated with API');
         } catch (error: unknown) {
           // Check if this is a subscription inactive error (403)
-          // The modal event is already dispatched by axios interceptor
-          const axiosError = error as { response?: { status?: number; data?: { detail?: { error_code?: string } } } };
-          if (axiosError?.response?.status === 403 &&
-              axiosError?.response?.data?.detail?.error_code === 'SUBSCRIPTION_INACTIVE') {
+          // handleApiError throws ApiError with .status property, not AxiosError with .response
+          const apiError = error as { status?: number; message?: string };
+          const isSubscriptionInactive = apiError?.status === 403 &&
+            (apiError?.message?.includes('inactive') || apiError?.message?.includes('SUBSCRIPTION'));
+
+          if (isSubscriptionInactive) {
             // Check if user is on subscription page - they need to stay logged in to renew
             const isOnSubscriptionPage = typeof window !== 'undefined' &&
               window.location.pathname.includes('/subscription/current-plan');
 
             if (isOnSubscriptionPage) {
               console.warn('[AUTH] Subscription inactive but on subscription page, keeping session for renewal');
-              // Keep the user logged in so they can renew
               return;
             }
 
-            console.warn('[AUTH] Subscription inactive, clearing session');
-            clearTokens();
-            clearUserFromStorage();
-            clearTenantFromStorage();
-            setUser(null);
-            setTenant(null);
-            // Don't redirect - let the modal handle it
+            console.warn('[AUTH] Subscription inactive, keeping session for modal handling');
+            // Don't clear tokens - let the SUBSCRIPTION_INACTIVE event modal handle it
+            // The axios interceptor already dispatched the event
             return;
           }
           console.warn('[AUTH] API validation failed, using cached user:', error);
@@ -405,22 +351,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AUTH] Fetching current user from API...');
           const apiUserData = await authService.getCurrentUser();
           console.log('[AUTH] Got user data:', apiUserData);
-          console.log('[AUTH] API Permissions:', apiUserData.permissions);
-          console.log('[AUTH] 🔍 API has can_view_scoring:', apiUserData.permissions.can_view_scoring);
-          console.log('[AUTH] 🔍 API has can_view_ai_match:', apiUserData.permissions.can_view_ai_match);
           const userData = mapApiUserToUser(apiUserData);
-          console.log('[AUTH] Mapped Permissions:', userData.permissions);
-          console.log('[AUTH] 🔍 Mapped has canViewScoring:', userData.permissions.canViewScoring);
-          console.log('[AUTH] 🔍 Mapped has canViewAiMatch:', userData.permissions.canViewAiMatch);
           setUser(userData);
           setTenant(mockTenant);
           saveUserToStorage(userData);
-          console.log('[AUTH] ✅ Session restored with fresh permissions from API');
-        } catch (error) {
+          console.log('[AUTH] Session restored with fresh permissions from API');
+        } catch (error: unknown) {
           console.error('[AUTH] Session restore failed:', error);
-          clearTokens();
-          clearUserFromStorage();
-          clearTenantFromStorage();
+          // Only clear tokens for actual auth failures (401), not temporary errors
+          const apiError = error as { status?: number };
+          if (apiError?.status === 401) {
+            console.log('[AUTH] Token invalid (401), clearing session');
+            clearTokens();
+            clearUserFromStorage();
+            clearTenantFromStorage();
+          } else {
+            console.warn('[AUTH] Keeping tokens - error may be temporary:', apiError?.status);
+            // Don't clear tokens for 403, 500, network errors, etc.
+            // Let the user stay on the page and let specific error handlers deal with it
+          }
         }
       } else {
         console.log('[AUTH] No token found, skipping session restore');
@@ -470,118 +419,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []); // Empty deps - only register once on mount
 
-  // ✅ SMART POLLING: Periodic permission version check with optimizations
-  // Checks if permission version changed on server with smart intervals
-  // Optimizations:
-  // - Only polls when tab is visible
-  // - Only polls when user is active (interacted in last 5 minutes)
-  // - Uses exponential backoff when idle
-  // - Stops polling after 30 minutes of inactivity
-  useEffect(() => {
-    if (!user) return;
-
-    let pollInterval = 5000; // Start with 5 seconds
-    let intervalId: NodeJS.Timeout | null = null;
-    let lastActivityTime = Date.now();
-    let consecutiveIdleChecks = 0;
-
-    // Update last activity time on user interaction
-    const updateActivity = () => {
-      lastActivityTime = Date.now();
-      consecutiveIdleChecks = 0;
-      // Reset to fast polling when user becomes active again
-      if (pollInterval > 5000) {
-        pollInterval = 5000;
-        restartPolling();
-      }
-    };
-
-    // Track user activity
-    if (typeof window !== 'undefined') {
-      window.addEventListener('mousemove', updateActivity);
-      window.addEventListener('keydown', updateActivity);
-      window.addEventListener('click', updateActivity);
-      window.addEventListener('scroll', updateActivity);
-    }
-
-    const checkPermissions = async () => {
-      // Skip if tab is not visible
-      if (typeof document !== 'undefined' && document.hidden) {
-        console.debug('[AUTH] Skipping poll - tab not visible');
-        return;
-      }
-
-      // Check if user has been inactive for > 30 minutes
-      const inactiveTime = Date.now() - lastActivityTime;
-      if (inactiveTime > 30 * 60 * 1000) {
-        console.log('[AUTH] Stopping polling - user inactive for 30+ minutes');
-        if (intervalId) clearInterval(intervalId);
-        return;
-      }
-
-      // Use exponential backoff for idle users (inactive > 5 minutes)
-      if (inactiveTime > 5 * 60 * 1000) {
-        consecutiveIdleChecks++;
-        if (consecutiveIdleChecks > 3 && pollInterval < 10000) {
-          pollInterval = Math.min(pollInterval * 2, 10000); // Max 10 seconds
-          console.log(`[AUTH] User idle, increasing poll interval to ${pollInterval/1000}s`);
-          restartPolling();
-        }
-      }
-
-      try {
-        const storedVersion = localStorage.getItem('permission_version');
-        if (!storedVersion) return;
-
-        const { permission_version } = await authService.checkPermissionVersion();
-        const currentVersion = parseInt(storedVersion, 10);
-
-        if (permission_version > currentVersion) {
-          console.log(`[AUTH] 🔄 Permission change detected via polling: ${currentVersion} → ${permission_version}`);
-          // Update the stored version
-          localStorage.setItem('permission_version', permission_version.toString());
-
-          // Trigger user data refresh
-          const apiUserData = await authService.getCurrentUser();
-          const userData = mapApiUserToUser(apiUserData);
-          // Preserve lastLogin and createdAt from current user if API doesn't return them
-          const currentUser = getUserFromStorage();
-          if (!userData.lastLogin && currentUser?.lastLogin) {
-            userData.lastLogin = currentUser.lastLogin;
-          }
-          if (!userData.createdAt && currentUser?.createdAt) {
-            userData.createdAt = currentUser.createdAt;
-          }
-          setUser(userData);
-          saveUserToStorage(userData);
-          console.log('[AUTH] ✅ Permissions refreshed - sidebar & features updated!');
-        }
-      } catch (error) {
-        // Silent fail - don't disrupt user experience with polling errors
-        console.debug('[AUTH] Permission polling check failed (normal if idle):', error);
-      }
-    };
-
-    const restartPolling = () => {
-      if (intervalId) clearInterval(intervalId);
-      intervalId = setInterval(checkPermissions, pollInterval);
-    };
-
-    // Start polling
-    restartPolling();
-    console.log(`[AUTH] 🔄 Smart polling started (${pollInterval/1000}s interval)`);
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('mousemove', updateActivity);
-        window.removeEventListener('keydown', updateActivity);
-        window.removeEventListener('click', updateActivity);
-        window.removeEventListener('scroll', updateActivity);
-      }
-      console.log('[AUTH] Smart polling stopped');
-    };
-  }, [user]); // Re-run if user changes (login/logout)
+  // Permission version updates are now handled via x-permission-version response header
+  // in the axios interceptor (api.ts) - no polling needed.
+  // The interceptor automatically refreshes tokens when permission version changes.
 
   const login = (userData: User, tenantName?: string) => {
     console.log('[AUTH] Login called for:', userData.email, 'tenant:', tenantName);
