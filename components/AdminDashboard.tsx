@@ -106,7 +106,7 @@ export default function AdminDashboard({
 
   if (loading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
         <div className="flex items-center gap-3">
           <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
           <span className="text-gray-600">Loading dashboard...</span>
@@ -116,7 +116,7 @@ export default function AdminDashboard({
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Welcome Banner */}
       <div className="mb-8">
         <WelcomeBanner user={user} tenant={tenant} />
@@ -187,7 +187,7 @@ export default function AdminDashboard({
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {/* Resumes Card - Clickable with navigation links */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition-all">
           <div className="flex items-center justify-between">
@@ -495,7 +495,7 @@ export default function AdminDashboard({
       )}
 
       {/* Quick Actions & Recent Activity */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Quick Actions */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>

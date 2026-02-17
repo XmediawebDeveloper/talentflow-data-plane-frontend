@@ -50,19 +50,47 @@ const containsCodePatterns = (text: string): boolean => {
 
   const lowerText = text.toLowerCase();
 
+  // Programming language names that are ALLOWED in job descriptions
+  // These should NOT trigger the code validation
+  const allowedProgrammingTerms = [
+    'c#', 'c++', 'c ', ' c', // C family languages (with spaces to avoid false matches)
+    'java', 'javascript', 'typescript',
+    'python', 'ruby', 'php',
+    'go', 'golang', 'rust', 'swift', 'kotlin',
+    'scala', 'perl', 'r programming',
+    '.net', 'dotnet', 'net', 'asp.net', 'asp', 'vb.net', // .NET variations
+    'node.js', 'nodejs', 'node',
+    'react', 'reactjs', 'angular', 'angularjs', 'vue', 'vuejs', 'svelte',
+    'sql', 'nosql', 'mongodb', 'postgresql', 'mysql', 'sqlite', 'oracle',
+    'html', 'css', 'sass', 'scss', 'less',
+    'spring boot', 'spring', 'django', 'flask', 'express', 'fastapi',
+    'aws', 'azure', 'gcp', 'docker', 'kubernetes', 'jenkins', 'gitlab', 'github',
+    'redux', 'graphql', 'rest api', 'api', 'webpack', 'babel',
+  ];
+
+  // Create a sanitized version of text with allowed terms removed
+  // This prevents programming language names from triggering false positives
+  let sanitizedText = text;
+  allowedProgrammingTerms.forEach(term => {
+    const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    sanitizedText = sanitizedText.replace(regex, ' ');
+  });
+
+  const sanitizedLowerText = sanitizedText.toLowerCase();
+
   // Common programming keywords across multiple languages
   const codeKeywords = [
-    'function', 'def ', 'class ', 'import ', 'export ', 'const ', 'let ', 'var ',
+    'function', 'def ', 'import ', 'export ', 'const ', 'let ', 'var ',
     'return ', 'if ', 'else ', 'for ', 'while ', 'switch ', 'case ',
-    'async ', 'await ', 'try ', 'catch ', 'throw ', 'new ',
+    'async ', 'await ', 'try ', 'catch ', 'throw ',
     'public ', 'private ', 'protected ', 'static ', 'void ',
-    'int ', 'string ', 'boolean ', 'float ', 'double ',
+    'int ', 'boolean ', 'float ', 'double ',
     'printf', 'cout', 'println', 'console.log', 'print(',
     '__init__', 'self.', 'this.', '<?php', '#!/bin'
   ];
 
-  // Check for programming keywords
-  const hasCodeKeywords = codeKeywords.some(keyword => lowerText.includes(keyword));
+  // Check for programming keywords in sanitized text
+  const hasCodeKeywords = codeKeywords.some(keyword => sanitizedLowerText.includes(keyword));
 
   // Code-like patterns
   const codePatterns = [
@@ -83,12 +111,12 @@ const containsCodePatterns = (text: string): boolean => {
     /f["'].*\{.*\}["']/,          // f-strings: f"text {var}"
   ];
 
-  // Check for code patterns
-  const hasCodePattern = codePatterns.some(pattern => pattern.test(text));
+  // Check for code patterns in sanitized text
+  const hasCodePattern = codePatterns.some(pattern => pattern.test(sanitizedText));
 
   // Detect excessive use of special characters typical in code
-  const specialChars = text.match(/[(){}\[\];:<>]/g);
-  const specialCharRatio = specialChars ? specialChars.length / text.length : 0;
+  const specialChars = sanitizedText.match(/[(){}\[\];:<>]/g);
+  const specialCharRatio = specialChars ? specialChars.length / sanitizedText.length : 0;
   const hasExcessiveSpecialChars = specialCharRatio > 0.15; // More than 15% special chars
 
   return hasCodeKeywords || hasCodePattern || hasExcessiveSpecialChars;
@@ -1293,14 +1321,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
-    // Validate JD does not contain code patterns
-    if (containsCodePatterns(jdText)) {
-      toast.error({
-        title: 'Invalid Job Description',
-        description: 'Job description should describe a job role, not contain programming code or technical syntax.',
-      });
-      return;
-    }
+    // Note: Removed code pattern validation here since AI-generated content is trusted
+    // Validation only applies to AI prompt input, not the generated JD content
 
     // Check if any Stage 1 field has changed since last extraction
     // If user has proceeded to review and comes back to Stage 1:

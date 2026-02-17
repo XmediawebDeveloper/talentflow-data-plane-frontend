@@ -760,7 +760,7 @@ export default function AITalentMatchPage({
 
       <main className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-white">
         {/* Header Section - Sticky */}
-        <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm p-6">
+        <div className="flex-shrink-0 bg-white border-b border-gray-200 shadow-sm p-4 sm:p-6">
           {/* Back Button & Title */}
           {(() => {
             // Check if job is disabled
@@ -772,7 +772,7 @@ export default function AITalentMatchPage({
 
             return (
               <>
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
                   <button
                     onClick={() => {
                       setViewMode('history');
@@ -801,35 +801,35 @@ export default function AITalentMatchPage({
                         }
                       }}
                       disabled={!canRunAiMatch}
-                      className={`px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center gap-2 ${
+                      className={`px-3 sm:px-4 py-2 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center justify-center gap-2 w-full sm:w-auto ${
                         canRunAiMatch
                           ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
                           : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
                       }`}
                       title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
                     >
-                      <Sparkles className="w-4 h-4" />
+                      <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
                       Run AI Match
                     </button>
                   )}
                 </div>
 
                 {/* Job Info Card */}
-                <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
-                      <Sparkles className="w-6 h-6 text-white" />
+                <div className="bg-gray-50 rounded-xl border border-gray-200 p-3 sm:p-4 mb-4">
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+                      <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <h1 className="text-xl text-gray-900 font-semibold">{selectedHistoryItem.jobTitle}</h1>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <h1 className="text-base sm:text-xl text-gray-900 font-semibold">{selectedHistoryItem.jobTitle}</h1>
                         {isJobDisabled && (
                           <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full border border-red-200">
                             Disabled
                           </span>
                         )}
                       </div>
-                <div className="flex items-center gap-3 text-sm text-gray-600 mt-1">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600 mt-1">
                   <span className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
                     {new Date(selectedHistoryItem.matchedAt).toLocaleDateString('en-US', {
@@ -853,34 +853,34 @@ export default function AITalentMatchPage({
 
           {/* Filters & Search */}
           <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search candidates..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm"
                 />
               </div>
               <select
                 value={filterThreshold}
                 onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm"
               >
                 <option value={0}>All Matches</option>
                 <option value={50}>50%+ Match</option>
                 <option value={70}>70%+ Match</option>
                 <option value={85}>85%+ Match</option>
               </select>
-              <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
+              <div className="text-xs sm:text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
                 {filteredCandidates.length} candidates
               </div>
               {selectedCandidates.length > 0 && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   {availableUnits !== null && selectedCandidates.length > availableUnits && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg w-full sm:w-auto">
                       <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                       <span className="text-xs text-amber-700 font-medium">
                         Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
@@ -891,21 +891,21 @@ export default function AITalentMatchPage({
                   <button
                       onClick={handleSubmitToScoring}
                       disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
-                    className={`px-4 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${
+                    className={`px-3 sm:px-4 py-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial ${
                       availableUnits !== null && selectedCandidates.length > availableUnits
                         ? 'bg-gray-400 cursor-not-allowed opacity-50'
                         : 'bg-gray-800 hover:bg-gray-900'
                     }`}
                     >
-                      <Target className="w-4 h-4" />
+                      <Target className="w-3 h-3 sm:w-4 sm:h-4" />
                       Score ({selectedCandidates.length})
                     </button>
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
                       onClick={handleAssessment}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-sm flex items-center gap-2"
+                      className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial"
                     >
-                      <ClipboardList className="w-4 h-4" />
+                      <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />
                       Assessment ({selectedCandidates.length})
                     </button>
                   )}
@@ -914,7 +914,7 @@ export default function AITalentMatchPage({
               )}
             </div>
             {/* Additional Filters */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <input
                 type="text"
                 value={filterPhone}
@@ -1684,18 +1684,18 @@ export default function AITalentMatchPage({
                     setViewMode('details');
                     updateUrlParams({ jdId: item.jobId, view: 'details' });
                   }}
-                  className="bg-white rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all p-6 cursor-pointer group"
+                  className="bg-white rounded-xl border-2 border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all p-4 sm:p-6 cursor-pointer group"
                   role="button"
                   tabIndex={0}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     {/* Job Info */}
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
-                        <Sparkles className="w-6 h-6 text-white" />
+                    <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
+                        <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
                           {jobData?.jobId && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
                               {jobData.jobId}
@@ -1716,12 +1716,12 @@ export default function AITalentMatchPage({
                             </span>
                           )}
                         </div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1 group-hover:text-gray-800 transition-colors">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 group-hover:text-gray-800 transition-colors">
                           {item.jobTitle}
                         </h3>
-                        <div className="flex items-center gap-4 text-sm text-gray-600">
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                           <span className="flex items-center gap-1.5">
-                            <Clock className="w-4 h-4" />
+                            <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
                             {new Date(item.matchedAt).toLocaleDateString('en-US', {
                               month: 'short',
                               day: 'numeric',
@@ -1729,7 +1729,7 @@ export default function AITalentMatchPage({
                             })}
                           </span>
                           <span className="flex items-center gap-1.5">
-                            <User className="w-4 h-4" />
+                            <User className="w-3 h-3 sm:w-4 sm:h-4" />
                             {item.totalMatches} matches
                           </span>
                         </div>
@@ -1746,10 +1746,10 @@ export default function AITalentMatchPage({
                         setViewMode('details');
                         updateUrlParams({ jdId: item.jobId, view: 'details' });
                       }}
-                      className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium"
+                      className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2 font-medium text-xs sm:text-sm w-full sm:w-auto"
                     >
                       View Details
-                      <ArrowLeft className="w-4 h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
+                      <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 rotate-180 group-hover:translate-x-1 transition-transform" />
                     </button>
                   </div>
                 </div>
@@ -1894,34 +1894,34 @@ export default function AITalentMatchPage({
 
           {/* Filters & Search */}
           <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search candidates..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                  className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm"
                 />
               </div>
               <select
                 value={filterThreshold}
                 onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm"
               >
                 <option value={0}>All Matches</option>
                 <option value={50}>50%+ Match</option>
                 <option value={70}>70%+ Match</option>
                 <option value={85}>85%+ Match</option>
               </select>
-              <div className="text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
+              <div className="text-xs sm:text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
                 {filteredCandidates.length} candidates
               </div>
               {selectedCandidates.length > 0 && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                   {availableUnits !== null && selectedCandidates.length > availableUnits && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg w-full sm:w-auto">
                       <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                       <span className="text-xs text-amber-700 font-medium">
                         Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
@@ -1932,21 +1932,21 @@ export default function AITalentMatchPage({
                   <button
                       onClick={handleSubmitToScoring}
                       disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
-                    className={`px-4 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center gap-2 ${
+                    className={`px-3 sm:px-4 py-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial ${
                       availableUnits !== null && selectedCandidates.length > availableUnits
                         ? 'bg-gray-400 cursor-not-allowed opacity-50'
                         : 'bg-gray-800 hover:bg-gray-900'
                     }`}
                     >
-                      <Target className="w-4 h-4" />
+                      <Target className="w-3 h-3 sm:w-4 sm:h-4" />
                       Score ({selectedCandidates.length})
                     </button>
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
                       onClick={handleAssessment}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-sm flex items-center gap-2"
+                      className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial"
                     >
-                      <ClipboardList className="w-4 h-4" />
+                      <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />
                       Assessment ({selectedCandidates.length})
                     </button>
                   )}
@@ -1955,7 +1955,7 @@ export default function AITalentMatchPage({
               )}
             </div>
             {/* Additional Filters */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <input
                 type="text"
                 value={filterPhone}
