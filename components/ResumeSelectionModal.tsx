@@ -699,14 +699,17 @@ export default function ResumeSelectionModal({
                   {/* Table Rows */}
                   {filteredResumes.map((resume) => {
                     const isSelected = selectedResumes.includes(resume.id);
+                    const isArchived = resume.isArchived;
                     return (
                       <div
                         key={resume.id}
-                        onClick={() => handleToggleResume(resume.id)}
-                        className={`grid grid-cols-12 gap-4 p-4 border-2 rounded-lg transition-all cursor-pointer items-center ${
-                          isSelected
-                            ? 'border-gray-400 bg-gray-50 shadow-sm'
-                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                        onClick={() => !isArchived && handleToggleResume(resume.id)}
+                        className={`grid grid-cols-12 gap-4 p-4 border-2 rounded-lg transition-all items-center ${
+                          isArchived
+                            ? 'border-amber-100 bg-amber-50 opacity-60 cursor-not-allowed'
+                            : isSelected
+                              ? 'border-gray-400 bg-gray-50 shadow-sm cursor-pointer'
+                              : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm cursor-pointer'
                         }`}
                       >
                         {/* Checkbox */}
@@ -714,9 +717,10 @@ export default function ResumeSelectionModal({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleToggleResume(resume.id);
+                              if (!isArchived) handleToggleResume(resume.id);
                             }}
-                            className="p-1 hover:bg-gray-100 rounded"
+                            disabled={isArchived}
+                            className="p-1 hover:bg-gray-100 rounded disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {isSelected ? (
                               <CheckSquare className="w-5 h-5 text-gray-800" />
@@ -729,7 +733,12 @@ export default function ResumeSelectionModal({
                         {/* Name */}
                         <div className="col-span-3">
                           <div className="font-medium text-gray-900">{resume.name}</div>
-                          {resume.source && (
+                          {isArchived && (
+                            <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-0.5">
+                              Archived
+                            </span>
+                          )}
+                          {!isArchived && resume.source && (
                             <div className="text-xs text-gray-500 mt-0.5">{resume.source}</div>
                           )}
                         </div>
