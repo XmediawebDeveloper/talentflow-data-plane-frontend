@@ -881,13 +881,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   });
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
       <div className="w-full">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-gray-900 mb-2">Assessment Management</h1>
-            <p className="text-sm text-gray-600">
+            <h1 className="text-xl sm:text-2xl text-gray-900 mb-1 sm:mb-2">Assessment Management</h1>
+            <p className="text-xs sm:text-sm text-gray-600">
               Create and manage skill assessments for candidates
             </p>
             {/* JD Filter Indicator */}
@@ -907,7 +907,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
             )}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Assessment Quota Badge with color coding - use stats.units_consumed for consistency */}
             {totalUnits > 0 && (
               <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 shadow-sm ${
@@ -972,14 +972,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 }}
                 disabled={!canCreateAssessment || (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0)}
                 title={!canCreateAssessment ? 'You do not have permission to create assessments' : (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 ? 'No assessment units available' : '')}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-lg transition-colors shadow-sm ${
+                className={`flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg transition-colors shadow-sm text-sm sm:text-base ${
                   !canCreateAssessment || (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0)
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
                     : 'bg-gray-800 text-white hover:bg-gray-900'
                 }`}
               >
-                <Sparkles className="w-5 h-5" />
-                Create Assessment
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Create Assessment</span>
+                <span className="sm:hidden">Create</span>
               </button>
             )}
           </div>
@@ -987,8 +988,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {/* Low Quota Warning Banner */}
         {!isUnlimited && availableUnits !== null && availableUnits > 0 && availableUnits <= 3 && (
-          <div className="mb-6 bg-gray-100 border-2 border-gray-300 rounded-lg p-4">
-            <div className="flex items-start gap-3">
+          <div className="mb-4 sm:mb-6 bg-gray-100 border-2 border-gray-300 rounded-lg p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-5 h-5 text-gray-700" />
               </div>
@@ -1011,8 +1012,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {/* Quota Exhausted Banner — only show when units were actually consumed */}
         {!isUnlimited && availableUnits !== null && availableUnits <= 0 && stats.units_consumed > 0 && (
-          <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-lg p-4">
-            <div className="flex items-start gap-3">
+          <div className="mb-4 sm:mb-6 bg-red-50 border-2 border-red-300 rounded-lg p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-200 flex items-center justify-center flex-shrink-0">
                 <Lock className="w-5 h-5 text-red-700" />
               </div>
@@ -1034,7 +1035,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         )}
 
         {/* AI-Powered Assessments Banner */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0">
               <Zap className="w-5 h-5 text-gray-700" />
@@ -1049,7 +1050,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         </div>
 
         {/* Stats Cards - Two Rows */}
-        <div className="space-y-4 mb-6">
+        <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
           {/* Row 1: Historical Metrics (Total Created, Total Deleted, Units Used) - HIDDEN */}
           {/* <div className="grid grid-cols-3 gap-4">
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
@@ -1091,7 +1092,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div> */}
 
           {/* Row 2: Current State Metrics (Total Assessments, Active, Candidates Tested) */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-6 h-6 rounded-lg bg-gray-100 flex items-center justify-center">
@@ -1132,22 +1133,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {/* Tabs */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-          <div className="border-b border-gray-200 px-6">
-            <div className="flex items-center justify-between">
-              <div className="flex gap-6">
+          <div className="border-b border-gray-200 px-3 sm:px-6">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex gap-3 sm:gap-6 overflow-x-auto scrollbar-hide">
                 <button
                   onClick={() => setActiveTab('all')}
-                  className={`py-4 text-sm border-b-2 transition-colors ${
+                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'all'
                       ? 'border-gray-800 text-gray-800'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  All Assessments
+                  <span className="hidden sm:inline">All Assessments</span>
+                  <span className="sm:hidden">All</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('active')}
-                  className={`py-4 text-sm border-b-2 transition-colors ${
+                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'active'
                       ? 'border-gray-800 text-gray-800'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -1157,7 +1159,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
                 <button
                   onClick={() => setActiveTab('draft')}
-                  className={`py-4 text-sm border-b-2 transition-colors ${
+                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'draft'
                       ? 'border-gray-800 text-gray-800'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -1167,7 +1169,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
                 <button
                   onClick={() => setActiveTab('completed')}
-                  className={`py-4 text-sm border-b-2 transition-colors ${
+                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'completed'
                       ? 'border-gray-800 text-gray-800'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -1179,31 +1181,33 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <>
                     <button
                       onClick={() => setActiveTab('audit')}
-                      className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
+                      className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                         activeTab === 'audit'
                           ? 'border-gray-800 text-gray-800'
                           : 'border-transparent text-gray-600 hover:text-gray-900'
                       }`}
                     >
-                      <Activity className="w-4 h-4" />
-                      Activity Logs
+                      <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Activity Logs</span>
+                      <span className="sm:hidden">Activity</span>
                     </button>
                     <button
                       onClick={() => setActiveTab('consent')}
-                      className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
+                      className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                         activeTab === 'consent'
                           ? 'border-gray-800 text-gray-800'
                           : 'border-transparent text-gray-600 hover:text-gray-900'
                       }`}
                     >
-                      <FileCheck className="w-4 h-4" />
-                      Consent Logs
+                      <FileCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Consent Logs</span>
+                      <span className="sm:hidden">Consent</span>
                     </button>
                   </>
                 )}
                 <button
                   onClick={() => setActiveTab('archived')}
-                  className={`py-4 text-sm border-b-2 transition-colors ${
+                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'archived'
                       ? 'border-gray-800 text-gray-800'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -1213,13 +1217,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
                 <button
                   onClick={() => setActiveTab('settings')}
-                  className={`py-4 text-sm border-b-2 transition-colors flex items-center gap-1.5 ${
+                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
                     activeTab === 'settings'
                       ? 'border-gray-800 text-gray-800'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  <Shield className="w-4 h-4" />
+                  <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Settings
                 </button>
               </div>
@@ -1252,7 +1256,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
 
           {/* Assessment List */}
-          <div className="p-6">
+          <div className="p-3 sm:p-6">
             {activeTab === 'audit' ? (
               /* Activity Logs Tab */
               <AssessmentAuditTrail />
@@ -1651,9 +1655,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     {/* Individual Security Features */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
                       <h3 className="text-sm font-medium text-gray-900 mb-4">Security Features</h3>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         {[
                           { key: 'webcam_monitoring', name: 'Webcam Monitoring', description: 'Record and analyze candidate video during assessment', icon: Video },
                           { key: 'screen_recording', name: 'Screen Recording', description: 'Capture screen activity throughout the test', icon: Monitor },
@@ -1695,9 +1699,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     {/* Threshold Settings */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
                       <h3 className="text-sm font-medium text-gray-900 mb-4">Threshold Settings</h3>
-                      <div className="grid grid-cols-3 gap-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                         <div>
                           <label className="block text-xs text-gray-600 mb-2">Max Tab Switches Before Warning</label>
                           <input
@@ -1738,7 +1742,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     {/* Recent Proctoring Events */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-6">
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
                       <div className="flex items-center justify-between mb-4">
                         <h3 className="text-sm font-medium text-gray-900">Recent Proctoring Events</h3>
                         <span className="text-xs text-gray-500">{proctoringEventsTotal} total events</span>
@@ -1831,7 +1835,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
             ) : viewMode === 'grid' ? (
               /* Grid View */
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {filteredAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
@@ -1847,7 +1851,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         router.push(`/recruitment/assessments/${assessment.id}`);
                       }
                     }}
-                    className="p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
+                    className="p-4 sm:p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
                     {/* Grid Card Header */}
                     <div className="flex items-start justify-between mb-3">
@@ -2116,7 +2120,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
             ) : (
               /* List View */
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {filteredAssessments.map((assessment) => (
                   <div
                     key={assessment.id}
@@ -2132,11 +2136,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         router.push(`/recruitment/assessments/${assessment.id}`);
                       }
                     }}
-                    className="p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
+                    className="p-4 sm:p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
                       {/* Left Side - Icon + Info */}
-                      <div className="flex items-center gap-4 flex-1">
+                      <div className="flex items-center gap-3 sm:gap-4 flex-1">
                         <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
                           <FileText className="w-5 h-5 text-gray-700" />
                         </div>
@@ -2195,7 +2199,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
 
                       {/* Right Side - Actions + Status + Menu */}
-                      <div className="flex items-center gap-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                         {/* Share via Email Button */}
                         {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
                           <button
@@ -2216,7 +2220,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
                           >
                             <Mail className="w-3.5 h-3.5" />
-                            Share via Email
+                            <span className="hidden sm:inline">Share via Email</span>
+                            <span className="sm:hidden">Share</span>
                           </button>
                         )}
 
@@ -2241,7 +2246,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-xs"
                         >
                           <BarChart className="w-3.5 h-3.5" />
-                          View Results ({assessment.candidates})
+                          <span className="hidden sm:inline">View Results ({assessment.candidates})</span>
+                          <span className="sm:hidden">Results</span>
                         </button>
 
                         {/* Status Badge */}
