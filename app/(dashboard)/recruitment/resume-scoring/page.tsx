@@ -564,7 +564,7 @@ export default function ResumeScoringRoute() {
       // Fetch JDs from tenant database - only published JDs for scoring dropdown
       const [jdResponse, resumeResponse, folderResponse] = await Promise.all([
         jdService.list({ status: 'published', page_size: 100, source: 'my-jds' }),
-        resumeService.list({ page_size: 100 }).catch(() => ({ items: [] })),
+        resumeService.list({ page_size: 100, include_archived: true }).catch(() => ({ items: [] })),
         folderService.list().catch(() => []),
       ]);
 
@@ -605,6 +605,8 @@ export default function ResumeScoringRoute() {
         versionCount: r.version_count || 1,
         fileName: r.file_name,
         fileSizeKb: r.file_size_kb,
+        isArchived: r.is_archived || false,
+        archivedAt: r.archived_at,
       }));
 
       // Convert API Folder to component Folder type
