@@ -7,6 +7,7 @@ import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, 
 import { User } from '@/lib/types/tenant';
 import { authService, isTwoFactorRequired, LoginResponse } from '@/lib/services';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 import ForgotPasswordModal from './ForgotPasswordModal';
 
 interface LoginProps {
@@ -134,8 +135,23 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       console.error('Error saving remember me preference:', error);
     }
 
-    // Check if tenant has pending payment - redirect to payment page first
+    // Check if tenant has pending payment - redirect to payment page with encoded params
     if (response.pending_payment && response.pending_payment_redirect) {
+      // Backend sends raw URL like /complete-payment?tenant_id=xxx&plan_id=63
+      // Encode the params so they're not visible in the URL
+      try {
+        const url = new URL(response.pending_payment_redirect, window.location.origin);
+        const rawTenantId = url.searchParams.get('tenant_id');
+        const rawPlanId = url.searchParams.get('plan_id');
+        if (rawTenantId && rawPlanId) {
+          const encodedUrl = `/complete-payment?t=${encodeURIComponent(encodeParam(rawTenantId))}&p=${encodeURIComponent(encodePlanId(rawPlanId))}`;
+          console.log('[LOGIN] Tenant has pending payment, redirecting to encoded URL');
+          router.push(encodedUrl);
+          return;
+        }
+      } catch {
+        // Fallback to raw URL if parsing fails
+      }
       console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
       router.push(response.pending_payment_redirect);
       return;

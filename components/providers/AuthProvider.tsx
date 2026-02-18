@@ -577,7 +577,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     if (!authService.isAuthenticated()) return;
     try {
-      console.log('[AUTH] Refreshing user data...');
+      console.log('[AUTH] refreshUser() called — fetching latest user from API...');
       const apiUserData = await authService.getCurrentUser();
       const userData = mapApiUserToUser(apiUserData);
       // Preserve lastLogin and createdAt from current user if API doesn't return them
