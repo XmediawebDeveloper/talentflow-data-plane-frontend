@@ -236,7 +236,13 @@ export default function ResumeSelectionModal({
 
     if (activeTab === 'my-resumes') {
       if (selectedFolder === 'all') {
-        resumes = allMyResumes;
+        // In "All Resumes" view, hide archived resumes (both flagged and folder-based)
+        const archivedFolder = folders.find(f => f.name?.toLowerCase().includes('archived'));
+        resumes = allMyResumes.filter(r => {
+          if (r.isArchived === true) return false;
+          if (archivedFolder && r.folderId === archivedFolder.id) return false;
+          return true;
+        });
       } else {
         // Check if selected folder is the root folder
         const selectedFolderData = folders.find(f => f.id === selectedFolder);
