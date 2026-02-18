@@ -206,7 +206,7 @@ function DraggableCardResumeRow({
   return (
     <div
       ref={preview as unknown as React.Ref<HTMLDivElement>}
-      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center ${
+      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center min-w-[1200px] ${
         !isLast ? 'border-b border-gray-100' : ''
       } ${selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''} ${isDragging ? 'opacity-50' : ''}`}
       onClick={() => onViewDetails(resume)}
@@ -2222,7 +2222,7 @@ export default function MyResumesPage() {
               onWidthChange={setFolderTreeWidth}
             />
 
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
               {/* Breadcrumb Navigation for List View */}
               {selectedFolder && selectedFolder !== 'all' && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-sm">

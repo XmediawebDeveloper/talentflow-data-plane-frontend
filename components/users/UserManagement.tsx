@@ -803,7 +803,7 @@ export default function UserManagement() {
     }
   }, [allPermissions]);
 
-  const loadAllPermissions = async () => {
+  const loadAllPermissions = async (): Promise<Permission[]> => {
     console.log('[LOAD PERMISSIONS] Starting to load permissions...');
     try {
       const data = await rbacService.getPermissions();
@@ -814,8 +814,10 @@ export default function UserManagement() {
       }
       setAllPermissions(data.permissions);
       console.log('[LOAD PERMISSIONS] ✓ allPermissions state updated successfully');
+      return data.permissions;
     } catch (error) {
       console.error('[LOAD PERMISSIONS] ✗ Failed to load permissions:', error);
+      return [];
     }
   };
 
@@ -1411,6 +1413,10 @@ export default function UserManagement() {
     try {
       const freshUserData = await userService.getUser(user.id);
 
+      // Ensure permissions are loaded before mapping — handles race condition when user
+      // opens edit modal before loadAllPermissions() has finished on mount.
+      const permissionsForMapping = allPermissions.length > 0 ? allPermissions : await loadAllPermissions();
+
       // Use permission_ids directly from backend response
       const currentPermissionIds = new Set<number>();
 
@@ -1423,9 +1429,9 @@ export default function UserManagement() {
       } else {
         // Fallback: Map user's current permissions (boolean fields) to permission IDs if permission_ids not available
         console.log('[EDIT USER] permission_ids not available, falling back to boolean mapping');
-        console.log('[EDIT USER] allPermissions array length:', allPermissions.length);
+        console.log('[EDIT USER] permissionsForMapping array length:', permissionsForMapping.length);
         console.log('[EDIT USER] freshUserData.permissions:', freshUserData.permissions);
-        allPermissions.forEach(perm => {
+        permissionsForMapping.forEach(perm => {
         // Map permission code to user's boolean permission fields
         // This requires checking various permission patterns
         let hasPermission = false;
@@ -1521,7 +1527,7 @@ export default function UserManagement() {
       // Also initialize permission codes based on permission IDs
       const currentPermissionCodes = new Set<string>();
       currentPermissionIds.forEach(id => {
-        const perm = allPermissions.find(p => p.id === id);
+        const perm = permissionsForMapping.find(p => p.id === id);
         if (perm) {
           currentPermissionCodes.add(perm.code);
         }
