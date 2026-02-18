@@ -1552,7 +1552,8 @@ export default function UserManagement() {
     setEditSelectedRoleId(null);
     setEditSelectedPermissionIds(new Set());
     setEditOriginalPermissionIds(new Set());
-    setEditSelectedPermissionCodes(new Set()); // Reset permission codes
+    setEditSelectedPermissionCodes(new Set());
+    setEditOriginalPermissionCodes(new Set()); // ⚠️ FIX: was missing — stale original codes caused incorrect permissionsChanged detection
     setEditOriginalRoleId(null);
     setEditEmailUsername('');
   };
@@ -1657,7 +1658,8 @@ export default function UserManagement() {
     }
 
     // Verify the user still exists in the list before attempting update
-    const userStillExists = users.some(u => u.id === editingUser.id);
+    // Use toString() comparison to guard against numeric vs string id type mismatch
+    const userStillExists = users.some(u => u.id.toString() === editingUser.id.toString());
     if (!userStillExists) {
       console.error('[UPDATE USER] User no longer exists in the current list!', {
         editingUserId: editingUser.id,
@@ -1800,6 +1802,7 @@ export default function UserManagement() {
             ? {
                 ...user,
                 ...updatedUserData,
+                id: user.id, // ⚠️ PRESERVE string id — API returns numeric id which would cause type mismatch in userStillExists check
                 role: updatedUserData.role, // Explicitly update role
                 name: updatedUserData.name,
                 email: updatedUserData.email,
