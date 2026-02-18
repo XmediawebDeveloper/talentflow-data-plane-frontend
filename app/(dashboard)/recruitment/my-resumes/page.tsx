@@ -1154,11 +1154,28 @@ export default function MyResumesPage() {
     }
   };
 
+  // Helper: check if a resume is archived (by flag OR by folder)
+  const isResumeArchived = (resume: Resume): boolean => {
+    if (resume.isArchived === true) return true;
+    const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+    if (archivedFolder && resume.folderId === archivedFolder.id) return true;
+    return false;
+  };
+
   // Handle apply to job
   // Single candidate: show version selector first
   // Multiple candidates: use latest version directly
   const handleApplyToJob = async () => {
     if (selectedResumes.length === 0) return;
+
+    // Check if any selected resumes are archived (by flag or folder)
+    const selectedResumeObjects = resumes.filter(r => selectedResumes.includes(r.id));
+    const archivedCount = selectedResumeObjects.filter(r => isResumeArchived(r)).length;
+
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be applied to any job. Please select active resumes only.`);
+      return;
+    }
 
     if (selectedResumes.length === 1) {
       // Single candidate - show version selector first
@@ -1244,6 +1261,12 @@ export default function MyResumesPage() {
   // Handle apply to job for a single resume (from table action button)
   // This is called from ResumeTable after version is selected there
   const handleSingleResumeApplyToJob = async (resume: Resume) => {
+    // Check if resume is archived (by flag OR by folder)
+    if (isResumeArchived(resume)) {
+      toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
+      return;
+    }
+
     // Resume already has selected version ID from ResumeTable's version selector
     setSingleResumeToApply(resume);
     await fetchPublishedJobs();
@@ -2249,6 +2272,10 @@ export default function MyResumesPage() {
                   highlightQuery={appliedSearchQuery}
                   onArchive={(resumeId) => handleArchiveResumes([resumeId])}
                   disablePagination={true}
+                  isArchivedFolder={
+                    folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
+                  }
+                  archivedFolderId={folders.find(f => f.name === 'Archived Resumes' && !f.parentId)?.id}
                 />
               </div>
               {totalPages > 0 && (
