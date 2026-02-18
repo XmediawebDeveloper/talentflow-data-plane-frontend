@@ -229,6 +229,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assessment</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
@@ -248,6 +249,11 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
 
                   return (
                     <tr key={invitation.id} className="hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                          {invitation.candidate_display_id || '-'}
+                        </span>
+                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-medium text-sm">

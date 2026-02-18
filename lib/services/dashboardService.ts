@@ -68,6 +68,7 @@ export interface DashboardResponse {
   // JD02A: Additional fields
   subscription_units: SubscriptionUnits | null;
   jd_recent_activity: JDActivity[];
+  user_recent_activity: RecentActivity[];  // Current user's own activities
 }
 
 export const dashboardService = {

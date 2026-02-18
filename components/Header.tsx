@@ -9,6 +9,7 @@ import { useQuota } from '@/contexts/QuotaContext';
 import notificationService, { Notification } from '@/lib/services/notificationService';
 import { useRouter } from 'next/navigation';
 import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -24,6 +25,7 @@ interface HeaderProps {
 export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen }: HeaderProps) {
   if (!user) return null;
   const router = useRouter();
+  const { refreshUser } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -143,6 +145,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     token: wsToken,
     onNewNotification: handleNewNotification,
     onCountUpdate: handleCountUpdate,
+    onPermissionsUpdated: refreshUser,
     enabled: !!user && !!wsToken,
   });
 
