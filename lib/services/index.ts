@@ -199,3 +199,19 @@ export type {
   ProctorEvent,
   ProctorEventResponse,
 } from './candidateService';
+
+// AI Interview
+export { aiInterviewService } from './aiInterviewService';
+export type {
+  AIInterviewCreate,
+  AIInterviewUpdate,
+  AIInterviewResponse,
+  AIInterviewListResponse,
+  AIInterviewStatsResponse,
+  SendInviteRequest,
+  ConsentRequest,
+  SystemCheckRequest,
+  CompleteInterviewRequest,
+  AIInterviewSettingsResponse,
+  AIInterviewSettingsUpdate,
+} from './aiInterviewService';

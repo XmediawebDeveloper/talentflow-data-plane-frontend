@@ -14,6 +14,7 @@ const publicRoutes = [
   '/login',
   '/signup',
   '/assessment', // Candidate assessment portal (public)
+  '/ai-interview', // Candidate AI interview portal (public)
 ];
 
 // Define protected dashboard routes (authentication required)
