@@ -320,7 +320,7 @@ export default function ResumeTable({
     <div className="flex-1">
       {/* FIX-008: Desktop Table View - hidden on mobile */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-[1100px]">
         <thead className="bg-gray-50 sticky top-0">
           <tr>
             {/* Drag handle column */}
