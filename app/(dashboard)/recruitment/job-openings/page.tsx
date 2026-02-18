@@ -295,8 +295,8 @@ export default function JobOpeningsPage() {
       await jdService.delete(job.id);
       setJobs(prev => prev.filter(j => j.id !== job.id));
       toast.success(`"${job.title}" has been deleted`);
-    } catch (error) {
-      toast.error('Failed to delete job');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete job');
     }
   };
 

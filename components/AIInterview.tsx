@@ -4,8 +4,12 @@ import { Video, Calendar, Users, CheckCircle, Play, MoreVertical, Settings, Tren
 import { useState } from 'react';
 import { recordAIInterview } from '@/lib/services/usageTrackingService';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 export default function AIInterview() {
+  const { user, isTenantAdmin } = useAuth();
+  const canRunAiInterviews = isTenantAdmin || (user?.permissions?.canRunAiInterviews ?? false);
+
   const [activeTab, setActiveTab] = useState<'scheduled' | 'completed' | 'settings'>('scheduled');
 
   // Handler for scheduling an interview - tracks usage
@@ -86,13 +90,15 @@ export default function AIInterview() {
               Conduct automated AI-powered interviews with candidates
             </p>
           </div>
-          <button
-            onClick={handleScheduleInterview}
-            className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-md hover:bg-gray-900 transition-colors"
-          >
-            <Calendar className="w-5 h-5" />
-            Schedule Interview
-          </button>
+          {canRunAiInterviews && (
+            <button
+              onClick={handleScheduleInterview}
+              className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-md hover:bg-gray-900 transition-colors"
+            >
+              <Calendar className="w-5 h-5" />
+              Schedule Interview
+            </button>
+          )}
         </div>
 
         {/* Stats Cards */}
@@ -226,7 +232,7 @@ export default function AIInterview() {
                           {interview.status}
                         </span>
                       </div>
-                      {interview.status === 'Scheduled' && (
+                      {interview.status === 'Scheduled' && canRunAiInterviews && (
                         <button className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors">
                           <Play className="w-4 h-4" />
                           Start

@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
@@ -41,7 +41,7 @@ export default function AssessmentDetailsView({
 }: AssessmentDetailsViewProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
-  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'info'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -325,6 +325,16 @@ export default function AssessmentDetailsView({
               }`}
             >
               Version History
+            </button>
+            <button
+              onClick={() => setActiveTab('info')}
+              className={`py-4 text-sm border-b-2 transition-colors ${
+                activeTab === 'info'
+                  ? 'border-gray-800 text-gray-800'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Assessment Info
             </button>
           </div>
         </div>
@@ -1235,6 +1245,181 @@ export default function AssessmentDetailsView({
             )}
           </div>
         )}
+      {/* Assessment Info Tab */}
+      {activeTab === 'info' && (() => {
+        const complexityLabel = (val: string | null | undefined) => {
+          const map: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', expert: 'Expert' };
+          return val ? (map[val] || val) : null;
+        };
+        const complexityColor = (val: string | null | undefined) => {
+          const map: Record<string, string> = {
+            low: 'bg-green-100 text-green-700 border-green-200',
+            medium: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+            high: 'bg-orange-100 text-orange-700 border-orange-200',
+            expert: 'bg-red-100 text-red-700 border-red-200',
+          };
+          return val ? (map[val] || 'bg-gray-100 text-gray-700 border-gray-200') : 'bg-gray-100 text-gray-700 border-gray-200';
+        };
+        const expLabel = (val: string | null | undefined) => {
+          const map: Record<string, string> = {
+            junior: 'Junior', mid: 'Mid-Level', senior: 'Senior', lead: 'Lead', expert: 'Expert',
+          };
+          return val ? (map[val] || val) : null;
+        };
+        const expColor = (val: string | null | undefined) => {
+          const map: Record<string, string> = {
+            junior: 'bg-blue-100 text-blue-700 border-blue-200',
+            mid: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+            senior: 'bg-purple-100 text-purple-700 border-purple-200',
+            lead: 'bg-pink-100 text-pink-700 border-pink-200',
+            expert: 'bg-red-100 text-red-700 border-red-200',
+          };
+          return val ? (map[val] || 'bg-gray-100 text-gray-700 border-gray-200') : 'bg-gray-100 text-gray-700 border-gray-200';
+        };
+
+        const skillDepth: any[] = assessment.jd_skill_depth || [];
+        const codingLanguages: string[] = assessment.coding_languages || [];
+        const hasData = assessment.jd_complexity || assessment.jd_experience_level || assessment.jd_primary_domain || skillDepth.length > 0 || codingLanguages.length > 0;
+
+        return (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center gap-2 mb-1">
+                <Info className="w-5 h-5 text-gray-600" />
+                <h3 className="text-base font-medium text-gray-900">Assessment Info</h3>
+              </div>
+              <p className="text-sm text-gray-600">Metadata extracted from the job description used to generate this assessment</p>
+            </div>
+
+            {!hasData ? (
+              <div className="px-6 py-12 text-center">
+                <Info className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-600 mb-1">No metadata available</p>
+                <p className="text-sm text-gray-500">Assessment info will appear once the JD analysis is complete</p>
+              </div>
+            ) : (
+              <div className="p-6 space-y-6">
+                {/* Key Metadata Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Job Complexity Level */}
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-gray-100 rounded-lg">
+                        <Layers className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Job Complexity</span>
+                    </div>
+                    {assessment.jd_complexity ? (
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${complexityColor(assessment.jd_complexity)}`}>
+                        {complexityLabel(assessment.jd_complexity)}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">Not available</span>
+                    )}
+                  </div>
+
+                  {/* Experience Level */}
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-gray-100 rounded-lg">
+                        <TrendingUp className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
+                    </div>
+                    {assessment.jd_experience_level ? (
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${expColor(assessment.jd_experience_level)}`}>
+                        {expLabel(assessment.jd_experience_level)}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">Not available</span>
+                    )}
+                  </div>
+
+                  {/* Primary Domain */}
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-gray-100 rounded-lg">
+                        <Globe className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Primary Domain</span>
+                    </div>
+                    {assessment.jd_primary_domain ? (
+                      <span className="text-sm font-medium text-gray-900">{assessment.jd_primary_domain}</span>
+                    ) : (
+                      <span className="text-sm text-gray-400">Not available</span>
+                    )}
+                  </div>
+
+                  {/* Coding Requirement */}
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-gray-100 rounded-lg">
+                        <Code className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Coding Requirement</span>
+                    </div>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${assessment.coding_enabled ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                      {assessment.coding_enabled ? 'Required' : 'Not Required'}
+                    </span>
+                  </div>
+
+                  {/* Eligible Programming Languages */}
+                  <div className="rounded-lg border border-gray-200 p-4 sm:col-span-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-gray-100 rounded-lg">
+                        <Zap className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Eligible Programming Languages</span>
+                    </div>
+                    {codingLanguages.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {codingLanguages.map((lang, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200"
+                          >
+                            {lang}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">{assessment.coding_enabled ? 'No languages specified' : 'N/A — coding not required'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Skill Depth */}
+                {skillDepth.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Star className="w-4 h-4 text-gray-600" />
+                      <h4 className="text-sm font-medium text-gray-900">Skill Depth</h4>
+                      <span className="text-xs text-gray-500">(Must-have skills extracted from JD)</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {skillDepth.map((skill: any, idx: number) => {
+                        const skillName = typeof skill === 'string' ? skill : skill?.name || skill?.skill || JSON.stringify(skill);
+                        const level = typeof skill === 'object' ? (skill?.level || skill?.depth) : null;
+                        return (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-50 text-gray-800 border border-gray-200"
+                          >
+                            {skillName}
+                            {level && (
+                              <span className="text-xs text-gray-500 font-normal">· {level}</span>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       </div>
     </div>
   );

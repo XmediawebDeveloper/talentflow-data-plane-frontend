@@ -73,18 +73,50 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       avatarUrl: response.user.avatar_url,
       isActive: response.user.is_active,
       permissions: {
+        // Job Descriptions - Granular CRUD
+        canReadJD: response.user.permissions.can_view_jd,
         canCreateJD: response.user.permissions.can_create_jd,
+        canUpdateJD: response.user.permissions.can_update_jd,
+        canDeleteJD: response.user.permissions.can_delete_jd,
         canManageJD: response.user.permissions.can_manage_jd,
-        canUploadResumes: response.user.permissions.can_upload_resumes,
+        // Resumes - Granular CRUD
         canViewResumes: response.user.permissions.can_view_resumes,
+        canUploadResumes: response.user.permissions.can_upload_resumes,
+        canUpdateResumes: response.user.permissions.can_update_resumes,
+        canDeleteResumes: response.user.permissions.can_delete_resumes,
+        // Resume Database - Granular CRUD
         canAccessInternalDB: response.user.permissions.can_access_internal_db,
+        canViewInternalDB: response.user.permissions.can_view_internal_db,
+        // Assessments - Granular CRUD
+        canViewAssessments: response.user.permissions.can_view_assessments,
         canCreateAssessments: response.user.permissions.can_create_assessments,
+        canUpdateAssessments: response.user.permissions.can_update_assessments,
+        canDeleteAssessments: response.user.permissions.can_delete_assessments,
+        // Analytics & Reports
         canViewAnalytics: response.user.permissions.can_view_analytics,
+        // Settings & Admin
         canManageSettings: response.user.permissions.can_manage_settings,
         canManageUsers: response.user.permissions.can_manage_users,
+        // Billing permissions
+        canViewBilling: response.user.permissions.can_view_billing,
+        canViewInvoices: response.user.permissions.can_view_invoices,
+        canViewUsage: response.user.permissions.can_view_usage,
+        // Feature permissions
+        canViewScoring: response.user.permissions.can_view_scoring,
+        canRunScoring: response.user.permissions.can_run_scoring,
+        canRunAiInterviews: response.user.permissions.can_run_ai_interviews,
+        canViewAiMatch: response.user.permissions.can_view_ai_match,
+        canRunAiMatch: response.user.permissions.can_run_ai_match,
+        canBulkOperations: response.user.permissions.can_bulk_operations,
+        canExport: response.user.permissions.can_export,
+        canApiAccess: response.user.permissions.can_api_access,
       },
       lastLogin: response.user.last_login,
       createdAt: response.user.created_at,
+      // Feature flags and tenant status
+      featureFlags: response.user.feature_flags,
+      enabledFeatures: response.user.enabled_features,
+      tenantStatus: response.user.tenant_status,
     };
 
     // Pass tenant name from login response

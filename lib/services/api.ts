@@ -500,6 +500,8 @@ export const handleApiError = (error: unknown): never => {
         message = detail.message || 'OpenAI API quota exceeded. Please try again later or contact support.';
       } else if (detail.message) {
         message = detail.message;
+      } else if (detail.error) {
+        message = detail.error;
       } else {
         message = error.message;
       }
