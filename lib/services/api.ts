@@ -5,6 +5,7 @@
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import Cookies from 'js-cookie';
+import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -399,7 +400,9 @@ api.interceptors.response.use(
         // Redirect to payment completion page (only if not already on that page)
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/complete-payment')) {
           const { tenant_id, plan_id } = detail.detail;
-          window.location.href = `/complete-payment?tenant_id=${tenant_id}&plan_id=${plan_id}`;
+          const t = encodeParam(tenant_id);
+          const p = encodePlanId(plan_id);
+          window.location.href = `/complete-payment?t=${encodeURIComponent(t)}&p=${encodeURIComponent(p)}`;
         }
         return Promise.reject(error);
       }
