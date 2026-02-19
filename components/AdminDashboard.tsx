@@ -258,6 +258,7 @@ export default function AdminDashboard({
       )}
 
       {/* Stats Cards */}
+    
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {/* Resumes Card - Clickable with navigation links */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition-all">
@@ -380,7 +381,7 @@ export default function AdminDashboard({
             {/* Resume Upload Units */}
             {subscriptionUnits.RU && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
+                <div className="block sm:flex sm:items-center sm:gap-3">
                   <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                     <Upload className="w-5 h-5 text-green-600" />
                   </div>
@@ -410,7 +411,7 @@ export default function AdminDashboard({
             {/* Resume Scoring Units */}
             {subscriptionUnits.RS && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
+                <div className="block sm:flex sm:items-center sm:gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                     <Zap className="w-5 h-5 text-blue-600" />
                   </div>
@@ -440,7 +441,7 @@ export default function AdminDashboard({
             {/* Assessment Units */}
             {subscriptionUnits.AS && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
+                <div className="block sm:flex sm:items-center sm:gap-3">
                   <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
                     <ClipboardCheck className="w-5 h-5 text-orange-600" />
                   </div>
@@ -470,7 +471,7 @@ export default function AdminDashboard({
             {/* AI Interview Units */}
             {subscriptionUnits.AIU && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
+                <div className="block sm:flex sm:items-center sm:gap-3">
                   <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                     <Video className="w-5 h-5 text-purple-600" />
                   </div>
@@ -500,7 +501,7 @@ export default function AdminDashboard({
             {/* Max Users */}
             {subscriptionUnits.max_seats && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
+                <div className="block sm:flex sm:items-center sm:gap-3">
                   <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
                     <UserCheck className="w-5 h-5 text-teal-600" />
                   </div>

@@ -160,7 +160,7 @@ export default function Settings() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
           <p className="text-gray-600">Loading settings...</p>
@@ -170,24 +170,24 @@ export default function Settings() {
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
-            <User className="w-7 h-7 text-white" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
+            <User className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-gray-900">Recruiter Settings</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Recruiter Settings</h1>
             <p className="text-sm text-gray-600">Manage your personal preferences and workflow settings</p>
           </div>
         </div>
       </div>
 
       {/* Tabs + Content Layout */}
-      <div className="flex gap-6">
+      <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
         {/* Left Sidebar - Tabs */}
-        <div className="w-64 flex-shrink-0">
+        <div className="w-full lg:w-64 flex-shrink-0">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 sticky top-8">
             <nav className="space-y-1">
               {tabs.map((tab) => {

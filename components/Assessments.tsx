@@ -1134,8 +1134,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         {/* Tabs */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           <div className="border-b border-gray-200 px-3 sm:px-6">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex gap-3 sm:gap-6 overflow-x-auto scrollbar-hide">
+            <div className="relative">
+              <div className="flex gap-3 sm:gap-5 overflow-x-auto pr-16 sm:pr-20 scrollbar-hide">
                 <button
                   onClick={() => setActiveTab('all')}
                   className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
@@ -1227,8 +1227,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   Settings
                 </button>
               </div>
-              {/* Grid/List View Toggle */}
-              <div className="flex items-center gap-1 border border-gray-200 rounded-lg p-1">
+              {/* Grid/List View Toggle - positioned absolute right so tabs get full scroll width */}
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1 border border-gray-200 rounded-lg p-1 bg-white">
                 <button
                   onClick={() => setViewMode('grid')}
                   className={`p-1.5 rounded ${
@@ -2138,9 +2138,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     }}
                     className="p-4 sm:p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-0">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 lg:gap-4">
                       {/* Left Side - Icon + Info */}
-                      <div className="flex items-center gap-3 sm:gap-4 flex-1">
+                      <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                         <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
                           <FileText className="w-5 h-5 text-gray-700" />
                         </div>
@@ -2199,87 +2199,91 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
 
                       {/* Right Side - Actions + Status + Menu */}
-                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                        {/* Share via Email Button */}
-                        {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
-                          <button
-                            onClick={() => {
-                              if (assessment.status === 'Draft') {
-                                toast.warning('Please publish the assessment before sharing');
-                                return;
-                              }
-                              setSelectedAssessmentForShare(assessment);
-                              setShowShareModal(true);
-                            }}
-                            disabled={assessment.status === 'Draft'}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs ${
-                              assessment.status === 'Draft'
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : 'bg-gray-700 text-white hover:bg-gray-800'
-                            }`}
-                            title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Share via Email</span>
-                            <span className="sm:hidden">Share</span>
-                          </button>
-                        )}
+                      <div className="flex items-center gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* Share via Email Button */}
+                          {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
+                            <button
+                              onClick={() => {
+                                if (assessment.status === 'Draft') {
+                                  toast.warning('Please publish the assessment before sharing');
+                                  return;
+                                }
+                                setSelectedAssessmentForShare(assessment);
+                                setShowShareModal(true);
+                              }}
+                              disabled={assessment.status === 'Draft'}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs whitespace-nowrap ${
+                                assessment.status === 'Draft'
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : 'bg-gray-700 text-white hover:bg-gray-800'
+                              }`}
+                              title={assessment.status === 'Draft' ? 'Publish assessment first to share' : 'Share via email'}
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                              Share
+                            </button>
+                          )}
 
-                        {/* Track Invites Button */}
-                        {assessment.candidates > 0 && (
-                          <button
-                            onClick={() => handleTrackInvites(assessment)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs bg-gray-700 text-white hover:bg-gray-800"
-                            title="Track invitation status"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            Track Invites ({assessment.candidates})
-                          </button>
-                        )}
+                          {/* Track Invites Button */}
+                          {assessment.candidates > 0 && (
+                            <button
+                              onClick={() => handleTrackInvites(assessment)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs whitespace-nowrap bg-gray-700 text-white hover:bg-gray-800"
+                              title="Track invitation status"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                              <span className="hidden xl:inline">Track Invites ({assessment.candidates})</span>
+                              <span className="xl:hidden">Track ({assessment.candidates})</span>
+                            </button>
+                          )}
 
-                        {/* View Results Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/recruitment/assessments/${assessment.id}/results`);
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-xs"
-                        >
-                          <BarChart className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">View Results ({assessment.candidates})</span>
-                          <span className="sm:hidden">Results</span>
-                        </button>
-
-                        {/* Status Badge */}
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-xs ${
-                            assessment.status === 'Active'
-                              ? 'bg-gray-700 text-white'
-                              : assessment.status === 'Draft'
-                              ? 'bg-gray-200 text-gray-600'
-                              : assessment.status === 'Archived'
-                              ? 'bg-gray-400 text-white'
-                              : assessment.status === 'Completed'
-                              ? 'bg-gray-600 text-white'
-                              : assessment.status === 'Paused'
-                              ? 'bg-gray-300 text-gray-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}
-                        >
-                          {assessment.status}
-                        </span>
-
-                        {/* Three Dots Menu */}
-                        <div className="relative">
+                          {/* View Results Button */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setOpenMenuId(openMenuId === assessment.id ? null : assessment.id);
+                              router.push(`/recruitment/assessments/${assessment.id}/results`);
                             }}
-                            className="p-1.5 text-gray-500 hover:bg-gray-100 rounded transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-xs whitespace-nowrap"
                           >
-                            <MoreVertical className="w-4 h-4" />
+                            <BarChart className="w-3.5 h-3.5" />
+                            Results
                           </button>
+                        </div>
+
+                        {/* Status Badge + Three Dots - always grouped together */}
+                        <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+                          {/* Status Badge */}
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs whitespace-nowrap ${
+                              assessment.status === 'Active'
+                                ? 'bg-gray-700 text-white'
+                                : assessment.status === 'Draft'
+                                ? 'bg-gray-200 text-gray-600'
+                                : assessment.status === 'Archived'
+                                ? 'bg-gray-400 text-white'
+                                : assessment.status === 'Completed'
+                                ? 'bg-gray-600 text-white'
+                                : assessment.status === 'Paused'
+                                ? 'bg-gray-300 text-gray-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {assessment.status}
+                          </span>
+
+                          {/* Three Dots Menu */}
+                          <div className="relative">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuId(openMenuId === assessment.id ? null : assessment.id);
+                              }}
+                              className="p-1.5 text-gray-500 hover:bg-gray-100 rounded transition-colors"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
 
                           {/* Dropdown Menu */}
                           {openMenuId === assessment.id && (
@@ -2451,6 +2455,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </>
                           )}
+                        </div>
                         </div>
                       </div>
                     </div>

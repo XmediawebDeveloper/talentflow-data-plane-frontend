@@ -1476,7 +1476,7 @@ export default function AITalentMatchPage({
       <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-blue-50 to-white">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="block sm:flex sm:items-center sm:gap-4 mb-4">
             {onBack && (
               <button
                 onClick={onBack}

@@ -253,15 +253,15 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
   };
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
             <Icon className="w-5 h-5 text-gray-800" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">{config.title}</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{config.title}</h1>
             <p className="text-sm text-gray-500">{config.description}</p>
           </div>
         </div>
@@ -275,7 +275,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden overflow-x-auto">
         {loading ? (
           <div className="p-8 text-center">
             <div className="animate-spin w-8 h-8 border-2 border-gray-800 border-t-transparent rounded-full mx-auto mb-2"></div>

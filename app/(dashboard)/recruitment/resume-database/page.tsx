@@ -815,11 +815,11 @@ export default function ResumeDatabasePage() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 p-8 bg-gray-50">
-      <div className="flex items-center justify-between mb-6">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-gray-50">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-semibold text-gray-900">Internal Resume Database</h1>
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Internal Resume Database</h1>
             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
               {resumes.length.toLocaleString()} Resumes
             </span>

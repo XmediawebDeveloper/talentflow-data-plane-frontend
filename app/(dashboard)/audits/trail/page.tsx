@@ -576,34 +576,34 @@ export default function AuditTrailPage() {
   });
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gray-50/50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50/50">
       <div>
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300">
-                <ScrollText className="w-7 h-7 text-white" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300">
+                <ScrollText className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Audit Trail</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Audit Trail</h1>
                 <p className="text-sm text-gray-500 mt-0.5">Track all system activities and changes</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 onClick={() => { fetchAuditLogs(); fetchStats(); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
               >
                 <RefreshCw className="w-4 h-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">Refresh</span>
+                <span className="text-sm font-medium text-gray-700 hidden sm:inline">Refresh</span>
               </button>
               <button
                 onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300"
               >
                 <Download className="w-4 h-4" />
-                <span className="text-sm font-medium">Export CSV</span>
+                <span className="text-sm font-medium hidden sm:inline">Export CSV</span>
               </button>
             </div>
           </div>
