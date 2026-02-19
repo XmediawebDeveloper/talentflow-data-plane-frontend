@@ -1905,8 +1905,16 @@ export default function MyResumesPage() {
               : record
           ));
 
-          // Check if batch is complete
-          if (status.status === 'completed' || status.pending === 0) {
+          // Check if batch is complete.
+          // IMPORTANT: Do NOT stop on status.pending === 0 alone — the backend uses
+          // 'pending' only for queued items. Once a file moves to 'processing',
+          // pending drops to 0 but the file is still running. Stopping here causes
+          // it to freeze at "⚡ Processing..." forever.
+          const hasActiveItems = status.items?.some((item: any) =>
+            item.status === 'pending' || item.status === 'processing'
+          ) ?? false;
+
+          if (status.status === 'completed' || !hasActiveItems) {
             clearInterval(pollInterval);
             pollingIntervalsRef.current.delete(pollInterval); // Remove from tracking
 
@@ -3069,7 +3077,11 @@ export default function MyResumesPage() {
 
                       {/* Overall ETA Banner */}
                       {(() => {
-                        const activeBatches = myResumesHistory.filter(r => r.pending > 0 && r.date);
+                        // Only show for batches that still have genuinely active items
+                        const activeBatches = myResumesHistory.filter(r =>
+                          r.pending > 0 && r.date &&
+                          r.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing')
+                        );
                         if (activeBatches.length === 0) return null;
                         const totalPending = activeBatches.reduce((sum: number, r: any) => sum + r.pending, 0);
                         const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
@@ -3081,9 +3093,10 @@ export default function MyResumesPage() {
                             </div>
                           );
                         }
-                        // Use the earliest active batch start time for overall ETA
+                        // Cap elapsed at 10 minutes so a batch that started hours ago with a
+                        // stuck file doesn't produce an absurd ETA (e.g. "233–433 mins remaining").
                         const earliestStart = Math.min(...activeBatches.map((r: any) => new Date(r.date).getTime()));
-                        const elapsed = Date.now() - earliestStart;
+                        const elapsed = Math.min(Date.now() - earliestStart, 10 * 60 * 1000);
                         const avgTimePerFile = elapsed / totalProcessed;
                         const remainingMs = totalPending * avgTimePerFile;
                         const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
@@ -3220,9 +3233,13 @@ export default function MyResumesPage() {
                                     </div>
                                   </div>
 
-                                  {/* Estimated Time Remaining */}
-                                  {record.pending > 0 && record.date && (() => {
-                                    const elapsed = Date.now() - new Date(record.date).getTime();
+                                  {/* Estimated Time Remaining — only show when items are genuinely active */}
+                                  {record.pending > 0 && record.date &&
+                                   record.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing') &&
+                                   (() => {
+                                    // Cap elapsed at 10 minutes to prevent absurd ETAs when a file
+                                    // is stuck at 'processing' and the batch started hours ago.
+                                    const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
                                     if (processed <= 0 || elapsed <= 0) {
                                       return (
                                         <div className="flex items-center gap-1.5 mb-4 text-xs text-blue-600">
