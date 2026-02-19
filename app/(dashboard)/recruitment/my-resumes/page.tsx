@@ -339,7 +339,7 @@ function DraggableCardResumeRow({
 export default function MyResumesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { user, isTenantAdmin, hasPermission, isLoading: authLoading } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -1154,11 +1154,28 @@ export default function MyResumesPage() {
     }
   };
 
+  // Helper: check if a resume is archived (by flag OR by folder)
+  const isResumeArchived = (resume: Resume): boolean => {
+    if (resume.isArchived === true) return true;
+    const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+    if (archivedFolder && resume.folderId === archivedFolder.id) return true;
+    return false;
+  };
+
   // Handle apply to job
   // Single candidate: show version selector first
   // Multiple candidates: use latest version directly
   const handleApplyToJob = async () => {
     if (selectedResumes.length === 0) return;
+
+    // Check if any selected resumes are archived (by flag or folder)
+    const selectedResumeObjects = resumes.filter(r => selectedResumes.includes(r.id));
+    const archivedCount = selectedResumeObjects.filter(r => isResumeArchived(r)).length;
+
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be applied to any job. Please select active resumes only.`);
+      return;
+    }
 
     if (selectedResumes.length === 1) {
       // Single candidate - show version selector first
@@ -1244,6 +1261,12 @@ export default function MyResumesPage() {
   // Handle apply to job for a single resume (from table action button)
   // This is called from ResumeTable after version is selected there
   const handleSingleResumeApplyToJob = async (resume: Resume) => {
+    // Check if resume is archived (by flag OR by folder)
+    if (isResumeArchived(resume)) {
+      toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
+      return;
+    }
+
     // Resume already has selected version ID from ResumeTable's version selector
     setSingleResumeToApply(resume);
     await fetchPublishedJobs();
@@ -1882,8 +1905,16 @@ export default function MyResumesPage() {
               : record
           ));
 
-          // Check if batch is complete
-          if (status.status === 'completed' || status.pending === 0) {
+          // Check if batch is complete.
+          // IMPORTANT: Do NOT stop on status.pending === 0 alone — the backend uses
+          // 'pending' only for queued items. Once a file moves to 'processing',
+          // pending drops to 0 but the file is still running. Stopping here causes
+          // it to freeze at "⚡ Processing..." forever.
+          const hasActiveItems = status.items?.some((item: any) =>
+            item.status === 'pending' || item.status === 'processing'
+          ) ?? false;
+
+          if (status.status === 'completed' || !hasActiveItems) {
             clearInterval(pollInterval);
             pollingIntervalsRef.current.delete(pollInterval); // Remove from tracking
 
@@ -2082,10 +2113,10 @@ export default function MyResumesPage() {
           </button>
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            disabled={!hasPermission('canUploadResumes')}
-            title={!hasPermission('canUploadResumes') ? 'You do not have permission to upload resumes. Contact your administrator.' : 'Upload Resume'}
+            disabled={!authLoading && !hasPermission('canUploadResumes') && !isTenantAdmin}
+            title={!authLoading && !hasPermission('canUploadResumes') && !isTenantAdmin ? 'You do not have permission to upload resumes. Contact your administrator.' : 'Upload Resume'}
             className={`flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-md transition-colors text-xs sm:text-sm flex-1 sm:flex-initial ${
-              hasPermission('canUploadResumes')
+              authLoading || hasPermission('canUploadResumes') || isTenantAdmin
                 ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
             }`}
@@ -2249,6 +2280,10 @@ export default function MyResumesPage() {
                   highlightQuery={appliedSearchQuery}
                   onArchive={(resumeId) => handleArchiveResumes([resumeId])}
                   disablePagination={true}
+                  isArchivedFolder={
+                    folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
+                  }
+                  archivedFolderId={folders.find(f => f.name === 'Archived Resumes' && !f.parentId)?.id}
                 />
               </div>
               {totalPages > 0 && (
@@ -3108,7 +3143,11 @@ export default function MyResumesPage() {
 
                       {/* Overall ETA Banner */}
                       {(() => {
-                        const activeBatches = myResumesHistory.filter(r => r.pending > 0 && r.date);
+                        // Only show for batches that still have genuinely active items
+                        const activeBatches = myResumesHistory.filter(r =>
+                          r.pending > 0 && r.date &&
+                          r.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing')
+                        );
                         if (activeBatches.length === 0) return null;
                         const totalPending = activeBatches.reduce((sum: number, r: any) => sum + r.pending, 0);
                         const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
@@ -3120,9 +3159,10 @@ export default function MyResumesPage() {
                             </div>
                           );
                         }
-                        // Use the earliest active batch start time for overall ETA
+                        // Cap elapsed at 10 minutes so a batch that started hours ago with a
+                        // stuck file doesn't produce an absurd ETA (e.g. "233–433 mins remaining").
                         const earliestStart = Math.min(...activeBatches.map((r: any) => new Date(r.date).getTime()));
-                        const elapsed = Date.now() - earliestStart;
+                        const elapsed = Math.min(Date.now() - earliestStart, 10 * 60 * 1000);
                         const avgTimePerFile = elapsed / totalProcessed;
                         const remainingMs = totalPending * avgTimePerFile;
                         const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
@@ -3259,9 +3299,13 @@ export default function MyResumesPage() {
                                     </div>
                                   </div>
 
-                                  {/* Estimated Time Remaining */}
-                                  {record.pending > 0 && record.date && (() => {
-                                    const elapsed = Date.now() - new Date(record.date).getTime();
+                                  {/* Estimated Time Remaining — only show when items are genuinely active */}
+                                  {record.pending > 0 && record.date &&
+                                   record.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing') &&
+                                   (() => {
+                                    // Cap elapsed at 10 minutes to prevent absurd ETAs when a file
+                                    // is stuck at 'processing' and the batch started hours ago.
+                                    const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
                                     if (processed <= 0 || elapsed <= 0) {
                                       return (
                                         <div className="flex items-center gap-1.5 mb-4 text-xs text-blue-600">

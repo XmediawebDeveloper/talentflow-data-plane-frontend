@@ -79,6 +79,8 @@ interface ResumeTableProps {
   highlightQuery?: string;
   onArchive?: (resumeId: string) => void;
   disablePagination?: boolean;
+  isArchivedFolder?: boolean;
+  archivedFolderId?: string;
 }
 
 // Helper function to highlight matching text
@@ -126,6 +128,8 @@ export default function ResumeTable({
   highlightQuery,
   onArchive,
   disablePagination = false,
+  isArchivedFolder = false,
+  archivedFolderId,
 }: ResumeTableProps) {
   const router = useRouter();
   // ✅ PERMISSION FIX: Get Resume CRUD permissions
@@ -215,6 +219,17 @@ export default function ResumeTable({
   // For SINGLE candidate: ALWAYS show version popup first, then job selection
   const handleApplyToJob = async (resume: Resume) => {
     console.log('[APPLY] handleApplyToJob called for:', resume.name);
+
+    // Block archived resumes - check isArchived flag, folder prop, or resume's own folderId
+    const isArchived = resume.isArchived === true
+      || isArchivedFolder
+      || (archivedFolderId !== undefined && resume.folderId === archivedFolderId);
+
+    if (isArchived) {
+      toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
+      return;
+    }
+
     // Always fetch versions and show selector for single candidate apply
     setIsLoadingVersions(true);
     try {
@@ -305,7 +320,7 @@ export default function ResumeTable({
     <div className="flex-1">
       {/* FIX-008: Desktop Table View - hidden on mobile */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-[1100px]">
         <thead className="bg-gray-50 sticky top-0">
           <tr>
             {/* Drag handle column */}
@@ -633,8 +648,7 @@ export default function ResumeTable({
                                       setActiveMenu(null);
                                       return;
                                     }
-                                    setSelectedResumeForAction(resume);
-                                    setShowDeleteModal(true);
+                                    onDelete?.(resume.id);
                                     setActiveMenu(null);
                                   }}
                                   disabled={!resumePerms.canDelete}
@@ -1129,49 +1143,6 @@ export default function ResumeTable({
         </div>
       )}
 
-      {/* Delete Resume Modal */}
-      {showDeleteModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full">
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                  <Trash2 className="w-6 h-6 text-red-600" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Delete Resume?</h2>
-                  <p className="text-sm text-gray-500">This action cannot be undone</p>
-                </div>
-              </div>
-              <p className="text-gray-700 mb-6">
-                Are you sure you want to delete <strong>{selectedResumeForAction.name}</strong>'s resume permanently?
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
-                >
-                  No, Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    onDelete?.(selectedResumeForAction.id);
-                    toast.success('Resume deleted successfully');
-                    setShowDeleteModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
-                >
-                  Yes, Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

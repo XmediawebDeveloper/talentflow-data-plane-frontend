@@ -84,22 +84,21 @@ export default function CandidateResultDetails({
           status = 'Pending';
         }
 
-        // Map section scores - Calculate using correct formula
+        // Map section scores - Use raw_score from backend (actual percentage)
         const sections = details.round_scores.map(round => {
-          // ✅ FIXED: Use formula: (total_obtained_marks / total_marks) * 100
-          // Each question is out of 10 points
-          const totalMarks = (round.questions_total || 0) * 10;
-          const obtainedMarks = (round.questions_correct || 0) * 10;
+          // Calculate actual points from question evaluations for this round
+          const roundQuestions = details.question_evaluations.filter(
+            q => q.round_type === round.round_type
+          );
+          const totalMarks = roundQuestions.reduce((sum, q) => sum + (q.points_possible || 10), 0);
+          const obtainedMarks = roundQuestions.reduce((sum, q) => sum + (q.points_earned || 0), 0);
 
-          // Calculate percentage using the correct formula
-          const percentage = totalMarks > 0 ? Math.round((obtainedMarks / totalMarks) * 100) : 0;
-
-          // Score out of 10 for display
-          const score = totalMarks > 0 ? Math.round((obtainedMarks / round.questions_total) * 10) / 10 : 0;
+          // Use raw_score from backend — it's the actual percentage
+          const percentage = Math.round(round.raw_score ?? 0);
 
           return {
             name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
-            score: obtainedMarks, // Total obtained marks
+            score: Math.round(obtainedMarks * 10) / 10, // Total obtained marks
             totalScore: totalMarks, // Total marks possible
             percentage: Math.min(percentage, 100) // Cap at 100%
           };
@@ -784,23 +783,18 @@ export default function CandidateResultDetails({
                           <h3 className="text-xl text-gray-900 capitalize">{round.round_type} Round</h3>
                           <p className="text-sm text-gray-600 mt-1">
                             {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''} •
-                            <span className="ml-1">{round.questions_correct}/{round.questions_total} correct</span>
+                            <span className="ml-1">
+                              {Math.round(questionsForRound.reduce((s, q) => s + (q.points_earned || 0), 0) * 10) / 10}
+                              /{questionsForRound.reduce((s, q) => s + (q.points_possible || 10), 0)} points
+                            </span>
                           </p>
                         </div>
-                        {round.round_type.toLowerCase() !== 'hr' && (
-                          <div className="text-right">
-                            <div className="text-sm text-gray-600 mb-1">Section Score</div>
-                            <div className={`text-3xl ${getScoreColor(Math.min(
-                              round.questions_total > 0 ? Math.round((round.questions_correct / round.questions_total) * 100) : 0,
-                              100
-                            ))}`}>
-                              {Math.min(
-                                round.questions_total > 0 ? Math.round((round.questions_correct / round.questions_total) * 100) : 0,
-                                100
-                              )}%
-                            </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-600 mb-1">Section Score</div>
+                          <div className={`text-3xl ${getScoreColor(Math.round(round.raw_score ?? 0))}`}>
+                            {Math.round(round.raw_score ?? 0)}%
                           </div>
-                        )}
+                        </div>
                       </div>
 
                       {/* Questions */}
