@@ -1258,6 +1258,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-center gap-2">
+                          {candidate.status !== 'Pending' && (
                           <button
                             onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}`)}
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -1266,6 +1267,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <Award className="w-3 h-3" />
                             View Details
                           </button>
+                          )}
                           {/* AS-25: PDF Download Button */}
                           {candidate.status === 'Completed' ? (
                             <button

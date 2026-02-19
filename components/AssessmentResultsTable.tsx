@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2, Trash2, Award, Play } from 'lucide-react';
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 
-// AS-24: localStorage key for column preferences
-const COLUMN_PREFERENCES_KEY = 'assessment_results_column_preferences';
+// AS-24: localStorage key for column preferences (v2 with new columns)
+const COLUMN_PREFERENCES_KEY = 'assessment_results_jd_column_preferences_v2';
 
 interface AssessmentResult {
   id: string;
+  candidateDisplayId?: string;
   candidateName: string;
   email: string;
   phone: string;
@@ -20,6 +23,7 @@ interface AssessmentResult {
   passFail: 'Pass' | 'Fail';
   completedDate: string;
   completionTime: string; // in minutes
+  duration?: string; // formatted duration like "5m 30s"
   aiSummary: string;
   roundScores: {
     roundName: string;
@@ -29,7 +33,12 @@ interface AssessmentResult {
   }[];
   invitedDate: string;
   invitedBy: string;
+  inviteSource?: string;
   status?: string; // completed, in_progress, pending
+  sent_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  created_at?: string;
 }
 
 interface Column {
@@ -42,9 +51,12 @@ interface AssessmentResultsTableProps {
   results: AssessmentResult[];
   jobTitle: string;
   jobId?: string;
+  onViewResultDetail?: (result: AssessmentResult, jobTitle?: string) => void;
 }
 
-export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1' }: AssessmentResultsTableProps) {
+export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail }: AssessmentResultsTableProps) {
+  const router = useRouter();
+  const dialog = useGlobalDialog();
   const [searchTerm, setSearchTerm] = useState('');
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [selectedResults, setSelectedResults] = useState<string[]>([]);
@@ -63,16 +75,20 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
   // AS-24: Default columns configuration (dynamic based on available rounds)
   const defaultColumns: Column[] = [
-    { id: 'candidateName', label: 'Candidate Name', enabled: true },
+    { id: 'cid', label: 'CID', enabled: true },
+    { id: 'candidateName', label: 'Candidate', enabled: true },
     { id: 'email', label: 'Email', enabled: true },
-    { id: 'phone', label: 'Phone', enabled: true },
     { id: 'assessmentName', label: 'Assessment', enabled: true },
-    { id: 'scorePercentage', label: 'Score %', enabled: true },
+    { id: 'phone', label: 'Phone', enabled: true },
+    { id: 'inviteSource', label: 'Invite Source', enabled: true },
     ...(hasTechnicalRound ? [{ id: 'techScore', label: 'Tech Score', enabled: true }] : []),
     ...(hasCodingRound ? [{ id: 'codingScore', label: 'Coding Score', enabled: true }] : []),
-    { id: 'passFail', label: 'Result', enabled: true },
-    { id: 'completedDate', label: 'Completion Date', enabled: true },
-    { id: 'completionTime', label: 'Time Taken', enabled: true },
+    { id: 'status', label: 'Status', enabled: true },
+    { id: 'timeline', label: 'Timeline', enabled: true },
+    { id: 'completed', label: 'Completed', enabled: true },
+    { id: 'duration', label: 'Duration', enabled: true },
+    { id: 'scorePercentage', label: 'Score %', enabled: false },
+    { id: 'passFail', label: 'Result', enabled: false },
     { id: 'invitedBy', label: 'Invited By', enabled: false },
     { id: 'invitedDate', label: 'Invited Date', enabled: false },
   ];
@@ -111,6 +127,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   // AS-25/AS-26: PDF download states
   const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
   const [downloadingBulkPDF, setDownloadingBulkPDF] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const enabledColumns = columns.filter(col => col.enabled);
 
@@ -131,9 +148,73 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
   // Helper: determine display status from result
   const getResultStatus = (result: AssessmentResult): string => {
-    if (result.status === 'completed' || result.completedDate !== 'In Progress') return 'Completed';
-    if (result.status === 'in_progress') return 'In Progress';
+    if (result.status === 'completed' || result.completed_at) return 'Completed';
+    if (result.status === 'in_progress' || result.started_at) return 'In Progress';
+    if (result.status === 'pending') return 'Pending';
+    // Fallback: check completedDate string
+    if (result.completedDate && result.completedDate !== 'In Progress' && result.completedDate !== 'Not started') return 'Completed';
+    if (result.completedDate === 'In Progress') return 'In Progress';
     return 'Pending';
+  };
+
+  // Helper: status badge colors
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'Completed': return 'bg-green-100 text-green-800 border-green-200';
+      case 'In Progress': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'Pending': return 'bg-gray-100 text-gray-800 border-gray-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  // Helper: format timeline date
+  const formatTimelineDate = (dateStr: string | undefined) => {
+    if (!dateStr) return '';
+    const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
+    const date = new Date(dateWithZ);
+    return date.toLocaleString('en-US', {
+      timeZone: 'Asia/Kolkata',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
+  // Handle delete result with timeout
+  const handleDeleteResult = async (result: AssessmentResult) => {
+    if (!result.assessmentId) {
+      toast.error('Assessment ID not found for this result.');
+      return;
+    }
+
+    const confirmed = await dialog.confirm({
+      title: 'Delete Result',
+      message: `Are you sure you want to delete the result for ${result.candidateName}? This action cannot be undone.`,
+      variant: 'error',
+      confirmText: 'Delete',
+    });
+
+    if (!confirmed) return;
+
+    console.log('[DELETE] Starting delete:', { assessmentId: result.assessmentId, resultId: result.id });
+    setIsDeleting(result.id);
+
+    try {
+      await withTimeout(
+        assessmentService.deleteResult(result.assessmentId, result.id),
+        30000,
+        'Delete operation timed out after 30 seconds. Please try again.'
+      );
+      toast.success(`Result for ${result.candidateName} deleted successfully`);
+      window.location.reload();
+    } catch (error: any) {
+      console.error('[DELETE] Failed:', error);
+      toast.error(error?.message || 'Failed to delete result. Please try again.');
+    } finally {
+      setIsDeleting(null);
+    }
   };
 
   // Filter results
@@ -280,26 +361,49 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     }
   };
 
+  // Helper: wrap a promise with a timeout that rejects if not resolved in time
+  const withTimeout = <T,>(promise: Promise<T>, ms: number, errorMsg: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error(errorMsg)), ms);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+  };
+
   // AS-25: Individual PDF download
   const handleDownloadPDF = async (resultId: string) => {
     if (downloadingPDF) return;
 
+    // Find the result to get assessmentId
+    const result = results.find(r => r.id === resultId);
+    const assessmentId = result?.assessmentId || jobId;
+
+    console.log('[PDF] Starting download:', { assessmentId, resultId, hasAssessmentId: !!result?.assessmentId });
+    toast.info('Generating PDF report... Please wait.');
     setDownloadingPDF(resultId);
+
     try {
-      const blob = await assessmentService.exportPDF(resultId);
+      const blob = await withTimeout(
+        assessmentService.exportPDF(assessmentId, resultId),
+        60000,
+        'PDF generation timed out after 60 seconds. The server may be busy. Please try again.'
+      );
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Assessment_Report_${resultId}.pdf`;
+      const safeName = result?.candidateName?.replace(/[^a-zA-Z0-9]/g, '_') || resultId;
+      link.download = `Assessment_Report_${safeName}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Failed to download PDF:', error);
-      toast.error('Failed to download PDF report. Please try again.');
+      console.log('[PDF] Download complete:', safeName);
+      toast.success('PDF downloaded successfully!');
+    } catch (error: any) {
+      console.error('[PDF] Failed to download:', error);
+      toast.error(error?.message || 'Failed to download PDF report. Please try again.');
     } finally {
       setDownloadingPDF(null);
     }
@@ -309,9 +413,13 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const handleDownloadBulkPDFs = async () => {
     if (downloadingBulkPDF || selectedResults.length === 0) return;
 
+    // Get assessmentId from first selected result
+    const firstResult = results.find(r => selectedResults.includes(r.id));
+    const assessmentId = firstResult?.assessmentId || jobId;
+
     setDownloadingBulkPDF(true);
     try {
-      const blob = await assessmentService.exportBulkPDFs(selectedResults);
+      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, selectedResults);
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -619,37 +727,54 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     </td>
 
                     {enabledColumns.map((col) => {
+                      if (col.id === 'cid') {
+                        return (
+                          <td key={col.id} className="py-3 px-4">
+                            <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                              {result.candidateDisplayId || '-'}
+                            </span>
+                          </td>
+                        );
+                      }
                       if (col.id === 'candidateName') {
                         return (
                           <td key={col.id} className="py-3 px-4">
-                            <div className="text-sm text-gray-900">{result.candidateName}</div>
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs">
+                                {(result.candidateName || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <div className="text-sm text-gray-900 font-medium">{result.candidateName}</div>
+                            </div>
                           </td>
                         );
                       }
                       if (col.id === 'email') {
                         return (
                           <td key={col.id} className="py-3 px-4">
-                            <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                              <Mail className="w-3.5 h-3.5" />
-                              {result.email}
-                            </div>
+                            <div className="text-sm text-gray-600">{result.email}</div>
                           </td>
                         );
                       }
                       if (col.id === 'phone') {
                         return (
                           <td key={col.id} className="py-3 px-4">
-                            <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                              <Phone className="w-3.5 h-3.5" />
-                              {result.phone}
-                            </div>
+                            <div className="text-sm text-gray-600">{result.phone || '-'}</div>
                           </td>
                         );
                       }
                       if (col.id === 'assessmentName') {
                         return (
                           <td key={col.id} className="py-3 px-4">
-                            <div className="text-sm text-gray-700">{result.assessmentName}</div>
+                            <div className="text-sm text-gray-700 truncate max-w-[200px]" title={result.assessmentName}>{result.assessmentName}</div>
+                          </td>
+                        );
+                      }
+                      if (col.id === 'inviteSource') {
+                        return (
+                          <td key={col.id} className="py-3 px-4">
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">
+                              {result.inviteSource || 'Manual'}
+                            </span>
                           </td>
                         );
                       }
@@ -671,12 +796,17 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         const techRound = result.roundScores.find(r => r.roundName === 'Technical');
                         const techPct = techRound ? Math.round((techRound.score / techRound.maxScore) * 100) : null;
                         return (
-                          <td key={col.id} className="py-3 px-4">
-                            {techPct !== null ? (
-                              <span className={`text-sm ${getScoreColor(techPct)}`}>{techPct}%</span>
-                            ) : (
-                              <span className="text-sm text-gray-400">-</span>
-                            )}
+                          <td key={col.id} className="py-3 px-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={`text-lg font-semibold ${techPct !== null ? getScoreColor(techPct) : 'text-gray-400'}`}>
+                                {techPct !== null ? `${techPct}%` : '-'}
+                              </span>
+                              {techPct !== null && (
+                                <span className={`text-xs font-medium ${techPct >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {techPct >= 50 ? 'Pass' : 'Fail'}
+                                </span>
+                              )}
+                            </div>
                           </td>
                         );
                       }
@@ -684,23 +814,63 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         const codingRound = result.roundScores.find(r => r.roundName === 'Coding');
                         const codingPct = codingRound ? Math.round((codingRound.score / codingRound.maxScore) * 100) : null;
                         return (
-                          <td key={col.id} className="py-3 px-4">
-                            {codingPct !== null ? (
-                              <span className={`text-sm ${getScoreColor(codingPct)}`}>{codingPct}%</span>
-                            ) : (
-                              <span className="text-sm text-gray-400">-</span>
-                            )}
+                          <td key={col.id} className="py-3 px-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={`text-lg font-semibold ${codingPct !== null ? getScoreColor(codingPct) : 'text-gray-400'}`}>
+                                {codingPct !== null ? `${codingPct}%` : '-'}
+                              </span>
+                              {codingPct !== null && (
+                                <span className={`text-xs font-medium ${codingPct >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {codingPct >= 50 ? 'Pass' : 'Fail'}
+                                </span>
+                              )}
+                            </div>
                           </td>
                         );
                       }
-                      if (col.id === 'passFail') {
+                      if (col.id === 'status') {
+                        const displayStatus = getResultStatus(result);
                         return (
-                          <td key={col.id} className="py-3 px-4">
-                            {getPassFailBadge(result.passFail)}
+                          <td key={col.id} className="py-3 px-4 text-center">
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border ${getStatusBadgeColor(displayStatus)}`}>
+                              {displayStatus}
+                            </span>
                           </td>
                         );
                       }
-                      if (col.id === 'completedDate') {
+                      if (col.id === 'timeline') {
+                        return (
+                          <td key={col.id} className="py-3 px-4 text-xs text-gray-500">
+                            <div className="space-y-1">
+                              {result.sent_at && (
+                                <div className="flex items-center gap-2">
+                                  <Mail className="w-3 h-3 text-blue-500" />
+                                  <span>Sent: {formatTimelineDate(result.sent_at)}</span>
+                                </div>
+                              )}
+                              {result.started_at && (
+                                <div className="flex items-center gap-2">
+                                  <Play className="w-3 h-3 text-yellow-500" />
+                                  <span>Started: {formatTimelineDate(result.started_at)}</span>
+                                </div>
+                              )}
+                              {result.completed_at && (
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="w-3 h-3 text-green-500" />
+                                  <span>Completed: {formatTimelineDate(result.completed_at)}</span>
+                                </div>
+                              )}
+                              {!result.sent_at && !result.started_at && !result.completed_at && (
+                                <div className="flex items-center gap-2">
+                                  <Clock className="w-3 h-3 text-gray-400" />
+                                  <span>{result.created_at ? `Created: ${formatTimelineDate(result.created_at)}` : '-'}</span>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      }
+                      if (col.id === 'completed') {
                         return (
                           <td key={col.id} className="py-3 px-4">
                             <div className="flex items-center gap-1.5 text-sm text-gray-600">
@@ -710,13 +880,20 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           </td>
                         );
                       }
-                      if (col.id === 'completionTime') {
+                      if (col.id === 'duration') {
+                        return (
+                          <td key={col.id} className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1.5 text-sm text-gray-600">
+                              <Clock className="w-3.5 h-3.5" />
+                              {result.duration || (result.completionTime ? `${result.completionTime} min` : '-')}
+                            </div>
+                          </td>
+                        );
+                      }
+                      if (col.id === 'passFail') {
                         return (
                           <td key={col.id} className="py-3 px-4">
-                            <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                              <Clock className="w-3.5 h-3.5" />
-                              {result.completionTime} min
-                            </div>
+                            {getPassFailBadge(result.passFail)}
                           </td>
                         );
                       }
@@ -740,24 +917,47 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     {/* Actions */}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
+                        {getResultStatus(result) !== 'Pending' && (
                         <button
-                          onClick={() => handleViewDetails(result)}
-                          className="p-1.5 text-gray-800 hover:bg-gray-50 rounded-md transition-colors"
+                          onClick={() => {
+                            if (result.assessmentId) {
+                              router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}`);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                           title="View Details"
                         >
-                          <Eye className="w-4 h-4" />
+                          <Award className="w-3 h-3" />
+                          View Details
                         </button>
+                        )}
+                        {getResultStatus(result) === 'Completed' && (
+                          <button
+                            onClick={() => handleDownloadPDF(result.id)}
+                            disabled={downloadingPDF === result.id}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Download PDF Report"
+                          >
+                            {downloadingPDF === result.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Download className="w-3 h-3" />
+                            )}
+                            PDF
+                          </button>
+                        )}
                         <button
-                          onClick={() => handleDownloadPDF(result.id)}
-                          disabled={downloadingPDF === result.id}
-                          className="p-1.5 text-gray-800 hover:bg-gray-50 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Download PDF Report"
+                          onClick={() => handleDeleteResult(result)}
+                          disabled={isDeleting !== null && isDeleting === result.id}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                          title="Delete"
                         >
-                          {downloadingPDF === result.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                          {isDeleting !== null && isDeleting === result.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
                           ) : (
-                            <FileText className="w-4 h-4" />
+                            <Trash2 className="w-3 h-3" />
                           )}
+                          Delete
                         </button>
                       </div>
                     </td>
@@ -867,19 +1067,18 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   {/* Header */}
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-sm text-gray-900 truncate">{result.candidateName}</h3>
+                      <div className="flex items-center gap-2">
+                        {result.candidateDisplayId && (
+                          <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
+                            {result.candidateDisplayId}
+                          </span>
+                        )}
+                        <h3 className="text-sm text-gray-900 truncate">{result.candidateName}</h3>
+                      </div>
                       <p className="text-xs text-gray-600 mt-0.5">{result.assessmentName}</p>
                     </div>
-                    {getPassFailBadge(result.passFail)}
-                  </div>
-
-                  {/* Score */}
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className={`text-xl ${getScoreColor(result.scorePercentage)}`}>
-                      {result.scorePercentage}%
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      ({result.totalScore}/{result.maxScore})
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${getStatusBadgeColor(getResultStatus(result))}`}>
+                      {getResultStatus(result)}
                     </span>
                   </div>
 
@@ -891,7 +1090,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         {result.email}
                       </div>
                     )}
-                    {enabledColumns.find(c => c.id === 'phone') && (
+                    {enabledColumns.find(c => c.id === 'phone') && result.phone && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-600">
                         <Phone className="w-3 h-3" />
                         {result.phone}
@@ -917,40 +1116,60 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         </div>
                       ) : null;
                     })()}
-                    {enabledColumns.find(c => c.id === 'completedDate') && (
+                    {enabledColumns.find(c => c.id === 'completed') && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-600">
                         <Calendar className="w-3 h-3" />
                         {result.completedDate}
                       </div>
                     )}
-                    {enabledColumns.find(c => c.id === 'completionTime') && (
+                    {enabledColumns.find(c => c.id === 'duration') && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-600">
                         <Clock className="w-3 h-3" />
-                        {result.completionTime} min
+                        {result.duration || (result.completionTime ? `${result.completionTime} min` : '-')}
                       </div>
                     )}
                   </div>
 
                   {/* Actions */}
                   <div className="flex items-center gap-2">
+                    {getResultStatus(result) !== 'Pending' && (
                     <button
-                      onClick={() => handleViewDetails(result)}
-                      className="flex-1 px-3 py-1.5 text-xs text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5"
+                      onClick={() => {
+                        if (result.assessmentId) {
+                          router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}`);
+                        }
+                      }}
+                      className="flex-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"
                     >
-                      <Eye className="w-3.5 h-3.5" />
-                      {selectedResultDetail === result.id ? 'Hide' : 'View'} Details
+                      <Award className="w-3.5 h-3.5" />
+                      View Details
                     </button>
+                    )}
+                    {getResultStatus(result) === 'Completed' && (
+                      <button
+                        onClick={() => handleDownloadPDF(result.id)}
+                        disabled={downloadingPDF === result.id}
+                        className="flex-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {downloadingPDF === result.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Download className="w-3.5 h-3.5" />
+                        )}
+                        {downloadingPDF === result.id ? 'Downloading...' : 'PDF'}
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleDownloadPDF(result.id)}
-                      disabled={downloadingPDF === result.id}
-                      className="flex-1 px-3 py-1.5 text-xs text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => handleDeleteResult(result)}
+                      disabled={isDeleting !== null && isDeleting === result.id}
+                      className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
-                      {downloadingPDF === result.id ? (
+                      {isDeleting !== null && isDeleting === result.id ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
-                        <FileText className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       )}
-                      {downloadingPDF === result.id ? 'Downloading...' : 'Download PDF'}
+                      Delete
                     </button>
                   </div>
 
