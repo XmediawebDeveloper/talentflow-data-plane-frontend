@@ -537,8 +537,8 @@ const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCom
 // Fallback master data in case API fails or returns empty
 const FALLBACK_EXPERIENCE_LEVELS: ExperienceLevel[] = [
   { id: 1, code: 'entry', label: 'Entry Level (0-2 Years)', min_years: 0, max_years: 2, sort_order: 1, is_active: true },
-  { id: 2, code: 'junior', label: 'Junior Level (2-4 Years)', min_years: 2, max_years: 4, sort_order: 2, is_active: true },
-  { id: 3, code: 'mid', label: 'Mid Level (5-7 Years)', min_years: 5, max_years: 7, sort_order: 3, is_active: true },
+  { id: 2, code: 'junior', label: 'Junior Level (2-3 Years)', min_years: 2, max_years: 3, sort_order: 2, is_active: true },
+  { id: 3, code: 'mid', label: 'Mid Level (4-7 Years)', min_years: 4, max_years: 7, sort_order: 3, is_active: true },
   { id: 4, code: 'senior', label: 'Senior Level (7-10 Years)', min_years: 7, max_years: 10, sort_order: 4, is_active: true },
   { id: 5, code: 'architect', label: 'Architect Level (10+ Years)', min_years: 10, max_years: null, sort_order: 5, is_active: true },
   { id: 6, code: 'management', label: 'Management Level (10+ Years)', min_years: 10, max_years: null, sort_order: 6, is_active: true },
@@ -1481,10 +1481,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // 7-10 years = Senior Level
         if (min >= 7 || (max && max >= 7 && min >= 5)) return 'senior';
 
-        // 5-7 years = Mid Level
-        if (min >= 5 || (max && max >= 5 && min >= 3)) return 'mid';
+        // 4-7 years = Mid Level
+        // NOTE: threshold is 4 (not 5) — a JD requiring "4 years of experience" is
+        // asking for someone at or beyond the Junior ceiling, which is Mid-level.
+        if (min >= 4 || (max && max >= 5 && min >= 3)) return 'mid';
 
-        // 2-4 years = Junior Level
+        // 2-3 years = Junior Level
         if (min >= 2 || (max && max >= 2 && min >= 1)) return 'junior';
 
         // 0-2 years = Entry Level
