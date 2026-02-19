@@ -169,19 +169,21 @@ export default function AdminDashboard({
               <div>
                 <p className="text-xs text-gray-500 mb-1">Status</p>
                 <p className="text-sm font-semibold capitalize">
-                  <span className={
-                    (quotaData?.subscription_status || tenant?.subscription?.status) === 'expired'
+                  {(() => {
+                    const rawStatus = quotaData?.subscription_status || tenant?.subscription?.status || 'trial';
+                    const isActive = rawStatus === 'trial' || rawStatus === 'active';
+                    const label = isActive ? 'Active' : rawStatus;
+                    const colorClass = rawStatus === 'expired' || rawStatus === 'suspended'
                       ? 'text-red-700'
-                      : (quotaData?.subscription_status || tenant?.subscription?.status) === 'suspended'
-                        ? 'text-red-700'
-                        : 'text-amber-600'
-                  }>
-                    {quotaData?.subscription_status || tenant?.subscription?.status || 'trial'}
-                  </span>
+                      : isActive
+                        ? 'text-green-700'
+                        : 'text-amber-600';
+                    return <span className={colorClass}>{label}</span>;
+                  })()}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-1">Days Remaining</p>
+                <p className="text-xs text-gray-500 mb-1">Time Remaining</p>
                 <p className="text-sm font-semibold">
                   {quotaData?.trial_info?.days_remaining != null ? (
                     <span className={
@@ -191,7 +193,21 @@ export default function AdminDashboard({
                           ? 'text-amber-600'
                           : 'text-green-700'
                     }>
-                      {quotaData.trial_info.days_remaining} {quotaData.trial_info.days_remaining === 1 ? 'day' : 'days'}
+                      {quotaData.trial_info.days_remaining === 0 ? (
+                        (() => {
+                          const endDate = quotaData.trial_info?.trial_end_date || quotaData.trial_end_date;
+                          if (endDate) {
+                            const hoursLeft = Math.max(0, Math.floor((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60)));
+                            if (hoursLeft > 0) return `${hoursLeft}h left`;
+                            const minsLeft = Math.max(0, Math.floor((new Date(endDate).getTime() - Date.now()) / (1000 * 60)));
+                            if (minsLeft > 0) return `${minsLeft}m left`;
+                            return 'Expired';
+                          }
+                          return 'Less than a day';
+                        })()
+                      ) : (
+                        `${quotaData.trial_info.days_remaining} ${quotaData.trial_info.days_remaining === 1 ? 'day' : 'days'}`
+                      )}
                     </span>
                   ) : (
                     <span className="text-gray-900">-</span>
@@ -385,7 +401,7 @@ export default function AdminDashboard({
                     <Upload className="w-5 h-5 text-green-600" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm text-gray-600">Resume Upload</p>
+                    <p className="text-sm text-gray-600">Resume Storage</p>
                     <p className="text-xl font-semibold text-gray-900">
                       {subscriptionUnits.RU.is_unlimited ? 'Unlimited' : subscriptionUnits.RU.available}
                     </p>

@@ -64,6 +64,15 @@ export interface ConsumptionLogEntry {
   failure_reason: string | null;
   overall_score: number | null;  // Resume Scoring Usage Logging: Scoring result (0-100)
   audit_log_id: string | null;  // Feature-Level Unit Deduction Recording: Link to audit entry
+  // Session tracking & error origin (Audit Logs & Error Codes doc)
+  error_origin: 'TENANT' | 'SYSTEM' | 'NONE' | null;
+  error_code: string | null;
+  refund_flag: 'YES' | 'NO' | null;
+  session_start_time: string | null;
+  interruption_time: string | null;
+  session_end_time: string | null;
+  total_session_duration: number | null; // seconds
+  module_type: string | null;
   created_at: string;
 }
 
@@ -349,6 +358,10 @@ export const unitPoolService = {
     reason?: string;
     job_description_id?: string;
     candidate_id?: string;
+    error_origin?: 'TENANT' | 'SYSTEM' | 'NONE';
+    error_code?: string;
+    session_start_time?: string;
+    interruption_time?: string;
   }): Promise<{ success: boolean; log_id: string | null; status: string; units_consumed: number; message: string }> {
     try {
       const response = await api.post('/unit-pool/log-abandoned', request);
@@ -371,9 +384,47 @@ export const unitPoolService = {
     reason?: string;
     job_description_id?: string;
     candidate_id?: string;
+    error_origin?: 'TENANT' | 'SYSTEM' | 'NONE';
+    error_code?: string;
+    session_start_time?: string;
+    interruption_time?: string;
   }): Promise<{ success: boolean; log_id: string | null; status: string; units_consumed: number; message: string }> {
     try {
       const response = await api.post('/unit-pool/log-interrupted', request);
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Log a session lifecycle event (start, complete, interrupted) for AS/AIU
+   * Implements session tracking per "Audit Logs & Error Codes" document Section 4
+   */
+  async logSessionEvent(request: {
+    unit_type: 'AS' | 'AIU';
+    session_id: string;
+    event_type: 'START' | 'COMPLETE' | 'INTERRUPTED';
+    entity_type: string;
+    entity_id?: string;
+    entity_name?: string;
+    error_origin?: 'TENANT' | 'SYSTEM' | 'NONE';
+    error_code?: string;
+    session_start_time: string;
+    interruption_time?: string;
+    session_end_time?: string;
+    candidate_id?: string;
+    job_description_id?: string;
+  }): Promise<{
+    success: boolean;
+    session_id: string;
+    event_type: string;
+    units_deducted: number;
+    refund_flag: 'YES' | 'NO';
+    message: string;
+  }> {
+    try {
+      const response = await api.post('/unit-pool/log-session-event', request);
       return response.data;
     } catch (error) {
       throw handleApiError(error);
