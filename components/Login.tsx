@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, Globe, ArrowLeft } from 'lucide-react';
 import { User, Tenant } from '@/lib/types/tenant';
 import { authService } from '../services/authService';
+import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 
 interface LoginProps {
   onLogin: (user: User, tenant?: Tenant) => void;
@@ -65,8 +66,21 @@ export default function Login({ onLogin, onSwitchToSignUp, onBackToPublic }: Log
         createdAt: response.user.created_at,
       };
 
-      // Check if tenant has pending payment - redirect to payment page first
+      // Check if tenant has pending payment - redirect to payment page with encoded params
       if (response.pending_payment && response.pending_payment_redirect) {
+        try {
+          const url = new URL(response.pending_payment_redirect, window.location.origin);
+          const rawTenantId = url.searchParams.get('tenant_id');
+          const rawPlanId = url.searchParams.get('plan_id');
+          if (rawTenantId && rawPlanId) {
+            const encodedUrl = `/complete-payment?t=${encodeURIComponent(encodeParam(rawTenantId))}&p=${encodeURIComponent(encodePlanId(rawPlanId))}`;
+            console.log('[LOGIN] Tenant has pending payment, redirecting to encoded URL');
+            router.push(encodedUrl);
+            return;
+          }
+        } catch {
+          // Fallback to raw URL if parsing fails
+        }
         console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
         router.push(response.pending_payment_redirect);
         return;

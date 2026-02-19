@@ -62,3 +62,32 @@ export function decodePlanId(encoded: string): string | null {
     return encoded;
   }
 }
+
+/**
+ * Generic encode for any param (tenant_id, etc.)
+ * Same base64 + timestamp salt approach as encodePlanId.
+ */
+export function encodeParam(value: string | number): string {
+  if (!value) return '';
+  try {
+    const salt = Date.now().toString(36);
+    return base64Encode(`${value}:${salt}`);
+  } catch {
+    return String(value);
+  }
+}
+
+/**
+ * Generic decode — inverse of encodeParam.
+ * Falls back to returning the raw string if not base64-encoded.
+ */
+export function decodeParam(encoded: string): string | null {
+  if (!encoded) return null;
+  try {
+    const decoded = base64Decode(encoded);
+    const [value] = decoded.split(':');
+    return value;
+  } catch {
+    return encoded;
+  }
+}

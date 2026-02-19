@@ -206,7 +206,7 @@ function DraggableCardResumeRow({
   return (
     <div
       ref={preview as unknown as React.Ref<HTMLDivElement>}
-      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center ${
+      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center min-w-[1200px] ${
         !isLast ? 'border-b border-gray-100' : ''
       } ${selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''} ${isDragging ? 'opacity-50' : ''}`}
       onClick={() => onViewDetails(resume)}
@@ -1154,11 +1154,28 @@ export default function MyResumesPage() {
     }
   };
 
+  // Helper: check if a resume is archived (by flag OR by folder)
+  const isResumeArchived = (resume: Resume): boolean => {
+    if (resume.isArchived === true) return true;
+    const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+    if (archivedFolder && resume.folderId === archivedFolder.id) return true;
+    return false;
+  };
+
   // Handle apply to job
   // Single candidate: show version selector first
   // Multiple candidates: use latest version directly
   const handleApplyToJob = async () => {
     if (selectedResumes.length === 0) return;
+
+    // Check if any selected resumes are archived (by flag or folder)
+    const selectedResumeObjects = resumes.filter(r => selectedResumes.includes(r.id));
+    const archivedCount = selectedResumeObjects.filter(r => isResumeArchived(r)).length;
+
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be applied to any job. Please select active resumes only.`);
+      return;
+    }
 
     if (selectedResumes.length === 1) {
       // Single candidate - show version selector first
@@ -1244,6 +1261,12 @@ export default function MyResumesPage() {
   // Handle apply to job for a single resume (from table action button)
   // This is called from ResumeTable after version is selected there
   const handleSingleResumeApplyToJob = async (resume: Resume) => {
+    // Check if resume is archived (by flag OR by folder)
+    if (isResumeArchived(resume)) {
+      toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
+      return;
+    }
+
     // Resume already has selected version ID from ResumeTable's version selector
     setSingleResumeToApply(resume);
     await fetchPublishedJobs();
@@ -2199,7 +2222,7 @@ export default function MyResumesPage() {
               onWidthChange={setFolderTreeWidth}
             />
 
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 min-w-0 flex flex-col">
               {/* Breadcrumb Navigation for List View */}
               {selectedFolder && selectedFolder !== 'all' && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-sm">
@@ -2249,6 +2272,10 @@ export default function MyResumesPage() {
                   highlightQuery={appliedSearchQuery}
                   onArchive={(resumeId) => handleArchiveResumes([resumeId])}
                   disablePagination={true}
+                  isArchivedFolder={
+                    folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
+                  }
+                  archivedFolderId={folders.find(f => f.name === 'Archived Resumes' && !f.parentId)?.id}
                 />
               </div>
               {totalPages > 0 && (

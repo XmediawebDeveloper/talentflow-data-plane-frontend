@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Cookies from 'js-cookie';
+import { decodeParam, decodePlanId } from '@/lib/utils/planEncoder';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -37,8 +38,14 @@ function CompletePaymentContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const tenantId = searchParams.get('tenant_id');
-  const planId = searchParams.get('plan_id');
+  // Support both encoded (t, p) and legacy (tenant_id, plan_id) params
+  const rawT = searchParams.get('t');
+  const rawP = searchParams.get('p');
+  const legacyTenantId = searchParams.get('tenant_id');
+  const legacyPlanId = searchParams.get('plan_id');
+
+  const tenantId = rawT ? decodeParam(rawT) : legacyTenantId;
+  const planId = rawP ? decodePlanId(rawP) : legacyPlanId;
   const billingIntervalParam = searchParams.get('billing');
 
   // Get user info for audit logging (from localStorage if user was previously logged in)
@@ -79,12 +86,23 @@ function CompletePaymentContent() {
           const plansArray = result.data?.plans || result.plans || [];
 
           // Find the plan with matching ID
+          const parsedPlanId = parseInt(planId);
           for (const groupedPlan of plansArray) {
             const monthly = groupedPlan.billing_options?.monthly;
             const annual = groupedPlan.billing_options?.annual;
 
-            if (monthly?.id === parseInt(planId) || annual?.id === parseInt(planId)) {
-              const planVariant = billingInterval === 'ANNUAL' ? (annual || monthly) : (monthly || annual);
+            if (monthly?.id === parsedPlanId || annual?.id === parsedPlanId) {
+              // Detect billing interval from which variant matches the plan_id
+              const isAnnualPlan = annual?.id === parsedPlanId;
+              const detectedInterval = isAnnualPlan ? 'ANNUAL' : 'MONTHLY';
+
+              // Update billing interval to match the actual plan
+              if (detectedInterval !== billingInterval) {
+                setBillingInterval(detectedInterval);
+              }
+
+              // Use the variant that matches the plan_id directly
+              const planVariant = isAnnualPlan ? annual : monthly;
               if (planVariant) {
                 setPlanDetails({
                   id: planVariant.id,
@@ -191,7 +209,28 @@ function CompletePaymentContent() {
     return `${symbol}${amount.toLocaleString()}`;
   };
 
-  // Styles
+  // Helper to get quota label
+  const getQuotaLabel = (key: string): string => {
+    const labels: Record<string, string> = {
+      max_seats: 'Max Users',
+      max_jobs: 'Max Jobs',
+      RS: 'Resume Scores',
+      RU: 'Resume Storage',
+      AS: 'Assessments',
+      AIU: 'AI Interviews',
+      api_rate_limit: 'API Rate Limit',
+    };
+    return labels[key] || key;
+  };
+
+  // Helper to format quota value
+  const formatQuotaValue = (key: string, value: number | undefined): string => {
+    if (value === undefined || value === null) return 'Unlimited';
+    if (value === -1) return 'Unlimited';
+    return value.toLocaleString();
+  };
+
+  // --- Styles (matching SignUp.tsx payment step) ---
   const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
     background: 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
@@ -209,9 +248,6 @@ function CompletePaymentContent() {
     boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
     padding: '40px',
     border: '1px solid #F3F4F6',
-    maxWidth: 520,
-    width: '100%',
-    margin: '0 auto',
   };
 
   const submitButtonStyle: React.CSSProperties = {
@@ -276,42 +312,21 @@ function CompletePaymentContent() {
     );
   }
 
-  // Helper to get quota label
-  const getQuotaLabel = (key: string): string => {
-    const labels: Record<string, string> = {
-      max_seats: 'Max Users',
-      max_jobs: 'Max Jobs',
-      RS: 'Resume Scores',
-      RU: 'Resume Storage',
-      AS: 'Assessments',
-      AIU: 'AI Interviews',
-      api_rate_limit: 'API Rate Limit',
-    };
-    return labels[key] || key;
-  };
-
-  // Helper to format quota value
-  const formatQuotaValue = (key: string, value: number | undefined): string => {
-    if (value === undefined || value === null) return 'Unlimited';
-    if (value === -1) return 'Unlimited';
-    return value.toLocaleString();
-  };
-
   return (
     <div style={containerStyle}>
       {/* Background Blobs */}
       <div style={{ position: 'absolute', top: 80, left: 40, width: 288, height: 288, backgroundColor: '#93C5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
       <div style={{ position: 'absolute', top: 160, right: 40, width: 288, height: 288, backgroundColor: '#C4B5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
 
-      <div style={{ ...formCardStyle, maxWidth: 900, maxHeight: '90vh', overflowY: 'auto' }}>
+      <div style={{ ...formCardStyle, maxWidth: 600, margin: '0 auto', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
           <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #2563EB, #4338CA)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <CreditCard style={{ width: 24, height: 24, color: '#ffffff' }} />
           </div>
           <div>
-            <h2 style={{ fontSize: 24, fontWeight: 700, color: '#111827', marginBottom: 4 }}>Complete Your Payment</h2>
-            <p style={{ color: '#6B7280', fontSize: 14 }}>Finish setting up your account by completing payment.</p>
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: '#111827', marginBottom: 4 }}>Complete Your Purchase</h2>
+            <p style={{ color: '#6B7280', fontSize: 14 }}>Your account is ready. Complete payment to activate your plan.</p>
           </div>
         </div>
 
@@ -422,6 +437,17 @@ function CompletePaymentContent() {
           </div>
         )}
 
+        {/* Account Status */}
+        <div style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 16, marginBottom: 24, border: '1px solid #BBF7D0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CheckCircle style={{ width: 18, height: 18, color: '#16A34A' }} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#166534' }}>Account Created — Payment Pending</span>
+          </div>
+          <p style={{ fontSize: 13, color: '#166534', marginTop: 8 }}>
+            Your account has been set up. Complete payment below to activate your plan and start using TalentFlow.
+          </p>
+        </div>
+
         {/* Complete Purchase Button */}
         <button
           onClick={handlePaymentSubmit}
@@ -455,18 +481,15 @@ function CompletePaymentContent() {
         <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #E5E7EB', textAlign: 'center' }}>
           <a
             href="/login"
-            onClick={(e) => {
-              // Clear all auth tokens from localStorage
+            onClick={() => {
               localStorage.removeItem('accessToken');
               localStorage.removeItem('refreshToken');
               localStorage.removeItem('token');
               localStorage.removeItem('user');
               localStorage.removeItem('tenant');
-              // Clear all cookies
               Cookies.remove('accessToken');
               Cookies.remove('refreshToken');
               Cookies.remove('token');
-              // Clear session storage
               sessionStorage.clear();
             }}
             style={{ color: '#2563EB', fontSize: 14, textDecoration: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}

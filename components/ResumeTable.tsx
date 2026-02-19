@@ -79,6 +79,8 @@ interface ResumeTableProps {
   highlightQuery?: string;
   onArchive?: (resumeId: string) => void;
   disablePagination?: boolean;
+  isArchivedFolder?: boolean;
+  archivedFolderId?: string;
 }
 
 // Helper function to highlight matching text
@@ -126,6 +128,8 @@ export default function ResumeTable({
   highlightQuery,
   onArchive,
   disablePagination = false,
+  isArchivedFolder = false,
+  archivedFolderId,
 }: ResumeTableProps) {
   const router = useRouter();
   // ✅ PERMISSION FIX: Get Resume CRUD permissions
@@ -215,6 +219,17 @@ export default function ResumeTable({
   // For SINGLE candidate: ALWAYS show version popup first, then job selection
   const handleApplyToJob = async (resume: Resume) => {
     console.log('[APPLY] handleApplyToJob called for:', resume.name);
+
+    // Block archived resumes - check isArchived flag, folder prop, or resume's own folderId
+    const isArchived = resume.isArchived === true
+      || isArchivedFolder
+      || (archivedFolderId !== undefined && resume.folderId === archivedFolderId);
+
+    if (isArchived) {
+      toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
+      return;
+    }
+
     // Always fetch versions and show selector for single candidate apply
     setIsLoadingVersions(true);
     try {
@@ -305,7 +320,7 @@ export default function ResumeTable({
     <div className="flex-1">
       {/* FIX-008: Desktop Table View - hidden on mobile */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-[1100px]">
         <thead className="bg-gray-50 sticky top-0">
           <tr>
             {/* Drag handle column */}

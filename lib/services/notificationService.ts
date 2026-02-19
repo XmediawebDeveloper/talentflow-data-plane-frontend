@@ -112,6 +112,25 @@ class NotificationService {
   }
 
   /**
+   * Ensure welcome notification exists (idempotent, called on first dashboard login)
+   */
+  async ensureWelcomeNotification(params: {
+    plan_name?: string;
+    is_trial: boolean;
+    days_remaining?: number;
+    plan_tier?: string;
+    billing_period?: string;
+  }): Promise<{ status: 'created' | 'already_exists' }> {
+    try {
+      const response = await api.post('/notifications/welcome', params);
+      return response.data;
+    } catch (error) {
+      console.error('Error ensuring welcome notification:', error);
+      return { status: 'already_exists' };
+    }
+  }
+
+  /**
    * Delete a notification
    */
   async deleteNotification(notificationId: string): Promise<void> {
