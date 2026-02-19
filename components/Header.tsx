@@ -69,6 +69,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   useEffect(() => {
     // Get token from localStorage (same as auth service uses)
     const token = localStorage.getItem('accessToken');
+    console.log('[Header] wsToken fetched from localStorage:', token ? `✅ present (${token.substring(0, 20)}...)` : '❌ null/missing');
     setWsToken(token);
   }, [user]);
 
@@ -151,9 +152,17 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     token: wsToken,
     onNewNotification: handleNewNotification,
     onCountUpdate: handleCountUpdate,
-    onPermissionsUpdated: refreshUser,
+    onPermissionsUpdated: () => {
+      console.log('[Header] onPermissionsUpdated triggered via WebSocket — calling refreshUser()');
+      refreshUser();
+    },
     enabled: !!user && !!wsToken,
   });
+
+  // Log WebSocket connection status changes
+  useEffect(() => {
+    console.log('[Header] WebSocket status — connected:', wsConnected, '| error:', wsError ?? 'none');
+  }, [wsConnected, wsError]);
 
   // Fetch notifications on mount and when dropdown opens
   useEffect(() => {

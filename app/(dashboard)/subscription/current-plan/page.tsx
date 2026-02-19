@@ -1615,7 +1615,7 @@ function CurrentPlanContent() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-12 h-12 text-gray-500 animate-spin" />
@@ -1653,7 +1653,7 @@ function CurrentPlanContent() {
     const colors = statusColors[tenantStatus.status as keyof typeof statusColors] || statusColors.PENDING;
 
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="mb-8">
@@ -1662,7 +1662,7 @@ function CurrentPlanContent() {
                 <CreditCard className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Current Plan</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Current Plan</h1>
                 <p className="text-sm text-gray-600">Manage your subscription and billing</p>
               </div>
             </div>
@@ -1726,7 +1726,7 @@ function CurrentPlanContent() {
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -1735,7 +1735,7 @@ function CurrentPlanContent() {
               <CreditCard className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Current Plan</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Current Plan</h1>
               <p className="text-sm text-gray-600">Manage your subscription and billing</p>
             </div>
           </div>

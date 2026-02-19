@@ -803,7 +803,7 @@ export default function UserManagement() {
     }
   }, [allPermissions]);
 
-  const loadAllPermissions = async () => {
+  const loadAllPermissions = async (): Promise<Permission[]> => {
     console.log('[LOAD PERMISSIONS] Starting to load permissions...');
     try {
       const data = await rbacService.getPermissions();
@@ -814,8 +814,10 @@ export default function UserManagement() {
       }
       setAllPermissions(data.permissions);
       console.log('[LOAD PERMISSIONS] ✓ allPermissions state updated successfully');
+      return data.permissions;
     } catch (error) {
       console.error('[LOAD PERMISSIONS] ✗ Failed to load permissions:', error);
+      return [];
     }
   };
 
@@ -1411,6 +1413,10 @@ export default function UserManagement() {
     try {
       const freshUserData = await userService.getUser(user.id);
 
+      // Ensure permissions are loaded before mapping — handles race condition when user
+      // opens edit modal before loadAllPermissions() has finished on mount.
+      const permissionsForMapping = allPermissions.length > 0 ? allPermissions : await loadAllPermissions();
+
       // Use permission_ids directly from backend response
       const currentPermissionIds = new Set<number>();
 
@@ -1423,9 +1429,9 @@ export default function UserManagement() {
       } else {
         // Fallback: Map user's current permissions (boolean fields) to permission IDs if permission_ids not available
         console.log('[EDIT USER] permission_ids not available, falling back to boolean mapping');
-        console.log('[EDIT USER] allPermissions array length:', allPermissions.length);
+        console.log('[EDIT USER] permissionsForMapping array length:', permissionsForMapping.length);
         console.log('[EDIT USER] freshUserData.permissions:', freshUserData.permissions);
-        allPermissions.forEach(perm => {
+        permissionsForMapping.forEach(perm => {
         // Map permission code to user's boolean permission fields
         // This requires checking various permission patterns
         let hasPermission = false;
@@ -1521,7 +1527,7 @@ export default function UserManagement() {
       // Also initialize permission codes based on permission IDs
       const currentPermissionCodes = new Set<string>();
       currentPermissionIds.forEach(id => {
-        const perm = allPermissions.find(p => p.id === id);
+        const perm = permissionsForMapping.find(p => p.id === id);
         if (perm) {
           currentPermissionCodes.add(perm.code);
         }
@@ -1552,7 +1558,8 @@ export default function UserManagement() {
     setEditSelectedRoleId(null);
     setEditSelectedPermissionIds(new Set());
     setEditOriginalPermissionIds(new Set());
-    setEditSelectedPermissionCodes(new Set()); // Reset permission codes
+    setEditSelectedPermissionCodes(new Set());
+    setEditOriginalPermissionCodes(new Set()); // ⚠️ FIX: was missing — stale original codes caused incorrect permissionsChanged detection
     setEditOriginalRoleId(null);
     setEditEmailUsername('');
   };
@@ -1657,7 +1664,8 @@ export default function UserManagement() {
     }
 
     // Verify the user still exists in the list before attempting update
-    const userStillExists = users.some(u => u.id === editingUser.id);
+    // Use toString() comparison to guard against numeric vs string id type mismatch
+    const userStillExists = users.some(u => u.id.toString() === editingUser.id.toString());
     if (!userStillExists) {
       console.error('[UPDATE USER] User no longer exists in the current list!', {
         editingUserId: editingUser.id,
@@ -1800,6 +1808,7 @@ export default function UserManagement() {
             ? {
                 ...user,
                 ...updatedUserData,
+                id: user.id, // ⚠️ PRESERVE string id — API returns numeric id which would cause type mismatch in userStillExists check
                 role: updatedUserData.role, // Explicitly update role
                 name: updatedUserData.name,
                 email: updatedUserData.email,
@@ -1852,24 +1861,24 @@ export default function UserManagement() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
+      <div className="mb-6 sm:mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-              <UserCog className="w-7 h-7 text-white" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
+              <UserCog className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Users</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Users</h1>
               <p className="text-sm text-gray-600">Manage users and their permissions</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* RBAC07: Dependency Matrix button */}
             <button
               onClick={() => setIsDependencyMatrixOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base"
               title="View Feature Dependencies"
             >
               <Link2 className="w-5 h-5" />

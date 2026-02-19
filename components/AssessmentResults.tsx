@@ -1170,9 +1170,30 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('inviteSource') && (
                         <td className="px-4 py-4">
-                          <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">
-                            {candidate.inviteSource || 'Manual'}
-                          </span>
+                          {(() => {
+                            const src = candidate.inviteSource || 'Manual';
+                            const styleMap: Record<string, string> = {
+                              'JD':            'bg-blue-100 text-blue-700',
+                              'Assessment':    'bg-purple-100 text-purple-700',
+                              'Resume Scoring':'bg-orange-100 text-orange-700',
+                              'Internal DB':   'bg-teal-100 text-teal-700',
+                              'Manual':        'bg-gray-100 text-gray-600',
+                            };
+                            const labelMap: Record<string, string> = {
+                              'JD':            'JD',
+                              'Assessment':    'Assessments',
+                              'Resume Scoring':'Resume Scoring',
+                              'Internal DB':   'Internal DB',
+                              'Manual':        'Manual',
+                            };
+                            const cls = styleMap[src] || 'bg-gray-100 text-gray-600';
+                            const label = labelMap[src] || src;
+                            return (
+                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${cls}`}>
+                                {label}
+                              </span>
+                            );
+                          })()}
                         </td>
                       )}
                       {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
@@ -1258,6 +1279,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       <td className="px-4 py-4">
                         <div className="flex items-center justify-center gap-2">
+                          {candidate.status !== 'Pending' && (
                           <button
                             onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}`)}
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -1266,6 +1288,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <Award className="w-3 h-3" />
                             View Details
                           </button>
+                          )}
                           {/* AS-25: PDF Download Button */}
                           {candidate.status === 'Completed' ? (
                             <button

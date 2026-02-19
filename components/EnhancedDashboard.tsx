@@ -480,7 +480,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               className="p-4 rounded-lg border-2 border-green-200 bg-green-50 hover:border-green-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=published')}
             >
-              <div className="text-4xl font-bold text-green-600 mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-600 mb-1 sm:mb-2">
                 {jdStatusCounts.published}
               </div>
               <div className="flex items-center gap-2">
@@ -499,7 +499,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               className="p-4 rounded-lg border-2 border-yellow-200 bg-yellow-50 hover:border-yellow-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=draft')}
             >
-              <div className="text-4xl font-bold text-yellow-600 mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-600 mb-1 sm:mb-2">
                 {jdStatusCounts.draft}
               </div>
               <div className="flex items-center gap-2">
@@ -518,7 +518,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               className="p-4 rounded-lg border-2 border-red-200 bg-red-50 hover:border-red-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=disabled')}
             >
-              <div className="text-4xl font-bold text-red-600 mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-red-600 mb-1 sm:mb-2">
                 {jdStatusCounts.disabled}
               </div>
               <div className="flex items-center gap-2">
@@ -537,7 +537,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50 hover:border-gray-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=archived')}
             >
-              <div className="text-4xl font-bold text-gray-600 mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-600 mb-1 sm:mb-2">
                 {jdStatusCounts.archived}
               </div>
               <div className="flex items-center gap-2">

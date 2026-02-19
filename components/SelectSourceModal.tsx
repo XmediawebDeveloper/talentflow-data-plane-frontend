@@ -74,10 +74,11 @@ export default function SelectSourceModal({
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch resumes based on active tab
+      // Fetch resumes based on active tab (include archived so they show as disabled)
       const resumeResponse = await resumeService.list({
         source: activeTab,
-        page_size: 100
+        page_size: 100,
+        include_archived: true
       });
       setResumes(resumeResponse.items || []);
 
@@ -152,6 +153,19 @@ export default function SelectSourceModal({
 
   // Toggle resume selection
   const handleToggleResume = (resumeId: string) => {
+    // Check if resume is archived OR if we're in the Archived folder
+    const resume = resumes.find(r => r.id === resumeId);
+
+    // Check if currently viewing Archived folder
+    const selectedFolderData = folders.find(f => f.id === selectedFolder);
+    const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
+
+    // Block if resume is archived OR if viewing archived folder
+    if (resume?.is_archived || isArchivedFolder) {
+      toast.error('Archived resumes cannot be scored. Please select an active resume.');
+      return;
+    }
+
     setSelectedResumes(prev =>
       prev.includes(resumeId)
         ? prev.filter(id => id !== resumeId)
@@ -161,10 +175,23 @@ export default function SelectSourceModal({
 
   // Select/deselect all
   const handleSelectAll = () => {
-    if (selectedResumes.length === filteredResumes.length && filteredResumes.length > 0) {
+    // Check if viewing Archived folder
+    const selectedFolderData = folders.find(f => f.id === selectedFolder);
+    const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
+
+    // Don't allow select all in archived folder
+    if (isArchivedFolder) {
+      toast.error('Archived resumes cannot be scored. Please select an active resume.');
+      return;
+    }
+
+    // Filter out archived resumes before selecting
+    const selectableResumes = filteredResumes.filter(r => !r.is_archived);
+
+    if (selectedResumes.length === selectableResumes.length && selectableResumes.length > 0) {
       setSelectedResumes([]);
     } else {
-      setSelectedResumes(filteredResumes.map(r => r.id));
+      setSelectedResumes(selectableResumes.map(r => r.id));
     }
   };
 
@@ -693,14 +720,27 @@ export default function SelectSourceModal({
                   {/* Table Rows */}
                   {filteredResumes.map((resume) => {
                     const isSelected = selectedResumes.includes(resume.id);
+                    // Check if resume is archived OR if we're viewing the Archived folder
+                    const selectedFolderData = folders.find(f => f.id === selectedFolder);
+                    const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
+                    const isArchived = resume.is_archived === true || isArchivedFolder;
+
                     return (
                       <div
                         key={resume.id}
-                        onClick={() => handleToggleResume(resume.id)}
-                        className={`grid grid-cols-12 gap-4 p-4 border-2 rounded-lg transition-all cursor-pointer items-center ${
-                          isSelected
-                            ? 'border-blue-400 bg-blue-50 shadow-sm'
-                            : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                        onClick={() => {
+                          if (isArchived) {
+                            toast.error('Archived resumes cannot be scored. Please select an active resume.');
+                            return;
+                          }
+                          handleToggleResume(resume.id);
+                        }}
+                        className={`grid grid-cols-12 gap-4 p-4 border-2 rounded-lg transition-all items-center ${
+                          isArchived
+                            ? 'border-amber-100 bg-amber-50 opacity-60 cursor-not-allowed'
+                            : isSelected
+                              ? 'border-blue-400 bg-blue-50 shadow-sm cursor-pointer'
+                              : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm cursor-pointer'
                         }`}
                       >
                         {/* Checkbox */}
@@ -708,9 +748,14 @@ export default function SelectSourceModal({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (isArchived) {
+                                toast.error('Archived resumes cannot be scored. Please select an active resume.');
+                                return;
+                              }
                               handleToggleResume(resume.id);
                             }}
-                            className="p-1 hover:bg-gray-100 rounded"
+                            disabled={isArchived}
+                            className="p-1 hover:bg-gray-100 rounded disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {isSelected ? (
                               <CheckSquare className="w-5 h-5 text-blue-600" />
@@ -728,6 +773,11 @@ export default function SelectSourceModal({
                             </div>
                             <div>
                               <div className="font-medium text-gray-900">{resume.candidate_name || 'Unknown'}</div>
+                              {isArchived && (
+                                <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-0.5">
+                                  Archived
+                                </span>
+                              )}
                               {resume.location && (
                                 <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
                                   <MapPin className="w-3 h-3" />
@@ -842,7 +892,27 @@ export default function SelectSourceModal({
               </button>
               <button
                 onClick={handleSubmitForScoring}
-                disabled={selectedResumes.length === 0 || submitting}
+                disabled={(() => {
+                  // Check if no resumes selected
+                  if (selectedResumes.length === 0) return true;
+
+                  // Check if submitting
+                  if (submitting) return true;
+
+                  // Check if currently viewing Archived folder
+                  const selectedFolderData = folders.find(f => f.id === selectedFolder);
+                  const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
+
+                  if (isArchivedFolder && selectedResumes.length > 0) {
+                    return true; // Disable if any resumes selected in archived folder
+                  }
+
+                  // Check if any archived resumes are selected
+                  const selectedResumeObjects = resumes.filter(r => selectedResumes.includes(r.id));
+                  const hasArchivedResumes = selectedResumeObjects.some(r => r.is_archived === true);
+
+                  return hasArchivedResumes;
+                })()}
                 className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2"
               >
                 {submitting ? (

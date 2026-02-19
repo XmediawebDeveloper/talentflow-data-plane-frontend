@@ -66,7 +66,7 @@ export default function BrandingPage() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
           <p className="text-gray-600">Loading branding settings...</p>
@@ -76,7 +76,7 @@ export default function BrandingPage() {
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -85,7 +85,7 @@ export default function BrandingPage() {
                 <Palette className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Branding & White Label</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Branding & White Label</h1>
                 <p className="text-sm text-gray-600">Customize your platform appearance</p>
               </div>
             </div>
@@ -137,7 +137,7 @@ export default function BrandingPage() {
               </button>
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Primary Color</label>
               <div className="flex items-center gap-3">

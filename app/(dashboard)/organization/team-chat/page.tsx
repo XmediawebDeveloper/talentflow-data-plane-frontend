@@ -435,7 +435,7 @@ export default function TeamChatPage() {
   return (
     <div className="flex h-[calc(100vh-80px)] bg-gray-100">
       {/* Left Sidebar - Channels List */}
-      <div className="w-72 bg-white border-r border-gray-200 flex flex-col">
+      <div className="hidden md:flex md:w-64 lg:w-72 bg-white border-r border-gray-200 flex-col">
         {/* Header */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center justify-between mb-4">
