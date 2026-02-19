@@ -5,6 +5,8 @@ import {
   Users,
   FileText,
   ClipboardCheck,
+  Upload,
+  Briefcase,
   Loader2,
   AlertCircle,
   Calendar,
@@ -33,6 +35,7 @@ const UNIT_TYPE_CONFIG = {
   RS: { label: 'Resume Scoring', icon: FileText, color: 'bg-blue-500', textColor: 'text-blue-600' },
   AS: { label: 'Assessment', icon: ClipboardCheck, color: 'bg-green-500', textColor: 'text-green-600' },
   AIU: { label: 'AI Interview', icon: Users, color: 'bg-purple-500', textColor: 'text-purple-600' },
+  RU: { label: 'Resume Upload', icon: Upload, color: 'bg-orange-500', textColor: 'text-orange-600' },
 };
 
 export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberUsageProps) {
@@ -268,6 +271,15 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   AI Interview
                 </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Resume Upload
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  JDs
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Assessments
+                </th>
                 <th
                   onClick={() => toggleSort('total')}
                   onKeyDown={(e) => e.key === 'Enter' && toggleSort('total')}
@@ -312,7 +324,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm font-medium text-blue-600">
-                      {(member.by_type.RS?.total_consumed || 0).toFixed(1)}
+                      {Math.round(member.by_type.RS?.total_consumed || 0)}
                     </div>
                     <div className="text-xs text-gray-500">
                       {member.by_type.RS?.consumption_count || 0} actions
@@ -328,11 +340,31 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm font-medium text-purple-600">
-                      {(member.by_type.AIU?.total_consumed || 0).toFixed(1)}
+                      {Math.round(member.by_type.AIU?.total_consumed || 0)}
                     </div>
                     <div className="text-xs text-gray-500">
                       {member.by_type.AIU?.consumption_count || 0} actions
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <div className="text-sm font-medium text-orange-600">
+                      {Math.round(member.by_type.RU?.total_consumed || 0)}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {member.by_type.RU?.consumption_count || 0} actions
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <div className="text-sm font-medium text-indigo-600">
+                      {member.jds_created || 0}
+                    </div>
+                    <div className="text-xs text-gray-500">created</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <div className="text-sm font-medium text-teal-600">
+                      {member.assessments_created || 0}
+                    </div>
+                    <div className="text-xs text-gray-500">created</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="text-sm font-bold text-gray-900">

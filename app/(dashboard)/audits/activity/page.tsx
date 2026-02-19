@@ -18,10 +18,19 @@ import {
   Trash2,
   Upload,
   Eye,
-  Send
+  Send,
+  Timer,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import {
+  ERROR_ORIGIN_LABELS,
+  ERROR_ORIGIN_COLORS,
+  formatSessionDuration,
+  type ErrorOrigin,
+} from '@/lib/types/auditSession';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -35,6 +44,15 @@ interface AuditLog {
   entity_id: string | null;
   details: Record<string, any>;
   ip_address: string | null;
+  // Session tracking fields
+  session_start_time: string | null;
+  interruption_time: string | null;
+  session_end_time: string | null;
+  total_session_duration: number | null;
+  error_origin: 'TENANT' | 'SYSTEM' | 'NONE' | null;
+  error_code: string | null;
+  refund_flag: 'YES' | 'NO' | null;
+  module_type: string | null;
   created_at: string;
 }
 
@@ -315,6 +333,30 @@ export default function ActivityLogsPage() {
                                   <p className="text-xs text-gray-400 mt-1 font-mono">
                                     IP: {log.ip_address}
                                   </p>
+                                )}
+
+                                {/* Session indicators */}
+                                {(log.total_session_duration != null || log.error_origin || log.refund_flag === 'YES') && (
+                                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                                    {log.total_session_duration != null && (
+                                      <span className="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                        <Timer className="w-3 h-3" />
+                                        {formatSessionDuration(log.total_session_duration)}
+                                      </span>
+                                    )}
+                                    {log.error_origin && log.error_origin !== 'NONE' && (
+                                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${ERROR_ORIGIN_COLORS[log.error_origin as ErrorOrigin]}`}>
+                                        {log.error_origin === 'SYSTEM' ? <AlertTriangle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                                        {ERROR_ORIGIN_LABELS[log.error_origin as ErrorOrigin]}
+                                      </span>
+                                    )}
+                                    {log.refund_flag === 'YES' && (
+                                      <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Refunded
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
 

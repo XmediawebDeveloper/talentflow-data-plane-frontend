@@ -1013,6 +1013,9 @@ function CurrentPlanContent() {
         setSelectedQueuedUpgrade(null);
         setTcAccepted(false);
 
+        // Refresh notifications before logout so bell updates during toast
+        window.dispatchEvent(new CustomEvent('notificationTrigger'));
+
         // Plan upgraded successfully - logout and redirect to login
         // This ensures user gets fresh session with new plan data
         setTimeout(() => {
@@ -1451,6 +1454,9 @@ function CurrentPlanContent() {
             duration: 3000,
           });
 
+          // Refresh notifications before logout so bell updates during toast
+          window.dispatchEvent(new CustomEvent('notificationTrigger'));
+
           // Wait a moment for the toast to show, then logout
           setTimeout(() => {
             logout();
@@ -1462,8 +1468,9 @@ function CurrentPlanContent() {
         // Refresh data after queued upgrade
         await fetchData();
 
-        // Notify Header component to refresh quota/plan display
+        // Notify Header component to refresh quota/plan display and notifications
         window.dispatchEvent(new CustomEvent('planChanged'));
+        window.dispatchEvent(new CustomEvent('notificationTrigger'));
       } else {
         // Handle both string and object error formats
         const errorDetail = data.detail;
