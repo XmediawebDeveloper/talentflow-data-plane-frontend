@@ -227,7 +227,7 @@ export default function SearchFilterBarCompact({
   return (
     <div className="bg-white border-b border-gray-200">
       {/* Main Search Bar */}
-      <div className="p-4 flex gap-3 items-center">
+      <div className="p-3 sm:p-4 flex gap-2 sm:gap-3 items-center">
         {/* Global Search Bar */}
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -267,7 +267,7 @@ export default function SearchFilterBarCompact({
             }`}
           >
             <SlidersHorizontal className="w-4 h-4" />
-            <span>Filters</span>
+            <span className="hidden sm:inline">Filters</span>
             {activeFilterCount > 0 && (
               <span className="bg-white text-blue-600 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
                 {activeFilterCount}
@@ -277,7 +277,7 @@ export default function SearchFilterBarCompact({
 
           {/* Filter Panel - Matching Screenshot Layout */}
           {showAdvancedFilters && (
-            <div className="absolute right-0 top-12 w-[700px] bg-white rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden">
+            <div className="fixed inset-x-3 top-auto sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-[500px] md:w-[700px] bg-white rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden">
               <div className="max-h-[600px] overflow-y-auto">
                 {/* Experience Row */}
                 <div className="p-5 border-b border-gray-100">
@@ -288,7 +288,7 @@ export default function SearchFilterBarCompact({
                         <Clock className="w-4 h-4 text-blue-600" />
                         Experience
                       </label>
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {[
                           { label: '0-2y', min: 0, max: 2 },
                           { label: '2-5y', min: 2, max: 5 },
@@ -332,7 +332,7 @@ export default function SearchFilterBarCompact({
                   </button>
                   {expandedSections.includes('location-education') && (
                     <div className="px-5 pb-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div>
                           <label className="block text-xs text-gray-600 mb-1.5">Location</label>
                           <input
@@ -380,7 +380,7 @@ export default function SearchFilterBarCompact({
                   </button>
                   {expandedSections.includes('company-notice') && (
                     <div className="px-5 pb-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div>
                           <label className="block text-xs text-gray-600 mb-1.5">Current Company</label>
                           <input
@@ -426,7 +426,7 @@ export default function SearchFilterBarCompact({
                   {expandedSections.includes('dates') && (
                     <div className="px-5 pb-4">
                       <label className="block text-xs text-gray-600 mb-1.5">Upload Date Range</label>
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <input
                           type="date"
                           value={tempFilters.uploadDateRange?.start || ''}
@@ -469,7 +469,7 @@ export default function SearchFilterBarCompact({
                   </button>
                   {expandedSections.includes('upload-source') && (
                     <div className="px-5 pb-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div>
                           <label className="block text-xs text-gray-600 mb-1.5">Uploaded By</label>
                           <input
@@ -499,7 +499,7 @@ export default function SearchFilterBarCompact({
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between px-5 py-4 bg-gray-50 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 bg-gray-50 border-t border-gray-200">
                 <div className="text-sm text-blue-600">
                   {activeFilterCount > 0 ? (
                     <span>{activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} applied</span>
@@ -532,7 +532,7 @@ export default function SearchFilterBarCompact({
             onClick={() => setShowSort(!showSort)}
             className="flex items-center gap-2 h-10 px-4 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
           >
-            <span className="text-sm text-gray-700 font-medium">Sort</span>
+            <span className="hidden sm:inline text-sm text-gray-700 font-medium">Sort</span>
             <ChevronDown className="w-4 h-4 text-gray-500" />
           </button>
 

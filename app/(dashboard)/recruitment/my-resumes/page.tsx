@@ -206,7 +206,7 @@ function DraggableCardResumeRow({
   return (
     <div
       ref={preview as unknown as React.Ref<HTMLDivElement>}
-      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center min-w-[1200px] ${
+      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center min-w-[1200px] ${
         !isLast ? 'border-b border-gray-100' : ''
       } ${selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''} ${isDragging ? 'opacity-50' : ''}`}
       onClick={() => onViewDetails(resume)}
@@ -1919,8 +1919,16 @@ export default function MyResumesPage() {
               : record
           ));
 
-          // Check if batch is complete
-          if (status.status === 'completed' || status.pending === 0) {
+          // Check if batch is complete.
+          // IMPORTANT: Do NOT stop on status.pending === 0 alone — the backend uses
+          // 'pending' only for queued items. Once a file moves to 'processing',
+          // pending drops to 0 but the file is still running. Stopping here causes
+          // it to freeze at "⚡ Processing..." forever.
+          const hasActiveItems = status.items?.some((item: any) =>
+            item.status === 'pending' || item.status === 'processing'
+          ) ?? false;
+
+          if (status.status === 'completed' || !hasActiveItems) {
             clearInterval(pollInterval);
             pollingIntervalsRef.current.delete(pollInterval); // Remove from tracking
 
@@ -2231,7 +2239,7 @@ export default function MyResumesPage() {
 
         {viewMode === 'list' ? (
           // List View with Folder Tree
-          <div className="flex">
+          <div className="flex flex-col md:flex-row">
             <FolderTree
               folders={folders}
               selectedFolder={selectedFolder}
@@ -2250,7 +2258,7 @@ export default function MyResumesPage() {
               onWidthChange={setFolderTreeWidth}
             />
 
-            <div className="flex-1 min-w-0 flex flex-col">
+            <div className="flex-1 flex flex-col min-w-0">
               {/* Breadcrumb Navigation for List View */}
               {selectedFolder && selectedFolder !== 'all' && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-sm">
@@ -2565,9 +2573,10 @@ export default function MyResumesPage() {
                           {foldersToDisplay.length > 0 && (
                             <h3 className="text-sm font-medium text-gray-700 mb-3">Resumes in this folder</h3>
                           )}
-                          {/* Resumes Table */}
+                          {/* Resumes Table - Desktop */}
                       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                        <div className="overflow-x-auto">
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto">
                         {/* Table Header */}
                         <div className="grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[1200px]">
                           <div></div>
@@ -2609,6 +2618,71 @@ export default function MyResumesPage() {
                             onViewDetails={(r) => router.push(`/recruitment/resume-view/${r.id}`)}
                           />
                         ))}
+                        </div>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden space-y-3 p-3">
+                          {folderResumes.map((resume) => (
+                            <div
+                              key={resume.id}
+                              className={`bg-white border rounded-lg p-4 cursor-pointer hover:shadow-md transition-all ${
+                                selectedResumes.includes(resume.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+                              }`}
+                              onClick={() => router.push(`/recruitment/resume-view/${resume.id}`)}
+                            >
+                              <div className="flex items-start gap-3 mb-3">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedResumes.includes(resume.id)}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectResume(resume.id);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-600 mt-1"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-gray-900 truncate">{resume.name}</div>
+                                  <div className="text-sm text-gray-500 truncate">{resume.email || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="space-y-2 text-sm mb-3">
+                                {resume.phone && resume.phone !== 'No phone' && (
+                                  <div className="text-gray-600 truncate">{resume.phone}</div>
+                                )}
+                                {resume.experience && (
+                                  <div className="text-gray-600">{resume.experience} exp.</div>
+                                )}
+                                {resume.skills && resume.skills.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {resume.skills.slice(0, 3).map((skill, i) => (
+                                      <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs border border-blue-200">{skill}</span>
+                                    ))}
+                                    {resume.skills.length > 3 && (
+                                      <span className="px-2 py-0.5 text-gray-500 text-xs">+{resume.skills.length - 3}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setQuickViewResume(resume); }}
+                                  className="flex-1 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center gap-1"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View
+                                </button>
+                                {(hasPermission('canDeleteResumes') || isTenantAdmin) && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(resume.id); }}
+                                    className="px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center gap-1"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                         </div>
@@ -2976,7 +3050,7 @@ export default function MyResumesPage() {
                   return (
                     <>
                       {/* Status Summary Cards - 6 Column Grid (Clickable Filters) */}
-                      <div className="grid grid-cols-3 gap-3 mb-6">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
                         {/* Completed */}
                         <div
                           onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'completed' ? null : 'completed')}
@@ -3097,7 +3171,11 @@ export default function MyResumesPage() {
 
                       {/* Overall ETA Banner */}
                       {(() => {
-                        const activeBatches = myResumesHistory.filter(r => r.pending > 0 && r.date);
+                        // Only show for batches that still have genuinely active items
+                        const activeBatches = myResumesHistory.filter(r =>
+                          r.pending > 0 && r.date &&
+                          r.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing')
+                        );
                         if (activeBatches.length === 0) return null;
                         const totalPending = activeBatches.reduce((sum: number, r: any) => sum + r.pending, 0);
                         const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
@@ -3109,9 +3187,10 @@ export default function MyResumesPage() {
                             </div>
                           );
                         }
-                        // Use the earliest active batch start time for overall ETA
+                        // Cap elapsed at 10 minutes so a batch that started hours ago with a
+                        // stuck file doesn't produce an absurd ETA (e.g. "233–433 mins remaining").
                         const earliestStart = Math.min(...activeBatches.map((r: any) => new Date(r.date).getTime()));
-                        const elapsed = Date.now() - earliestStart;
+                        const elapsed = Math.min(Date.now() - earliestStart, 10 * 60 * 1000);
                         const avgTimePerFile = elapsed / totalProcessed;
                         const remainingMs = totalPending * avgTimePerFile;
                         const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
@@ -3248,9 +3327,13 @@ export default function MyResumesPage() {
                                     </div>
                                   </div>
 
-                                  {/* Estimated Time Remaining */}
-                                  {record.pending > 0 && record.date && (() => {
-                                    const elapsed = Date.now() - new Date(record.date).getTime();
+                                  {/* Estimated Time Remaining — only show when items are genuinely active */}
+                                  {record.pending > 0 && record.date &&
+                                   record.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing') &&
+                                   (() => {
+                                    // Cap elapsed at 10 minutes to prevent absurd ETAs when a file
+                                    // is stuck at 'processing' and the batch started hours ago.
+                                    const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
                                     if (processed <= 0 || elapsed <= 0) {
                                       return (
                                         <div className="flex items-center gap-1.5 mb-4 text-xs text-blue-600">

@@ -584,7 +584,9 @@ export const assessmentService = {
    */
   async deleteResult(assessmentId: string, resultId: string): Promise<void> {
     try {
-      await api.delete(`/assessments/${assessmentId}/results/${resultId}`);
+      await api.delete(`/assessments/${assessmentId}/results/${resultId}`, {
+        timeout: 30000, // 30 seconds timeout
+      });
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -802,6 +804,7 @@ export const assessmentService = {
       const response = await api.get(`/reports/export/assessment/${assessmentId}`, {
         responseType: 'blob',
         params,
+        timeout: 120000, // 2 minutes timeout for PDF generation
       });
       return response.data;
     } catch (error) {

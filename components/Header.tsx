@@ -44,8 +44,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   // Listen for plan changes and unit consumption to refresh quota data
   useEffect(() => {
     const handlePlanChange = () => {
-      console.log('[Header] Plan changed, refreshing quota...');
+      console.log('[Header] Plan changed, refreshing quota and notifications...');
       fetchQuotaStatus();
+      // Refresh notification count after a delay to pick up backend-created notifications
+      setTimeout(() => fetchNotificationCount(), 2000);
     };
 
     const handleUnitsConsumed = () => {
@@ -199,6 +201,47 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     }).then((result) => {
       if (result.status === 'created') {
         // Refresh notification count to show the new welcome notification
+        fetchNotificationCount();
+      }
+    });
+  }, [user, quotaData, fetchNotificationCount]);
+
+  // Status notifications: Check expiry, quota exhausted, quota low on first quota load per session
+  const statusCheckCalledRef = useRef(false);
+
+  useEffect(() => {
+    if (!user || !quotaData || statusCheckCalledRef.current) return;
+    if (!['active', 'trial', 'expired'].includes(quotaData.subscription_status || '')) return;
+
+    statusCheckCalledRef.current = true;
+
+    // Build quota payload from quotaData
+    const quotaPayload: Record<string, { total_remaining: number; total_limit: number; is_unlimited: boolean }> = {};
+    if (quotaData.quotas) {
+      for (const [key, quota] of Object.entries(quotaData.quotas)) {
+        if (quota) {
+          const isUnlimited = !!(quota as any).is_unlimited;
+          const totalRemaining = typeof quota.total_remaining === 'number' ? quota.total_remaining : 0;
+          const subLimit = typeof quota.subscription?.limit === 'number' ? quota.subscription.limit : 0;
+          const addonPurchased = quota.addon?.total_purchased || 0;
+          quotaPayload[key] = {
+            total_remaining: totalRemaining,
+            total_limit: subLimit + addonPurchased,
+            is_unlimited: isUnlimited,
+          };
+        }
+      }
+    }
+
+    notificationService.checkStatusNotifications({
+      plan_name: quotaData.plan_name || quotaData.plan_info?.plan_name,
+      is_trial: !!quotaData.is_trial,
+      subscription_status: quotaData.subscription_status,
+      plan_expiry_date: quotaData.plan_expiry_date,
+      trial_end_date: quotaData.trial_end_date || quotaData.trial_info?.trial_end_date,
+      quotas: quotaPayload,
+    }).then((result) => {
+      if (result.count > 0) {
         fetchNotificationCount();
       }
     });

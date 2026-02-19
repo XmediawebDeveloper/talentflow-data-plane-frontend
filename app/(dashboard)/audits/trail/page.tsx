@@ -24,9 +24,24 @@ import {
   ShoppingCart,
   TrendingUp,
   Tag,
+  AlertTriangle,
+  Shield,
+  Timer,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import {
+  ERROR_ORIGIN_LABELS,
+  ERROR_ORIGIN_COLORS,
+  ERROR_CODE_LABELS,
+  ERROR_CODE_COLORS,
+  REFUND_FLAG_COLORS,
+  MODULE_TYPE_LABELS,
+  formatSessionDuration,
+  isSessionModule,
+  getBillingImpact,
+  type ErrorOrigin,
+} from '@/lib/types/auditSession';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -49,6 +64,18 @@ interface AuditLog {
   consumption_status: string | null;  // SUCCESS, FAILED, INSUFFICIENT_UNITS, etc.
   balance_before: number | null;      // Available units before action
   balance_after: number | null;       // Available units after action
+  // Session tracking fields (Audit Logs & Error Codes: Sections 3, 14)
+  session_start_time: string | null;
+  interruption_time: string | null;
+  session_end_time: string | null;
+  total_session_duration: number | null; // seconds
+  // Error origin classification (Section 5)
+  error_origin: 'TENANT' | 'SYSTEM' | 'NONE' | null;
+  error_code: string | null;
+  // Refund tracking (Section 6)
+  refund_flag: 'YES' | 'NO' | null;
+  // Module type for session-based actions
+  module_type: string | null;
   created_at: string;
 }
 
@@ -102,14 +129,15 @@ export default function AuditTrailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // View mode: 'all' | 'system' | 'usage'
-  const [viewMode, setViewMode] = useState<'all' | 'system' | 'usage'>('all');
+  // View mode: 'all' | 'system' | 'usage' | 'sessions'
+  const [viewMode, setViewMode] = useState<'all' | 'system' | 'usage' | 'sessions'>('all');
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('');
   const [entityFilter, setEntityFilter] = useState('');
   const [dateRange, setDateRange] = useState('30');
+  const [errorOriginFilter, setErrorOriginFilter] = useState<'' | ErrorOrigin>('');
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -129,7 +157,7 @@ export default function AuditTrailPage() {
 
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
-  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange });
+  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, viewMode, errorOriginFilter });
 
   // Valid backend enum values (actions the API accepts as filters)
   const validBackendActions = [
@@ -148,10 +176,11 @@ export default function AuditTrailPage() {
     'settings_update', 'company_settings_update',
     'subscription_upgrade', 'subscription_downgrade', 'subscription_cancel', 'payment_method_add', 'payment_method_remove',
     'export_excel', 'export_pdf', 'export_csv',
+    'session_start', 'session_complete', 'session_interrupted',
   ];
 
   const validBackendEntities = [
-    'user', 'job_description', 'resume', 'folder', 'assessment', 'role', 'permission', 'master_data', 'settings', 'subscription',
+    'user', 'job_description', 'resume', 'folder', 'assessment', 'role', 'permission', 'master_data', 'settings', 'subscription', 'session',
   ];
 
   const fetchAuditLogs = useCallback(async () => {
@@ -160,9 +189,12 @@ export default function AuditTrailPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
+      // When using view mode filters (usage/system), fetch more items from backend
+      // since client-side filtering will reduce the visible count
+      const fetchSize = viewMode === 'all' ? pageSize : pageSize * 5;
       const params = new URLSearchParams({
         page: page.toString(),
-        page_size: pageSize.toString(),
+        page_size: fetchSize.toString(),
       });
 
       // Only send filter to API if it's a valid backend enum value
@@ -218,7 +250,7 @@ export default function AuditTrailPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, actionFilter, entityFilter, dateRange]);
+  }, [page, pageSize, actionFilter, entityFilter, dateRange, viewMode]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -319,20 +351,23 @@ export default function AuditTrailPage() {
       prev.page !== page ||
       prev.actionFilter !== actionFilter ||
       prev.entityFilter !== entityFilter ||
-      prev.dateRange !== dateRange;
+      prev.dateRange !== dateRange ||
+      prev.viewMode !== viewMode ||
+      prev.errorOriginFilter !== errorOriginFilter;
 
     if (filtersChanged && hasFetched.current) {
-      prevFilters.current = { page, actionFilter, entityFilter, dateRange };
+      prevFilters.current = { page, actionFilter, entityFilter, dateRange, viewMode, errorOriginFilter };
       fetchAuditLogs();
       fetchStats();
     }
-  }, [page, actionFilter, entityFilter, dateRange]);
+  }, [page, actionFilter, entityFilter, dateRange, viewMode, errorOriginFilter]);
 
   // Handle view mode change - reset filters and update view mode together
-  const handleViewModeChange = (newMode: 'all' | 'system' | 'usage') => {
+  const handleViewModeChange = (newMode: 'all' | 'system' | 'usage' | 'sessions') => {
     if (newMode === viewMode) return;
     setActionFilter('');
     setEntityFilter('');
+    setErrorOriginFilter('');
     setPage(1);
     setViewMode(newMode);
   };
@@ -400,9 +435,14 @@ export default function AuditTrailPage() {
     }
   };
 
-  // Derive status from action name
-  const getActionStatus = (action: string): { label: string; color: string } => {
-    if (action.includes('_failed') || action === 'login_failed')
+  // Derive status from action name and error_origin
+  const getActionStatus = (action: string, errorOrigin?: string | null): { label: string; color: string } => {
+    // Use error_origin for session-based events when available
+    if (errorOrigin === 'SYSTEM')
+      return { label: 'System Failure', color: 'bg-red-100 text-red-800 border border-red-200' };
+    if (errorOrigin === 'TENANT')
+      return { label: 'Tenant Interrupted', color: 'bg-amber-100 text-amber-800 border border-amber-200' };
+    if (action.includes('_failed') || action === 'login_failed' || action === 'session_interrupted')
       return { label: 'Failed', color: 'bg-red-100 text-red-800 border border-red-200' };
     if (action === 'quota_exhausted' || action === 'user_limit_exceeded')
       return { label: 'Blocked', color: 'bg-orange-100 text-orange-800 border border-orange-200' };
@@ -433,22 +473,29 @@ export default function AuditTrailPage() {
     return typeof firstVal === 'string' ? firstVal : '—';
   };
 
-  // Get impact level (severity based on status)
+  // Get impact level (severity based on status and error_origin)
   const getImpactLevel = (log: AuditLog): { label: string; color: string } => {
-    const status = getActionStatus(log.action);
-    if (status.label === 'Failed') return { label: 'High', color: 'text-red-600' };
+    // Use error_origin when available for session-based events
+    if (log.error_origin === 'SYSTEM') return { label: 'High', color: 'text-red-600' };
+    if (log.error_origin === 'TENANT') return { label: 'Medium', color: 'text-amber-600' };
+    const status = getActionStatus(log.action, log.error_origin);
+    if (status.label === 'Failed' || status.label === 'System Failure') return { label: 'High', color: 'text-red-600' };
     if (status.label === 'Blocked') return { label: 'High', color: 'text-red-600' };
-    if (status.label === 'Denied') return { label: 'Medium', color: 'text-amber-600' };
-    // Destructive actions
+    if (status.label === 'Denied' || status.label === 'Tenant Interrupted') return { label: 'Medium', color: 'text-amber-600' };
     if (log.action.includes('delete') || log.action.includes('remove') || log.action.includes('cancel'))
       return { label: 'Medium', color: 'text-amber-600' };
     return { label: 'Low', color: 'text-green-600' };
   };
 
   // Get impact text (unit consumption impact)
-  const getImpactText = (log: AuditLog): { text: string; negative: boolean } => {
+  const getImpactText = (log: AuditLog): { text: string; negative: boolean; positive?: boolean } => {
     const units = log.details?.units_consumed_actual ?? log.units_consumed;
+    // Addon/seat purchases add credits — show as positive (green)
+    const isPurchase = ['addon_purchase', 'seats_purchase'].includes(log.action);
     if (units && units > 0 && log.unit_type) {
+      if (isPurchase) {
+        return { text: `+${units} ${log.unit_type}`, negative: false, positive: true };
+      }
       return { text: `-${units} ${log.unit_type}`, negative: true };
     }
     if (units === 0 && log.unit_type) {
@@ -458,9 +505,14 @@ export default function AuditTrailPage() {
   };
 
   const convertToCSV = (logs: AuditLog[]): string => {
-    const headers = ['Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Status', 'Details', 'Impact', 'Unit Type', 'Units Consumed', 'Available Before', 'Available After', 'IP Address'];
+    const headers = [
+      'Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Status', 'Details', 'Impact',
+      'Unit Type', 'Units Impact', 'Available Before', 'Available After',
+      'Error Origin', 'Error Code', 'Session Start', 'Session End', 'Duration (s)', 'Refund',
+      'IP Address',
+    ];
     const rows = logs.map(log => {
-      const status = getActionStatus(log.action);
+      const status = getActionStatus(log.action, log.error_origin);
       const impact = getImpactText(log);
       return [
         log.created_at,
@@ -475,6 +527,12 @@ export default function AuditTrailPage() {
         log.units_consumed || '',
         log.balance_before ?? log.details?.balance_before ?? '',
         log.balance_after ?? log.details?.balance_after ?? '',
+        log.error_origin || '',
+        log.error_code ? (ERROR_CODE_LABELS[log.error_code] || log.error_code) : '',
+        log.session_start_time || '',
+        log.session_end_time || '',
+        log.total_session_duration ?? '',
+        log.refund_flag || '',
         log.ip_address || '',
       ];
     });
@@ -517,6 +575,9 @@ export default function AuditTrailPage() {
     'tenant_signup',
     'payment_confirmed',
     'invoice_generated',
+    'session_start',
+    'session_complete',
+    'session_interrupted',
   ];
   const usageEntityTypes = [
     'addon',
@@ -530,28 +591,45 @@ export default function AuditTrailPage() {
     'plan',
   ];
 
+  // Session-based actions for the Sessions view tab
+  const sessionActions = [
+    'assessment_start', 'assessment_complete',
+    'session_start', 'session_complete', 'session_interrupted',
+  ];
+
   // Filter available actions and entities based on view mode
   const filteredAvailableActions = viewMode === 'all'
     ? availableActions
     : viewMode === 'usage'
       ? availableActions.filter(action => usageActions.includes(action.value))
-      : availableActions.filter(action => !usageActions.includes(action.value));
+      : viewMode === 'sessions'
+        ? availableActions.filter(action => sessionActions.includes(action.value))
+        : availableActions.filter(action => !usageActions.includes(action.value));
 
   const filteredAvailableEntities = viewMode === 'all'
     ? availableEntities
     : viewMode === 'usage'
       ? availableEntities.filter(entity => usageEntityTypes.includes(entity.value))
-      : availableEntities.filter(entity => !usageEntityTypes.includes(entity.value));
+      : viewMode === 'sessions'
+        ? availableEntities.filter(entity => ['assessment', 'session'].includes(entity.value))
+        : availableEntities.filter(entity => !usageEntityTypes.includes(entity.value));
 
   const filteredLogs = auditLogs.filter(log => {
     // First filter by view mode
     const isUsageLog = usageActions.includes(log.action) ||
                        usageEntityTypes.includes(log.entity_type || '') ||
                        (log.units_consumed && log.units_consumed > 0);
+    const isSessionLog = sessionActions.includes(log.action) ||
+                         isSessionModule(log.module_type) ||
+                         log.session_start_time !== null;
 
     if (viewMode === 'usage' && !isUsageLog) return false;
     if (viewMode === 'system' && isUsageLog) return false;
+    if (viewMode === 'sessions' && !isSessionLog) return false;
     // 'all' shows everything
+
+    // Error origin filter (works across all view modes)
+    if (errorOriginFilter && log.error_origin !== errorOriginFilter) return false;
 
     // Client-side filter by action (for usage-related actions not supported by backend)
     if (actionFilter && !validBackendActions.includes(actionFilter)) {
@@ -571,39 +649,40 @@ export default function AuditTrailPage() {
       (log.action_label && log.action_label.toLowerCase().includes(search)) ||
       (log.entity_type && log.entity_type.toLowerCase().includes(search)) ||
       (log.ip_address && log.ip_address.includes(search)) ||
-      (log.user_email && log.user_email.toLowerCase().includes(search))
+      (log.user_email && log.user_email.toLowerCase().includes(search)) ||
+      (log.error_code && (ERROR_CODE_LABELS[log.error_code] || log.error_code).toLowerCase().includes(search))
     );
   });
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gray-50/50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50/50">
       <div>
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300">
-                <ScrollText className="w-7 h-7 text-white" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300">
+                <ScrollText className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Audit Trail</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Audit Trail</h1>
                 <p className="text-sm text-gray-500 mt-0.5">Track all system activities and changes</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 onClick={() => { fetchAuditLogs(); fetchStats(); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
               >
                 <RefreshCw className="w-4 h-4 text-gray-600" />
-                <span className="text-sm font-medium text-gray-700">Refresh</span>
+                <span className="text-sm font-medium text-gray-700 hidden sm:inline">Refresh</span>
               </button>
               <button
                 onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300"
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300"
               >
                 <Download className="w-4 h-4" />
-                <span className="text-sm font-medium">Export CSV</span>
+                <span className="text-sm font-medium hidden sm:inline">Export CSV</span>
               </button>
             </div>
           </div>
@@ -714,6 +793,17 @@ export default function AuditTrailPage() {
                   <CreditCard className="w-4 h-4" />
                   <span className="text-sm">Usage & Billing</span>
                 </button>
+                <button
+                  onClick={() => handleViewModeChange('sessions')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                    viewMode === 'sessions'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Timer className="w-4 h-4" />
+                  <span className="text-sm">Sessions</span>
+                </button>
               </div>
               <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full font-medium">{filteredLogs.length} records</span>
             </div>
@@ -775,6 +865,20 @@ export default function AuditTrailPage() {
                   </select>
                   <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 rotate-90 pointer-events-none" />
                 </div>
+                <div className="relative">
+                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  <select
+                    value={errorOriginFilter}
+                    onChange={(e) => { setErrorOriginFilter(e.target.value as '' | ErrorOrigin); setPage(1); }}
+                    className="appearance-none pl-9 pr-10 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-sm cursor-pointer"
+                  >
+                    <option value="">All Origins</option>
+                    <option value="TENANT">Tenant-Side</option>
+                    <option value="SYSTEM">System-Side</option>
+                    <option value="NONE">None (Normal)</option>
+                  </select>
+                  <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 rotate-90 pointer-events-none" />
+                </div>
               </div>
             </div>
           </div>
@@ -820,9 +924,17 @@ export default function AuditTrailPage() {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Details</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Impact</th>
-                    {viewMode !== 'system' && (
+                    {viewMode === 'sessions' && (
                       <>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Units Consumed</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Error Origin</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Error Code</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Duration</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Refund</th>
+                      </>
+                    )}
+                    {(viewMode === 'all' || viewMode === 'usage') && (
+                      <>
+                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Units Impact</th>
                         <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Available</th>
                       </>
                     )}
@@ -831,7 +943,7 @@ export default function AuditTrailPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredLogs.map((log) => {
-                    const actionStatus = getActionStatus(log.action);
+                    const actionStatus = getActionStatus(log.action, log.error_origin);
                     const impact = getImpactText(log);
                     const balanceBefore = log.balance_before ?? log.details?.balance_before;
                     const balanceAfter = log.balance_after ?? log.details?.balance_after;
@@ -884,12 +996,52 @@ export default function AuditTrailPage() {
                             );
                           })()}
                         </td>
-                        {viewMode !== 'system' && (
+                        {viewMode === 'sessions' && (
                           <>
-                            {/* Units Consumed */}
+                            {/* Error Origin */}
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {log.error_origin ? (
+                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_ORIGIN_COLORS[log.error_origin as ErrorOrigin]}`}>
+                                  {ERROR_ORIGIN_LABELS[log.error_origin as ErrorOrigin]}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-gray-400">—</span>
+                              )}
+                            </td>
+                            {/* Error Code */}
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {log.error_code ? (
+                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_CODE_COLORS[log.error_code] || 'bg-gray-50 text-gray-600'}`}>
+                                  {ERROR_CODE_LABELS[log.error_code] || log.error_code}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-gray-400">—</span>
+                              )}
+                            </td>
+                            {/* Duration */}
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="text-sm text-gray-700 font-medium">
+                                {formatSessionDuration(log.total_session_duration)}
+                              </span>
+                            </td>
+                            {/* Refund */}
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {log.refund_flag ? (
+                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${REFUND_FLAG_COLORS[log.refund_flag as 'YES' | 'NO']}`}>
+                                  {log.refund_flag}
+                                </span>
+                              ) : (
+                                <span className="text-sm text-gray-400">—</span>
+                              )}
+                            </td>
+                          </>
+                        )}
+                        {(viewMode === 'all' || viewMode === 'usage') && (
+                          <>
+                            {/* Units Impact */}
                             <td className="px-6 py-4 whitespace-nowrap">
                               {impact.text !== '—' ? (
-                                <span className={`inline-flex items-center gap-1 text-sm font-semibold ${impact.negative ? 'text-red-700' : 'text-gray-500'}`}>
+                                <span className={`inline-flex items-center gap-1 text-sm font-semibold ${impact.negative ? 'text-red-700' : impact.positive ? 'text-green-600' : 'text-gray-500'}`}>
                                   {impact.negative && <Zap className="w-3.5 h-3.5" />}
                                   {impact.text}
                                 </span>
@@ -929,11 +1081,18 @@ export default function AuditTrailPage() {
           )}
 
           {/* Pagination */}
-          {totalPages > 1 && filteredLogs.length > 0 && (
+          {filteredLogs.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
-              <p className="text-sm text-gray-600">
-                Page <span className="font-semibold text-gray-900">{page}</span> of <span className="font-semibold text-gray-900">{totalPages}</span>
-              </p>
+              <div className="flex items-center gap-4">
+                <p className="text-sm text-gray-600">
+                  Showing <span className="font-semibold text-gray-900">{Math.min((page - 1) * pageSize + 1, total)}</span>–<span className="font-semibold text-gray-900">{Math.min(page * pageSize, total)}</span> of <span className="font-semibold text-gray-900">{total}</span> records
+                </p>
+                {viewMode !== 'all' && (
+                  <span className="text-xs text-gray-400">
+                    ({filteredLogs.length} matching {viewMode === 'usage' ? 'usage & billing' : viewMode === 'sessions' ? 'sessions' : 'system'} filter)
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
@@ -943,6 +1102,9 @@ export default function AuditTrailPage() {
                   <ChevronLeft className="w-4 h-4" />
                   Previous
                 </button>
+                <span className="text-sm text-gray-500 px-2">
+                  Page {page} of {totalPages}
+                </span>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
@@ -1027,7 +1189,7 @@ export default function AuditTrailPage() {
                     <div className="grid grid-cols-3 gap-3">
                       <div className="bg-gray-50 rounded-xl p-3.5">
                         <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Status</p>
-                        {(() => { const s = getActionStatus(selectedLog.action); return <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
+                        {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
                       </div>
                       <div /><div />
                     </div>
@@ -1057,7 +1219,7 @@ export default function AuditTrailPage() {
                     ) : <div />}
                     <div className="bg-gray-50 rounded-xl p-3.5">
                       <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Status</p>
-                      {(() => { const s = getActionStatus(selectedLog.action); return <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
+                      {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
                     </div>
                   </div>
                 );
@@ -1068,6 +1230,75 @@ export default function AuditTrailPage() {
                 <div className="bg-gray-50 rounded-xl p-3.5">
                   <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Entity ID</p>
                   <p className="text-sm font-mono text-gray-700 truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
+                </div>
+              )}
+
+              {/* Session Details (shown when session fields exist) */}
+              {(selectedLog.session_start_time || selectedLog.error_origin || selectedLog.module_type) && (
+                <div>
+                  <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2.5">Session Details</p>
+                  <div className="bg-gray-50 rounded-xl divide-y divide-gray-100 overflow-hidden">
+                    {selectedLog.module_type && (
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Module</span>
+                        <span className="text-sm font-medium text-gray-900">{MODULE_TYPE_LABELS[selectedLog.module_type] || selectedLog.module_type}</span>
+                      </div>
+                    )}
+                    {selectedLog.session_start_time && (
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Session Start</span>
+                        <span className="text-sm text-gray-900">{formatDate(selectedLog.session_start_time)}</span>
+                      </div>
+                    )}
+                    {selectedLog.interruption_time && (
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Interruption Time</span>
+                        <span className="text-sm text-red-700">{formatDate(selectedLog.interruption_time)}</span>
+                      </div>
+                    )}
+                    {selectedLog.session_end_time && (
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Session End</span>
+                        <span className="text-sm text-gray-900">{formatDate(selectedLog.session_end_time)}</span>
+                      </div>
+                    )}
+                    {selectedLog.total_session_duration != null && (
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Total Duration</span>
+                        <span className="text-sm font-semibold text-gray-900">{formatSessionDuration(selectedLog.total_session_duration)}</span>
+                      </div>
+                    )}
+                    {selectedLog.error_origin && (
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Error Origin</span>
+                        <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_ORIGIN_COLORS[selectedLog.error_origin as ErrorOrigin]}`}>
+                          {ERROR_ORIGIN_LABELS[selectedLog.error_origin as ErrorOrigin]}
+                        </span>
+                      </div>
+                    )}
+                    {selectedLog.error_code && (
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Error Code</span>
+                        <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_CODE_COLORS[selectedLog.error_code] || 'bg-gray-50 text-gray-600'}`}>
+                          {ERROR_CODE_LABELS[selectedLog.error_code] || selectedLog.error_code}
+                        </span>
+                      </div>
+                    )}
+                    {selectedLog.refund_flag && (
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Refund Status</span>
+                        <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${REFUND_FLAG_COLORS[selectedLog.refund_flag as 'YES' | 'NO']}`}>
+                          {selectedLog.refund_flag === 'YES' ? 'Refunded' : 'No Refund'}
+                        </span>
+                      </div>
+                    )}
+                    {selectedLog.error_origin && selectedLog.error_origin !== 'NONE' && (
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Billing Impact</span>
+                        <span className="text-sm text-gray-700">{getBillingImpact(selectedLog.error_origin as ErrorOrigin).description}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

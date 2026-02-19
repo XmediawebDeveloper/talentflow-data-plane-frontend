@@ -96,7 +96,7 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
 
       <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {/* Left: Avatar + Greeting */}
-        <div className="flex items-center gap-4">
+        <div className="block sm:flex sm:items-center sm:gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/15 text-lg font-semibold ring-2 ring-white/20">
             {user?.name ? getInitials(user.name) : 'U'}
           </div>
