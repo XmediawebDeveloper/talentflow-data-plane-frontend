@@ -20,8 +20,19 @@ const navItems = [
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isSubdomain, setIsSubdomain] = useState(false);
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
+
+  useEffect(() => {
+    const host = window.location.hostname;
+    const parts = host.split('.');
+    // Subdomain if 3+ parts and not www/app (e.g. acme.0sms.com or acme.localhost)
+    setIsSubdomain(
+      (parts.length >= 3 && !['www', 'app'].includes(parts[0])) ||
+      host.endsWith('.localhost')
+    );
+  }, []);
 
   // Prevent hydration mismatch by only rendering theme-dependent UI after mount
   useEffect(() => {
@@ -80,12 +91,22 @@ export function Header() {
               )}
             </button>
 
-            <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800" asChild>
-              <Link href="/login">Sign In</Link>
-            </Button>
-            <Button className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
-              <Link href="/signup">Start Free Trial</Link>
-            </Button>
+            {/* Root domain: Sign In hidden (signup only). Subdomain: Start Free Trial hidden (login only). */}
+            {!isSubdomain && (
+              <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800" asChild>
+                <Link href="/login">Sign In</Link>
+              </Button>
+            )}
+            {!isSubdomain && (
+              <Button className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
+                <Link href="/signup">Start Free Trial</Link>
+              </Button>
+            )}
+            {isSubdomain && (
+              <Button className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
+                <Link href="/login">Sign In</Link>
+              </Button>
+            )}
           </div>
 
           <div className="flex md:hidden items-center gap-2">
@@ -137,16 +158,25 @@ export function Header() {
                 </Link>
               ))}
               <div className="flex flex-col gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <Button
-                  variant="outline"
-                  className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
-                  asChild
-                >
-                  <Link href="/login" prefetch={false}>Sign In</Link>
-                </Button>
-                <Button className="w-full bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
-                  <Link href="/signup" prefetch={false}>Start Free Trial</Link>
-                </Button>
+                {!isSubdomain && (
+                  <Button
+                    variant="outline"
+                    className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
+                    asChild
+                  >
+                    <Link href="/login" prefetch={false}>Sign In</Link>
+                  </Button>
+                )}
+                {!isSubdomain && (
+                  <Button className="w-full bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
+                    <Link href="/signup" prefetch={false}>Start Free Trial</Link>
+                  </Button>
+                )}
+                {isSubdomain && (
+                  <Button className="w-full bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
+                    <Link href="/login" prefetch={false}>Sign In</Link>
+                  </Button>
+                )}
               </div>
             </nav>
           </div>

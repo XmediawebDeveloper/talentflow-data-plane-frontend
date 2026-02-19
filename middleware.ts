@@ -13,6 +13,7 @@ const publicRoutes = [
   '/faq',
   '/login',
   '/signup',
+  '/reset-password', // Invite-based first-login password setup
   '/assessment', // Candidate assessment portal (public)
 ];
 
@@ -80,6 +81,20 @@ export async function middleware(request: NextRequest) {
     }
   }
   // --- End subdomain validation ---
+
+  // Root domain (0sms.com) is SIGNUP-ONLY — block /login, redirect to /signup
+  if (!tenantSubdomain && pathname === '/login') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/signup';
+    return NextResponse.redirect(url);
+  }
+
+  // Subdomain (acme.0sms.com) is LOGIN-ONLY — block /signup, redirect to /login
+  if (tenantSubdomain && pathname === '/signup') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
+  }
 
   // Check if route is public
   const isPublicRoute = publicRoutes.some(route =>

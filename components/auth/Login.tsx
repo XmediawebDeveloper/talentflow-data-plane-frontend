@@ -144,6 +144,12 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       console.error('Error saving remember me preference:', error);
     }
 
+    // Check if user must reset password (invite flow)
+    if (response.must_reset_password) {
+      router.push('/reset-password');
+      return;
+    }
+
     // Check if tenant has pending payment - redirect to payment page with encoded params
     if (response.pending_payment && response.pending_payment_redirect) {
       // Backend sends raw URL like /complete-payment?tenant_id=xxx&plan_id=63
@@ -842,7 +848,8 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
             {/* Footer */}
             <div style={footerStyle}>
-              {onSwitchToSignUp && (
+              {/* Hide "Create Account" on subdomain — subdomain is login-only */}
+              {onSwitchToSignUp && !subdomain && (
                 <p style={footerTextStyle}>
                   Don't have an account?{' '}
                   <button type="button" onClick={onSwitchToSignUp} style={switchLinkStyle}>

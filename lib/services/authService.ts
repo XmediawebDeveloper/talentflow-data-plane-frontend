@@ -104,6 +104,8 @@ export interface LoginResponse {
   // Pending payment info - if set, frontend should redirect to payment page
   pending_payment?: boolean;
   pending_payment_redirect?: string;
+  // Invite flow: if true, user must set a new password before accessing the dashboard
+  must_reset_password?: boolean;
 }
 
 // 2FA Required Response - returned when user has 2FA enabled
