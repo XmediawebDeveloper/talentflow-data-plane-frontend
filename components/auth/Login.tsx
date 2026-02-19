@@ -3,10 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, KeyRound } from 'lucide-react';
+import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, KeyRound, Building2 } from 'lucide-react';
 import { User } from '@/lib/types/tenant';
 import { authService, isTwoFactorRequired, LoginResponse } from '@/lib/services';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
+import { detectSubdomain } from '@/lib/utils/subdomain';
 import ForgotPasswordModal from './ForgotPasswordModal';
 
 interface LoginProps {
@@ -31,6 +33,14 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const [isMobile, setIsMobile] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+
+  // Subdomain (tenant) detection
+  const [subdomain, setSubdomain] = useState<string | null>(null);
+
+  useEffect(() => {
+    const detected = detectSubdomain(new URLSearchParams(searchParams.toString()));
+    if (detected) setSubdomain(detected);
+  }, [searchParams]);
 
   // 2FA State
   const [show2FA, setShow2FA] = useState(false);
@@ -134,8 +144,23 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       console.error('Error saving remember me preference:', error);
     }
 
-    // Check if tenant has pending payment - redirect to payment page first
+    // Check if tenant has pending payment - redirect to payment page with encoded params
     if (response.pending_payment && response.pending_payment_redirect) {
+      // Backend sends raw URL like /complete-payment?tenant_id=xxx&plan_id=63
+      // Encode the params so they're not visible in the URL
+      try {
+        const url = new URL(response.pending_payment_redirect, window.location.origin);
+        const rawTenantId = url.searchParams.get('tenant_id');
+        const rawPlanId = url.searchParams.get('plan_id');
+        if (rawTenantId && rawPlanId) {
+          const encodedUrl = `/complete-payment?t=${encodeURIComponent(encodeParam(rawTenantId))}&p=${encodeURIComponent(encodePlanId(rawPlanId))}`;
+          console.log('[LOGIN] Tenant has pending payment, redirecting to encoded URL');
+          router.push(encodedUrl);
+          return;
+        }
+      } catch {
+        // Fallback to raw URL if parsing fails
+      }
       console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
       router.push(response.pending_payment_redirect);
       return;
@@ -155,7 +180,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     setIsLoading(true);
 
     try {
-      const response = await authService.login({ email, password });
+      const response = await authService.login({ email, password, subdomain: subdomain || undefined });
 
       // Check if 2FA is required
       if (isTwoFactorRequired(response)) {
@@ -706,6 +731,25 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
               </>
             ) : (
               <>
+                {/* Tenant subdomain banner */}
+                {subdomain && (
+                  <div style={{
+                    marginBottom: '20px',
+                    padding: '10px 14px',
+                    backgroundColor: '#EFF6FF',
+                    border: '1px solid #BFDBFE',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}>
+                    <Building2 style={{ width: 16, height: 16, color: '#2563EB', flexShrink: 0 }} />
+                    <span style={{ fontSize: '13px', color: '#1D4ED8' }}>
+                      Signing in to <strong style={{ textTransform: 'capitalize' }}>{subdomain}</strong> workspace
+                    </span>
+                  </div>
+                )}
+
                 <h2 style={formTitleStyle}>Welcome Back</h2>
                 <p style={formSubtitleStyle}>Sign in to access your recruitment dashboard</p>
 

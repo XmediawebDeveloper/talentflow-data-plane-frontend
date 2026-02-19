@@ -577,7 +577,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     if (!authService.isAuthenticated()) return;
     try {
-      console.log('[AUTH] Refreshing user data...');
+      console.log('[AUTH] refreshUser() called — fetching latest user from API...');
       const apiUserData = await authService.getCurrentUser();
       const userData = mapApiUserToUser(apiUserData);
       // Preserve lastLogin and createdAt from current user if API doesn't return them
@@ -591,12 +591,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(userData);
       saveUserToStorage(userData);
       console.log('[AUTH] User data refreshed');
-
-      // ✅ Dispatch event to notify UI components (like Sidebar) to re-render
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('permissions-updated'));
-        console.log('[AUTH] Dispatched permissions-updated event after refresh');
-      }
+      // NOTE: Do NOT dispatch 'permissions-updated' here — that event is reserved for the
+      // API interceptor (version-mismatch detection). Dispatching it here creates a feedback
+      // loop: handlePermissionsUpdated catches it, makes a second API call, and calls setUser()
+      // again, causing a double Header re-render that can update wsToken and trigger an
+      // unnecessary WebSocket reconnect.
+      // The Sidebar and other components re-render naturally because setUser() above changes
+      // the AuthContext user, which propagates through props automatically.
     } catch (error) {
       console.error('[AUTH] Failed to refresh user:', error);
     }

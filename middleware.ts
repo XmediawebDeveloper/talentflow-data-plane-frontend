@@ -26,8 +26,60 @@ const protectedRoutes = [
   '/analytics',
 ];
 
-export function middleware(request: NextRequest) {
+const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // --- Extract tenant subdomain ---
+  const host = request.headers.get('host') || '';
+  const hostname = host.split(':')[0]; // strip port for localhost:3000
+  const hostParts = hostname.split('.');
+  let tenantSubdomain: string | null = null;
+  let isRealSubdomain = false; // true = from actual hostname (not ?org= dev param)
+
+  // Real subdomain: acme.0sms.com → ['acme', '0sms', 'com']
+  if (hostParts.length >= 3 && !['www', 'app'].includes(hostParts[0])) {
+    tenantSubdomain = hostParts[0];
+    isRealSubdomain = true;
+  }
+  // Local dev fallback: localhost:3000?org=acme (skip DB validation)
+  if (!tenantSubdomain) {
+    tenantSubdomain = request.nextUrl.searchParams.get('org');
+  }
+  // --- End subdomain extraction ---
+
+  // --- Validate real subdomain against DB ---
+  // Only for real hostnames (acme.0sms.com), not the ?org= dev shortcut
+  if (tenantSubdomain && isRealSubdomain) {
+    const cachedValid = request.cookies.get('tf-subdomain-valid')?.value;
+
+    if (cachedValid !== tenantSubdomain) {
+      // Not in cache — call backend to check if this org exists and is active
+      try {
+        const resp = await fetch(
+          `${API_URL}/auth/validate-subdomain/${encodeURIComponent(tenantSubdomain)}`,
+          {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(3000), // 3 s max
+          }
+        );
+
+        if (!resp.ok) {
+          // Subdomain not found or inactive → redirect to root domain
+          console.log(`[MIDDLEWARE] Unknown subdomain "${tenantSubdomain}", redirecting to root`);
+          return NextResponse.redirect(`https://${BASE_DOMAIN}`);
+        }
+        // Valid — the cache cookie is set below on the final response
+      } catch (err) {
+        // Backend unreachable — allow through rather than blocking all traffic
+        console.log('[MIDDLEWARE] Subdomain validation fetch error:', err);
+      }
+    }
+  }
+  // --- End subdomain validation ---
 
   // Check if route is public
   const isPublicRoute = publicRoutes.some(route =>
@@ -60,7 +112,7 @@ export function middleware(request: NextRequest) {
     console.log('[MIDDLEWARE] No token cookie found', {
       pathname,
       browser: browserType,
-      userAgent: userAgent.substring(0, 100), // First 100 chars for debugging
+      userAgent: userAgent.substring(0, 100),
       referer: request.headers.get('referer'),
     });
   }
@@ -71,7 +123,17 @@ export function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('from', pathname);
-    return NextResponse.redirect(url);
+    const redirectRes = NextResponse.redirect(url);
+    // Preserve subdomain cookie so login page knows which tenant
+    if (tenantSubdomain) {
+      redirectRes.cookies.set('tf-subdomain', tenantSubdomain, {
+        httpOnly: false,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 3600,
+      });
+    }
+    return redirectRes;
   }
 
   // NOTE: We intentionally DO NOT check token expiry here in middleware
@@ -97,7 +159,37 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  return NextResponse.next();
+  // Forward subdomain as request header so server components can read it via headers()
+  const requestHeaders = new Headers(request.headers);
+  if (tenantSubdomain) {
+    requestHeaders.set('x-tenant-subdomain', tenantSubdomain);
+  }
+
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
+
+  // Set/clear tf-subdomain cookie for client-side access in Login component
+  if (tenantSubdomain) {
+    res.cookies.set('tf-subdomain', tenantSubdomain, {
+      httpOnly: false,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 3600,
+    });
+    // Cache the validated subdomain for 5 minutes so we don't hit the DB on every request
+    if (isRealSubdomain) {
+      res.cookies.set('tf-subdomain-valid', tenantSubdomain, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 300, // 5 minutes
+      });
+    }
+  } else {
+    res.cookies.delete('tf-subdomain');
+    res.cookies.delete('tf-subdomain-valid');
+  }
+
+  return res;
 }
 
 export const config = {

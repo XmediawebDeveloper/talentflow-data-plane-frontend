@@ -67,6 +67,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   useEffect(() => {
     // Get token from localStorage (same as auth service uses)
     const token = localStorage.getItem('accessToken');
+    console.log('[Header] wsToken fetched from localStorage:', token ? `✅ present (${token.substring(0, 20)}...)` : '❌ null/missing');
     setWsToken(token);
   }, [user]);
 
@@ -91,8 +92,9 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const fetchNotificationCount = useCallback(async () => {
     if (!user) return;
 
-    // Skip if subscription is expired (no notifications needed for renewal flow)
-    if (!quotaData || quotaData?.subscription_status === 'expired') {
+    // Skip if subscription is explicitly expired (no notifications needed for renewal flow)
+    // NOTE: Do NOT skip when quotaData is null/loading — that blocks initial fetch for new signups
+    if (quotaData && quotaData.subscription_status === 'expired') {
       console.log('[Header] Skipping notification count - subscription expired');
       return;
     }
@@ -113,6 +115,9 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
   // Track if initial notification count fetch has been done (to prevent duplicate fetches)
   const initialFetchDoneRef = useRef(false);
+
+  // Track if welcome notification call has been made this session
+  const welcomeNotifCalledRef = useRef(false);
 
   // Handle new notification from WebSocket - stable callback
   const handleNewNotification = useCallback((notification: any) => {
@@ -145,9 +150,17 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     token: wsToken,
     onNewNotification: handleNewNotification,
     onCountUpdate: handleCountUpdate,
-    onPermissionsUpdated: refreshUser,
+    onPermissionsUpdated: () => {
+      console.log('[Header] onPermissionsUpdated triggered via WebSocket — calling refreshUser()');
+      refreshUser();
+    },
     enabled: !!user && !!wsToken,
   });
+
+  // Log WebSocket connection status changes
+  useEffect(() => {
+    console.log('[Header] WebSocket status — connected:', wsConnected, '| error:', wsError ?? 'none');
+  }, [wsConnected, wsError]);
 
   // Fetch notifications on mount and when dropdown opens
   useEffect(() => {
@@ -164,6 +177,32 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       console.log('[Header] Initial notification count fetch');
     }
   }, [user, fetchNotificationCount]);
+
+  // Welcome notification: Trigger on first quota load for tenant_admin users
+  useEffect(() => {
+    if (
+      !user ||
+      !quotaData ||
+      welcomeNotifCalledRef.current ||
+      user.role !== 'tenant_admin' ||
+      !['active', 'trial'].includes(quotaData.subscription_status || '')
+    ) {
+      return;
+    }
+    welcomeNotifCalledRef.current = true;
+    notificationService.ensureWelcomeNotification({
+      plan_name: quotaData.plan_name || quotaData.plan_info?.plan_name,
+      is_trial: !!quotaData.is_trial,
+      days_remaining: quotaData.trial_info?.days_remaining,
+      plan_tier: quotaData.plan_info?.plan_tier,
+      billing_period: quotaData.plan_info?.billing_period,
+    }).then((result) => {
+      if (result.status === 'created') {
+        // Refresh notification count to show the new welcome notification
+        fetchNotificationCount();
+      }
+    });
+  }, [user, quotaData, fetchNotificationCount]);
 
   // Fallback polling: Only when WebSocket is not connected
   useEffect(() => {
