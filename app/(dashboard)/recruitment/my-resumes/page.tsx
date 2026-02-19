@@ -339,7 +339,7 @@ function DraggableCardResumeRow({
 export default function MyResumesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { user, isTenantAdmin, hasPermission, isLoading: authLoading } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -2105,10 +2105,10 @@ export default function MyResumesPage() {
           </button>
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            disabled={!hasPermission('canUploadResumes')}
-            title={!hasPermission('canUploadResumes') ? 'You do not have permission to upload resumes. Contact your administrator.' : 'Upload Resume'}
+            disabled={!authLoading && !hasPermission('canUploadResumes') && !isTenantAdmin}
+            title={!authLoading && !hasPermission('canUploadResumes') && !isTenantAdmin ? 'You do not have permission to upload resumes. Contact your administrator.' : 'Upload Resume'}
             className={`flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-md transition-colors text-xs sm:text-sm flex-1 sm:flex-initial ${
-              hasPermission('canUploadResumes')
+              authLoading || hasPermission('canUploadResumes') || isTenantAdmin
                 ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
             }`}
