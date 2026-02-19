@@ -790,8 +790,9 @@ export default function JDListPage() {
                                     <div>
                                       <p className="font-semibold text-orange-800">Cannot Delete</p>
                                       <p className="text-xs mt-0.5 text-orange-700">
-                                        This JD is linked to {delStatus.activeCount} active assessment{delStatus.activeCount !== 1 ? 's' : ''}. Once the assessment{delStatus.activeCount !== 1 ? 's are' : ' is'} completed, you can delete this JD.
-                                      </p>
+  You have assigned the assessment for this JD. So you will not be able to delete this JD.
+</p>
+
                                     </div>
                                   </div>
                                 </div>
