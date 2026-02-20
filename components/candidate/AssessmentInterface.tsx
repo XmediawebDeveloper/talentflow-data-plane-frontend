@@ -1281,7 +1281,7 @@ export function AssessmentInterface({
 
         {/* Main Header */}
         <header className="bg-white border-b border-gray-200 px-4 py-3">
-          <div className="w-full px-2 lg:px-6 flex items-center justify-between">
+          <div className="w-full px-2 sm:px-4 lg:px-6 flex items-center justify-between">
             {/* Logo & Title */}
             <div className="flex items-center gap-3">
               {/* TalentFlow Logo - Always Visible */}
@@ -1304,16 +1304,16 @@ export function AssessmentInterface({
             </div>
 
             {/* Right Side - Timer, Progress, Camera */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5 sm:gap-3">
               {/* Global Assessment Timer */}
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
+              <div className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ${
                 globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
                 globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
               }`}>
-                <Clock className="w-4 h-4" />
+                <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <div className="flex flex-col items-center">
-                  <span className="font-mono font-bold text-lg">{formatTime(globalTimeRemaining)}</span>
-                  <span className="text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+                  <span className="font-mono font-bold text-sm sm:text-lg">{formatTime(globalTimeRemaining)}</span>
+                  <span className="hidden sm:block text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
                 </div>
               </div>
 
@@ -1381,7 +1381,7 @@ export function AssessmentInterface({
               )}
 
               {/* Camera Preview */}
-              <div className="w-20 h-14 bg-gray-900 rounded-lg overflow-hidden relative">
+              <div className="hidden sm:block w-16 h-12 sm:w-20 sm:h-14 bg-gray-900 rounded-lg overflow-hidden relative">
                 <video
                   ref={videoRef}
                   autoPlay
@@ -1397,12 +1397,12 @@ export function AssessmentInterface({
 
         {/* Progress Stepper */}
         <div className="w-full bg-white border-b border-gray-200">
-          <div className="w-full px-4 lg:px-8 py-3">
-            <div className="flex items-center justify-center gap-2">
+          <div className="w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-3 overflow-x-auto">
+            <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-max mx-auto">
               {progressSteps.map((step, index) => (
                 <div key={index} className="flex items-center">
                   <div className="flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
+                    <div className={`w-5 h-5 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
                       step.completed
                         ? 'bg-green-500 text-white'
                         : step.active
@@ -1411,7 +1411,7 @@ export function AssessmentInterface({
                     }`}>
                       {step.completed ? <Check className="w-3 h-3" /> : index + 1}
                     </div>
-                    <span className={`text-xs font-medium hidden md:block ${
+                    <span className={`text-xs font-medium hidden lg:block ${
                       step.active ? 'text-gray-900' : step.completed ? 'text-green-600' : 'text-gray-500'
                     }`}>
                       {step.label}
@@ -1430,8 +1430,8 @@ export function AssessmentInterface({
 
         {/* Round Progress Bar */}
         <div className="w-full bg-gray-50 border-b border-gray-200">
-          <div className="w-full px-4 lg:px-8 py-2">
-            <div className="flex items-center justify-center gap-3">
+          <div className="w-full px-2 sm:px-4 lg:px-8 py-1.5 sm:py-2 overflow-x-auto">
+            <div className="flex items-center justify-center gap-2 sm:gap-3 min-w-max mx-auto">
               {rounds.map((round, idx) => {
                 const Icon = getRoundIcon(round.round_type);
                 const isActive = round.round_type === currentQuestion.round_type;
@@ -1458,22 +1458,23 @@ export function AssessmentInterface({
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto px-8 py-6">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6">
           {/* Review Mode Banner */}
           {allQuestionsAnswered && (
-            <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+            <div className="mb-3 sm:mb-4 bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
+                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
                 </div>
                 <div>
-                  <p className="font-medium text-green-800">All questions answered!</p>
-                  <p className="text-sm text-green-600">You can review and edit your answers before submitting.</p>
+                  <p className="font-medium text-green-800 text-sm sm:text-base">All questions answered!</p>
+                  <p className="text-xs sm:text-sm text-green-600">You can review and edit your answers before submitting.</p>
                 </div>
               </div>
               <Button
                 variant="primary"
                 onClick={() => setShowCompleteConfirm(true)}
+                className="w-full sm:w-auto"
               >
                 <Send className="w-4 h-4 mr-2" />
                 Submit Assessment
@@ -1484,7 +1485,7 @@ export function AssessmentInterface({
           {/* Question Card */}
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
             {/* Question Header */}
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg ${getRoundColor(currentQuestion.round_type)} flex items-center justify-center`}>
@@ -1499,7 +1500,7 @@ export function AssessmentInterface({
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
                   {currentQuestion.tags.map((tag, idx) => (
                     <span
                       key={`${tag}-${idx}`}
@@ -1513,7 +1514,7 @@ export function AssessmentInterface({
             </div>
 
             {/* Question Content */}
-            <div className="p-6">
+            <div className="p-3 sm:p-6">
               {currentQuestion.round_type === 'hr' && (
                 <HRQuestionView
                   question={currentQuestion}
@@ -1545,7 +1546,7 @@ export function AssessmentInterface({
             </div>
 
             {/* Actions */}
-            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+            <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between gap-2 flex-wrap">
               {/* Left side - Previous button */}
               <div>
                 {currentQuestion.question_number > 1 && (
@@ -1613,7 +1614,7 @@ export function AssessmentInterface({
           </div>
 
           {/* Progress Indicator - Display Only (No Navigation) */}
-          <div className="mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-4">
+          <div className="mt-3 sm:mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-medium text-gray-700">Progress</p>
               <div className="flex items-center gap-4 text-xs">

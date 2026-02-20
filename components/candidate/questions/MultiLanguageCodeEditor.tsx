@@ -110,6 +110,9 @@ export function MultiLanguageCodeEditor({
   const editorRef = useRef<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Mobile tab state: switch between problem and editor on small screens
+  const [activeMobileTab, setActiveMobileTab] = useState<'problem' | 'editor'>('problem');
+
   // Code submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<CodeSubmissionResult | null>(null);
@@ -443,7 +446,7 @@ export function MultiLanguageCodeEditor({
   const currentLangConfig = getLanguageConfig(selectedLanguage);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       {/* Locked Banner */}
       {isLocked && (
         <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
@@ -452,9 +455,34 @@ export function MultiLanguageCodeEditor({
         </div>
       )}
 
-      <div className="flex gap-4 h-[650px]">
+      {/* Mobile Tab Switcher — visible only on small screens */}
+      <div className="flex md:hidden rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+        <button
+          onClick={() => setActiveMobileTab('problem')}
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+            activeMobileTab === 'problem'
+              ? 'bg-blue-600 text-white'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          Problem
+        </button>
+        <button
+          onClick={() => setActiveMobileTab('editor')}
+          className={`flex-1 py-2.5 text-sm font-medium transition-colors ${
+            activeMobileTab === 'editor'
+              ? 'bg-gray-900 text-white'
+              : 'bg-white text-gray-600 hover:bg-gray-50'
+          }`}
+        >
+          Editor
+        </button>
+      </div>
+
+      {/* Main Layout: side-by-side on md+, tab-based on mobile */}
+      <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-300px)] md:h-[650px] min-h-[420px]">
       {/* Left Panel - Problem Description & Output */}
-      <div className="w-[45%] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className={`${activeMobileTab === 'editor' ? 'hidden md:flex' : 'flex'} w-full md:w-[45%] flex-col bg-white rounded-xl border border-gray-200 overflow-hidden`}>
         {/* Header */}
         <div className="flex items-center gap-2 p-3 border-b border-gray-200 bg-gray-50">
           <Code className="w-4 h-4 text-gray-600" />
@@ -765,9 +793,9 @@ export function MultiLanguageCodeEditor({
       </div>
 
       {/* Right Panel - Code Editor */}
-      <div className="w-[55%] flex flex-col bg-gray-900 rounded-xl overflow-hidden">
+      <div className={`${activeMobileTab === 'problem' ? 'hidden md:flex' : 'flex'} w-full md:w-[55%] flex-col bg-gray-900 rounded-xl overflow-hidden`}>
         {/* Editor Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700">
+        <div className="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-3 bg-gray-800 border-b border-gray-700 gap-2 flex-wrap">
           {/* Language Selector */}
           <div className="relative" ref={dropdownRef}>
             {/* Show locked language indicator when only one language (compiler mode) */}
@@ -835,7 +863,7 @@ export function MultiLanguageCodeEditor({
           </div>
 
           {/* Editor Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
             {/* Custom Input Toggle */}
             <button
               onClick={() => setShowInputPanel(!showInputPanel)}
@@ -862,7 +890,7 @@ export function MultiLanguageCodeEditor({
             <select
               value={fontSize}
               onChange={(e) => setFontSize(Number(e.target.value))}
-              className="bg-gray-700 text-gray-300 text-sm rounded-lg px-2 py-1.5 border-none focus:ring-0"
+              className="hidden sm:block bg-gray-700 text-gray-300 text-sm rounded-lg px-2 py-1.5 border-none focus:ring-0"
             >
               <option value={12}>12px</option>
               <option value={14}>14px</option>
@@ -885,7 +913,7 @@ export function MultiLanguageCodeEditor({
             </Button>
 
             {/* Auto-save indicator */}
-            <div className="flex items-center gap-2 text-xs text-gray-400">
+            <div className="hidden sm:flex items-center gap-2 text-xs text-gray-400">
               <CheckCircle className="w-3 h-3 text-green-500" />
               <span>Auto-saving...</span>
             </div>
@@ -946,7 +974,7 @@ export function MultiLanguageCodeEditor({
               value={customInput}
               onChange={(e) => setCustomInput(e.target.value)}
               placeholder="Enter input for your program here (e.g., numbers, text that your code will read)..."
-              className="w-full h-20 bg-gray-900 text-green-400 font-mono text-sm p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full h-16 sm:h-20 bg-gray-900 text-green-400 font-mono text-sm p-2 sm:p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {!customInput.trim() && (
               <p className="text-xs text-amber-400 mt-1">

@@ -47,7 +47,7 @@ export function HRQuestionView({ question, answer, onAnswerChange, isLocked = fa
           maxLength={3000}
           disabled={isLocked}
           readOnly={isLocked}
-          className={`w-full h-64 p-4 border rounded-xl resize-none ${
+          className={`w-full h-48 sm:h-64 p-3 sm:p-4 border rounded-xl resize-none ${
             isLocked
               ? 'bg-gray-50 border-gray-200 text-gray-600 cursor-not-allowed'
               : 'border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-200'
