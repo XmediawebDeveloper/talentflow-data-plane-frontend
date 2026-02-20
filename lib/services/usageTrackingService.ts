@@ -24,6 +24,15 @@ export const QUOTA_TYPE_LABELS: Record<QuotaType, string> = {
   'storage_gb': 'Storage (GB)',
 };
 
+// Session data for session-based operations (AS/AIU)
+export interface SessionData {
+  error_origin?: 'TENANT' | 'SYSTEM' | 'NONE';
+  error_code?: string;
+  session_start_time?: string;
+  interruption_time?: string;
+  session_end_time?: string;
+}
+
 // Request body interface
 export interface RecordUsageRequest {
   quota_type: QuotaType;
@@ -33,6 +42,12 @@ export interface RecordUsageRequest {
   user_id?: string;          // User who performed the action (for audit logging)
   user_email?: string;       // User email (for audit logging)
   metadata?: Record<string, any>;  // Additional context
+  // Session tracking fields (Audit Logs & Error Codes doc)
+  error_origin?: 'TENANT' | 'SYSTEM' | 'NONE';
+  error_code?: string;
+  session_start_time?: string;
+  interruption_time?: string;
+  session_end_time?: string;
 }
 
 // Response interface
@@ -195,22 +210,24 @@ export async function recordResumeScoring(resourceId?: string, metadata?: Record
 }
 
 // Assessment
-export async function recordAssessment(resourceId?: string, metadata?: Record<string, any>): Promise<RecordUsageResponse> {
+export async function recordAssessment(resourceId?: string, metadata?: Record<string, any>, sessionData?: SessionData): Promise<RecordUsageResponse> {
   return recordUsage({
     quota_type: 'AS',
     operation_type: 'assessment',
     resource_id: resourceId,
     metadata,
+    ...sessionData,
   });
 }
 
 // AI Interview
-export async function recordAIInterview(resourceId?: string, metadata?: Record<string, any>): Promise<RecordUsageResponse> {
+export async function recordAIInterview(resourceId?: string, metadata?: Record<string, any>, sessionData?: SessionData): Promise<RecordUsageResponse> {
   return recordUsage({
     quota_type: 'AIU',
     operation_type: 'ai_interview',
     resource_id: resourceId,
     metadata,
+    ...sessionData,
   });
 }
 

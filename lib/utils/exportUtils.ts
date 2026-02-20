@@ -91,10 +91,15 @@ export function formatTeamUsageForExport(teams: any[]): any[] {
     assessment_actions: team.by_type?.AS?.consumption_count || 0,
     ai_interview_units: team.by_type?.AIU?.total_consumed || 0,
     ai_interview_actions: team.by_type?.AIU?.consumption_count || 0,
+    resume_upload_units: team.by_type?.RU?.total_consumed || 0,
+    resume_upload_actions: team.by_type?.RU?.consumption_count || 0,
+    jds_created: team.jds_created || 0,
+    assessments_created: team.assessments_created || 0,
     total_units:
       (team.by_type?.RS?.total_consumed || 0) +
       (team.by_type?.AS?.total_consumed || 0) +
-      (team.by_type?.AIU?.total_consumed || 0),
+      (team.by_type?.AIU?.total_consumed || 0) +
+      (team.by_type?.RU?.total_consumed || 0),
   }));
 }
 
@@ -111,6 +116,10 @@ export function formatMemberUsageForExport(members: any[]): any[] {
     assessment_actions: member.by_type?.AS?.consumption_count || 0,
     ai_interview_units: member.by_type?.AIU?.total_consumed || 0,
     ai_interview_actions: member.by_type?.AIU?.consumption_count || 0,
+    resume_upload_units: member.by_type?.RU?.total_consumed || 0,
+    resume_upload_actions: member.by_type?.RU?.consumption_count || 0,
+    jds_created: member.jds_created || 0,
+    assessments_created: member.assessments_created || 0,
     total_units: member.total_consumed,
     total_actions: member.total_actions,
     last_activity: member.last_activity || 'Never',
@@ -128,6 +137,10 @@ export const TEAM_USAGE_COLUMNS: ExportColumn[] = [
   { key: 'assessment_actions', header: 'Assessment (Actions)' },
   { key: 'ai_interview_units', header: 'AI Interview (Units)' },
   { key: 'ai_interview_actions', header: 'AI Interview (Actions)' },
+  { key: 'resume_upload_units', header: 'Resume Upload (Units)' },
+  { key: 'resume_upload_actions', header: 'Resume Upload (Actions)' },
+  { key: 'jds_created', header: 'JDs Created' },
+  { key: 'assessments_created', header: 'Assessments Created' },
   { key: 'total_units', header: 'Total Units' },
 ];
 
@@ -143,6 +156,10 @@ export const MEMBER_USAGE_COLUMNS: ExportColumn[] = [
   { key: 'assessment_actions', header: 'Assessment (Actions)' },
   { key: 'ai_interview_units', header: 'AI Interview (Units)' },
   { key: 'ai_interview_actions', header: 'AI Interview (Actions)' },
+  { key: 'resume_upload_units', header: 'Resume Upload (Units)' },
+  { key: 'resume_upload_actions', header: 'Resume Upload (Actions)' },
+  { key: 'jds_created', header: 'JDs Created' },
+  { key: 'assessments_created', header: 'Assessments Created' },
   { key: 'total_units', header: 'Total Units' },
   { key: 'total_actions', header: 'Total Actions' },
   { key: 'last_activity', header: 'Last Activity' },

@@ -1594,8 +1594,8 @@ export default function ResumeScoringPage({
         </div>
 
         {/* Search and Filter Bar */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-6">
-          <div className="flex items-center gap-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-5 mb-6">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
             <div className="flex-1">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -1604,31 +1604,33 @@ export default function ResumeScoringPage({
                   value={historySearchQuery}
                   onChange={(e) => setHistorySearchQuery(e.target.value)}
                   placeholder="Search by job title..."
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent transition-shadow"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent transition-shadow text-gray-900"
                 />
               </div>
             </div>
 
-            <button
-              onClick={() => setShowHistoryFilters(!showHistoryFilters)}
-              className={`px-5 py-2.5 rounded-lg border-2 transition-all flex items-center gap-2 font-medium ${
-                activeFiltersCount > 0
-                  ? 'bg-gray-50 border-gray-800 text-gray-900 shadow-sm'
-                  : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
-              }`}
-            >
-              <Filter className="w-5 h-5" />
-              Filters
-              {activeFiltersCount > 0 && (
-                <span className="px-2 py-0.5 bg-gray-800 text-white rounded-full text-xs font-medium">
-                  {activeFiltersCount}
-                </span>
-              )}
-              <ChevronDown className={`w-4 h-4 transition-transform ${showHistoryFilters ? 'rotate-180' : ''}`} />
-            </button>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <button
+                onClick={() => setShowHistoryFilters(!showHistoryFilters)}
+                className={`flex-1 sm:flex-none px-3 sm:px-5 py-2.5 rounded-lg border-2 transition-all flex items-center justify-center gap-2 font-medium text-sm sm:text-base ${
+                  activeFiltersCount > 0
+                    ? 'bg-gray-50 border-gray-800 text-gray-900 shadow-sm'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400'
+                }`}
+              >
+                <Filter className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Filters</span>
+                {activeFiltersCount > 0 && (
+                  <span className="px-2 py-0.5 bg-gray-800 text-white rounded-full text-xs font-medium">
+                    {activeFiltersCount}
+                  </span>
+                )}
+                <ChevronDown className={`w-4 h-4 transition-transform ${showHistoryFilters ? 'rotate-180' : ''}`} />
+              </button>
 
-            <div className="text-sm text-gray-700 bg-gray-100 px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
-              <span className="text-gray-800">{displayHistory.length}</span> of {scoredHistory.length + (processingEntry ? 1 : 0)} jobs
+              <div className="text-xs sm:text-sm text-gray-700 bg-gray-100 px-3 sm:px-4 py-2.5 rounded-lg whitespace-nowrap font-medium border border-gray-200">
+                <span className="text-gray-800">{displayHistory.length}</span> of {scoredHistory.length + (processingEntry ? 1 : 0)} jobs
+              </div>
             </div>
           </div>
 
@@ -1643,7 +1645,7 @@ export default function ResumeScoringPage({
                   <select
                     value={historySourceFilter}
                     onChange={(e) => setHistorySourceFilter(e.target.value as 'all' | 'my-resumes' | 'database')}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white transition-shadow"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white text-gray-900 transition-shadow"
                   >
                     <option value="all">All Sources</option>
                     <option value="my-resumes">My Resumes</option>
@@ -1659,7 +1661,7 @@ export default function ResumeScoringPage({
                     type="date"
                     value={historyDateFrom}
                     onChange={(e) => setHistoryDateFrom(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white transition-shadow"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white text-gray-900 transition-shadow"
                   />
                 </div>
 
@@ -1671,7 +1673,7 @@ export default function ResumeScoringPage({
                     type="date"
                     value={historyDateTo}
                     onChange={(e) => setHistoryDateTo(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white transition-shadow"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white text-gray-900 transition-shadow"
                   />
                 </div>
 

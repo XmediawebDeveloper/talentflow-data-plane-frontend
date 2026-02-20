@@ -63,7 +63,7 @@ export default function Pagination({
   };
 
   return (
-    <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-white">
       {/* Left: Items per page */}
       {showItemsPerPage && (
         <div className="flex items-center gap-2">
@@ -71,7 +71,7 @@ export default function Pagination({
           <select
             value={itemsPerPage}
             onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+            className="px-2 sm:px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
           >
             <option value={10}>10</option>
             <option value={25}>25</option>
@@ -83,42 +83,42 @@ export default function Pagination({
       )}
 
       {/* Center: Page info */}
-      <div className="text-sm text-gray-700">
+      <div className="text-xs sm:text-sm text-gray-700 text-center">
         Showing <span className="text-gray-900">{startItem}</span> to{' '}
         <span className="text-gray-900">{endItem}</span> of{' '}
         <span className="text-gray-900">{totalItems}</span> results
       </div>
 
       {/* Right: Pagination controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2">
         {/* First page */}
         <button
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          className="p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 sm:p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           title="First page"
         >
-          <ChevronsLeft className="w-4 h-4" />
+          <ChevronsLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
 
         {/* Previous page */}
         <button
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 sm:p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           title="Previous page"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
 
         {/* Page numbers */}
-        <div className="flex items-center gap-1">
+        <div className="hidden sm:flex items-center gap-1">
           {getPageNumbers().map((page, index) => (
             <button
               key={index}
               onClick={() => typeof page === 'number' && onPageChange(page)}
               disabled={page === '...'}
-              className={`min-w-[40px] px-3 py-2 text-sm rounded-md transition-colors ${
+              className={`min-w-[36px] sm:min-w-[40px] px-2 sm:px-3 py-1.5 sm:py-2 text-sm rounded-md transition-colors ${
                 page === currentPage
                   ? 'bg-blue-600 text-white'
                   : page === '...'
@@ -130,25 +130,29 @@ export default function Pagination({
             </button>
           ))}
         </div>
+        {/* Mobile: Show current page / total */}
+        <span className="sm:hidden text-sm text-gray-700 px-2">
+          {currentPage} / {totalPages}
+        </span>
 
         {/* Next page */}
         <button
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 sm:p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           title="Next page"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
 
         {/* Last page */}
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          className="p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="p-1.5 sm:p-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           title="Last page"
         >
-          <ChevronsRight className="w-4 h-4" />
+          <ChevronsRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
       </div>
     </div>

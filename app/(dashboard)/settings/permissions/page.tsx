@@ -227,7 +227,7 @@ export default function PermissionsPage() {
 
   if (loading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
           <span className="ml-3 text-gray-600">Loading permissions...</span>
@@ -237,7 +237,7 @@ export default function PermissionsPage() {
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -247,7 +247,7 @@ export default function PermissionsPage() {
                 <Shield className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Permissions & Roles</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Permissions & Roles</h1>
                 <p className="text-sm text-gray-600">Manage user roles and their permissions</p>
               </div>
             </div>
@@ -272,7 +272,7 @@ export default function PermissionsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Roles List */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Roles</h2>

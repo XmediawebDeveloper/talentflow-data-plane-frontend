@@ -377,69 +377,70 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-white">
       {/* Back Button */}
-      <div className="px-8 pt-6">
+      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors hover:gap-3"
+          className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors hover:gap-3 text-sm sm:text-base"
         >
-          <ArrowLeft className="w-5 h-5" />
+          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           Back to Scored Resumes
         </button>
       </div>
 
       {/* Header */}
-      <div className="px-8 py-6">
-        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6">
-          <div className="flex items-start justify-between mb-6">
-            <div className="flex-1">
-              <h1 className="text-2xl text-gray-900 font-bold mb-2">{resume.candidateName}</h1>
-                <div className="flex items-center gap-3 mb-3">
-                  <p className="text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
+      <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4 sm:mb-6">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl text-gray-900 font-bold mb-2 truncate">{resume.candidateName}</h1>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
+                  <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
                   {resume.resumeVersion && (
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                    <span className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs sm:text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
                       Version {resume.resumeVersion}
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
-                  <span className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-                    <Mail className="w-4 h-4 text-gray-800" />
-                    <span className="text-gray-900">{resume.email}</span>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-gray-600">
+                  <span className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200 min-w-0">
+                    <Mail className="w-4 h-4 text-gray-800 flex-shrink-0" />
+                    <span className="text-gray-900 truncate">{resume.email}</span>
                   </span>
-                  <span className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-                    <Phone className="w-4 h-4 text-green-600" />
+                  <span className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200">
+                    <Phone className="w-4 h-4 text-green-600 flex-shrink-0" />
                     <span className="text-gray-900">{resume.phone}</span>
                   </span>
                   {resume.location && (
-                    <span className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-                      <MapPin className="w-4 h-4 text-red-500" />
+                    <span className="flex items-center gap-2 bg-gray-50 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border border-gray-200">
+                      <MapPin className="w-4 h-4 text-red-500 flex-shrink-0" />
                       <span className="text-gray-900">{resume.location}</span>
                     </span>
                   )}
                 </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-shrink-0">
               <button
                 onClick={handleDownloadScorecard}
-                className="px-4 py-2 text-sm text-gray-700 border-2 border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2"
+                className="w-full sm:w-auto px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 border-2 border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
               >
                 <Download className="w-4 h-4" />
-                Download Scorecard
+                <span className="hidden sm:inline">Download Scorecard</span>
+                <span className="sm:hidden">Download</span>
               </button>
             </div>
           </div>
 
           {/* Score Display - Compact */}
-          <div className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3 border border-gray-200">
-            <div className="flex items-center gap-4">
-              <div className={`text-3xl font-bold ${getScoreColor(fullResumeData.scorePercentage)}`}>{fullResumeData.scorePercentage}%</div>
-              <span className={`px-3 py-1 rounded-md text-sm font-medium border ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+              <div className={`text-2xl sm:text-3xl font-bold ${getScoreColor(fullResumeData.scorePercentage)}`}>{fullResumeData.scorePercentage}%</div>
+              <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
                 {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
               </span>
-              <span className="text-gray-400">|</span>
-              <span className="text-sm text-gray-700">{jobTitle}</span>
+              <span className="hidden sm:inline text-gray-400">|</span>
+              <span className="text-xs sm:text-sm text-gray-700 truncate">{jobTitle}</span>
             </div>
-            <div className="text-sm text-gray-600">
+            <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
               {fullResumeData.scoredDate && !isNaN(new Date(fullResumeData.scoredDate).getTime())
                 ? new Date(fullResumeData.scoredDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
                 : fullResumeData.scoredDate}
@@ -449,9 +450,9 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       </div>
 
       {/* Tabs */}
-      <div className="px-8">
+      <div className="px-4 sm:px-6 lg:px-8">
         <div className="bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200">
-          <div className="flex gap-1 px-6 pt-2">
+          <div className="flex gap-1 px-3 sm:px-6 pt-2 overflow-x-auto scrollbar-hide">
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'scoretable', label: 'Score Table' },
@@ -460,7 +461,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`px-6 py-3 text-sm font-medium transition-colors rounded-t-lg ${
+                className={`px-3 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-medium transition-colors rounded-t-lg whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'text-gray-800 bg-gray-50 border-b-2 border-gray-600'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -474,8 +475,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
       </div>
 
       {/* Content */}
-      <div className="px-8 pb-8">
-        <div className="bg-white rounded-b-xl border-x-2 border-b-2 border-gray-200 p-8">
+      <div className="px-4 sm:px-6 lg:px-8 pb-6 sm:pb-8">
+        <div className="bg-white rounded-b-xl border-x-2 border-b-2 border-gray-200 p-4 sm:p-6 lg:p-8">
           {/* {activeTab === 'comparison' && (
             <div className="space-y-6">
               <div className="bg-white border-2 border-gray-200 rounded-xl p-6">
@@ -765,7 +766,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                     </div>
 
                     {/* Contact Info */}
-                    <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                       {resume.email && (
                         <div className="flex items-center gap-2 text-sm text-gray-700">
                           <Mail className="w-4 h-4 text-gray-500" />
@@ -981,7 +982,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                     <Languages className="w-5 h-5 text-gray-500" />
                     <h3 className="text-lg font-semibold text-gray-800">Languages</h3>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                     {fullResumeData.languages.map((language: any, index: number) => {
                       // Handle both string and object formats
                       const langName = typeof language === 'string' ? language : (language.name || language.language || 'Unknown');
@@ -1148,7 +1149,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                     <FileText className="w-5 h-5 text-gray-500" />
                     <h3 className="text-lg font-semibold text-gray-800">Social & Portfolio Links</h3>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     {fullResumeData.linkedinUrl && (
                       <a href={fullResumeData.linkedinUrl} target="_blank" rel="noopener noreferrer"
                          className="flex items-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors">

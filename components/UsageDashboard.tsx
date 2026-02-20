@@ -573,14 +573,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100/50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200/80 shadow-sm sticky top-0 z-10 backdrop-blur-sm bg-white/95">
-        <div className="max-w-7xl mx-auto px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-5">
-              <div className="w-14 h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300/50 ring-4 ring-gray-100">
-                <BarChart3 className="w-7 h-7 text-white" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-5">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300/50 ring-2 sm:ring-4 ring-gray-100">
+                <BarChart3 className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Usage & Quotas</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Usage & Quotas</h1>
                 <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
                   <span className="inline-flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" />
