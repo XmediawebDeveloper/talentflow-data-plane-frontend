@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Briefcase, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { getLoginUrl } from '@/lib/services/authService';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -24,11 +25,11 @@ export default function ResetPassword() {
   const newPasswordValid = newPassword.length >= 6;
   const canSubmit = newPasswordValid && passwordsMatch && confirmPassword.length > 0;
 
-  // Guard: if no access token, redirect to login
+  // Guard: if no access token, redirect to the org login page (not bare /login)
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (!token) {
-      router.replace('/login');
+      router.replace(getLoginUrl());
     }
   }, [router]);
 
@@ -68,7 +69,7 @@ export default function ResetPassword() {
       });
 
       if (response.status === 401) {
-        router.replace('/login');
+        router.replace(getLoginUrl());
         return;
       }
 

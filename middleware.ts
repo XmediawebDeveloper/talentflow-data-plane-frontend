@@ -233,8 +233,9 @@ export async function middleware(request: NextRequest) {
         maxAge: 300, // 5 minutes
       });
     }
-  } else if (!isProtectedRoute) {
-    // Only clear on non-protected (public) routes — never on /dashboard etc.
+  } else if (!isProtectedRoute && pathname !== '/reset-password') {
+    // Clear on public routes EXCEPT /reset-password, which is mid-auth-flow.
+    // Clearing there would lose org context if the token guard redirects to /login.
     res.cookies.delete('tf-subdomain');
     res.cookies.delete('tf-subdomain-valid');
   }
