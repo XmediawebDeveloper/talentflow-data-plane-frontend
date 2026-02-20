@@ -260,10 +260,8 @@ export default function ResumeScoringPage({
         : item.status === 'completed'
         ? new Date()
         : undefined,
-      matchResult: item.status === 'already_scored' && item.matchStatus
+      matchResult: item.matchStatus
         ? convertMatchStatus(item.matchStatus)
-        : item.score != null
-        ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
         : undefined,
     }));
     setProgressData(progressItems);
@@ -746,9 +744,7 @@ export default function ResumeScoringPage({
       score: item.score,
       matchResult: item.matchStatus
         ? convertMatchStatus(item.matchStatus)
-        : item.score != null
-        ? (item.score >= 85 ? 'Exact Match' as const : item.score >= 70 ? 'Partial Match' as const : 'No Match' as const)
-        : undefined,
+        : undefined, // Stay "Pending" until real match_status is fetched after completion
     }));
 
     // Always update progress data for live polling
@@ -762,23 +758,43 @@ export default function ResumeScoringPage({
       setShowProgressModal(true);
     }
 
-    // When batch scoring completes, refresh history and navigate to show scored resumes
+    // When batch scoring completes, fetch real match results then refresh history
     if (isComplete && onRefreshHistory) {
-      console.log('[ResumeScoringPage] Batch complete - refreshing history and showing results');
+      console.log('[ResumeScoringPage] Batch complete - fetching real match results');
       const jobId = batchProgress.jobId;
-      // Small delay to ensure backend has committed all scores before fetching
+      // Delay to ensure backend has committed all scores before fetching
       setTimeout(() => {
-        onRefreshHistory().then(() => {
-          setShowProgressModal(false);
-          // Trigger auto-navigation to the details view for this JD
-          setPendingAutoSelectJdId(jobId);
-          router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
-        }).catch((err) => {
-          console.error('[ResumeScoringPage] Failed to refresh history after batch:', err);
-          setShowProgressModal(false);
-          setViewMode('history');
-        });
-      }, 1500);
+        // Step 1: Fetch actual scored results to get the real match_status for each resume
+        scoringService.getJDScoredResumes(jobId, { page_size: 500 })
+          .then(jdScores => {
+            // Build map of resume_id → match_status from the actual score records
+            const scoreMap = new Map(jdScores.items.map(s => [s.resume_id, s.match_status]));
+            // Update the popup items with correct match results
+            setProgressData(prev => prev.map(item => ({
+              ...item,
+              matchResult: scoreMap.has(item.resumeId)
+                ? convertMatchStatus(scoreMap.get(item.resumeId)!)
+                : item.matchResult,
+            })));
+          })
+          .catch(e => console.warn('[ResumeScoringPage] Could not update match statuses from scores:', e))
+          .finally(() => {
+            // Step 2: Wait 3 seconds so user can read the correct match results,
+            // then refresh history and close modal
+            setTimeout(() => {
+              onRefreshHistory().then(() => {
+                setShowProgressModal(false);
+                // Trigger auto-navigation to the details view for this JD
+                setPendingAutoSelectJdId(jobId);
+                router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
+              }).catch((err) => {
+                console.error('[ResumeScoringPage] Failed to refresh history after batch:', err);
+                setShowProgressModal(false);
+                setViewMode('history');
+              });
+            }, 3000);
+          });
+      }, 2000);
     }
   }, [batchProgress, onRefreshHistory, router]);
 

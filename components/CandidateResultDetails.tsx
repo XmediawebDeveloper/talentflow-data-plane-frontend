@@ -833,6 +833,7 @@ export default function CandidateResultDetails({
                       {detailedResult.proctoring_stats?.total_violations || 0}
                     </span>
                   </button>
+
                 </div>
               </div>
 
@@ -1385,6 +1386,7 @@ export default function CandidateResultDetails({
                     )}
                   </div>
                 )}
+
               </div>
             </>
           )}

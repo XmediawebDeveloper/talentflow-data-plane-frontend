@@ -234,10 +234,23 @@ export async function middleware(request: NextRequest) {
       });
     }
   } else if (!isProtectedRoute && pathname !== '/reset-password') {
-    // Clear on public routes EXCEPT /reset-password, which is mid-auth-flow.
-    // Clearing there would lose org context if the token guard redirects to /login.
+    // Only clear on non-protected public routes — never on /dashboard etc.
+    // Also preserve on /reset-password: it's part of the invite auth flow,
+    // so the org context must survive the /login → /reset-password → /dashboard journey.
     res.cookies.delete('tf-subdomain');
     res.cookies.delete('tf-subdomain-valid');
+  } else if (pathname === '/reset-password') {
+    // Re-set the existing tf-subdomain cookie so it isn't lost during the
+    // invite flow (login → reset-password → dashboard).
+    const existingSubdomain = request.cookies.get('tf-subdomain')?.value;
+    if (existingSubdomain) {
+      res.cookies.set('tf-subdomain', existingSubdomain, {
+        httpOnly: false,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 3600,
+      });
+    }
   }
 
   return res;

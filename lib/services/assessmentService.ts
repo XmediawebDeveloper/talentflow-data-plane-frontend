@@ -207,6 +207,23 @@ export interface DetailedResultResponse {
   candidate_insights?: Record<string, any>;
   hiring_recommendation?: string;
   proctoring_stats?: ProctoringStats;
+  ai_generation_audit?: {
+    ai_model_version: string | null;
+    questions_generated_at: string | null;
+    generation_params: {
+      jd_id?: string;
+      jd_title?: string;
+      experience_level?: string;
+      duration_minutes?: number;
+      total_questions_generated?: number;
+      rounds_config?: Array<{
+        type: string;
+        weightage: number;
+        topics?: string[];
+      }>;
+      generation_timestamp?: string;
+    } | null;
+  };
 }
 
 // ==================== NEW API INTERFACES ====================
