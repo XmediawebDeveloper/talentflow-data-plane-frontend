@@ -3,11 +3,12 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  CreditCard, AlertCircle, Loader2, CheckCircle, ShieldCheck, ArrowLeft, Check
+  CreditCard, AlertCircle, Loader2, CheckCircle, ShieldCheck, ArrowLeft, Check, Shield
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Cookies from 'js-cookie';
 import { decodeParam, decodePlanId } from '@/lib/utils/planEncoder';
+import { useRazorpay } from '@/lib/hooks/useRazorpay';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -69,6 +70,8 @@ function CompletePaymentContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [paymentProcessing, setPaymentProcessing] = useState(false);
+  const [paymentStep, setPaymentStep] = useState<string>('');
+  const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
 
   // Fetch plan details
   useEffect(() => {
@@ -134,7 +137,7 @@ function CompletePaymentContent() {
     fetchPlanDetails();
   }, [planId, billingInterval]);
 
-  // Handle payment submission
+  // Handle payment submission via Razorpay
   const handlePaymentSubmit = async () => {
     if (!tenantId || !planDetails) {
       setError('Missing tenant or plan information');
@@ -145,32 +148,75 @@ function CompletePaymentContent() {
     setError('');
 
     try {
-      const response = await fetch(`${API_URL}/signup/process-payment`, {
+      // Step 1: Create Razorpay order
+      setPaymentStep('Creating order...');
+      const orderResponse = await fetch(`${API_URL}/signup/create-order`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenant_id: tenantId,
           plan_id: planDetails.id,
           billing_interval: billingInterval,
-          ...getUserInfo(),
+        }),
+      });
+
+      const orderData = await orderResponse.json();
+      if (!orderResponse.ok) {
+        throw new Error(orderData.detail || 'Failed to create payment order');
+      }
+
+      // Step 2: Open Razorpay checkout modal
+      setPaymentStep('Opening payment gateway...');
+      const userInfo = getUserInfo();
+      let razorpayResult: RazorpayResponse;
+      try {
+        razorpayResult = await openCheckout({
+          orderId: orderData.order_id,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          planName: orderData.plan_name || planDetails.plan_name,
+          userName: userInfo.user_email?.split('@')[0],
+          userEmail: userInfo.user_email,
+        });
+      } catch (rzpErr: any) {
+        // User cancelled or payment failed in modal
+        if (rzpErr.message?.includes('cancelled')) {
+          toast.info('Payment cancelled', { description: 'You can try again anytime.' });
+        } else {
+          toast.error('Payment failed', { description: rzpErr.message });
+        }
+        setPaymentProcessing(false);
+        setPaymentStep('');
+        return;
+      }
+
+      // Step 3: Verify payment with backend
+      setPaymentStep('Verifying payment...');
+      const response = await fetch(`${API_URL}/signup/process-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          plan_id: planDetails.id,
+          billing_interval: billingInterval,
+          razorpay_payment_id: razorpayResult.razorpay_payment_id,
+          razorpay_order_id: razorpayResult.razorpay_order_id,
+          razorpay_signature: razorpayResult.razorpay_signature,
+          ...userInfo,
         }),
       });
 
       const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.detail || 'Payment processing failed');
+        throw new Error(data.detail || 'Payment verification failed');
       }
 
       // Payment successful
       toast.success('Payment successful!', { description: 'Your plan is now active.' });
 
-      // Queue audit verification for initial payment (non-blocking)
+      // Queue audit verification (non-blocking)
       try {
         const mod = await import('@/lib/services/auditVerificationService');
-        const userInfo = getUserInfo();
         mod.auditVerificationService.storePendingVerification({
           action: 'subscription_upgrade',
           entity_type: 'subscription',
@@ -179,7 +225,6 @@ function CompletePaymentContent() {
           user_email: userInfo.user_email,
           timestamp: new Date().toISOString(),
         });
-        console.log('[AuditVerification] Queued initial payment verification');
       } catch (e) { console.warn('[AuditVerification] Failed to queue:', e); }
 
       // Redirect to login
@@ -194,6 +239,7 @@ function CompletePaymentContent() {
       toast.error('Payment failed', { description: message });
     } finally {
       setPaymentProcessing(false);
+      setPaymentStep('');
     }
   };
 
@@ -451,30 +497,41 @@ function CompletePaymentContent() {
         {/* Complete Purchase Button */}
         <button
           onClick={handlePaymentSubmit}
-          disabled={paymentProcessing}
+          disabled={paymentProcessing || razorpayProcessing}
           style={{
             ...submitButtonStyle,
-            opacity: paymentProcessing ? 0.7 : 1,
-            cursor: paymentProcessing ? 'not-allowed' : 'pointer',
+            opacity: (paymentProcessing || razorpayProcessing) ? 0.7 : 1,
+            cursor: (paymentProcessing || razorpayProcessing) ? 'not-allowed' : 'pointer',
           }}
         >
-          {paymentProcessing ? (
+          {paymentProcessing || razorpayProcessing ? (
             <>
               <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
-              Processing Payment...
+              {paymentStep || 'Processing Payment...'}
             </>
           ) : (
             <>
               <CreditCard style={{ width: 20, height: 20 }} />
-              Complete Purchase - {formatCurrency(planDetails.base_price, planDetails.currency)}
+              Pay {formatCurrency(planDetails.base_price, planDetails.currency)} - Razorpay
             </>
           )}
         </button>
 
+        {/* Payment Methods Indicator */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 12, fontSize: 12, color: '#9CA3AF' }}>
+          <span>Card</span>
+          <span style={{ color: '#D1D5DB' }}>|</span>
+          <span>UPI</span>
+          <span style={{ color: '#D1D5DB' }}>|</span>
+          <span>Netbanking</span>
+          <span style={{ color: '#D1D5DB' }}>|</span>
+          <span>Wallets</span>
+        </div>
+
         {/* Security Notice */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, color: '#6B7280', fontSize: 13 }}>
-          <ShieldCheck style={{ width: 16, height: 16 }} />
-          <span>Secure payment processing</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, color: '#6B7280', fontSize: 13 }}>
+          <Shield style={{ width: 16, height: 16 }} />
+          <span>Secure payment via Razorpay</span>
         </div>
 
         {/* Logout and Back to Login */}
