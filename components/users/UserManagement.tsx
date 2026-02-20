@@ -1877,7 +1877,7 @@ export default function UserManagement() {
         </div>
 
         {/* RBAC01: User Limits - always visible */}
-        <div className="mt-6 space-y-4">
+        <div className="mt-4 sm:mt-6 space-y-3 sm:space-y-4">
           <UserLimits compact refreshTrigger={seatQuotaRefreshTrigger} />
           {/* Addon card - only shows when quota exhausted */}
           <SeatQuotaCard
@@ -1889,32 +1889,32 @@ export default function UserManagement() {
       </div>
 
       {/* Search Bar */}
-      <div className="mb-6">
-        <div className="relative max-w-md">
+      <div className="mb-4 sm:mb-6">
+        <div className="relative max-w-full sm:max-w-md">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
             placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent placeholder-gray-400 transition-colors"
           />
         </div>
       </div>
 
       {/* Stats Cards - Dynamic based on available roles */}
-      <div className="grid grid-cols-4 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <p className="text-sm text-gray-600">Total Users</p>
-          <p className="text-3xl font-semibold text-gray-900 mt-1">{users.length}</p>
-          <p className="text-xs text-gray-500 mt-1">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
+          <p className="text-xs sm:text-sm text-gray-600">Total Users</p>
+          <p className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 mt-1">{users.length}</p>
+          <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
             ({users.filter(u => u.is_active).length} Active, {users.filter(u => !u.is_active).length} Inactive)
           </p>
         </div>
         {availableRoles.slice(0, 3).map((role, index) => (
-          <div key={role.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <p className="text-sm text-gray-600">{role.name}s</p>
-            <p className={`text-3xl font-semibold mt-1 ${
+          <div key={role.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
+            <p className="text-xs sm:text-sm text-gray-600">{role.name}s</p>
+            <p className={`text-xl sm:text-2xl lg:text-3xl font-semibold mt-1 ${
               index === 0 ? 'text-gray-800' : index === 1 ? 'text-gray-700' : 'text-gray-600'
             }`}>
               {users.filter(u => u.role.toLowerCase() === role.code.toLowerCase() ||
@@ -1925,31 +1925,31 @@ export default function UserManagement() {
       </div>
 
       {/* Users Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-x-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-gray-700 animate-spin" />
+          <div className="flex items-center justify-center py-8 sm:py-12">
+            <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-gray-700 animate-spin" />
           </div>
         ) : (
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   User
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
                   Permissions
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
                   Last Login
                 </th>
-                <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -1957,34 +1957,34 @@ export default function UserManagement() {
             <tbody className="divide-y divide-gray-200">
               {filteredUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                         user.role.toLowerCase() === 'tenant_admin' || user.role.toLowerCase() === 'admin'
                           ? 'bg-gray-800'
                           : user.role.toLowerCase() === 'recruiter'
                           ? 'bg-gray-700'
                           : 'bg-gray-600'
                       }`}>
-                        <span className="text-white text-sm font-medium">
+                        <span className="text-white text-xs sm:text-sm font-medium">
                           {(user.name || 'U').split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
                         </span>
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{user.name || user.email || 'Unknown'}</div>
-                        <div className="text-xs text-gray-500 flex items-center gap-1">
-                          <Mail className="w-3 h-3" />
-                          {user.email}
+                      <div className="min-w-0">
+                        <div className="text-xs sm:text-sm font-medium text-gray-900 truncate">{user.name || user.email || 'Unknown'}</div>
+                        <div className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 truncate">
+                          <Mail className="w-3 h-3 flex-shrink-0" />
+                          <span className="truncate">{user.email}</span>
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${getRoleBadgeColor(user.role, availableRoles)}`}>
+                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                    <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium rounded-full ${getRoleBadgeColor(user.role, availableRoles)}`}>
                       {getRoleLabel(user.role, availableRoles)}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden md:table-cell">
                     <div className="flex flex-wrap gap-1 max-w-xs">
                       {Object.entries(user.permissions)
                         .filter(([, value]) => value)
@@ -2004,7 +2004,7 @@ export default function UserManagement() {
                       )}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
                     {/* Toggle Switch for Active/Inactive */}
                     {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId ? (
                       <div className="flex items-center gap-2">
@@ -2033,14 +2033,14 @@ export default function UserManagement() {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <Calendar className="w-4 h-4" />
                       {formatDate(user.last_login)}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-2">
+                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                    <div className="flex items-center justify-center gap-1 sm:gap-2">
                       {/* Feature Permissions button - HIDDEN for now as requested */}
                       {/* {user.role.toLowerCase() !== 'tenant_admin' && (
                         <button
@@ -2076,19 +2076,19 @@ export default function UserManagement() {
         )}
 
         {!isLoading && filteredUsers.length === 0 && (
-          <div className="text-center py-12">
-            <UserCog className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No users found</p>
+          <div className="text-center py-8 sm:py-12">
+            <UserCog className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-3 sm:mb-4" />
+            <p className="text-sm sm:text-base text-gray-500">No users found</p>
           </div>
         )}
       </div>
 
       {/* Create User Modal */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Create New User</h2>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Create New User</h2>
               <button
                 onClick={resetCreateModal}
                 className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
@@ -2115,16 +2115,56 @@ export default function UserManagement() {
                   Email <span className="text-red-500">*</span>
                 </label>
 
-                <input
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => {
-                    setNewUser({ ...newUser, email: e.target.value });
-                    checkEmailAvailability(e.target.value);
-                  }}
-                  placeholder="user@example.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                />
+                {/* Email input with locked domain */}
+                <div className="relative flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-600 overflow-hidden">
+                  {/* Username input */}
+                  <input
+                    type="text"
+                    value={emailUsername}
+                    onChange={(e) => {
+                      let value = e.target.value;
+                      const hadAtSymbol = value.includes('@');
+
+                      // Remove @ symbol if user tries to type it
+                      value = value.replace(/@/g, '');
+
+                      // Show brief message if @ was blocked
+                      if (hadAtSymbol && value !== e.target.value) {
+                        setShowAtBlockedMessage(true);
+                        setTimeout(() => setShowAtBlockedMessage(false), 2000);
+                      }
+
+                      setEmailUsername(value);
+                      checkEmailAvailability(value);
+                    }}
+                    placeholder="username"
+                    className="flex-1 px-4 py-2.5 border-0 focus:outline-none focus:ring-0"
+                  />
+
+                  {/* @ symbol and locked domain */}
+                  <div className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-600 font-medium border-l border-gray-300">
+                    <span className="text-gray-900">@</span>
+                    <span className="ml-1">
+                      {tenantEmailDomain || 'loading...'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Preview of full email */}
+                {emailUsername && tenantEmailDomain && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    Full email: <span className="font-medium">{emailUsername}@{tenantEmailDomain}</span>
+                  </div>
+                )}
+
+                {/* @ symbol blocked message */}
+                {showAtBlockedMessage && (
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-700">
+                      ℹ️ Just type the username. Domain is added automatically.
+                    </p>
+                  </div>
+                )}
 
                 {/* Email validation feedback */}
                 {isCheckingEmail && (
@@ -2159,7 +2199,7 @@ export default function UserManagement() {
                   Role <span className="text-red-500">*</span>
                 </label>
                 {/* Role Selection Grid */}
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {availableRoles.map(role => {
                     const isSelected = selectedRoleId === role.id;
                     const isSystemRole = role.is_system;
@@ -2169,7 +2209,7 @@ export default function UserManagement() {
                         key={role.id}
                         type="button"
                         onClick={() => selectRole(role.id)}
-                        className={`relative p-3 rounded-lg border-2 text-left transition-all ${
+                        className={`relative p-2.5 sm:p-3 rounded-lg border-2 text-left transition-all ${
                           isSelected
                             ? 'border-gray-800 bg-gray-50 ring-1 ring-gray-800'
                             : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
@@ -2290,10 +2330,10 @@ export default function UserManagement() {
               )}
             </div>
 
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 mt-4 sm:mt-6">
               <button
                 onClick={resetCreateModal}
-                className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 sm:py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm sm:text-base"
                 disabled={isSaving}
               >
                 Cancel
@@ -2301,7 +2341,7 @@ export default function UserManagement() {
               <button
                 onClick={handleCreateUser}
                 disabled={isSaving || !emailCheckResult.available || isCheckingEmail}
-                className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 sm:py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Create User
@@ -2313,13 +2353,13 @@ export default function UserManagement() {
 
       {/* Edit User Modal - Redesigned */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Edit User</h2>
-                <p className="text-xs text-gray-500 mt-0.5">{editingUser.email}</p>
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Edit User</h2>
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 truncate">{editingUser.email}</p>
               </div>
               <button
                 onClick={resetEditModal}
@@ -2330,9 +2370,9 @@ export default function UserManagement() {
             </div>
 
             {/* Body - Scrollable */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-5">
               {/* User Details Row */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Name</label>
                   <input
@@ -2465,7 +2505,7 @@ export default function UserManagement() {
                           >
                             {/* Category Header */}
                             <div
-                              className="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none"
+                              className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 cursor-pointer select-none"
                               onClick={category.viewCode ? toggleCategory : undefined}
                             >
                               <div className="flex items-center gap-3">
@@ -2495,7 +2535,7 @@ export default function UserManagement() {
 
                             {/* Action Pills - shown when category is active */}
                             {isCategoryActive && (
-                              <div className="px-4 pb-3 space-y-2.5">
+                              <div className="px-3 sm:px-4 pb-2.5 sm:pb-3 space-y-2 sm:space-y-2.5">
                                 {/* View pill for categories with only sub-categories (no direct actions) */}
                                 {(!category.actions || category.actions.length === 0) && category.viewCode && editSelectedPermissionCodes.has(category.viewCode) && (
                                   <div className="flex flex-wrap gap-1.5">
@@ -2653,8 +2693,8 @@ export default function UserManagement() {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
-              <span className="text-xs text-gray-400">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-gray-50/50 rounded-b-2xl">
+              <span className="text-[10px] sm:text-xs text-gray-400 hidden sm:inline">
                 {editSelectedPermissionCodes.size !== editOriginalPermissionCodes.size ||
                  ![...editSelectedPermissionCodes].every(c => editOriginalPermissionCodes.has(c))
                   ? 'Unsaved changes'
@@ -2663,7 +2703,7 @@ export default function UserManagement() {
               <div className="flex gap-2">
                 <button
                   onClick={resetEditModal}
-                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
                   disabled={isSaving}
                 >
                   Cancel
@@ -2671,7 +2711,7 @@ export default function UserManagement() {
                 <button
                   onClick={handleUpdateUser}
                   disabled={isSaving}
-                  className="px-5 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50"
+                  className="px-4 sm:px-5 py-1.5 sm:py-2 bg-gray-900 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
                   {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Save

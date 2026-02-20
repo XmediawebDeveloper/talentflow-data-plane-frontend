@@ -408,10 +408,10 @@ a:focus:not(:focus-visible) {
   }
 
   /* Touch-friendly tap targets */
-  button,
+  /* button,
   a[role="button"] {
     min-height: 44px;
-  }
+  } */
 }
 
 /* Very small screens - phones in portrait */
