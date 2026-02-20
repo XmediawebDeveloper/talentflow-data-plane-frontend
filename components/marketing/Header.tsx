@@ -94,7 +94,7 @@ export function Header() {
             {/* Root domain: Sign In hidden (signup only). Subdomain: Start Free Trial hidden (login only). */}
             {!isSubdomain && (
               <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800" asChild>
-                <Link href="/login">Sign In</Link>
+                <Link href="/signup">Sign Up</Link>
               </Button>
             )}
             {!isSubdomain && (
@@ -164,7 +164,7 @@ export function Header() {
                     className="w-full border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800"
                     asChild
                   >
-                    <Link href="/login" prefetch={false}>Sign In</Link>
+                    <Link href="/signup" prefetch={false}>Sign Up</Link>
                   </Button>
                 )}
                 {!isSubdomain && (
