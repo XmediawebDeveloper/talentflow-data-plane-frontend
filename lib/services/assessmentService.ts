@@ -162,6 +162,7 @@ export interface QuestionEvaluation {
   feedback?: string;
   strengths?: string[];
   areas_for_improvement?: string[];
+  question_status?: 'pending' | 'answered' | 'skipped' | 'scored';
 }
 
 export interface RoundScore {
@@ -180,6 +181,7 @@ export interface ProctoringStats {
   window_blur_count: number;
   video_violation_count: number;
   voice_violation_count: number;
+  multiple_faces_count: number;
   fullscreen_exit_count: number;
   other_violation_count?: number; // Uncategorized events
   total_violations: number;
