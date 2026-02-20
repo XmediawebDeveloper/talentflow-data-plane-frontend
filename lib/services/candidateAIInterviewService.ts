@@ -76,4 +76,30 @@ export const candidateAIInterviewService = {
     );
     return response.data;
   },
+
+  async uploadRecording(token: string, blob: Blob): Promise<{ message: string; path: string }> {
+    const formData = new FormData();
+    formData.append('file', blob, 'recording.webm');
+    const response = await candidateApi.post(
+      `/candidate/ai-interview/${token}/upload-recording`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return response.data;
+  },
+
+  async reportProctorEvent(
+    token: string,
+    event: { event_type: string; timestamp?: string; details?: Record<string, any> },
+  ): Promise<{ success: boolean; violation_count: number; warning_issued: boolean }> {
+    const response = await candidateApi.post(
+      `/candidate/ai-interview/${token}/proctor-event`,
+      {
+        event_type: event.event_type,
+        timestamp: event.timestamp || new Date().toISOString(),
+        details: event.details || {},
+      },
+    );
+    return response.data;
+  },
 };

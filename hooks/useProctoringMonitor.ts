@@ -31,6 +31,7 @@ interface UseProctoringMonitorOptions {
   onWarning?: (warning: ProctoringWarning) => void;
   voiceDetectionSensitivity?: number; // 0-100, default 50
   obstructionThreshold?: number; // 0-255, default 30
+  reportEvent?: (token: string, event: { event_type: string; timestamp: string; details: Record<string, any> }) => Promise<any>;
 }
 
 interface ProctoringState {
@@ -102,6 +103,7 @@ export function useProctoringMonitor({
   onWarning,
   voiceDetectionSensitivity = 50,
   obstructionThreshold = 30,
+  reportEvent,
 }: UseProctoringMonitorOptions) {
   const [state, setState] = useState<ProctoringState>({
     isMonitoring: false,
@@ -157,6 +159,11 @@ export function useProctoringMonitor({
   useEffect(() => {
     enabledRef.current = enabled;
   }, [enabled]);
+
+  const reportEventRef = useRef(reportEvent);
+  useEffect(() => {
+    reportEventRef.current = reportEvent;
+  }, [reportEvent]);
 
   // Refs for worker processing params
   const voiceSensitivityRef = useRef(voiceDetectionSensitivity);
@@ -234,7 +241,8 @@ export function useProctoringMonitor({
 
     // Always log to backend (use ref for token)
     try {
-      await candidateService.reportProctorEvent(tokenRef.current, {
+      const reporter = reportEventRef.current || candidateService.reportProctorEvent;
+      await reporter(tokenRef.current, {
         event_type: eventType,
         timestamp: new Date().toISOString(),
         details: details || {},
@@ -262,7 +270,8 @@ export function useProctoringMonitor({
 
     // Log as a single aggregated event to backend
     try {
-      await candidateService.reportProctorEvent(tokenRef.current, {
+      const reporter = reportEventRef.current || candidateService.reportProctorEvent;
+      await reporter(tokenRef.current, {
         event_type: 'voice_detected',
         timestamp: new Date().toISOString(),
         details: {
@@ -472,7 +481,15 @@ export function useProctoringMonitor({
     if (audioTracks.length === 0) return;
 
     try {
-      audioContextRef.current = new AudioContext();
+      try {
+        audioContextRef.current = new AudioContext();
+      } catch (ctxErr) {
+        console.error('[PROCTORING] Failed to create AudioContext — audio device may be unavailable:', ctxErr);
+        return;
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
       const source = audioContextRef.current.createMediaStreamSource(currentStream);
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
@@ -981,7 +998,8 @@ export function useProctoringMonitor({
       if (voiceBatchRef.current.length > 0) {
         console.log(`[PROCTORING] Flushing remaining ${voiceBatchRef.current.length} voice events on cleanup`);
         // Fire and forget - don't await since we're cleaning up
-        candidateService.reportProctorEvent(tokenRef.current, {
+        const cleanupReporter = reportEventRef.current || candidateService.reportProctorEvent;
+        cleanupReporter(tokenRef.current, {
           event_type: 'voice_detected',
           timestamp: new Date().toISOString(),
           details: {

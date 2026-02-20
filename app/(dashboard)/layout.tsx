@@ -323,7 +323,7 @@ export default function DashboardLayout({
               onOpenSettings={() => router.push('/settings')}
             />
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto flex flex-col">
               {children}
             </div>
           </div>

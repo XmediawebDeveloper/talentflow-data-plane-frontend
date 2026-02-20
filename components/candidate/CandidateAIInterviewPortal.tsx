@@ -4,8 +4,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Video, CheckCircle, X, Play, Info, AlertTriangle, FileText, Loader2, Mic, Eye, Monitor, Camera, Wifi, Cpu, Circle, RefreshCw } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
+import { InterviewUI } from '@/components/ai-interview/InterviewUI';
 
-type Step = 'loading' | 'consent' | 'system_check' | 'ready' | 'error';
+type Step = 'loading' | 'consent' | 'system_check' | 'interview' | 'completed' | 'error';
 
 interface Props {
   token: string;
@@ -48,7 +49,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (info.status === 'system_check') {
         setStep('system_check');
       } else if (info.status === 'in_progress') {
-        setStep('ready');
+        setStep('interview');
       } else if (info.status === 'completed' || info.status === 'cancelled' || info.status === 'expired') {
         setErrorMessage(`This interview is ${info.status}.`);
         setStep('error');
@@ -151,7 +152,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       stopMediaStream();
       const result = await candidateAIInterviewService.startInterview(token);
       setInterview(result);
-      setStep('ready');
+      setStep('interview');
     } catch (err: any) {
       setErrorMessage(err?.response?.data?.detail || 'Failed to start interview');
       setStep('error');
@@ -194,17 +195,28 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     );
   }
 
-  // ========== READY (interview started) ==========
-  if (step === 'ready') {
+  // ========== INTERVIEW (live AI interview) ==========
+  if (step === 'interview' && interview) {
+    return (
+      <InterviewUI
+        token={token}
+        interviewInfo={interview}
+        onInterviewComplete={() => setStep('completed')}
+      />
+    );
+  }
+
+  // ========== COMPLETED ==========
+  if (step === 'completed') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="max-w-md text-center">
           <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-gray-800" />
           </div>
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">You're All Set!</h1>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">Interview Complete</h1>
           <p className="text-sm text-gray-600">
-            The AI interview session will begin shortly. Please keep your camera and microphone on.
+            Thank you for completing the AI interview. Your responses have been recorded and will be reviewed by the hiring team.
           </p>
           {interview && (
             <div className="mt-6 border border-gray-200 rounded-lg p-4 bg-white text-left">
@@ -214,20 +226,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                   <div className="font-medium text-gray-900">{interview.position}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500">Duration</div>
-                  <div className="font-medium text-gray-900">{interview.duration_minutes} min</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500">Questions</div>
-                  <div className="font-medium text-gray-900">{interview.total_questions}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-gray-500">Type</div>
-                  <div className="font-medium text-gray-900 capitalize">{interview.interview_type.replace('_', ' ')}</div>
+                  <div className="text-xs text-gray-500">Candidate</div>
+                  <div className="font-medium text-gray-900">{interview.candidate_name}</div>
                 </div>
               </div>
             </div>
           )}
+          <p className="text-xs text-gray-400 mt-6">You may close this window.</p>
         </div>
       </div>
     );
@@ -262,7 +267,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       <div className="min-h-screen overflow-y-auto bg-gray-50">
         {/* Header */}
         <div className="bg-gray-900 px-8 py-5">
-          <div className="max-w-4xl mx-auto flex items-center gap-4">
+          <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">
               <Video className="w-6 h-6 text-gray-300" />
             </div>
@@ -276,7 +281,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         </div>
 
         {/* Content */}
-        <div className="max-w-4xl mx-auto px-8 py-8 space-y-8">
+        <div className="px-8 py-8 space-y-8">
           <div className="border border-gray-200 rounded-lg p-5 bg-white">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
@@ -400,7 +405,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
         {/* Sticky Footer */}
         <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-4">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm text-gray-500">
               <Circle className="w-3 h-3 fill-gray-400 text-gray-400" />
               Pre-Check
@@ -433,7 +438,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       <div className="min-h-screen overflow-y-auto bg-gray-50">
         {/* Header */}
         <div className="bg-gray-900 px-8 py-5">
-          <div className="max-w-4xl mx-auto flex items-center gap-4">
+          <div className="flex items-center gap-4">
             <Video className="w-6 h-6 text-gray-300" />
             <div>
               <h1 className="text-white text-lg font-semibold">AI Video Interview - Consent Required</h1>
@@ -445,7 +450,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         </div>
 
         {/* Content */}
-        <div className="max-w-4xl mx-auto px-8 py-8 space-y-8">
+        <div className="px-8 py-8 space-y-8">
           {/* Special Category Data Warning */}
           <div className="border border-gray-300 rounded-lg p-6">
             <div className="flex items-start gap-3 mb-4">
@@ -582,7 +587,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
         {/* Sticky Footer */}
         <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-4">
-          <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <div className="flex items-center justify-between">
             {!allConsentsChecked && (
               <span className="text-sm text-gray-500">Please accept all required consents</span>
             )}
