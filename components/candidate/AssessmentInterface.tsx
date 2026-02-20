@@ -248,6 +248,11 @@ export function AssessmentInterface({
           return newMap;
         });
 
+        // Clear localStorage backup now that backend has the latest
+        try {
+          localStorage.removeItem(`assessment_draft_${token}_${currentQuestion.question_id}`);
+        } catch (e) { /* ignore */ }
+
         setLastAutoSaveTime(new Date());
         setAutoSaveStatus('saved');
         setLastSaveError(null);
@@ -335,6 +340,49 @@ export function AssessmentInterface({
     isAutoSaving,
     questionStartTime
   ]);
+
+  // 💾 LOCAL STORAGE BACKUP: Save answer immediately on every change (no debounce)
+  // This ensures code is never lost on refresh, even if auto-save hasn't fired yet
+  useEffect(() => {
+    const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+    if (!hasAnswer || isCurrentAnswerLocked) return;
+
+    const key = `assessment_draft_${token}_${currentQuestion.question_id}`;
+    try {
+      localStorage.setItem(key, JSON.stringify({
+        ...answer,
+        _savedAt: Date.now(),
+      }));
+    } catch (e) {
+      console.warn('[LOCAL-BACKUP] Failed to save to localStorage:', e);
+    }
+  }, [answer, token, currentQuestion.question_id, isCurrentAnswerLocked]);
+
+  // 🔄 BEFORE UNLOAD: Flush current answer to backend via sendBeacon
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+      if (!hasAnswer || isCurrentAnswerLocked) return;
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const url = `${apiUrl}/candidate/assessment/${token}/answer`;
+      const payload = JSON.stringify({
+        question_id: currentQuestion.question_id,
+        text_response: answer.text_response,
+        selected_options: answer.selected_options,
+        code_submission: answer.code_submission,
+        language: answer.language,
+        is_draft: true,
+        time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
+      });
+
+      navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+      console.log('[UNLOAD] Flushed answer via sendBeacon');
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [answer, token, currentQuestion.question_id, isCurrentAnswerLocked, questionStartTime]);
 
   // 🌐 NETWORK STATUS: Monitor connection and retry queued requests
   useEffect(() => {
@@ -720,10 +768,18 @@ export function AssessmentInterface({
     }
   }, [stream, videoRef]);
 
-  // Update answer statuses when question changes.
-  // Note: setAnswer is now handled synchronously above via the derived-state pattern,
-  // so we only need to update answerStatuses here.
+  // Reset answer when question changes and update answer statuses
   useEffect(() => {
+    if (currentQuestion.previous_answer) {
+      setAnswer({
+        text_response: currentQuestion.previous_answer.text_response || undefined,
+        selected_options: currentQuestion.previous_answer.selected_options || undefined,
+        code_submission: currentQuestion.previous_answer.code_submission || undefined
+      });
+    } else {
+      setAnswer({});
+    }
+
     // Update ALL question statuses from backend (if available)
     if (currentQuestion.all_question_statuses && currentQuestion.all_question_statuses.length > 0) {
       setAnswerStatuses(prev => {
@@ -749,7 +805,7 @@ export function AssessmentInterface({
     }
 
     setTimeRemaining(currentQuestion.time_limit_seconds);
-  }, [currentQuestion.question_id, currentQuestion.question_number]);
+  }, [token, currentQuestion.question_id, currentQuestion.question_number]);
 
   // Timer for timed questions
   useEffect(() => {

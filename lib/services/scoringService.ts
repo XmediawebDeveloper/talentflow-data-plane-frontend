@@ -119,6 +119,7 @@ export interface BatchScoringItem {
   status: 'queued' | 'processing' | 'completed' | 'failed';
   score_id?: string;
   overall_score?: number;
+  match_status?: string;
   error_message?: string;
 }
 

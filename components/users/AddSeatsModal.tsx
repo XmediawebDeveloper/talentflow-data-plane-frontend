@@ -278,91 +278,91 @@ export default function AddSeatsModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-4 sm:px-6 py-4 sm:py-5">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 text-white" />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">Add User Seats</h2>
-                <p className="text-sm text-blue-100">Expand your team capacity</p>
+                <h2 className="text-base sm:text-lg font-semibold text-white">Add User Seats</h2>
+                <p className="text-xs sm:text-sm text-blue-100">Expand your team capacity</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              className="p-1.5 sm:p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <div className="flex items-center justify-center py-8 sm:py-12">
+              <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-blue-600" />
             </div>
           ) : (
             <>
               {/* Current Status */}
-              <div className="bg-gray-50 rounded-xl p-4 mb-6">
+              <div className="bg-gray-50 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Current Plan</span>
-                  <span className="text-sm font-medium text-gray-900">{planName}</span>
+                  <span className="text-xs sm:text-sm text-gray-600">Current Plan</span>
+                  <span className="text-xs sm:text-sm font-medium text-gray-900">{planName}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Active Users</span>
-                  <span className="text-sm font-medium text-gray-900">
+                  <span className="text-xs sm:text-sm text-gray-600">Active Users</span>
+                  <span className="text-xs sm:text-sm font-medium text-gray-900">
                     {currentSeats} / {maxSeats === -1 ? '∞' : maxSeats} seats
                   </span>
                 </div>
                 {currentSeats >= maxSeats && maxSeats !== -1 && (
-                  <div className="mt-3 flex items-center gap-2 text-red-600">
-                    <AlertCircle className="w-4 h-4" />
-                    <span className="text-xs font-medium">Seat limit reached</span>
+                  <div className="mt-2 sm:mt-3 flex items-center gap-2 text-red-600">
+                    <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="text-[10px] sm:text-xs font-medium">Seat limit reached</span>
                   </div>
                 )}
               </div>
 
               {/* Package Selector */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
+              <div className="mb-4 sm:mb-6">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">
                   Number of packages to buy
                 </label>
-                <div className="flex items-center justify-center gap-4">
+                <div className="flex items-center justify-center gap-3 sm:gap-4">
                   <button
                     onClick={decrementQuantity}
                     disabled={quantity <= 1}
-                    className="w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    <Minus className="w-5 h-5" />
+                    <Minus className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
-                  <div className="w-24 text-center">
+                  <div className="w-20 sm:w-24 text-center">
                     <input
                       type="number"
                       min={1}
                       max={pricing?.max_packages || 50}
                       value={quantity}
                       onChange={(e) => setQuantity(Math.max(1, Math.min(pricing?.max_packages || 50, parseInt(e.target.value) || 1)))}
-                      className="w-full text-center text-3xl font-bold text-gray-900 border-0 focus:ring-0 bg-transparent"
+                      className="w-full text-center text-2xl sm:text-3xl font-bold text-gray-900 border-0 focus:ring-0 bg-transparent"
                     />
-                    <span className="text-sm text-gray-500">package{quantity > 1 ? 's' : ''}</span>
+                    <span className="text-xs sm:text-sm text-gray-500">package{quantity > 1 ? 's' : ''}</span>
                   </div>
                   <button
                     onClick={incrementQuantity}
                     disabled={pricing ? quantity >= (pricing.max_packages || 50) : false}
-                    className="w-12 h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl border-2 border-gray-200 flex items-center justify-center text-gray-600 hover:border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    <Plus className="w-5 h-5" />
+                    <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                 </div>
                 {pricing && (
-                  <p className="text-center text-sm text-gray-500 mt-2">
+                  <p className="text-center text-xs sm:text-sm text-gray-500 mt-2">
                     = {totalSeats} seat{totalSeats !== 1 ? 's' : ''} total
                   </p>
                 )}
@@ -370,16 +370,16 @@ export default function AddSeatsModal({
 
               {/* Pricing */}
               {pricing && (
-                <div className="bg-blue-50 rounded-xl p-4 mb-6">
+                <div className="bg-blue-50 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-blue-700">Package</span>
-                    <span className="text-sm font-medium text-blue-900">
+                    <span className="text-xs sm:text-sm text-blue-700">Package</span>
+                    <span className="text-xs sm:text-sm font-medium text-blue-900">
                       {unitsPerPackage} seats for {getCurrencySymbol(currency)}{pricePerPackage}
                     </span>
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-blue-200">
-                    <span className="text-base font-medium text-blue-800">Total ({totalSeats} seats)</span>
-                    <span className="text-2xl font-bold text-blue-900">
+                    <span className="text-sm sm:text-base font-medium text-blue-800">Total ({totalSeats} seats)</span>
+                    <span className="text-xl sm:text-2xl font-bold text-blue-900">
                       {getCurrencySymbol(currency)}{totalPrice}
                     </span>
                   </div>
@@ -387,9 +387,9 @@ export default function AddSeatsModal({
               )}
 
               {/* Info */}
-              <div className="flex items-start gap-2 p-3 bg-gray-50 rounded-lg mb-6">
-                <Info className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-gray-600">
+              <div className="flex items-start gap-2 p-2.5 sm:p-3 bg-gray-50 rounded-lg mb-4 sm:mb-6">
+                <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[10px] sm:text-xs text-gray-600">
                   Additional seats will be available immediately after purchase.
                   You'll be charged on your next billing cycle.
                 </p>
@@ -397,17 +397,17 @@ export default function AddSeatsModal({
 
               {/* Error */}
               {error && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg mb-6">
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-700">{error}</p>
+                <div className="flex items-start gap-2 p-2.5 sm:p-3 bg-red-50 border border-red-200 rounded-lg mb-4 sm:mb-6">
+                  <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs sm:text-sm text-red-700">{error}</p>
                 </div>
               )}
 
               {/* Actions */}
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                 <button
                   onClick={onClose}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl font-medium hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2.5 sm:py-3 border border-gray-300 text-gray-700 rounded-xl font-medium text-sm sm:text-base hover:bg-gray-50 transition-colors"
                 >
                   Cancel
                 </button>

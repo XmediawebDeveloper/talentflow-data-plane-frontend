@@ -243,6 +243,7 @@ export interface CurrentQuestion {
     text_response: string | null;
     selected_options: string[] | null;
     code_submission: string | null;
+    language: string | null;  // Coding language used (python, java, etc.)
     is_locked: boolean;  // True = submitted (not editable), False = draft (editable)
   } | null;
   // All question statuses for progress tracking

@@ -24,9 +24,8 @@ import {
   ShoppingCart,
   TrendingUp,
   Tag,
-  AlertTriangle,
-  Shield,
-  Timer,
+  Cpu,
+  Loader2 as Loader2Icon,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -147,6 +146,14 @@ export default function AuditTrailPage() {
 
   // Detail modal
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+
+  // AI Generation audit data (fetched when modal opens for assessment logs)
+  const [aiAuditData, setAiAuditData] = useState<{
+    ai_model_version: string | null;
+    questions_generated_at: string | null;
+    generation_params: Record<string, any> | null;
+  } | null>(null);
+  const [isLoadingAiAudit, setIsLoadingAiAudit] = useState(false);
 
   // Available filters
   const [availableActions, setAvailableActions] = useState<Array<{value: string; label: string}>>([]);
@@ -361,6 +368,48 @@ export default function AuditTrailPage() {
       fetchStats();
     }
   }, [page, actionFilter, entityFilter, dateRange, viewMode, errorOriginFilter]);
+
+  // Fetch AI generation audit data when an assessment-related log is selected
+  useEffect(() => {
+    setAiAuditData(null);
+
+    if (!selectedLog) return;
+
+    // Check if this is an assessment-related log with an attempt_id
+    const isAssessmentLog = selectedLog.entity_type === 'assessment' || selectedLog.entity_type === 'assessment_attempt';
+    const attemptId = selectedLog.details?.attempt_id
+      || (selectedLog.entity_type === 'assessment_attempt' ? selectedLog.entity_id : null);
+
+    if (!isAssessmentLog || !attemptId) return;
+
+    const fetchAiAudit = async () => {
+      setIsLoadingAiAudit(true);
+      try {
+        const token = localStorage.getItem('accessToken');
+        if (!token) return;
+
+        const response = await fetch(`${API_URL}/audits/ai-generation/${attemptId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.ai_model_version || data.questions_generated_at || data.generation_params) {
+            setAiAuditData(data);
+          }
+        }
+      } catch (err) {
+        console.error('[AI-AUDIT] Failed to fetch AI generation data:', err);
+      } finally {
+        setIsLoadingAiAudit(false);
+      }
+    };
+
+    fetchAiAudit();
+  }, [selectedLog]);
 
   // Handle view mode change - reset filters and update view mode together
   const handleViewModeChange = (newMode: 'all' | 'system' | 'usage' | 'sessions') => {
@@ -1329,6 +1378,85 @@ export default function AuditTrailPage() {
                   </div>
                 </div>
               )}
+
+              {/* AI Generation Audit Section */}
+              {isLoadingAiAudit && (
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Loader2Icon className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Loading AI generation data...</span>
+                </div>
+              )}
+              {aiAuditData && (
+                <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-purple-600" />
+                  <p className="text-[11px] font-medium text-purple-600 uppercase tracking-wider">AI Generation Audit</p>
+                </div>
+
+                {/* Model Version + Generation Timestamp */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-purple-50 rounded-xl p-3.5 border border-purple-100">
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">AI Model Version</p>
+                    <p className="text-sm font-semibold text-gray-900">{aiAuditData.ai_model_version || 'N/A'}</p>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3.5 border border-purple-100">
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-1">Generation Timestamp</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {aiAuditData.questions_generated_at
+                        ? new Date(aiAuditData.questions_generated_at).toLocaleString('en-US', {
+                            timeZone: 'Asia/Kolkata',
+                            month: 'short', day: 'numeric', year: 'numeric',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
+                          })
+                        : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Input Parameters Table */}
+                <div className="bg-gray-50 rounded-xl divide-y divide-gray-100 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-gray-100/50">
+                    <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">Input Parameters</p>
+                  </div>
+                  {aiAuditData.generation_params ? (
+                    <>
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">JD Title</span>
+                        <span className="text-sm text-gray-900">{aiAuditData.generation_params.jd_title || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Experience Level</span>
+                        <span className="text-sm text-gray-900 capitalize">{aiAuditData.generation_params.experience_level?.replace(/_/g, ' ') || 'N/A'}</span>
+                      </div>
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Duration</span>
+                        <span className="text-sm text-gray-900">{aiAuditData.generation_params.duration_minutes ? `${aiAuditData.generation_params.duration_minutes} minutes` : 'N/A'}</span>
+                      </div>
+                      <div className="flex items-start px-4 py-3 gap-4">
+                        <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Questions Generated</span>
+                        <span className="text-sm text-gray-900">{aiAuditData.generation_params.total_questions_generated ?? 'N/A'}</span>
+                      </div>
+                      {aiAuditData.generation_params.rounds_config && aiAuditData.generation_params.rounds_config.length > 0 && (
+                        <div className="flex items-start px-4 py-3 gap-4">
+                          <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5">Rounds Config</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {aiAuditData.generation_params.rounds_config.map((round: any, idx: number) => (
+                              <span key={idx} className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium capitalize">
+                                {round.type} ({round.weightage}%)
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="px-4 py-3">
+                      <span className="text-sm text-gray-400">No input parameters recorded</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             </div>
 
             {/* Modal Footer */}

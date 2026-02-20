@@ -43,16 +43,16 @@ export function DuplicateResumeDetectedModal({
 }: DuplicateResumeDetectedModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md mx-2 sm:mx-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-amber-600">
-            <AlertTriangle className="w-5 h-5" />
+          <DialogTitle className="flex items-center gap-2 text-amber-600 text-base sm:text-lg">
+            <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
             Resume Already Exists
           </DialogTitle>
         </DialogHeader>
 
-        <div className="py-4">
-          <p className="text-sm text-gray-600 mb-4">
+        <div className="py-3 sm:py-4">
+          <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">
             This resume already exists in your Internal Resume Database.
             {jobTitle && (
               <> Do you still want to submit for scoring against <span className="font-medium text-gray-900">{jobTitle}</span>?</>
@@ -60,9 +60,9 @@ export function DuplicateResumeDetectedModal({
           </p>
 
           {/* Uploaded File Info */}
-          <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <FileText className="w-4 h-4 text-gray-400" />
+          <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+              <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
               <span className="font-medium">Uploaded File:</span>
               <span className="truncate">{fileName}</span>
             </div>
@@ -70,13 +70,13 @@ export function DuplicateResumeDetectedModal({
 
           {/* Existing Resume Info */}
           <div className="border rounded-lg overflow-hidden">
-            <div className="px-3 py-2 bg-amber-50 border-b border-amber-200">
-              <span className="text-xs font-medium text-amber-700">Existing Record in Database</span>
+            <div className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-amber-50 border-b border-amber-200">
+              <span className="text-[10px] sm:text-xs font-medium text-amber-700">Existing Record in Database</span>
             </div>
-            <div className="p-4 space-y-3">
+            <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
               <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-gray-400" />
-                <span className="font-medium text-gray-900">{existingResume.candidate_name || 'Unknown Candidate'}</span>
+                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                <span className="text-sm sm:text-base font-medium text-gray-900 truncate">{existingResume.candidate_name || 'Unknown Candidate'}</span>
                 {existingResume.version && existingResume.version > 1 && (
                   <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
                     v{existingResume.version}
@@ -85,29 +85,29 @@ export function DuplicateResumeDetectedModal({
               </div>
 
               {existingResume.email && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                  <span>{existingResume.email}</span>
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                  <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                  <span className="truncate">{existingResume.email}</span>
                 </div>
               )}
 
               {existingResume.current_title && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Briefcase className="w-4 h-4 text-gray-400" />
-                  <span>{existingResume.current_title}</span>
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                  <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                  <span className="truncate">{existingResume.current_title}</span>
                 </div>
               )}
 
               {existingResume.folder_name && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <FileText className="w-4 h-4 text-gray-400" />
-                  <span>Folder: {existingResume.folder_name}</span>
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
+                  <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                  <span className="truncate">Folder: {existingResume.folder_name}</span>
                 </div>
               )}
 
               {existingResume.uploaded_at && (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Calendar className="w-4 h-4 text-gray-400" />
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500">
+                  <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
                   <span>Uploaded: {format(new Date(existingResume.uploaded_at), 'MMM d, yyyy')}</span>
                 </div>
               )}
@@ -120,9 +120,9 @@ export function DuplicateResumeDetectedModal({
           <Button
             variant="outline"
             onClick={onClose}
-            className="flex items-center gap-2 order-3 sm:order-1"
+            className="flex items-center justify-center gap-2 order-3 sm:order-1 text-xs sm:text-sm"
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Cancel
           </Button>
 
@@ -133,9 +133,9 @@ export function DuplicateResumeDetectedModal({
               onViewExisting(existingResume.id);
               onClose();
             }}
-            className="flex items-center gap-2 order-2"
+            className="flex items-center justify-center gap-2 order-2 text-xs sm:text-sm"
           >
-            <Eye className="w-4 h-4" />
+            <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             View Existing Record
           </Button>
 
@@ -145,9 +145,9 @@ export function DuplicateResumeDetectedModal({
               onProceedWithScoring(existingResume.id);
               onClose();
             }}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 order-1 sm:order-3"
+            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 order-1 sm:order-3 text-xs sm:text-sm"
           >
-            <Target className="w-4 h-4" />
+            <Target className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Proceed with Scoring
           </Button>
         </DialogFooter>
