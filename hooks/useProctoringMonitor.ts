@@ -472,7 +472,7 @@ export function useProctoringMonitor({
   }, []);
 
   // ==================== VOICE DETECTION (Web Worker) ====================
-  const setupVoiceDetection = useCallback(() => {
+  const setupVoiceDetection = useCallback(async () => {
     const currentStream = streamRef.current;
     if (!currentStream || !workerRef.current) return;
 
