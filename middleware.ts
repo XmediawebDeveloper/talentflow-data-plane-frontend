@@ -13,6 +13,7 @@ const publicRoutes = [
   '/faq',
   '/login',
   '/signup',
+  '/reset-password', // Invite-based first-login password setup
   '/assessment', // Candidate assessment portal (public)
 ];
 
@@ -81,6 +82,37 @@ export async function middleware(request: NextRequest) {
   }
   // --- End subdomain validation ---
 
+  // Routing rules for auth pages:
+  //   • Root domain  (0sms.com / localhost without ?org=): /login  → /signup
+  //   • Subdomain    (acme.0sms.com / ?org=acme):         /signup → /login
+  //   Signup is root-domain-only. Login is subdomain-only.
+
+  // Root domain /login handling:
+  // If no subdomain in URL/hostname, check the tf-subdomain cookie (set on last login).
+  // This handles the case where an org user's logout goes to bare /login (no ?org=):
+  //   - If cookie has org → redirect to /login?org=<org>  (returning org user)
+  //   - If no cookie     → redirect to /signup            (brand new user)
+  if (!tenantSubdomain && pathname === '/login') {
+    const cookieSubdomain = request.cookies.get('tf-subdomain')?.value;
+    if (cookieSubdomain) {
+      // Org user without ?org= in URL — restore it from cookie
+      const url = request.nextUrl.clone();
+      url.searchParams.set('org', cookieSubdomain);
+      return NextResponse.redirect(url);
+    }
+    // No org context at all → new user, send to signup
+    const url = request.nextUrl.clone();
+    url.pathname = '/signup';
+    return NextResponse.redirect(url);
+  }
+
+  // Subdomain (acme.0sms.com) is LOGIN-ONLY — block /signup, redirect to /login
+  if (tenantSubdomain && pathname === '/signup') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
+  }
+
   // Check if route is public
   const isPublicRoute = publicRoutes.some(route =>
     pathname === route || pathname.startsWith(`${route}/`)
@@ -123,8 +155,17 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('from', pathname);
+
+    // Preserve org context in the redirect URL so /login doesn't get sent to /signup.
+    // Use tenantSubdomain from URL/hostname first, fall back to tf-subdomain cookie
+    // (cookie persists on protected routes — see cookie management below).
+    const orgToPreserve = tenantSubdomain || request.cookies.get('tf-subdomain')?.value;
+    if (orgToPreserve) {
+      url.searchParams.set('org', orgToPreserve);
+    }
+
     const redirectRes = NextResponse.redirect(url);
-    // Preserve subdomain cookie so login page knows which tenant
+    // Keep the subdomain cookie alive in the redirect response
     if (tenantSubdomain) {
       redirectRes.cookies.set('tf-subdomain', tenantSubdomain, {
         httpOnly: false,
@@ -167,7 +208,15 @@ export async function middleware(request: NextRequest) {
 
   const res = NextResponse.next({ request: { headers: requestHeaders } });
 
-  // Set/clear tf-subdomain cookie for client-side access in Login component
+  // Set/clear tf-subdomain cookie for client-side access in Login component.
+  //
+  // IMPORTANT: On protected routes (dashboard, settings, etc.) we do NOT clear the cookie
+  // even when there's no ?org= in the URL. This preserves the org context so that:
+  //   1. If the session expires, the no-token redirect can include ?org= (see above).
+  //   2. If logout redirects to bare /login, the cookie redirect above can find the org.
+  //
+  // We only clear it on public routes (home, pricing, signup) when there's no org context,
+  // which handles the "truly new user" case cleanly.
   if (tenantSubdomain) {
     res.cookies.set('tf-subdomain', tenantSubdomain, {
       httpOnly: false,
@@ -184,7 +233,8 @@ export async function middleware(request: NextRequest) {
         maxAge: 300, // 5 minutes
       });
     }
-  } else {
+  } else if (!isProtectedRoute) {
+    // Only clear on non-protected (public) routes — never on /dashboard etc.
     res.cookies.delete('tf-subdomain');
     res.cookies.delete('tf-subdomain-valid');
   }
