@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { clearTokens, getTokens } from '@/lib/services/api';
+import { getLoginUrl } from '@/lib/services/authService';
 import { userSettingsApi } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
 
@@ -69,11 +70,12 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
   // Logout function
   const handleLogout = useCallback(() => {
     console.log('[SessionTimeout] Auto-logout due to inactivity');
+    const loginUrl = getLoginUrl();
     clearTokens();
     localStorage.removeItem('user');
     sessionStorage.clear();
     toast.error('Session expired due to inactivity. Please log in again.');
-    router.push('/login');
+    router.push(loginUrl);
   }, [router]);
 
   // Show warning before logout

@@ -39,7 +39,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
   useEffect(() => {
     const detected = detectSubdomain(new URLSearchParams(searchParams.toString()));
-    if (detected) setSubdomain(detected);
+    if (detected) {
+      setSubdomain(detected);
+      // Persist immediately so getLoginUrl() can find it at logout time,
+      // even if the user navigates away and the ?org= param is no longer in the URL.
+      if (typeof window !== 'undefined') {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocalhost) localStorage.setItem('talentflow_subdomain', detected);
+      }
+    }
   }, [searchParams]);
 
   // 2FA State

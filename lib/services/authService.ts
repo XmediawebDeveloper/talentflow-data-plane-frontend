@@ -4,6 +4,50 @@
 
 import api, { setTokens, clearTokens, handleApiError } from './api';
 
+const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+
+/**
+ * Returns the correct login URL preserving org context.
+ * - Localhost: /login?org=<subdomain>
+ * - Production subdomain (myorg.0sms.com): https://myorg.0sms.com/login
+ */
+export const getLoginUrl = (): string => {
+  if (typeof window === 'undefined') return '/login';
+
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+  // ── Localhost / local dev ──────────────────────────────────────────────────
+  if (isLocalhost) {
+    // Priority 1: tenantSubdomain from stored user (populated by /auth/me on every load)
+    try {
+      const storedUser = localStorage.getItem('talentflow_user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        if (user?.tenantSubdomain) return `/login?org=${user.tenantSubdomain}`;
+      }
+    } catch {}
+    // Priority 2: subdomain stored at login time via ?org= param
+    try {
+      const sub = localStorage.getItem('talentflow_subdomain');
+      if (sub) return `/login?org=${sub}`;
+    } catch {}
+    // Priority 3: ?org= still in current URL
+    const org = new URLSearchParams(window.location.search).get('org');
+    if (org) return `/login?org=${org}`;
+    return '/login';
+  }
+
+  // ── Production subdomain (myorg.0sms.com) ─────────────────────────────────
+  // Extract subdomain from hostname: myorg.0sms.com → myorg
+  if (hostname.endsWith(`.${BASE_DOMAIN}`)) {
+    const subdomain = hostname.slice(0, -(BASE_DOMAIN.length + 1));
+    if (subdomain) return `https://${subdomain}.${BASE_DOMAIN}/login`;
+  }
+
+  return '/login';
+};
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -87,9 +131,11 @@ export interface User {
   created_at: string;
   // Tenant status info (for suspension/expiry display)
   tenant_status?: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED' | 'PENDING_ACTIVATION' | 'PROVISIONING' | 'DELETED';
-  suspension_reason?: string;  // User-friendly suspension reason message
-  suspension_notes?: string;   // Additional suspension details
-  suspended_at?: string;       // ISO date string when account was suspended
+  suspension_reason?: string;
+  suspension_notes?: string;
+  suspended_at?: string;
+  // Tenant subdomain - used to build org-aware login URL on logout
+  tenant_subdomain?: string;
 }
 
 export interface LoginResponse {

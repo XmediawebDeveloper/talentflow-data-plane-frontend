@@ -82,7 +82,12 @@ export async function middleware(request: NextRequest) {
   }
   // --- End subdomain validation ---
 
-  // Root domain (0sms.com) is SIGNUP-ONLY — block /login, redirect to /signup
+  // Routing rules for auth pages:
+  //   • Root domain  (0sms.com / localhost without ?org=): /login  → /signup
+  //   • Subdomain    (acme.0sms.com / ?org=acme):         /signup → /login
+  //   Signup is root-domain-only. Login is subdomain-only.
+
+  // Root domain: redirect /login → /signup (no org context = new user)
   if (!tenantSubdomain && pathname === '/login') {
     const url = request.nextUrl.clone();
     url.pathname = '/signup';
