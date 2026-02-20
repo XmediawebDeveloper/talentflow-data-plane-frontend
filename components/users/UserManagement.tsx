@@ -1186,7 +1186,7 @@ export default function UserManagement() {
         role: user.role || 'viewer',
         permissions: user.permissions || defaultPermissions,
         is_active: user.is_active ?? true,
-        last_login: user.last_login_at,
+        last_login: user.last_login,
       }));
 
       // DEBUG: Log loaded users
@@ -1381,11 +1381,32 @@ export default function UserManagement() {
       const currentPermissionIds = new Set<number>();
 
       // Backend now returns permission_ids array - use it directly!
-      if (freshUserData.permission_ids && Array.isArray(freshUserData.permission_ids)) {
+      if (freshUserData.permission_ids && Array.isArray(freshUserData.permission_ids) && freshUserData.permission_ids.length > 0) {
+        // User has explicit custom permissions - use them
         freshUserData.permission_ids.forEach((id: number) => {
           currentPermissionIds.add(id);
         });
-        console.log('[EDIT USER] Loaded permission IDs from backend:', Array.from(currentPermissionIds));
+        console.log('[EDIT USER] Loaded custom permission IDs from backend:', Array.from(currentPermissionIds));
+      } else if (Array.isArray(freshUserData.permission_ids) && freshUserData.permission_ids.length === 0) {
+        // Empty array: user has no custom permissions (e.g. newly invited user)
+        // Fall back to role default permissions so the modal shows what they actually have
+        const roleIdForDefaults = matchingRole?.id;
+        if (roleIdForDefaults) {
+          try {
+            const rolePerms = await userService.getRolePermissions(roleIdForDefaults);
+            rolePerms.permission_codes.forEach(code => {
+              const perm = permissionsForMapping.find(p => p.code === code);
+              if (perm) {
+                currentPermissionIds.add(perm.id);
+              }
+            });
+            console.log('[EDIT USER] Loaded role default permissions (user has no custom permissions):', Array.from(currentPermissionIds));
+          } catch (e) {
+            console.warn('[EDIT USER] Failed to load role defaults:', e);
+          }
+        } else {
+          console.log('[EDIT USER] No role ID available, showing empty permissions');
+        }
       } else {
         // Fallback: Map user's current permissions (boolean fields) to permission IDs if permission_ids not available
         console.log('[EDIT USER] permission_ids not available, falling back to boolean mapping');

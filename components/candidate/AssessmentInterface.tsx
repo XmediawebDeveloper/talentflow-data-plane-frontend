@@ -95,13 +95,37 @@ export function AssessmentInterface({
   isCameraActive = true,
   isMicrophoneActive = true
 }: AssessmentInterfaceProps) {
-  const [answer, setAnswer] = useState<{
+  type AnswerState = {
     text_response?: string;
     video_response_url?: string;
     selected_options?: string[];
     code_submission?: string;
     language?: string;
-  }>({});
+  };
+
+  const buildAnswerFromPrevious = (q: typeof currentQuestion): AnswerState => {
+    if (q.previous_answer) {
+      return {
+        text_response: q.previous_answer.text_response || undefined,
+        selected_options: q.previous_answer.selected_options || undefined,
+        code_submission: q.previous_answer.code_submission || undefined,
+      };
+    }
+    return {};
+  };
+
+  // Initialize answer from previous_answer immediately so child components (e.g.
+  // MultiLanguageCodeEditor) see the saved code on their very first render.
+  const [answer, setAnswer] = useState<AnswerState>(() => buildAnswerFromPrevious(currentQuestion));
+
+  // Synchronously update answer when the question changes (derived-state-from-props pattern).
+  // useEffect fires AFTER render, which is too late — the editor's init effect would run
+  // with a stale empty answer and show the template instead of the saved code.
+  const [prevQuestionId, setPrevQuestionId] = useState(currentQuestion.question_id);
+  if (prevQuestionId !== currentQuestion.question_id) {
+    setPrevQuestionId(currentQuestion.question_id);
+    setAnswer(buildAnswerFromPrevious(currentQuestion));
+  }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [questionStartTime] = useState(Date.now());
@@ -696,18 +720,10 @@ export function AssessmentInterface({
     }
   }, [stream, videoRef]);
 
-  // Reset answer when question changes and update answer statuses
+  // Update answer statuses when question changes.
+  // Note: setAnswer is now handled synchronously above via the derived-state pattern,
+  // so we only need to update answerStatuses here.
   useEffect(() => {
-    if (currentQuestion.previous_answer) {
-      setAnswer({
-        text_response: currentQuestion.previous_answer.text_response || undefined,
-        selected_options: currentQuestion.previous_answer.selected_options || undefined,
-        code_submission: currentQuestion.previous_answer.code_submission || undefined
-      });
-    } else {
-      setAnswer({});
-    }
-
     // Update ALL question statuses from backend (if available)
     if (currentQuestion.all_question_statuses && currentQuestion.all_question_statuses.length > 0) {
       setAnswerStatuses(prev => {

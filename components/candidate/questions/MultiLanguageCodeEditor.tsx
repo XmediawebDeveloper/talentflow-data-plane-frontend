@@ -136,8 +136,8 @@ export function MultiLanguageCodeEditor({
     // Get starter code or template
     let initialCode = '';
 
-    if (answer.code_submission && answer.language === selectedLanguage) {
-      // Use existing answer if same language
+    if (answer.code_submission && (!answer.language || answer.language === selectedLanguage)) {
+      // Use existing answer if language matches OR if no language info is available (e.g., page refresh)
       initialCode = answer.code_submission;
     } else if (question.starter_code?.[selectedLanguage]) {
       // Use question's starter code for this language
@@ -148,16 +148,11 @@ export function MultiLanguageCodeEditor({
     }
 
     setCode(initialCode);
-  }, [selectedLanguage]);
-
-  // Update answer when code or language changes
-  useEffect(() => {
-    onAnswerChange({
-      ...answer,
-      code_submission: code,
-      language: selectedLanguage,
-    });
-  }, [code, selectedLanguage]);
+    // Notify parent of the restored/initialized code so auto-save can track it
+    onAnswerChange({ ...answer, code_submission: initialCode, language: selectedLanguage });
+  // question.question_id ensures this re-runs when navigating between questions,
+  // so the editor shows the correct saved code for each question.
+  }, [selectedLanguage, question.question_id]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -253,14 +248,21 @@ export function MultiLanguageCodeEditor({
     fetchAvailableLanguages();
   }, [attemptId, question.coding_enabled]);
 
-  const handleEditorMount: OnMount = (editor) => {
+  const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     editor.focus();
+    // Block copy/paste/cut inside Monaco to enforce proctoring restrictions
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {});
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {});
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {});
   };
 
   const handleCodeChange: OnChange = (value) => {
     if (isLocked) return; // Cannot change if locked
-    setCode(value || '');
+    const newCode = value || '';
+    setCode(newCode);
+    // Notify parent directly so auto-save triggers on every keystroke (with 3s debounce in parent)
+    onAnswerChange({ ...answer, code_submission: newCode, language: selectedLanguage });
   };
 
   const handleLanguageChange = async (langId: string) => {
