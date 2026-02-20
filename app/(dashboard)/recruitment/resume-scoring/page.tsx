@@ -147,6 +147,7 @@ export default function ResumeScoringRoute() {
               candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
               status: item.status,
               score: item.overall_score,
+              matchStatus: item.match_status,
               errorMessage: item.error_message,
             }));
           } else if (storedResumeItems.length > 0) {
@@ -279,6 +280,7 @@ export default function ResumeScoringRoute() {
             candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
             status: item.status,
             score: item.overall_score,
+            matchStatus: item.match_status,
             errorMessage: item.error_message,
           }));
         } else if (storedResumeItems.length > 0) {
