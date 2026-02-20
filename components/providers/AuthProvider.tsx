@@ -535,7 +535,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // the tf-subdomain cookie gets cleared by middleware.
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       if (isLocalhost) {
-        const org = new URLSearchParams(window.location.search).get('org');
+        // Prefer ?org= from URL, fall back to tenant_subdomain from the API login response
+        const org = new URLSearchParams(window.location.search).get('org') || userData.tenantSubdomain;
         if (org) {
           localStorage.setItem('talentflow_subdomain', org);
           console.log('[AUTH] Stored subdomain for logout redirect:', org);
@@ -564,6 +565,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     console.log('[AUTH] Logout called');
+
+    // Ensure talentflow_subdomain is always fresh from live React state before getLoginUrl() reads it.
+    // This handles stale localStorage sessions where talentflow_subdomain was never stored.
+    if (typeof window !== 'undefined') {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const subdomain = user?.tenantSubdomain;
+      if (isLocalhost && subdomain) {
+        localStorage.setItem('talentflow_subdomain', subdomain);
+      }
+    }
 
     // Capture login URL before clearing storage (subdomain lives in tenant storage)
     const loginUrl = getLoginUrl();

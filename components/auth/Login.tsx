@@ -134,6 +134,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       featureFlags: response.user.feature_flags,
       enabledFeatures: response.user.enabled_features,
       tenantStatus: response.user.tenant_status,
+      tenantSubdomain: response.user.tenant_subdomain,
     };
 
     // Pass tenant name from login response
