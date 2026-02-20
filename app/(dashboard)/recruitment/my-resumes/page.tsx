@@ -1850,6 +1850,14 @@ export default function MyResumesPage() {
 
     // For multiple files, use bulk upload with async processing
     try {
+      // Auto-clear previous completed batches before starting a new upload
+      try {
+        await resumeService.deleteCompletedBatches();
+        setUploadHistory(prev => prev.filter(r => r.pending > 0 || r.status === 'processing'));
+      } catch (e) {
+        // Non-critical — proceed even if cleanup fails
+      }
+
       // Start bulk upload - returns immediately with batch info
       const batch = await resumeService.uploadBulk(files, targetFolderId);
 
