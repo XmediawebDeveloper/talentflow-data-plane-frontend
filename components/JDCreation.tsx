@@ -122,6 +122,14 @@ const containsCodePatterns = (text: string): boolean => {
   return hasCodeKeywords || hasCodePattern || hasExcessiveSpecialChars;
 };
 
+const isEnglishOnly = (text: string): boolean => {
+  if (!text || !text.trim()) return true;
+  // Detect characters from non-Latin scripts (Arabic, Chinese, Japanese, Korean,
+  // Devanagari/Hindi, Cyrillic, Thai, Tamil, Telugu, Malayalam, etc.)
+  const nonLatinPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF\u0900-\u097F\u0400-\u04FF\u0E00-\u0E7F\u0B80-\u0BFF\u0C00-\u0C7F\u0D00-\u0D7F]/u;
+  return !nonLatinPattern.test(text);
+};
+
 interface ExtractedData {
   mustHaveSkills: string[];
   mustHaveComments: string[];
@@ -1093,6 +1101,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       toast.error({
         title: 'Invalid AI Prompt',
         description: 'AI prompt should describe a job role, not contain programming code or technical syntax.',
+      });
+      return;
+    }
+
+    // Validate AI prompt is in English only
+    if (!isEnglishOnly(jobTitle) || !isEnglishOnly(aiPrompt)) {
+      toast.error({
+        title: 'English Only',
+        description: 'Job title and AI prompt must be written in English. Other languages are not supported.',
       });
       return;
     }
