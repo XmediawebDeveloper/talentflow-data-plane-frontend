@@ -346,7 +346,7 @@ export default function Dashboard({
   }, [fetchRecentActivities]);
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto bg-gray-50">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-7xl mx-auto">
         {/* Welcome Section */}
         <div className="mb-6">
@@ -360,10 +360,10 @@ export default function Dashboard({
         )}
 
         {/* Main Stats Grid */}
-        <div className="grid grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
                 <Users className="w-6 h-6 text-gray-800" />
               </div>
               <span className="flex items-center gap-1 text-sm text-green-600">
@@ -377,7 +377,7 @@ export default function Dashboard({
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
                 <Briefcase className="w-6 h-6 text-green-600" />
               </div>
               <span className="flex items-center gap-1 text-sm text-green-600">
@@ -391,7 +391,7 @@ export default function Dashboard({
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
                 <Video className="w-6 h-6 text-gray-800" />
               </div>
               <span className="flex items-center gap-1 text-sm text-red-600">
@@ -405,7 +405,7 @@ export default function Dashboard({
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-yellow-100 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl bg-yellow-100 flex items-center justify-center flex-shrink-0">
                 <FileText className="w-6 h-6 text-yellow-600" />
               </div>
             </div>
@@ -416,7 +416,7 @@ export default function Dashboard({
 
         {/* Active Plan & Available Units Section */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
-          <div className="flex items-start justify-between mb-6 pb-6 border-b border-gray-200">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 pb-6 border-b border-gray-200">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Crown className="w-6 h-6 text-gray-800" />
@@ -451,11 +451,11 @@ export default function Dashboard({
           </div>
 
           {/* Usage Cards */}
-          <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {/* Resume Upload Units */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                   <Users className="w-5 h-5 text-gray-800" />
                 </div>
               </div>
@@ -480,7 +480,7 @@ export default function Dashboard({
             {/* Job Posting Units */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
                   <Briefcase className="w-5 h-5 text-green-600" />
                 </div>
               </div>
@@ -505,7 +505,7 @@ export default function Dashboard({
             {/* Assessment Units */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0">
                   <FileText className="w-5 h-5 text-yellow-600" />
                 </div>
               </div>
@@ -530,7 +530,7 @@ export default function Dashboard({
             {/* AI Interview Units */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                   <Video className="w-5 h-5 text-gray-800" />
                 </div>
               </div>
@@ -564,7 +564,7 @@ export default function Dashboard({
 
           {/* Plan Features */}
           <div className="pt-4 border-t border-gray-200">
-            <div className="grid grid-cols-3 gap-3 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
               <div className="flex items-center gap-2">
                 <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                 <span className="text-gray-700">Unlimited Team Members</span>
@@ -811,10 +811,10 @@ export default function Dashboard({
         </div>
 
         {/* Two Column Layout - Recent Activity & Quick Actions */}
-        <div className={`grid gap-6 mb-6 ${user?.is_tenant_admin ? 'grid-cols-3' : 'grid-cols-1'}`}>
+        <div className={`grid gap-6 mb-6 ${user?.is_tenant_admin ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'}`}>
           {/* Recent Activity - Tenant Admin Only */}
           {user?.is_tenant_admin && (
-            <div className="col-span-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 shadow-sm overflow-x-auto">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <h2 className="text-gray-900">Recent Activity</h2>
@@ -936,7 +936,7 @@ export default function Dashboard({
         </div>
 
         {/* Job Performance */}
-        <div className="grid grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
             <h2 className="text-gray-900 mb-6">Top Performing Jobs</h2>
             <div className="space-y-4">

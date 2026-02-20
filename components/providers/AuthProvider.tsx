@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User, Tenant, Permission, FeatureFlags, UserRole } from '@/lib/types/tenant';
 import { authService, clearTokens } from '@/lib/services';
+import { getLoginUrl } from '@/lib/services/authService';
 import { mockTenant } from '@/lib/mockData/tenantData';
 import { useRouter } from 'next/navigation';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
@@ -200,6 +201,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     suspensionReason: apiUser.suspension_reason,
     suspensionNotes: apiUser.suspension_notes,
     suspendedAt: apiUser.suspended_at,
+    tenantSubdomain: apiUser.tenant_subdomain,
   };
 }
 
@@ -319,6 +321,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           setUser(userData);
           saveUserToStorage(userData);
+          // Mirror tenantSubdomain to talentflow_subdomain so getLoginUrl() has it
+          // even if talentflow_user is cleared before getLoginUrl() is called
+          if (userData.tenantSubdomain && typeof window !== 'undefined') {
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            if (isLocalhost) localStorage.setItem('talentflow_subdomain', userData.tenantSubdomain);
+          }
           console.log('[AUTH] User validated with API');
         } catch (error: unknown) {
           // Check if this is a subscription inactive error (403)
@@ -520,6 +528,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       // Save current login time for next session
       localStorage.setItem(LAST_LOGIN_KEY, new Date().toISOString());
+
+      // Store subdomain for later use by getLoginUrl() at logout time.
+      // We capture it NOW because: at login the ?org= param is still in the URL,
+      // but after navigating to /dashboard the URL no longer carries ?org= and
+      // the tf-subdomain cookie gets cleared by middleware.
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocalhost) {
+        // Prefer ?org= from URL, fall back to tenant_subdomain from the API login response
+        const org = new URLSearchParams(window.location.search).get('org') || userData.tenantSubdomain;
+        if (org) {
+          localStorage.setItem('talentflow_subdomain', org);
+          console.log('[AUTH] Stored subdomain for logout redirect:', org);
+        }
+      }
     }
 
     setUser(userData);
@@ -544,6 +566,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     console.log('[AUTH] Logout called');
 
+    // Ensure talentflow_subdomain is always fresh from live React state before getLoginUrl() reads it.
+    // This handles stale localStorage sessions where talentflow_subdomain was never stored.
+    if (typeof window !== 'undefined') {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const subdomain = user?.tenantSubdomain;
+      if (isLocalhost && subdomain) {
+        localStorage.setItem('talentflow_subdomain', subdomain);
+      }
+    }
+
+    // Capture login URL before clearing storage (subdomain lives in tenant storage)
+    const loginUrl = getLoginUrl();
+
     // Call backend logout API so the event is recorded in activity logs
     try {
       await authService.logout();
@@ -561,11 +596,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // ✅ PERMISSION CACHE FIX: Clear permission version on logout
     if (typeof window !== 'undefined') {
       localStorage.removeItem('permission_version');
+      localStorage.removeItem('talentflow_subdomain');
       // Note: Keep LAST_LOGIN_KEY so it persists for next login by the same user
       console.log('[AUTH] Permission version cache cleared on logout');
     }
 
-    router.push('/login');
+    router.push(loginUrl);
   };
 
   const updateUser = (userData: User) => {

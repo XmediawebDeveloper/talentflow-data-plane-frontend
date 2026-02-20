@@ -936,7 +936,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                     console.log('Sort by changed to:', value);
                     setSortBy(value);
                   }}
-                  className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base cursor-pointer"
+                  className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base  text-black cursor-pointer"
                 >
                   <option value="date">Date Posted</option>
                   <option value="applicants">Applicants</option>
@@ -951,7 +951,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                     console.log('Sort order button clicked! Current order:', sortOrder, 'Switching to:', sortOrder === 'asc' ? 'desc' : 'asc');
                     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
                   }}
-                  className="p-2 sm:p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="p-2 sm:p-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-black cursor-pointer"
                   title={sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'}
                 >
                   <ArrowUpDown className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform ${sortOrder === 'asc' ? '' : 'rotate-180'}`} />

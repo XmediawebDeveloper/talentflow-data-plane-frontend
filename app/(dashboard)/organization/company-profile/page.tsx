@@ -339,10 +339,10 @@ export default function CompanyProfilePage() {
         </div>
 
         {/* Address Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Address</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            <div className="col-span-2">
+          <div className="space-y-4 sm:space-y-6">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
               <input
                 type="text"
@@ -352,45 +352,49 @@ export default function CompanyProfilePage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-              <input
-                type="text"
-                value={companyData.city}
-                onChange={(e) => setCompanyData({ ...companyData, city: e.target.value })}
-                disabled={!isEditing}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">City</label>
+                <input
+                  type="text"
+                  value={companyData.city}
+                  onChange={(e) => setCompanyData({ ...companyData, city: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">State</label>
+                <input
+                  type="text"
+                  value={companyData.state}
+                  onChange={(e) => setCompanyData({ ...companyData, state: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-              <input
-                type="text"
-                value={companyData.state}
-                onChange={(e) => setCompanyData({ ...companyData, state: e.target.value })}
-                disabled={!isEditing}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
-              <input
-                type="text"
-                value={companyData.country}
-                onChange={(e) => setCompanyData({ ...companyData, country: e.target.value })}
-                disabled={!isEditing}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ZIP/Postal Code</label>
-              <input
-                type="text"
-                value={companyData.zipCode}
-                onChange={(e) => setCompanyData({ ...companyData, zipCode: e.target.value })}
-                disabled={!isEditing}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">Country</label>
+                <input
+                  type="text"
+                  value={companyData.country}
+                  onChange={(e) => setCompanyData({ ...companyData, country: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">ZIP/Postal Code</label>
+                <input
+                  type="text"
+                  value={companyData.zipCode}
+                  onChange={(e) => setCompanyData({ ...companyData, zipCode: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
+                />
+              </div>
             </div>
           </div>
         </div>

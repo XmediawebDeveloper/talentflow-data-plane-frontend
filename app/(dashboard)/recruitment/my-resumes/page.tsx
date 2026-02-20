@@ -1828,6 +1828,20 @@ export default function MyResumesPage() {
             error: detail?.message || `Failed to upload ${files[0].name}`,
           };
         }
+        // Check for read-only mode (403 Forbidden)
+        else if (error?.response?.status === 403) {
+          const detail = error?.response?.data?.detail;
+          if (detail?.error === 'READ_ONLY_MODE') {
+            return {
+              success: false,
+              error: 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.',
+            };
+          }
+          return {
+            success: false,
+            error: 'You do not have permission to upload resumes. Please contact your administrator.',
+          };
+        }
         else {
           return { success: false, error: `Failed to upload ${files[0].name}` };
         }
@@ -1942,6 +1956,20 @@ export default function MyResumesPage() {
 
       return { success: true };
     } catch (error: any) {
+      // Check for read-only mode (403 Forbidden)
+      if (error?.response?.status === 403) {
+        const detail = error?.response?.data?.detail;
+        if (detail?.error === 'READ_ONLY_MODE') {
+          return {
+            success: false,
+            error: 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.',
+          };
+        }
+        return {
+          success: false,
+          error: 'You do not have permission to upload resumes. Please contact your administrator.',
+        };
+      }
       // Check for duplicate error (409 Conflict)
       if (error?.response?.status === 409) {
         const detail = error?.response?.data?.detail;
