@@ -18,10 +18,19 @@ import {
   Trash2,
   Upload,
   Eye,
-  Send
+  Send,
+  Timer,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import {
+  ERROR_ORIGIN_LABELS,
+  ERROR_ORIGIN_COLORS,
+  formatSessionDuration,
+  type ErrorOrigin,
+} from '@/lib/types/auditSession';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -35,6 +44,15 @@ interface AuditLog {
   entity_id: string | null;
   details: Record<string, any>;
   ip_address: string | null;
+  // Session tracking fields
+  session_start_time: string | null;
+  interruption_time: string | null;
+  session_end_time: string | null;
+  total_session_duration: number | null;
+  error_origin: 'TENANT' | 'SYSTEM' | 'NONE' | null;
+  error_code: string | null;
+  refund_flag: 'YES' | 'NO' | null;
+  module_type: string | null;
   created_at: string;
 }
 
@@ -185,17 +203,17 @@ export default function ActivityLogsPage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-green-700 rounded-xl flex items-center justify-center shadow-lg">
-                <Activity className="w-7 h-7 text-white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-green-600 to-green-700 rounded-xl flex items-center justify-center shadow-lg">
+                <Activity className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Activity Logs</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Activity Logs</h1>
                 <p className="text-sm text-gray-600">Recent system activity timeline</p>
               </div>
             </div>
@@ -315,6 +333,30 @@ export default function ActivityLogsPage() {
                                   <p className="text-xs text-gray-400 mt-1 font-mono">
                                     IP: {log.ip_address}
                                   </p>
+                                )}
+
+                                {/* Session indicators */}
+                                {(log.total_session_duration != null || log.error_origin || log.refund_flag === 'YES') && (
+                                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                                    {log.total_session_duration != null && (
+                                      <span className="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                        <Timer className="w-3 h-3" />
+                                        {formatSessionDuration(log.total_session_duration)}
+                                      </span>
+                                    )}
+                                    {log.error_origin && log.error_origin !== 'NONE' && (
+                                      <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${ERROR_ORIGIN_COLORS[log.error_origin as ErrorOrigin]}`}>
+                                        {log.error_origin === 'SYSTEM' ? <AlertTriangle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                                        {ERROR_ORIGIN_LABELS[log.error_origin as ErrorOrigin]}
+                                      </span>
+                                    )}
+                                    {log.refund_flag === 'YES' && (
+                                      <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                                        <CheckCircle2 className="w-3 h-3" />
+                                        Refunded
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
 

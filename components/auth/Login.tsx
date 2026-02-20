@@ -39,7 +39,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
   useEffect(() => {
     const detected = detectSubdomain(new URLSearchParams(searchParams.toString()));
-    if (detected) setSubdomain(detected);
+    if (detected) {
+      setSubdomain(detected);
+      // Persist immediately so getLoginUrl() can find it at logout time,
+      // even if the user navigates away and the ?org= param is no longer in the URL.
+      if (typeof window !== 'undefined') {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocalhost) localStorage.setItem('talentflow_subdomain', detected);
+      }
+    }
   }, [searchParams]);
 
   // 2FA State
@@ -126,6 +134,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       featureFlags: response.user.feature_flags,
       enabledFeatures: response.user.enabled_features,
       tenantStatus: response.user.tenant_status,
+      tenantSubdomain: response.user.tenant_subdomain,
     };
 
     // Pass tenant name from login response
@@ -142,6 +151,12 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       }
     } catch (error) {
       console.error('Error saving remember me preference:', error);
+    }
+
+    // Check if user must reset password (invite flow)
+    if (response.must_reset_password) {
+      router.push('/reset-password');
+      return;
     }
 
     // Check if tenant has pending payment - redirect to payment page with encoded params
@@ -842,7 +857,8 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
             {/* Footer */}
             <div style={footerStyle}>
-              {onSwitchToSignUp && (
+              {/* Hide "Create Account" on subdomain — subdomain is login-only */}
+              {onSwitchToSignUp && !subdomain && (
                 <p style={footerTextStyle}>
                   Don't have an account?{' '}
                   <button type="button" onClick={onSwitchToSignUp} style={switchLinkStyle}>

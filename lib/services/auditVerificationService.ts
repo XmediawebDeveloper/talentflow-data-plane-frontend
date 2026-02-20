@@ -25,6 +25,10 @@ export interface ExpectedAuditEntry {
   user_id?: string;
   user_email?: string;
   timestamp: string; // ISO string
+  // Session tracking fields (Audit Logs & Error Codes doc)
+  error_origin?: 'TENANT' | 'SYSTEM' | 'NONE';
+  error_code?: string;
+  module_type?: string;
 }
 
 export interface FieldMismatch {
@@ -87,6 +91,9 @@ const OPERATION_MAP: Record<string, string> = {
   addon_purchase: 'addon_purchase',
   seats_purchase: 'seats_purchase',
   usage_recorded: 'usage_recorded',
+  session_start: 'session_start',
+  session_complete: 'session_complete',
+  session_interrupted: 'session_interrupted',
 };
 
 // --- Helpers ---
@@ -180,6 +187,16 @@ function compareEntries(expected: ExpectedAuditEntry, actual: ActualAuditLog): F
         actual: `${actual.created_at} (diff: ${Math.round(diffSeconds)}s)`,
       });
     }
+  }
+
+  // Compare error_origin if expected
+  if (expected.error_origin && actual.error_origin && expected.error_origin !== actual.error_origin) {
+    mismatches.push({ field: 'error_origin', expected: expected.error_origin, actual: actual.error_origin });
+  }
+
+  // Compare error_code if expected
+  if (expected.error_code && actual.error_code && expected.error_code !== actual.error_code) {
+    mismatches.push({ field: 'error_code', expected: expected.error_code, actual: actual.error_code });
   }
 
   return mismatches;

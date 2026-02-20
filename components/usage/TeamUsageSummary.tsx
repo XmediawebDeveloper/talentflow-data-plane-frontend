@@ -4,14 +4,15 @@
  * Team-Level Usage Visibility Component
  *
  * Displays team usage summaries with role-based access:
- * - Owner: View all teams' usage
+ * - Owner: View all teams' usage + expandable member-level usage
  * - Standard User/Viewer: View only their team's usage
  * - Billing Manager: No access (shows message)
  */
 
 import { useState, useEffect } from 'react';
-import { Users, BarChart3, FileText, ClipboardCheck, Loader2, AlertCircle, Calendar } from 'lucide-react';
+import { Users, BarChart3, FileText, ClipboardCheck, Upload, Briefcase, Loader2, AlertCircle, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import teamService, { TeamUsageSummary, AllTeamsUsageSummary, MyTeamsUsageSummary } from '@/lib/services/teamService';
+import TeamMemberUsage from '@/components/teams/TeamMemberUsage';
 
 // Unit type labels for display
 const UNIT_TYPE_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -30,6 +31,11 @@ const UNIT_TYPE_LABELS: Record<string, { label: string; icon: React.ReactNode; c
     icon: <Users className="w-4 h-4" />,
     color: 'bg-purple-500',
   },
+  RU: {
+    label: 'Resume Upload',
+    icon: <Upload className="w-4 h-4" />,
+    color: 'bg-orange-500',
+  },
 };
 
 interface TeamUsageSummaryProps {
@@ -44,6 +50,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
   const [myTeamsUsage, setMyTeamsUsage] = useState<MyTeamsUsageSummary | null>(null);
   const [singleTeamUsage, setSingleTeamUsage] = useState<TeamUsageSummary | null>(null);
   const [selectedDays, setSelectedDays] = useState(30);
+  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
 
   // Only tenant_admin and owner roles should have access to all teams' usage
   const isTenantAdmin = userRole === 'tenant_admin' || userRole === 'owner' || userRole === 'admin';
@@ -78,6 +85,10 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedTeamId(expandedTeamId === id ? null : id);
   };
 
   // Billing Manager: No access
@@ -142,7 +153,13 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
         </div>
 
         {/* Usage Stats */}
-        <TeamUsageCard team={singleTeamUsage} />
+        <TeamUsageCard
+          team={singleTeamUsage}
+          isExpanded={expandedTeamId === singleTeamUsage.team_id}
+          onToggleExpand={() => toggleExpanded(singleTeamUsage.team_id)}
+          showMemberUsage={isTenantAdmin}
+          userRole={userRole}
+        />
       </div>
     );
   }
@@ -171,11 +188,18 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
         <DaysPicker selectedDays={selectedDays} onChange={setSelectedDays} />
       </div>
 
-      {/* Teams Grid */}
+      {/* Teams List */}
       {teamsData.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-6">
           {teamsData.map((team) => (
-            <TeamUsageCard key={team.team_id} team={team} />
+            <TeamUsageCard
+              key={team.team_id}
+              team={team}
+              isExpanded={expandedTeamId === team.team_id}
+              onToggleExpand={() => toggleExpanded(team.team_id)}
+              showMemberUsage={isTenantAdmin}
+              userRole={userRole}
+            />
           ))}
         </div>
       ) : (
@@ -212,9 +236,27 @@ function DaysPicker({ selectedDays, onChange }: { selectedDays: number; onChange
   );
 }
 
-// Team usage card component
-function TeamUsageCard({ team }: { team: TeamUsageSummary }) {
+// Team usage card component with expandable member usage
+function TeamUsageCard({
+  team,
+  isExpanded,
+  onToggleExpand,
+  showMemberUsage,
+  userRole,
+}: {
+  team: TeamUsageSummary;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+  showMemberUsage: boolean;
+  userRole: string;
+}) {
   const hasData = Object.keys(team.by_type).length > 0;
+  const hasCreationData = (team.jds_created || 0) > 0 || (team.assessments_created || 0) > 0;
+
+  // Format unit value: integers for all except AS (float)
+  const formatUnits = (unitType: string, value: number) => {
+    return unitType === 'AS' ? value.toFixed(1) : Math.round(value).toString();
+  };
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -225,41 +267,91 @@ function TeamUsageCard({ team }: { team: TeamUsageSummary }) {
             <p className="text-sm font-medium opacity-80">Team Usage</p>
             <h4 className="text-lg font-bold">{team.team_name || 'Unknown Team'}</h4>
           </div>
-          <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-            <Users className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-3">
+            {showMemberUsage && (
+              <button
+                onClick={onToggleExpand}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors"
+              >
+                <Users className="w-4 h-4" />
+                Members
+                {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            )}
+            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 text-white" />
+            </div>
           </div>
         </div>
       </div>
 
       {/* Usage Stats */}
       <div className="p-6">
-        {hasData ? (
+        {hasData || hasCreationData ? (
           <div className="space-y-4">
-            {Object.entries(team.by_type).map(([unitType, usage]) => {
-              const typeInfo = UNIT_TYPE_LABELS[unitType] || {
-                label: unitType,
-                icon: <BarChart3 className="w-4 h-4" />,
-                color: 'bg-gray-500',
-              };
+            {/* Unit Consumption */}
+            {hasData && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {Object.entries(team.by_type).map(([unitType, usage]) => {
+                  const typeInfo = UNIT_TYPE_LABELS[unitType] || {
+                    label: unitType,
+                    icon: <BarChart3 className="w-4 h-4" />,
+                    color: 'bg-gray-500',
+                  };
 
-              return (
-                <div key={unitType} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 ${typeInfo.color} rounded-lg flex items-center justify-center text-white`}>
-                      {typeInfo.icon}
+                  return (
+                    <div key={unitType} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 ${typeInfo.color} rounded-lg flex items-center justify-center text-white`}>
+                          {typeInfo.icon}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{typeInfo.label}</p>
+                          <p className="text-xs text-gray-500">{usage?.consumption_count || 0} actions</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-bold text-gray-900">{formatUnits(unitType, usage?.total_consumed || 0)}</p>
+                        <p className="text-xs text-gray-500">units</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{typeInfo.label}</p>
-                      <p className="text-xs text-gray-500">{usage?.consumption_count || 0} actions</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl font-bold text-gray-900">{usage?.total_consumed?.toFixed(1) || 0}</p>
-                    <p className="text-xs text-gray-500">units used</p>
-                  </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Creation Activity */}
+            {hasCreationData && (
+              <>
+                <div className="border-t border-gray-200 pt-3">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Creation Activity</p>
                 </div>
-              );
-            })}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(team.jds_created || 0) > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center text-white">
+                          <Briefcase className="w-4 h-4" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-900">JDs Created</p>
+                      </div>
+                      <p className="text-xl font-bold text-gray-900">{team.jds_created}</p>
+                    </div>
+                  )}
+                  {(team.assessments_created || 0) > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center text-white">
+                          <ClipboardCheck className="w-4 h-4" />
+                        </div>
+                        <p className="text-sm font-medium text-gray-900">Assessments Created</p>
+                      </div>
+                      <p className="text-xl font-bold text-gray-900">{team.assessments_created}</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="text-center py-6">
@@ -267,10 +359,17 @@ function TeamUsageCard({ team }: { team: TeamUsageSummary }) {
             <p className="text-sm text-gray-500">No usage recorded for this period</p>
           </div>
         )}
-
-        {/* Note */}
-        <p className="mt-4 text-xs text-gray-500 italic">{team.note}</p>
       </div>
+
+      {/* Expandable Member Usage */}
+      {isExpanded && showMemberUsage && (
+        <div className="border-t border-gray-200 p-6 bg-gray-50">
+          <TeamMemberUsage
+            team={{ id: team.team_id, name: team.team_name || 'Unknown Team' } as any}
+            userRole={userRole}
+          />
+        </div>
+      )}
     </div>
   );
 }

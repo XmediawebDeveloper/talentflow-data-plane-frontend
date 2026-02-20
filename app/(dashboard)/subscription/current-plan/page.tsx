@@ -13,6 +13,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
+import { useRazorpay } from '@/lib/hooks/useRazorpay';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -188,11 +189,10 @@ interface TransactionResult {
   auto_apply_date?: string;
   current_plan_expires?: string;
   message?: string;
-  stripe?: {
-    payment_intent_id: string;
-    subscription_id: string;
+  razorpay?: {
+    payment_id: string;
+    order_id: string;
     status: string;
-    payment_method: string;
   };
 }
 
@@ -504,6 +504,8 @@ function CurrentPlanContent() {
     targetPlan?: DisplayPlan;
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Partial<PaymentFormData>>({});
+  const [paymentStep, setPaymentStep] = useState<string>('');
+  const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
 
   // Plan settings from admin API (yearly discount, database extra charge)
   const [planSettings, setPlanSettings] = useState<PlanSettings | null>(null);
@@ -1013,6 +1015,9 @@ function CurrentPlanContent() {
         setSelectedQueuedUpgrade(null);
         setTcAccepted(false);
 
+        // Refresh notifications before logout so bell updates during toast
+        window.dispatchEvent(new CustomEvent('notificationTrigger'));
+
         // Plan upgraded successfully - logout and redirect to login
         // This ensures user gets fresh session with new plan data
         setTimeout(() => {
@@ -1314,36 +1319,27 @@ function CurrentPlanContent() {
       setSuccessMessage(null);
 
       const token = localStorage.getItem('accessToken');
-      const apiUrl = `${API_URL}/subscription/${tenantId}/select-plan`;
 
-      // Request body per API spec - use correct plan_id based on billing period AND availability
-      // If user selects yearly but only monthly exists, use monthly plan ID and MONTHLY interval
-      // If user selects monthly but only yearly exists, use yearly plan ID and ANNUAL interval
+      // Determine plan ID and billing interval
       const hasAnnual = !!selectedPlanForPayment.annualPlanId;
       const hasMonthly = !!selectedPlanForPayment.monthlyPlanId;
 
-      // Determine actual billing interval based on availability
       let actualBillingInterval: 'ANNUAL' | 'MONTHLY';
       let planId: number;
 
       if (isYearly && hasAnnual) {
-        // User wants yearly and it's available
         actualBillingInterval = 'ANNUAL';
         planId = selectedPlanForPayment.annualPlanId!;
       } else if (!isYearly && hasMonthly) {
-        // User wants monthly and it's available
         actualBillingInterval = 'MONTHLY';
         planId = selectedPlanForPayment.monthlyPlanId!;
       } else if (hasAnnual) {
-        // Only annual available (user wanted monthly but it's not available)
         actualBillingInterval = 'ANNUAL';
         planId = selectedPlanForPayment.annualPlanId!;
       } else if (hasMonthly) {
-        // Only monthly available (user wanted yearly but it's not available)
         actualBillingInterval = 'MONTHLY';
         planId = selectedPlanForPayment.monthlyPlanId!;
       } else {
-        // Fallback to numericId (shouldn't happen with proper validation)
         actualBillingInterval = isYearly ? 'ANNUAL' : 'MONTHLY';
         planId = selectedPlanForPayment.numericId;
       }
@@ -1357,6 +1353,67 @@ function CurrentPlanContent() {
         selectedPlanId: planId,
       });
 
+      if (!token) {
+        setError('Authentication token not found. Please login again.');
+        setIsSelectingPlan(false);
+        return;
+      }
+
+      // Step 1: Create Razorpay order
+      setPaymentStep('Creating order...');
+      let razorpayFields: { razorpay_payment_id?: string; razorpay_order_id?: string; razorpay_signature?: string } = {};
+
+      // Only create Razorpay order for paid plans (price > 0)
+      const planPrice = selectedPlanForPayment.price || 0;
+      if (planPrice > 0) {
+        const orderResponse = await fetch(`${API_URL}/subscription/${tenantId}/create-order`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            plan_id: planId,
+            billing_interval: actualBillingInterval,
+          }),
+        });
+
+        const orderData = await orderResponse.json();
+        if (!orderResponse.ok) {
+          throw new Error(orderData.detail || 'Failed to create payment order');
+        }
+
+        // Step 2: Open Razorpay checkout modal
+        setPaymentStep('Opening payment gateway...');
+        try {
+          const razorpayResult = await openCheckout({
+            orderId: orderData.order_id,
+            amount: orderData.amount,
+            currency: orderData.currency,
+            planName: orderData.plan_name || selectedPlanForPayment.name,
+            userName: user?.full_name || user?.email?.split('@')[0],
+            userEmail: user?.email,
+          });
+          razorpayFields = {
+            razorpay_payment_id: razorpayResult.razorpay_payment_id,
+            razorpay_order_id: razorpayResult.razorpay_order_id,
+            razorpay_signature: razorpayResult.razorpay_signature,
+          };
+        } catch (rzpErr: any) {
+          if (rzpErr.message?.includes('cancelled')) {
+            toast.info('Payment cancelled', { description: 'You can try again anytime.' });
+          } else {
+            toast.error('Payment failed', { description: rzpErr.message });
+          }
+          setIsSelectingPlan(false);
+          setPaymentStep('');
+          return;
+        }
+      }
+
+      // Step 3: Call select-plan with Razorpay verification details
+      setPaymentStep('Verifying payment...');
+      const apiUrl = `${API_URL}/subscription/${tenantId}/select-plan`;
       const requestBody = {
         plan_id: planId,
         schema_per_tenant: isolationType === 'schema',
@@ -1365,21 +1422,14 @@ function CurrentPlanContent() {
         billing_interval: actualBillingInterval,
         user_id: user?.id,
         user_email: user?.email,
+        ...razorpayFields,
       };
 
       console.log('Calling API:', apiUrl);
-      console.log('Auth - Token exists:', !!token);
       console.log('Request body:', requestBody);
 
-      if (!token) {
-        setError('Authentication token not found. Please login again.');
-        setIsSelectingPlan(false);
-        return;
-      }
-
-      // Call billing API with Bearer token and timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
 
       let response;
       let data;
@@ -1451,6 +1501,9 @@ function CurrentPlanContent() {
             duration: 3000,
           });
 
+          // Refresh notifications before logout so bell updates during toast
+          window.dispatchEvent(new CustomEvent('notificationTrigger'));
+
           // Wait a moment for the toast to show, then logout
           setTimeout(() => {
             logout();
@@ -1462,8 +1515,9 @@ function CurrentPlanContent() {
         // Refresh data after queued upgrade
         await fetchData();
 
-        // Notify Header component to refresh quota/plan display
+        // Notify Header component to refresh quota/plan display and notifications
         window.dispatchEvent(new CustomEvent('planChanged'));
+        window.dispatchEvent(new CustomEvent('notificationTrigger'));
       } else {
         // Handle both string and object error formats
         const errorDetail = data.detail;
@@ -1518,6 +1572,7 @@ function CurrentPlanContent() {
       });
     } finally {
       setIsSelectingPlan(false);
+      setPaymentStep('');
     }
   };
 
@@ -1608,7 +1663,7 @@ function CurrentPlanContent() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-12 h-12 text-gray-500 animate-spin" />
@@ -1646,7 +1701,7 @@ function CurrentPlanContent() {
     const colors = statusColors[tenantStatus.status as keyof typeof statusColors] || statusColors.PENDING;
 
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="mb-8">
@@ -1655,7 +1710,7 @@ function CurrentPlanContent() {
                 <CreditCard className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Current Plan</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Current Plan</h1>
                 <p className="text-sm text-gray-600">Manage your subscription and billing</p>
               </div>
             </div>
@@ -1719,7 +1774,7 @@ function CurrentPlanContent() {
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -1728,7 +1783,7 @@ function CurrentPlanContent() {
               <CreditCard className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Current Plan</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Current Plan</h1>
               <p className="text-sm text-gray-600">Manage your subscription and billing</p>
             </div>
           </div>
@@ -2932,7 +2987,7 @@ function CurrentPlanContent() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Payment ID:</span>
-                        <span className="font-medium text-gray-500 text-xs">{transactionResult.stripe?.payment_intent_id}</span>
+                        <span className="font-medium text-gray-500 text-xs">{transactionResult.razorpay?.payment_id || transactionResult.external_transaction_id}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Status:</span>

@@ -21,7 +21,7 @@ interface DisputeMetadata {
   customer_claim?: string;
   dispute_status?: string;
   dispute_evidence?: string | null;
-  stripe_dispute_id?: string;
+  razorpay_dispute_id?: string;
   original_invoice_id?: number | null;
   original_invoice_number?: string;
   [key: string]: unknown;
@@ -240,7 +240,7 @@ Disputed Amount: ${formatAmount(inv.total_amount_inr)}
 -------------------------------
 Dispute Status: ${inv.metadata?.dispute_status || inv.dispute_status || inv.status}
 Bank Reference: ${inv.metadata?.bank_reference || '-'}
-${inv.metadata?.stripe_dispute_id ? `Stripe Dispute ID: ${inv.metadata.stripe_dispute_id}` : ''}
+${inv.metadata?.razorpay_dispute_id ? `Razorpay Dispute ID: ${inv.metadata.razorpay_dispute_id}` : ''}
 ==============================
 Please contact support for assistance.
     `.trim();
@@ -298,17 +298,17 @@ Please contact support for assistance.
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || startDate || endDate;
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg">
-                <AlertTriangle className="w-7 h-7 text-white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-orange-500 rounded-xl flex items-center justify-center shadow-lg">
+                <AlertTriangle className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Dispute History</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Dispute History</h1>
                 <p className="text-sm text-gray-600">View and manage payment disputes</p>
               </div>
             </div>
@@ -335,7 +335,7 @@ Please contact support for assistance.
 
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-6">
             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
               <p className="text-xs text-gray-500 uppercase mb-1">Total Disputed</p>
               <p className="text-2xl font-bold text-orange-600">{formatAmount(stats.total_amount)}</p>
@@ -567,7 +567,7 @@ Please contact support for assistance.
                 </button>
               </div>
               <div className="p-6">
-                <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
                   <div>
                     <p className="text-xs text-gray-500 uppercase">Issue Date</p>
                     <p className="text-sm font-medium text-gray-900">{formatDate(selectedDispute.issue_date)}</p>
@@ -626,10 +626,10 @@ Please contact support for assistance.
                   </div>
                 </div>
 
-                {selectedDispute.metadata?.stripe_dispute_id && (
+                {selectedDispute.metadata?.razorpay_dispute_id && (
                   <div className="p-3 bg-blue-50 rounded-lg mb-6">
-                    <p className="text-xs text-blue-600 font-medium">Stripe Dispute ID</p>
-                    <p className="text-sm text-blue-900 font-mono">{selectedDispute.metadata.stripe_dispute_id}</p>
+                    <p className="text-xs text-blue-600 font-medium">Razorpay Dispute ID</p>
+                    <p className="text-sm text-blue-900 font-mono">{selectedDispute.metadata.razorpay_dispute_id}</p>
                   </div>
                 )}
 

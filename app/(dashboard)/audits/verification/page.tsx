@@ -161,17 +161,17 @@ export default function LogVerificationPage() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gray-50/50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50/50">
       <div>
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300">
-                <ShieldCheck className="w-7 h-7 text-white" />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300">
+                <ShieldCheck className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Log Verification</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Log Verification</h1>
                 <p className="text-sm text-gray-500 mt-0.5">Verify audit log consistency after data plane actions</p>
               </div>
             </div>

@@ -131,9 +131,10 @@ export interface User {
   can_manage_billing?: boolean;
   // Tenant status info (for suspension/expiry display)
   tenantStatus?: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED' | 'PENDING_ACTIVATION' | 'PROVISIONING' | 'DELETED';
-  suspensionReason?: string;  // User-friendly suspension reason message
-  suspensionNotes?: string;   // Additional suspension details
-  suspendedAt?: string;       // ISO date string when account was suspended
+  suspensionReason?: string;
+  suspensionNotes?: string;
+  suspendedAt?: string;
+  tenantSubdomain?: string;
 }
 
 export interface PlanLimits {

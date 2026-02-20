@@ -169,19 +169,21 @@ export default function AdminDashboard({
               <div>
                 <p className="text-xs text-gray-500 mb-1">Status</p>
                 <p className="text-sm font-semibold capitalize">
-                  <span className={
-                    (quotaData?.subscription_status || tenant?.subscription?.status) === 'expired'
+                  {(() => {
+                    const rawStatus = quotaData?.subscription_status || tenant?.subscription?.status || 'trial';
+                    const isActive = rawStatus === 'trial' || rawStatus === 'active';
+                    const label = isActive ? 'Active' : rawStatus;
+                    const colorClass = rawStatus === 'expired' || rawStatus === 'suspended'
                       ? 'text-red-700'
-                      : (quotaData?.subscription_status || tenant?.subscription?.status) === 'suspended'
-                        ? 'text-red-700'
-                        : 'text-amber-600'
-                  }>
-                    {quotaData?.subscription_status || tenant?.subscription?.status || 'trial'}
-                  </span>
+                      : isActive
+                        ? 'text-green-700'
+                        : 'text-amber-600';
+                    return <span className={colorClass}>{label}</span>;
+                  })()}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 mb-1">Days Remaining</p>
+                <p className="text-xs text-gray-500 mb-1">Time Remaining</p>
                 <p className="text-sm font-semibold">
                   {quotaData?.trial_info?.days_remaining != null ? (
                     <span className={
@@ -191,7 +193,21 @@ export default function AdminDashboard({
                           ? 'text-amber-600'
                           : 'text-green-700'
                     }>
-                      {quotaData.trial_info.days_remaining} {quotaData.trial_info.days_remaining === 1 ? 'day' : 'days'}
+                      {quotaData.trial_info.days_remaining === 0 ? (
+                        (() => {
+                          const endDate = quotaData.trial_info?.trial_end_date || quotaData.trial_end_date;
+                          if (endDate) {
+                            const hoursLeft = Math.max(0, Math.floor((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60)));
+                            if (hoursLeft > 0) return `${hoursLeft}h left`;
+                            const minsLeft = Math.max(0, Math.floor((new Date(endDate).getTime() - Date.now()) / (1000 * 60)));
+                            if (minsLeft > 0) return `${minsLeft}m left`;
+                            return 'Expired';
+                          }
+                          return 'Less than a day';
+                        })()
+                      ) : (
+                        `${quotaData.trial_info.days_remaining} ${quotaData.trial_info.days_remaining === 1 ? 'day' : 'days'}`
+                      )}
                     </span>
                   ) : (
                     <span className="text-gray-900">-</span>
@@ -258,7 +274,8 @@ export default function AdminDashboard({
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
         {/* Resumes Card - Clickable with navigation links */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition-all">
           <div className="flex items-center justify-between">
@@ -281,7 +298,7 @@ export default function AdminDashboard({
                 </span>
               </div>
             </div>
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
               <FileText className="w-6 h-6 text-blue-600" />
             </div>
           </div>
@@ -321,7 +338,7 @@ export default function AdminDashboard({
               </div>
             </div>
             <div
-              className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center cursor-pointer"
+              className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center cursor-pointer flex-shrink-0"
               onClick={() => router.push('/recruitment/job-openings')}
             >
               <Briefcase className="w-6 h-6 text-purple-600" />
@@ -340,7 +357,7 @@ export default function AdminDashboard({
               <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_users || 0}</p>
               <p className="text-xs text-green-600 mt-1">{stats?.active_users || 0} Active</p>
             </div>
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
               <Users className="w-6 h-6 text-green-600" />
             </div>
           </div>
@@ -365,7 +382,7 @@ export default function AdminDashboard({
                 )}
               </div>
             </div>
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
               <Award className="w-6 h-6 text-orange-600" />
             </div>
           </div>
@@ -376,21 +393,19 @@ export default function AdminDashboard({
       {subscriptionUnits && (
         <div className="mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Units</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
             {/* Resume Upload Units */}
             {subscriptionUnits.RU && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Upload className="w-5 h-5 text-green-600" />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600">Resume Upload</p>
-                    <p className="text-xl font-semibold text-gray-900">
-                      {subscriptionUnits.RU.is_unlimited ? 'Unlimited' : subscriptionUnits.RU.available}
-                    </p>
-                  </div>
                 </div>
+                <p className="text-sm text-gray-600 whitespace-nowrap">Resume Storage</p>
+                <p className="text-xl font-semibold text-gray-900">
+                  {subscriptionUnits.RU.is_unlimited ? 'Unlimited' : subscriptionUnits.RU.available}
+                </p>
                 {!subscriptionUnits.RU.is_unlimited && (
                   <div className="mt-3">
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -410,17 +425,15 @@ export default function AdminDashboard({
             {/* Resume Scoring Units */}
             {subscriptionUnits.RS && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Zap className="w-5 h-5 text-blue-600" />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600">Resume Scoring</p>
-                    <p className="text-xl font-semibold text-gray-900">
-                      {subscriptionUnits.RS.is_unlimited ? 'Unlimited' : subscriptionUnits.RS.available}
-                    </p>
-                  </div>
                 </div>
+                <p className="text-sm text-gray-600 whitespace-nowrap">Resume Scoring</p>
+                <p className="text-xl font-semibold text-gray-900">
+                  {subscriptionUnits.RS.is_unlimited ? 'Unlimited' : subscriptionUnits.RS.available}
+                </p>
                 {!subscriptionUnits.RS.is_unlimited && (
                   <div className="mt-3">
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -440,17 +453,15 @@ export default function AdminDashboard({
             {/* Assessment Units */}
             {subscriptionUnits.AS && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <ClipboardCheck className="w-5 h-5 text-orange-600" />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600">Assessment</p>
-                    <p className="text-xl font-semibold text-gray-900">
-                      {subscriptionUnits.AS.is_unlimited ? 'Unlimited' : subscriptionUnits.AS.available}
-                    </p>
-                  </div>
                 </div>
+                <p className="text-sm text-gray-600 whitespace-nowrap">Assessment</p>
+                <p className="text-xl font-semibold text-gray-900">
+                  {subscriptionUnits.AS.is_unlimited ? 'Unlimited' : subscriptionUnits.AS.available}
+                </p>
                 {!subscriptionUnits.AS.is_unlimited && (
                   <div className="mt-3">
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -470,17 +481,15 @@ export default function AdminDashboard({
             {/* AI Interview Units */}
             {subscriptionUnits.AIU && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Video className="w-5 h-5 text-purple-600" />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600">AI Interview</p>
-                    <p className="text-xl font-semibold text-gray-900">
-                      {subscriptionUnits.AIU.is_unlimited ? 'Unlimited' : subscriptionUnits.AIU.available}
-                    </p>
-                  </div>
                 </div>
+                <p className="text-sm text-gray-600 whitespace-nowrap">AI Interview</p>
+                <p className="text-xl font-semibold text-gray-900">
+                  {subscriptionUnits.AIU.is_unlimited ? 'Unlimited' : subscriptionUnits.AIU.available}
+                </p>
                 {!subscriptionUnits.AIU.is_unlimited && (
                   <div className="mt-3">
                     <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -500,17 +509,15 @@ export default function AdminDashboard({
             {/* Max Users */}
             {subscriptionUnits.max_seats && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <UserCheck className="w-5 h-5 text-teal-600" />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600">Max Users</p>
-                    <p className="text-xl font-semibold text-gray-900">
-                      {subscriptionUnits.max_seats.is_unlimited ? 'Unlimited' : subscriptionUnits.max_seats.available}
-                    </p>
-                  </div>
                 </div>
+                <p className="text-sm text-gray-600 whitespace-nowrap">Max Users</p>
+                <p className="text-xl font-semibold text-gray-900">
+                  {subscriptionUnits.max_seats.is_unlimited ? 'Unlimited' : subscriptionUnits.max_seats.available}
+                </p>
                 {!subscriptionUnits.max_seats.is_unlimited && (
                   <div className="mt-3">
                     <div className="flex justify-between text-xs text-gray-500 mb-1">

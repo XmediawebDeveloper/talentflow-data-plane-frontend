@@ -16,15 +16,12 @@ import {
   Settings2,
   Link2,
   AlertCircle,
-  Eye,
-  EyeOff
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
-import { tenantService } from '@/lib/services/tenantService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
 import { UserRole } from '@/lib/types/tenant';
 import FeaturePermissionManager from './FeaturePermissionManager';
@@ -679,20 +676,13 @@ export default function UserManagement() {
   // Refresh trigger for SeatQuotaCard
   const [seatQuotaRefreshTrigger, setSeatQuotaRefreshTrigger] = useState(0);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // Toggle password visibility
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
-    password: '',
     role: 'viewer',
     permissions: { ...defaultPermissions },
   });
 
-  // Tenant email domain (locked part of email)
-  const [tenantEmailDomain, setTenantEmailDomain] = useState<string>('');
-  const [emailUsername, setEmailUsername] = useState<string>(''); // Just the username part before @
-  const [editEmailUsername, setEditEmailUsername] = useState<string>(''); // Username part for edit modal
-  const [showAtBlockedMessage, setShowAtBlockedMessage] = useState(false);
 
   // Email validation states
   const [emailCheckResult, setEmailCheckResult] = useState<{
@@ -737,20 +727,6 @@ export default function UserManagement() {
     checkPermission();
   }, [router]);
 
-  // Fetch tenant email domain on mount
-  useEffect(() => {
-    const fetchTenantDomain = async () => {
-      try {
-        const domain = await tenantService.getTenantEmailDomain();
-        setTenantEmailDomain(domain);
-      } catch (error) {
-        console.error('Failed to fetch tenant domain:', error);
-        toast.error('Failed to load organization email domain');
-      }
-    };
-
-    fetchTenantDomain();
-  }, []);
 
   // Load users, roles, and permissions
   // Auto-sync with Admin API first to ensure accurate counts
@@ -1137,7 +1113,7 @@ export default function UserManagement() {
   };
 
   // Email validation with debounce (500ms)
-  const checkEmailAvailability = async (username: string) => {
+  const checkEmailAvailability = async (email: string) => {
     // Clear previous timeout
     if (emailCheckTimeoutRef.current) {
       clearTimeout(emailCheckTimeoutRef.current);
@@ -1146,13 +1122,10 @@ export default function UserManagement() {
     // Reset validation state
     setEmailCheckResult({ error: null, available: true });
 
-    // Skip validation if username is empty or domain not loaded
-    if (!username || !tenantEmailDomain) {
+    // Skip validation if email is empty or not a valid-looking email
+    if (!email || !email.includes('@')) {
       return;
     }
-
-    // Construct full email
-    const fullEmail = `${username}@${tenantEmailDomain}`;
 
     // Set loading state
     setIsCheckingEmail(true);
@@ -1160,7 +1133,7 @@ export default function UserManagement() {
     // Debounce - wait 500ms after user stops typing
     emailCheckTimeoutRef.current = setTimeout(async () => {
       try {
-        const result = await userService.checkEmailAvailability(fullEmail);
+        const result = await userService.checkEmailAvailability(email);
 
         // Update validation result
         setEmailCheckResult({
@@ -1213,7 +1186,7 @@ export default function UserManagement() {
         role: user.role || 'viewer',
         permissions: user.permissions || defaultPermissions,
         is_active: user.is_active ?? true,
-        last_login: user.last_login_at,
+        last_login: user.last_login,
       }));
 
       // DEBUG: Log loaded users
@@ -1266,14 +1239,13 @@ export default function UserManagement() {
   };
 
   const handleCreateUser = async () => {
-    // Validate username instead of email
-    if (!newUser.name || !emailUsername || !newUser.password) {
+    if (!newUser.name || !newUser.email) {
       toast.error('Please fill in all required fields');
       return;
     }
 
-    if (!tenantEmailDomain) {
-      toast.error('Organization email domain not loaded. Please refresh the page.');
+    if (!newUser.email.includes('@')) {
+      toast.error('Please enter a valid email address');
       return;
     }
 
@@ -1282,26 +1254,17 @@ export default function UserManagement() {
       return;
     }
 
-    if (newUser.password.length < 6) {
-      toast.error('Password must be at least 6 characters');
-      return;
-    }
-
-    // Check email domain validation
+    // Check email validation
     if (!emailCheckResult.available) {
-      toast.error(emailCheckResult.error || 'Email domain validation failed');
+      toast.error(emailCheckResult.error || 'Email validation failed');
       return;
     }
-
-    // Construct full email from username + domain
-    const fullEmail = `${emailUsername}@${tenantEmailDomain}`;
 
     const selectedRole = availableRoles.find(r => r.id === selectedRoleId);
     const roleCode = selectedRole?.code || 'viewer';
 
     setIsSaving(true);
     try {
-      // Log selected permission codes for debugging
       console.log('[CREATE USER] Selected permission codes:', Array.from(selectedPermissionCodes));
       console.log('[CREATE USER] Mapped permission IDs:', Array.from(selectedPermissionIds));
 
@@ -1313,12 +1276,12 @@ export default function UserManagement() {
         },
         body: JSON.stringify({
           name: newUser.name,
-          email: fullEmail, // Use constructed full email
-          password: newUser.password,
+          email: newUser.email,
+          // No password — backend generates a temp password and emails the user
           role: roleCode,
           role_id: selectedRoleId,
           permission_ids: Array.from(selectedPermissionIds),
-          permission_codes: Array.from(selectedPermissionCodes), // Also send codes for future backend support
+          permission_codes: Array.from(selectedPermissionCodes),
         }),
       });
 
@@ -1364,7 +1327,7 @@ export default function UserManagement() {
         return;
       }
 
-      toast.success('User created successfully');
+      toast.success('User created! An invite email has been sent with their login details.');
       resetCreateModal();
       refreshLimits(); // Refresh user limits count
       setSeatQuotaRefreshTrigger(prev => prev + 1); // Refresh SeatQuotaCard
@@ -1381,16 +1344,13 @@ export default function UserManagement() {
     setNewUser({
       name: '',
       email: '',
-      password: '',
       role: 'viewer',
       permissions: { ...defaultPermissions },
     });
-    setEmailUsername(''); // Reset email username
     setEmailCheckResult({ error: null, available: true }); // Reset validation
     setSelectedRoleId(null);
     setSelectedPermissionIds(new Set());
     setSelectedPermissionCodes(new Set()); // Reset permission codes
-    setShowPassword(false); // Hide password when modal closes
     setIsCreateModalOpen(false);
     // Clear email validation state
     setEmailCheckResult({ error: null, available: true });
@@ -1421,11 +1381,32 @@ export default function UserManagement() {
       const currentPermissionIds = new Set<number>();
 
       // Backend now returns permission_ids array - use it directly!
-      if (freshUserData.permission_ids && Array.isArray(freshUserData.permission_ids)) {
+      if (freshUserData.permission_ids && Array.isArray(freshUserData.permission_ids) && freshUserData.permission_ids.length > 0) {
+        // User has explicit custom permissions - use them
         freshUserData.permission_ids.forEach((id: number) => {
           currentPermissionIds.add(id);
         });
-        console.log('[EDIT USER] Loaded permission IDs from backend:', Array.from(currentPermissionIds));
+        console.log('[EDIT USER] Loaded custom permission IDs from backend:', Array.from(currentPermissionIds));
+      } else if (Array.isArray(freshUserData.permission_ids) && freshUserData.permission_ids.length === 0) {
+        // Empty array: user has no custom permissions (e.g. newly invited user)
+        // Fall back to role default permissions so the modal shows what they actually have
+        const roleIdForDefaults = matchingRole?.id;
+        if (roleIdForDefaults) {
+          try {
+            const rolePerms = await userService.getRolePermissions(roleIdForDefaults);
+            rolePerms.permission_codes.forEach(code => {
+              const perm = permissionsForMapping.find(p => p.code === code);
+              if (perm) {
+                currentPermissionIds.add(perm.id);
+              }
+            });
+            console.log('[EDIT USER] Loaded role default permissions (user has no custom permissions):', Array.from(currentPermissionIds));
+          } catch (e) {
+            console.warn('[EDIT USER] Failed to load role defaults:', e);
+          }
+        } else {
+          console.log('[EDIT USER] No role ID available, showing empty permissions');
+        }
       } else {
         // Fallback: Map user's current permissions (boolean fields) to permission IDs if permission_ids not available
         console.log('[EDIT USER] permission_ids not available, falling back to boolean mapping');
@@ -1544,13 +1525,6 @@ export default function UserManagement() {
       setEditOriginalPermissionIds(new Set());
     }
 
-    // Parse email to extract username part for editing
-    if (user.email && user.email.includes('@')) {
-      const username = user.email.split('@')[0];
-      setEditEmailUsername(username);
-    } else {
-      setEditEmailUsername('');
-    }
   };
 
   const resetEditModal = () => {
@@ -1561,7 +1535,6 @@ export default function UserManagement() {
     setEditSelectedPermissionCodes(new Set());
     setEditOriginalPermissionCodes(new Set()); // ⚠️ FIX: was missing — stale original codes caused incorrect permissionsChanged detection
     setEditOriginalRoleId(null);
-    setEditEmailUsername('');
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -1722,10 +1695,7 @@ export default function UserManagement() {
 
     console.log('[UPDATE USER] Final derivedPermissionIds:', derivedPermissionIds);
 
-    // Reconstruct full email from username + domain
-    const fullEmail = editEmailUsername && tenantEmailDomain
-      ? `${editEmailUsername}@${tenantEmailDomain}`
-      : editingUser.email;
+    const fullEmail = editingUser.email;
 
     // Build request body
     const requestBody: any = {
@@ -1861,24 +1831,24 @@ export default function UserManagement() {
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
+      <div className="mb-6 sm:mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
-              <UserCog className="w-7 h-7 text-white" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-800 rounded-xl flex items-center justify-center shadow-lg">
+              <UserCog className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Users</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Users</h1>
               <p className="text-sm text-gray-600">Manage users and their permissions</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* RBAC07: Dependency Matrix button */}
             <button
               onClick={() => setIsDependencyMatrixOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm sm:text-base"
               title="View Feature Dependencies"
             >
               <Link2 className="w-5 h-5" />
@@ -2145,56 +2115,16 @@ export default function UserManagement() {
                   Email <span className="text-red-500">*</span>
                 </label>
 
-                {/* Email input with locked domain */}
-                <div className="relative flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-600 overflow-hidden">
-                  {/* Username input */}
-                  <input
-                    type="text"
-                    value={emailUsername}
-                    onChange={(e) => {
-                      let value = e.target.value;
-                      const hadAtSymbol = value.includes('@');
-
-                      // Remove @ symbol if user tries to type it
-                      value = value.replace(/@/g, '');
-
-                      // Show brief message if @ was blocked
-                      if (hadAtSymbol && value !== e.target.value) {
-                        setShowAtBlockedMessage(true);
-                        setTimeout(() => setShowAtBlockedMessage(false), 2000);
-                      }
-
-                      setEmailUsername(value);
-                      checkEmailAvailability(value);
-                    }}
-                    placeholder="username"
-                    className="flex-1 px-4 py-2.5 border-0 focus:outline-none focus:ring-0"
-                  />
-
-                  {/* @ symbol and locked domain */}
-                  <div className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-600 font-medium border-l border-gray-300">
-                    <span className="text-gray-900">@</span>
-                    <span className="ml-1">
-                      {tenantEmailDomain || 'loading...'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Preview of full email */}
-                {emailUsername && tenantEmailDomain && (
-                  <div className="mt-1 text-xs text-gray-500">
-                    Full email: <span className="font-medium">{emailUsername}@{tenantEmailDomain}</span>
-                  </div>
-                )}
-
-                {/* @ symbol blocked message */}
-                {showAtBlockedMessage && (
-                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-xs text-blue-700">
-                      ℹ️ Just type the username. Domain is added automatically.
-                    </p>
-                  </div>
-                )}
+                <input
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => {
+                    setNewUser({ ...newUser, email: e.target.value });
+                    checkEmailAvailability(e.target.value);
+                  }}
+                  placeholder="user@example.com"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                />
 
                 {/* Email validation feedback */}
                 {isCheckingEmail && (
@@ -2217,30 +2147,12 @@ export default function UserManagement() {
                   </div>
                 )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={newUser.password}
-                    onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                    placeholder="Min. 6 characters"
-                    className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="w-5 h-5" />
-                    ) : (
-                      <Eye className="w-5 h-5" />
-                    )}
-                  </button>
-                </div>
+              {/* Password is auto-generated — user receives invite email */}
+              <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-700">
+                <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>A temporary password will be auto-generated and emailed to the user. They will be asked to set a new password on first login.</span>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2432,18 +2344,13 @@ export default function UserManagement() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">Email</label>
-                  <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-gray-800 transition-shadow">
-                    <input
-                      type="text"
-                      value={editEmailUsername}
-                      onChange={(e) => setEditEmailUsername(e.target.value.replace(/@/g, ''))}
-                      placeholder="username"
-                      className="flex-1 px-3 py-2 border-0 text-sm focus:outline-none focus:ring-0"
-                    />
-                    <div className="px-3 py-2 bg-gray-50 text-xs text-gray-500 border-l border-gray-200 whitespace-nowrap">
-                      @{tenantEmailDomain || '...'}
-                    </div>
-                  </div>
+                  <input
+                    type="email"
+                    value={editingUser.email}
+                    onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                    placeholder="user@example.com"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-800 focus:border-transparent transition-shadow"
+                  />
                 </div>
               </div>
 

@@ -230,8 +230,8 @@ export default function DashboardLayout({
     // FIX-002: Skeleton loader instead of spinner
     return (
       <div className="flex h-screen bg-gray-50">
-        {/* Sidebar Skeleton */}
-        <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
+        {/* Sidebar Skeleton - hidden on mobile */}
+        <div className="hidden lg:flex w-64 bg-white border-r border-gray-200 flex-col">
           {/* Logo area */}
           <div className="h-16 px-4 flex items-center border-b border-gray-100">
             <div className="h-8 w-32 bg-gray-200 rounded animate-pulse" />
@@ -250,23 +250,23 @@ export default function DashboardLayout({
         {/* Main content area */}
         <div className="flex-1 flex flex-col">
           {/* Header Skeleton */}
-          <div className="h-16 bg-white border-b border-gray-200 px-8 flex items-center justify-between">
-            <div className="h-10 w-80 bg-gray-100 rounded-lg animate-pulse" />
+          <div className="h-16 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+            <div className="h-10 w-40 sm:w-60 lg:w-80 bg-gray-100 rounded-lg animate-pulse" />
             <div className="flex items-center gap-4">
               <div className="h-8 w-8 bg-gray-200 rounded-lg animate-pulse" />
-              <div className="h-8 w-8 bg-gray-200 rounded-lg animate-pulse" />
-              <div className="h-8 w-24 bg-gray-200 rounded-lg animate-pulse" />
+              <div className="h-8 w-8 bg-gray-200 rounded-lg animate-pulse hidden sm:block" />
+              <div className="h-8 w-24 bg-gray-200 rounded-lg animate-pulse hidden sm:block" />
               <div className="h-9 w-9 bg-gray-300 rounded-full animate-pulse" />
             </div>
           </div>
 
           {/* Content Skeleton */}
-          <div className="flex-1 p-8 space-y-6">
+          <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
             {/* Page title */}
             <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
 
             {/* Stats cards skeleton */}
-            <div className="grid grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
               {[...Array(4)].map((_, i) => (
                 <div key={i} className="bg-white rounded-xl border border-gray-200 p-6">
                   <div className="h-4 w-20 bg-gray-200 rounded animate-pulse mb-3" />

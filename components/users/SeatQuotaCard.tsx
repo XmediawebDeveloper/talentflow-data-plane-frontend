@@ -21,6 +21,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRazorpay } from '@/lib/hooks/useRazorpay';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -63,6 +64,7 @@ const getCurrencySymbol = (currency: string): string => {
 };
 
 export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigger = 0 }: SeatQuotaCardProps) {
+  const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
   const [loading, setLoading] = useState(true);
   const [seatData, setSeatData] = useState<SeatQuotaData | null>(null);
   const [planName, setPlanName] = useState('');
@@ -196,10 +198,57 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
     });
 
     try {
+      // Step 1: Create Razorpay order
+      const orderRes = await fetch(`${API_BASE}/addons/create-order`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          credit_type: 'max_seats',
+          quantity: seatsToAdd,
+        }),
+      });
+
+      if (!orderRes.ok) {
+        const errData = await orderRes.json().catch(() => ({}));
+        throw new Error(errData.detail || `Failed to create order: ${orderRes.status}`);
+      }
+
+      const orderData = await orderRes.json();
+      console.log('[SeatQuotaCard] Razorpay order created:', orderData);
+
+      // Step 2: Open Razorpay checkout modal
+      let paymentResponse;
+      try {
+        const stored = localStorage.getItem('talentflow_user');
+        const u = stored ? JSON.parse(stored) : {};
+        paymentResponse = await openCheckout({
+          orderId: orderData.order_id,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          planName: 'User Seats',
+          userName: u.name || '',
+          userEmail: u.email || '',
+        });
+      } catch (checkoutErr: any) {
+        setPurchasing(false);
+        if (checkoutErr?.message?.includes('cancelled')) {
+          toast.info('Payment cancelled');
+        } else {
+          toast.error(checkoutErr?.message || 'Payment failed');
+        }
+        return;
+      }
+
+      // Step 3: Complete purchase with Razorpay payment credentials
       const response = await fetch(`${API_BASE}/addons/purchase-seats`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ quantity: seatsToAdd }),  // Send total seats
+        body: JSON.stringify({
+          quantity: seatsToAdd,
+          razorpay_payment_id: paymentResponse.razorpay_payment_id,
+          razorpay_order_id: paymentResponse.razorpay_order_id,
+          razorpay_signature: paymentResponse.razorpay_signature,
+        }),
       });
 
       const data = await response.json();
@@ -525,10 +574,10 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
                 </button>
                 <button
                   onClick={handlePurchase}
-                  disabled={purchasing || quantity < 1 || !seatPricing}
+                  disabled={purchasing || razorpayProcessing || quantity < 1 || !seatPricing}
                   className="flex-1 px-4 py-3 bg-gray-800 text-white rounded-xl font-medium hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
-                  {purchasing ? (
+                  {purchasing || razorpayProcessing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Processing...
@@ -536,7 +585,7 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
                   ) : (
                     <>
                       <ShoppingCart className="w-4 h-4" />
-                      Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
+                      Pay & Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
                     </>
                   )}
                 </button>

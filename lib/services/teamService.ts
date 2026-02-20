@@ -58,7 +58,10 @@ export interface TeamUsageSummary {
     RS?: TeamUsageByType;
     AS?: TeamUsageByType;
     AIU?: TeamUsageByType;
+    RU?: TeamUsageByType;
   };
+  jds_created: number;
+  assessments_created: number;
   note: string;
 }
 
@@ -93,10 +96,13 @@ export interface TeamMemberUsage {
     RS?: TeamUsageByType;
     AS?: TeamUsageByType;
     AIU?: TeamUsageByType;
+    RU?: TeamUsageByType;
   };
   total_consumed: number;
   total_actions: number;
   last_activity: string | null;
+  jds_created: number;
+  assessments_created: number;
 }
 
 export interface TeamMembersUsageSummary {

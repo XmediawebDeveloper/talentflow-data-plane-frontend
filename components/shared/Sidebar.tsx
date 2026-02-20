@@ -353,7 +353,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       items: [
         { id: 'audit-trail', label: 'Audit Trail', icon: ScrollText, href: '/audits/trail', adminOnly: true },
         { id: 'activity-logs', label: 'Activity Logs', icon: Activity, href: '/audits/activity', adminOnly: true },
-        { id: 'log-verification', label: 'Log Verification', icon: ShieldCheck, href: '/audits/verification', adminOnly: true },
       ]
     },
 

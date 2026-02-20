@@ -713,14 +713,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     <div className="flex-1 bg-gray-50 h-screen overflow-auto">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl shadow-lg">
-                <HelpCircle className="w-6 h-6 text-white" />
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="p-2 sm:p-3 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl shadow-lg">
+                <HelpCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">Support Center</h1>
+                <h1 className="text-lg sm:text-xl font-semibold text-gray-900">Support Center</h1>
                 <p className="text-sm text-gray-600">
                   {activeTab === 'external' ? 'Get help from TalentFlow support team' : 'Manage help requests from your team'}
                 </p>

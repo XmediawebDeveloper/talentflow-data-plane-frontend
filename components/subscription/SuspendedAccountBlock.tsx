@@ -3,6 +3,7 @@
 import { AlertOctagon, Mail, LogOut, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { getLoginUrl } from '@/lib/services/authService';
 
 interface SuspendedAccountBlockProps {
   suspensionReason?: string;
@@ -24,8 +25,9 @@ export default function SuspendedAccountBlock({
   const { logout } = useAuth();
 
   const handleSignOut = async () => {
+    const loginUrl = getLoginUrl();
     await logout();
-    router.push('/login');
+    router.push(loginUrl);
   };
 
   const handleContactSupport = () => {

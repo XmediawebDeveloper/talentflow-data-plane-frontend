@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import QuotaDisplay from './QuotaDisplay';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useRazorpay } from '@/lib/hooks/useRazorpay';
 
 // Addon interface
 interface Addon {
@@ -159,6 +160,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const { quotaData: contextQuotaData, loading: quotaLoading, error: quotaError, hasPermission, refetch: refetchQuota } = useQuota();
   // Get user from AuthContext (already fetched during login)
   const { user } = useAuth();
+  const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
 
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -491,7 +493,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     setShowAddonModal(true);
   };
 
-  // Handle addon purchase
+  // Handle addon purchase — 3-step Razorpay flow
   const handlePurchaseAddon = async () => {
     if (!selectedAddon) return;
 
@@ -506,7 +508,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return;
       }
 
-      // Get tenant ID from AuthContext (already fetched during login)
       const tenantId = user?.tenantId;
       if (!tenantId) {
         setAddonPurchaseError('User session not found. Please log in again.');
@@ -514,8 +515,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return;
       }
 
-      // Purchase addon via API
-      const response = await fetch(`${API_BASE}/addons/purchase`, {
+      // Step 1: Create Razorpay order
+      const orderRes = await fetch(`${API_BASE}/addons/create-order`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -528,14 +529,62 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         }),
       });
 
+      if (!orderRes.ok) {
+        const errData = await orderRes.json().catch(() => ({}));
+        throw new Error(errData.detail || `Failed to create order: ${orderRes.status}`);
+      }
+
+      const orderData = await orderRes.json();
+      console.log('[UsageDashboard] Razorpay order created:', orderData);
+
+      // Step 2: Open Razorpay checkout modal
+      const cleanName = (selectedAddon.name || 'Addon').replace(/\s*-?\s*Pro$/i, '').trim();
+      let paymentResponse;
+      try {
+        paymentResponse = await openCheckout({
+          orderId: orderData.order_id,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          planName: cleanName,
+          userName: user?.name || '',
+          userEmail: user?.email || '',
+        });
+      } catch (checkoutErr: any) {
+        setPurchasingAddon(false);
+        if (checkoutErr?.message?.includes('cancelled')) {
+          const { toast } = await import('sonner');
+          toast.info('Payment cancelled');
+        } else {
+          const { toast } = await import('sonner');
+          toast.error(checkoutErr?.message || 'Payment failed');
+        }
+        return;
+      }
+
+      // Step 3: Complete purchase with Razorpay payment credentials
+      const response = await fetch(`${API_BASE}/addons/purchase`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          addon_id: selectedAddon.id,
+          quantity: addonQuantity,
+          tenant_id: tenantId,
+          razorpay_payment_id: paymentResponse.razorpay_payment_id,
+          razorpay_order_id: paymentResponse.razorpay_order_id,
+          razorpay_signature: paymentResponse.razorpay_signature,
+        }),
+      });
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Purchase failed: ${response.status}`);
+        throw new Error(errorData.detail || `Purchase verification failed: ${response.status}`);
       }
 
       const result = await response.json();
       const totalCredits = (selectedAddon.credit_amount || 0) * addonQuantity;
-      const cleanName = (selectedAddon.name || 'quota').replace(/\s*-?\s*Pro$/i, '').trim();
       console.log('[UsageDashboard] Addon purchase result:', result);
       setAddonPurchaseSuccess(`Successfully added ${totalCredits} Units to your ${cleanName}!`);
 
@@ -573,14 +622,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100/50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200/80 shadow-sm sticky top-0 z-10 backdrop-blur-sm bg-white/95">
-        <div className="max-w-7xl mx-auto px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-5">
-              <div className="w-14 h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300/50 ring-4 ring-gray-100">
-                <BarChart3 className="w-7 h-7 text-white" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-5">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300/50 ring-2 sm:ring-4 ring-gray-100">
+                <BarChart3 className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Usage & Quotas</h1>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Usage & Quotas</h1>
                 <p className="text-sm text-gray-500 mt-1 flex items-center gap-2">
                   <span className="inline-flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" />
@@ -1400,10 +1449,10 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 </button>
                 <button
                   onClick={handlePurchaseAddon}
-                  disabled={purchasingAddon || !!addonPurchaseSuccess}
+                  disabled={purchasingAddon || razorpayProcessing || !!addonPurchaseSuccess}
                   className="flex-1 px-4 py-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl font-semibold hover:from-gray-700 hover:to-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-gray-300/30"
                 >
-                  {purchasingAddon ? (
+                  {purchasingAddon || razorpayProcessing ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
                       Processing...
@@ -1411,7 +1460,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   ) : (
                     <>
                       <CreditCard className="w-5 h-5" />
-                      Confirm Purchase
+                      Pay & Purchase
                     </>
                   )}
                 </button>
