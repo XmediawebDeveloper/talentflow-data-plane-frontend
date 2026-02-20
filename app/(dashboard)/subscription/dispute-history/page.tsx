@@ -21,7 +21,7 @@ interface DisputeMetadata {
   customer_claim?: string;
   dispute_status?: string;
   dispute_evidence?: string | null;
-  stripe_dispute_id?: string;
+  razorpay_dispute_id?: string;
   original_invoice_id?: number | null;
   original_invoice_number?: string;
   [key: string]: unknown;
@@ -240,7 +240,7 @@ Disputed Amount: ${formatAmount(inv.total_amount_inr)}
 -------------------------------
 Dispute Status: ${inv.metadata?.dispute_status || inv.dispute_status || inv.status}
 Bank Reference: ${inv.metadata?.bank_reference || '-'}
-${inv.metadata?.stripe_dispute_id ? `Stripe Dispute ID: ${inv.metadata.stripe_dispute_id}` : ''}
+${inv.metadata?.razorpay_dispute_id ? `Razorpay Dispute ID: ${inv.metadata.razorpay_dispute_id}` : ''}
 ==============================
 Please contact support for assistance.
     `.trim();
@@ -626,10 +626,10 @@ Please contact support for assistance.
                   </div>
                 </div>
 
-                {selectedDispute.metadata?.stripe_dispute_id && (
+                {selectedDispute.metadata?.razorpay_dispute_id && (
                   <div className="p-3 bg-blue-50 rounded-lg mb-6">
-                    <p className="text-xs text-blue-600 font-medium">Stripe Dispute ID</p>
-                    <p className="text-sm text-blue-900 font-mono">{selectedDispute.metadata.stripe_dispute_id}</p>
+                    <p className="text-xs text-blue-600 font-medium">Razorpay Dispute ID</p>
+                    <p className="text-sm text-blue-900 font-mono">{selectedDispute.metadata.razorpay_dispute_id}</p>
                   </div>
                 )}
 

@@ -19,7 +19,7 @@ interface RefundMetadata {
   notes?: string;
   processed_by?: string;
   refund_method?: string;
-  stripe_refund_id?: string | null;
+  razorpay_refund_id?: string | null;
   refund_percentage?: number;
   original_invoice_id?: number | null;
   original_invoice_number?: string;
@@ -612,10 +612,10 @@ Refund processed successfully.
                   </div>
                 )}
 
-                {selectedRefund.metadata?.stripe_refund_id && (
+                {selectedRefund.metadata?.razorpay_refund_id && (
                   <div className="p-3 bg-blue-50 rounded-lg mb-6">
-                    <p className="text-xs text-blue-600 font-medium">Stripe Refund ID</p>
-                    <p className="text-sm text-blue-900 font-mono">{selectedRefund.metadata.stripe_refund_id}</p>
+                    <p className="text-xs text-blue-600 font-medium">Razorpay Refund ID</p>
+                    <p className="text-sm text-blue-900 font-mono">{selectedRefund.metadata.razorpay_refund_id}</p>
                   </div>
                 )}
 
