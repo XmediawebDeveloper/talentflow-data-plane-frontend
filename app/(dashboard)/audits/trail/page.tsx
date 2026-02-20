@@ -165,7 +165,7 @@ export default function AuditTrailPage() {
     'user_create', 'user_update', 'user_delete', 'user_activate', 'user_deactivate', 'user_invite', 'user_role_change',
     'role_create', 'role_update', 'role_delete', 'permission_update',
     'jd_create', 'jd_update', 'jd_delete', 'jd_publish', 'jd_archive',
-    'resume_upload', 'resume_update', 'resume_delete', 'resume_version', 'resume_move',
+    'resume_upload', 'resume_bulk_uploaded', 'resume_update', 'resume_delete', 'resume_version', 'resume_move',
     'duplicate_detected', 'duplicate_resolved',
     'resume_upload_failed', 'resume_move_failed', 'search_failed',
     'folder_create', 'folder_update', 'folder_delete',
@@ -180,7 +180,7 @@ export default function AuditTrailPage() {
   ];
 
   const validBackendEntities = [
-    'user', 'job_description', 'resume', 'folder', 'assessment', 'role', 'permission', 'master_data', 'settings', 'subscription', 'session',
+    'user', 'job_description', 'resume', 'resume_batch', 'folder', 'assessment', 'role', 'permission', 'master_data', 'settings', 'subscription', 'session',
   ];
 
   const fetchAuditLogs = useCallback(async () => {
@@ -558,6 +558,7 @@ export default function AuditTrailPage() {
     'usage_recorded',
     'unit_consume',
     'resume_upload',
+    'resume_bulk_uploaded',
     'resume_upload_failed',
     'scoring_complete',
     'scoring_failed',

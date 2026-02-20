@@ -20,6 +20,7 @@ import {
   Info
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRazorpay } from '@/lib/hooks/useRazorpay';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -60,6 +61,7 @@ export default function AddSeatsModal({
   planName,
   onSuccess
 }: AddSeatsModalProps) {
+  const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
   const [quantity, setQuantity] = useState(1);  // Number of packages to buy
   const [isLoading, setIsLoading] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -149,6 +151,57 @@ export default function AddSeatsModal({
 
     try {
       const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+
+      // Step 1: Create Razorpay order
+      const orderRes = await fetch(`${API_URL}/addons/create-order`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          credit_type: 'max_seats',
+          quantity: totalSeats,
+        }),
+      });
+
+      if (orderRes.status === 401) {
+        handleUnauthorized();
+        return;
+      }
+
+      if (!orderRes.ok) {
+        const errData = await orderRes.json().catch(() => ({}));
+        throw new Error(errData.detail || `Failed to create order: ${orderRes.status}`);
+      }
+
+      const orderData = await orderRes.json();
+      console.log('[AddSeatsModal] Razorpay order created:', orderData);
+
+      // Step 2: Open Razorpay checkout modal
+      let paymentResponse;
+      try {
+        const stored = localStorage.getItem('talentflow_user');
+        const u = stored ? JSON.parse(stored) : {};
+        paymentResponse = await openCheckout({
+          orderId: orderData.order_id,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          planName: 'User Seats',
+          userName: u.name || '',
+          userEmail: u.email || '',
+        });
+      } catch (checkoutErr: any) {
+        setIsPurchasing(false);
+        if (checkoutErr?.message?.includes('cancelled')) {
+          toast.info('Payment cancelled');
+        } else {
+          toast.error(checkoutErr?.message || 'Payment failed');
+        }
+        return;
+      }
+
+      // Step 3: Complete purchase with Razorpay payment credentials
       const response = await fetch(`${API_URL}/addons/purchase-seats`, {
         method: 'POST',
         headers: {
@@ -156,7 +209,10 @@ export default function AddSeatsModal({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          quantity: totalSeats,  // Send total seats to add
+          quantity: totalSeats,
+          razorpay_payment_id: paymentResponse.razorpay_payment_id,
+          razorpay_order_id: paymentResponse.razorpay_order_id,
+          razorpay_signature: paymentResponse.razorpay_signature,
         }),
       });
 
@@ -357,10 +413,10 @@ export default function AddSeatsModal({
                 </button>
                 <button
                   onClick={handlePurchase}
-                  disabled={isPurchasing || quantity < 1 || !pricing}
-                  className="flex-1 px-4 py-2.5 sm:py-3 bg-blue-600 text-white rounded-xl font-medium text-sm sm:text-base hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                  disabled={isPurchasing || razorpayProcessing || quantity < 1 || !pricing}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
-                  {isPurchasing ? (
+                  {isPurchasing || razorpayProcessing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Processing...
@@ -368,7 +424,7 @@ export default function AddSeatsModal({
                   ) : (
                     <>
                       <ShoppingCart className="w-4 h-4" />
-                      Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
+                      Pay & Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
                     </>
                   )}
                 </button>

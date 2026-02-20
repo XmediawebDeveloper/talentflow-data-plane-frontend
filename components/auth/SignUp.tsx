@@ -119,6 +119,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
+  const [createdSubdomain, setCreatedSubdomain] = useState<string | null>(null);
 
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -463,9 +464,12 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         throw new Error(errorMessage);
       }
 
-      // Store tenant_id for payment processing
+      // Store tenant_id and subdomain for payment processing and redirect
       if (data.tenant_id) {
         setCreatedTenantId(data.tenant_id);
+      }
+      if (data.subdomain) {
+        setCreatedSubdomain(data.subdomain);
       }
 
       // If paid signup, show payment step to complete purchase
@@ -480,9 +484,15 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             ? `Your ${trialDays}-day free trial has started. Explore all features!`
             : 'Your account has been created successfully.',
         });
-        // Redirect to login page after brief success message
+        // Redirect to org subdomain login after brief success message
         setTimeout(() => {
-          router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
+          const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+          const sub = data.subdomain;
+          if (sub) {
+            window.location.href = `https://${sub}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
+          } else {
+            router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
+          }
         }, 2000);
       }
 
@@ -527,11 +537,16 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         throw new Error(data.detail || 'Payment processing failed');
       }
 
-      // Payment successful - show success and redirect to login
+      // Payment successful - show success and redirect to org subdomain login
       toast.success('Payment successful!', { description: 'Your plan is now active.' });
       setStep('success');
       setTimeout(() => {
-        router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
+        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+        if (createdSubdomain) {
+          window.location.href = `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
+        } else {
+          router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
+        }
       }, 2000);
 
     } catch (err: any) {
@@ -547,7 +562,12 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   // Handle continue to login (skip payment - stay on trial)
   const handleSkipPayment = () => {
     toast.info('Starting with free trial', { description: 'You can upgrade anytime from your dashboard.' });
-    router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
+    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+    if (createdSubdomain) {
+      window.location.href = `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
+    } else {
+      router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
+    }
   };
 
   // Check if email is valid for OTP
