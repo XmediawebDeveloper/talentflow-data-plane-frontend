@@ -38,6 +38,7 @@ export const Webcam = forwardRef<WebcamRef, WebcamProps>(function Webcam(
             height: { ideal: 480 },
             facingMode: "user",
           },
+          audio: true, // Required for proctoring voice detection
         });
 
         streamRef.current = stream;

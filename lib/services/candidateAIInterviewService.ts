@@ -38,6 +38,8 @@ export interface CandidateSystemCheckRequest {
   microphone: string;
   network: string;
   ai_engine: string;
+  lighting?: string;
+  noise?: string;
 }
 
 export const candidateAIInterviewService = {

@@ -5,10 +5,12 @@ import { Avatar } from "./Avatar";
 import { Webcam, WebcamRef } from "./Webcam";
 import { useAvatarState } from "@/hooks/useAvatarState";
 import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
+import { useFaceDetection } from "@/hooks/useFaceDetection";
 import { useProctoringMonitor } from "@/hooks/useProctoringMonitor";
-import { ProctoringWarningModal, useProctoringWarnings } from "@/components/candidate/ProctoringWarningModal";
-import type { ProctoringWarning } from "@/hooks/useProctoringMonitor";
+import { ProctoringWarningModal } from "@/components/candidate/ProctoringWarningModal";
 import { CandidateInterviewInfo, candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
+import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
+import { Maximize2, Clock } from "lucide-react";
 
 interface InterviewUIProps {
   token: string;
@@ -41,6 +43,39 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const [duration, setDuration] = useState(0);
   const shouldDisconnectAfterAudioRef = useRef(false);
 
+  // Countdown timer
+  const [remainingSeconds, setRemainingSeconds] = useState(interviewInfo.duration_minutes * 60);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (!isConnected || isClosing) return;
+    timerIntervalRef.current = setInterval(() => {
+      setRemainingSeconds(prev => {
+        if (prev <= 1) {
+          if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, [isConnected, isClosing]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // No-response detection state
+  const [showMicPopup, setShowMicPopup] = useState(false);
+  const noResponseTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const noResponseRetryRef = useRef(0); // 0=first attempt, 1=asked "are you there?"
+  const micPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const handleNoResponseRef = useRef<() => void>(() => {});
+
   // Webcam ref for hand detection
   const webcamRef = useRef<WebcamRef>(null);
   const [webcamReady, setWebcamReady] = useState(false);
@@ -61,28 +96,67 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     onWaveDetected: () => avatarState.wave(),
   });
 
-  // Proctoring
+  // Proctoring (decoupled — no warning state here)
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
-  const { warnings, addWarning, dismissWarning } = useProctoringWarnings();
-  const handleProctoringWarning = useCallback((warning: ProctoringWarning) => {
-    addWarning(warning);
-  }, [addWarning]);
   const reportProctorEvent = useCallback(async (t: string, event: any) => {
     return candidateAIInterviewService.reportProctorEvent(t, event);
   }, []);
 
-  const { state: proctoringState } = useProctoringMonitor({
+  const { state: proctoringState, emitEvent, setReducedFrequency } = useProctoringMonitor({
     token,
     stream: webcamStream,
     enabled: isConnected,
-    onWarning: handleProctoringWarning,
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
     reportEvent: reportProctorEvent,
   });
 
+  // Fullscreen enforcement
+  const [isFullscreenActive, setIsFullscreenActive] = useState(true);
+
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const eventName = getFullscreenChangeEvent();
+    const handleFullscreenChange = () => {
+      setIsFullscreenActive(isFullscreen());
+    };
+
+    setIsFullscreenActive(isFullscreen());
+    document.addEventListener(eventName, handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener(eventName, handleFullscreenChange);
+      if (isFullscreen()) {
+        exitFullscreen().catch(() => {});
+      }
+    };
+  }, [isConnected]);
+
+  // Face detection & gaze tracking (Phase 2 & 3)
+  const handleFaceMissing = useCallback(() => {
+    emitEvent('face_missing', { timestamp: new Date().toISOString() });
+  }, [emitEvent]);
+
+  const handleMultipleFaces = useCallback((count: number) => {
+    emitEvent('multiple_faces', { face_count: count });
+  }, [emitEvent]);
+
+  const handleGazeAway = useCallback((direction: string) => {
+    emitEvent('gaze_away', { direction });
+  }, [emitEvent]);
+
+  const faceDetection = useFaceDetection({
+    enabled: isConnected && webcamReady,
+    enableGazeTracking: true,
+    onFaceMissing: handleFaceMissing,
+    onMultipleFaces: handleMultipleFaces,
+    onGazeAway: handleGazeAway,
+  });
+
   const handleVideoReady = useCallback((video: HTMLVideoElement) => {
     handDetection.setVideoElement(video);
+    faceDetection.setVideoElement(video);
     setWebcamReady(true);
 
     // Start video recording from webcam stream
@@ -116,7 +190,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         }
       }
     }
-  }, [handDetection]);
+  }, [handDetection, faceDetection]);
 
   // Refs
   const wsRef = useRef<WebSocket | null>(null);
@@ -149,7 +223,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const silenceStartRef = useRef<number | null>(null);
   const speechDetectedRef = useRef(false);
   const silenceThresholdRef = useRef(0.03);
-  const silenceDurationMsRef = useRef(2000);
+  const silenceDurationMsRef = useRef(5000);
 
   // Save AI message
   const saveAiMessage = useCallback(() => {
@@ -313,8 +387,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     const buffer = ctx.createBuffer(1, float32.length, 24000);
     buffer.getChannelData(0).set(float32);
     audioQueueRef.current.push(buffer);
+    // Load shedding: reduce proctoring frequency when audio is lagging
+    if (audioQueueRef.current.length > 3) {
+      setReducedFrequency(true);
+    } else if (audioQueueRef.current.length <= 1) {
+      setReducedFrequency(false);
+    }
     if (!isPlayingRef.current) { playNextBuffer(); }
-  }, [playNextBuffer]);
+  }, [playNextBuffer, setReducedFrequency]);
 
   // WebSocket handlers
   const handleMessage = useCallback((data: any) => {
@@ -358,6 +438,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         setIsAiSpeaking(true);
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
+        noResponseRetryRef.current = 0; // Reset no-response tracking on new question
         setStatus("Linda is speaking...");
         startRevealingTokens();
         break;
@@ -436,6 +517,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     }
   }, [token]);
 
+  // Clear no-response timer helper
+  const clearNoResponseTimer = useCallback(() => {
+    if (noResponseTimerRef.current) {
+      clearTimeout(noResponseTimerRef.current);
+      noResponseTimerRef.current = null;
+    }
+  }, []);
+
   // Recording
   const stopRecording = useCallback(() => {
     if (!isRecordingRef.current) return;
@@ -445,6 +534,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     silenceStartRef.current = null;
     speechDetectedRef.current = false;
     stopWebSpeechRecognition();
+    clearNoResponseTimer();
 
     setTimeout(() => {
       mediaStreamRef.current?.getTracks().forEach(t => t.stop());
@@ -458,7 +548,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         wsRef.current.send(JSON.stringify({ type: "end_turn" }));
       }
     }, 100);
-  }, [avatarState, stopWebSpeechRecognition]);
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer]);
+
+  // Stop recording silently (no end_turn) — used for no-response flow
+  const stopRecordingSilent = useCallback(() => {
+    if (!isRecordingRef.current) return;
+    isRecordingRef.current = false;
+    setIsRecording(false);
+    avatarState.onUserStopSpeaking();
+    silenceStartRef.current = null;
+    speechDetectedRef.current = false;
+    stopWebSpeechRecognition();
+    clearNoResponseTimer();
+    mediaStreamRef.current?.getTracks().forEach(t => t.stop());
+    processorRef.current?.disconnect();
+    processorRef.current = null;
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer]);
 
   const startRecordingInternal = async () => {
     if (isAiSpeaking || isProcessing || isRecordingRef.current) return;
@@ -503,6 +608,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         if (avgLevel > silenceThresholdRef.current) {
           speechDetectedRef.current = true;
           silenceStartRef.current = null;
+          // Clear no-response timer — candidate is speaking
+          clearNoResponseTimer();
+          noResponseRetryRef.current = 0;
         } else if (speechDetectedRef.current) {
           if (silenceStartRef.current === null) {
             silenceStartRef.current = Date.now();
@@ -541,6 +649,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       avatarState.onUserStartSpeaking();
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
       startWebSpeechRecognition();
+
+      // Start no-response detection (3 seconds)
+      clearNoResponseTimer();
+      noResponseTimerRef.current = setTimeout(() => {
+        if (!speechDetectedRef.current && isRecordingRef.current) {
+          handleNoResponseRef.current();
+        }
+      }, 3000);
     } catch {
       setStatus("Microphone error");
     }
@@ -548,6 +664,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   const disconnect = useCallback(() => {
     stopRecording();
+    clearNoResponseTimer();
+    if (micPopupTimerRef.current) {
+      clearTimeout(micPopupTimerRef.current);
+      micPopupTimerRef.current = null;
+    }
+    setShowMicPopup(false);
+    noResponseRetryRef.current = 0;
     wsRef.current?.close();
     setIsConnected(false);
     setIsRecording(false);
@@ -558,7 +681,123 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     isPlayingRef.current = false;
     audioEndReceivedRef.current = false;
     currentAiTextRef.current = "";
-  }, [stopRecording]);
+  }, [stopRecording, clearNoResponseTimer]);
+
+  // No-response handlers
+  const handleMicPopupNo = useCallback(() => {
+    setShowMicPopup(false);
+    if (micPopupTimerRef.current) {
+      clearTimeout(micPopupTimerRef.current);
+      micPopupTimerRef.current = null;
+    }
+    // End interview with closing message
+    const closingMsg = "It seems we're having technical difficulties. Thank you for your time. The interview will now end.";
+    setMessages(prev => [...prev, {
+      id: crypto.randomUUID(),
+      role: "assistant" as const,
+      content: closingMsg,
+    }]);
+    setStatus("Interview ending...");
+    setIsClosing(true);
+
+    const utterance = new SpeechSynthesisUtterance(closingMsg);
+    utterance.rate = 1.0;
+    utterance.onend = () => {
+      disconnect();
+      onInterviewComplete?.();
+    };
+    try {
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setTimeout(() => {
+        disconnect();
+        onInterviewComplete?.();
+      }, 3000);
+    }
+  }, [disconnect, onInterviewComplete]);
+
+  const handleMicPopupYes = useCallback(async () => {
+    setShowMicPopup(false);
+    if (micPopupTimerRef.current) {
+      clearTimeout(micPopupTimerRef.current);
+      micPopupTimerRef.current = null;
+    }
+    noResponseRetryRef.current = 0;
+    setStatus("Resuming interview...");
+
+    // Re-check microphone
+    try {
+      const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      testStream.getTracks().forEach(t => t.stop());
+      setTimeout(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          startRecordingInternal();
+        }
+      }, 500);
+    } catch {
+      setStatus("Microphone not available - please check your device");
+    }
+  }, []);
+
+  const handleNoResponse = useCallback(() => {
+    if (noResponseRetryRef.current === 0) {
+      // First timeout: Linda asks "Are you there?"
+      stopRecordingSilent();
+      noResponseRetryRef.current = 1;
+
+      const areYouThereMsg = "Are you there? I didn't hear a response.";
+      setMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        role: "assistant" as const,
+        content: areYouThereMsg,
+      }]);
+
+      setStatus("Linda is speaking...");
+      setIsAiSpeaking(true);
+      avatarState.onAiStartSpeaking();
+
+      const utterance = new SpeechSynthesisUtterance(areYouThereMsg);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.onend = () => {
+        setIsAiSpeaking(false);
+        avatarState.onAiStopSpeaking();
+        setStatus("Your turn - speak now...");
+        setTimeout(() => {
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            startRecordingInternal();
+          }
+        }, 400);
+      };
+
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        setTimeout(() => {
+          setIsAiSpeaking(false);
+          avatarState.onAiStopSpeaking();
+          setStatus("Your turn - speak now...");
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            startRecordingInternal();
+          }
+        }, 1500);
+      }
+    } else {
+      // Second timeout: Show mic popup
+      stopRecordingSilent();
+      setShowMicPopup(true);
+      setStatus("Checking microphone...");
+
+      micPopupTimerRef.current = setTimeout(() => {
+        handleMicPopupNo();
+      }, 3000);
+    }
+  }, [stopRecordingSilent, avatarState, handleMicPopupNo]);
+
+  // Keep handleNoResponseRef in sync
+  useEffect(() => {
+    handleNoResponseRef.current = handleNoResponse;
+  }, [handleNoResponse]);
 
   // WebSocket connection
   const connect = useCallback(() => {
@@ -701,6 +940,54 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         </div>
       </div>
     )}
+    {/* Fullscreen exit overlay */}
+    {isConnected && !isFullscreenActive && (
+      <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm">
+        <div className="bg-gray-900 border border-yellow-500 rounded-2xl p-8 max-w-md text-center shadow-2xl">
+          <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-white mb-2">Fullscreen Required</h2>
+          <p className="text-gray-400 mb-6">
+            Please return to fullscreen mode to continue the interview.
+          </p>
+          <button
+            onClick={() => requestFullscreen().catch(() => {})}
+            className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 rounded-xl font-bold text-white transition-colors"
+          >
+            Return to Fullscreen
+          </button>
+          <div className="text-sm text-red-400 font-medium animate-pulse mt-4">
+            This event has been recorded
+          </div>
+        </div>
+      </div>
+    )}
+    {/* Microphone issue popup */}
+    {showMicPopup && (
+      <div className="fixed inset-0 z-[101] bg-black/80 flex items-center justify-center backdrop-blur-sm">
+        <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-sm text-center shadow-2xl animate-in fade-in zoom-in duration-200">
+          <div className="text-amber-500 text-5xl mb-4">🎤</div>
+          <h2 className="text-xl font-bold text-white mb-2">Microphone Issue?</h2>
+          <p className="text-gray-400 mb-6">
+            We couldn&apos;t detect any audio. Is your microphone working?
+          </p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={handleMicPopupYes}
+              className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-white transition-colors"
+            >
+              Yes, Resume
+            </button>
+            <button
+              onClick={handleMicPopupNo}
+              className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors"
+            >
+              No, End Interview
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-3">Auto-closing in 3 seconds...</p>
+        </div>
+      </div>
+    )}
     <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-700">
@@ -710,11 +997,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         </div>
         <div className="flex items-center gap-4">
           {isConnected && !isClosing && (
-            <div className="text-sm px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg">
-              <span className="font-medium">
-                {messages.filter(m => m.role === 'assistant').length}/{interviewInfo.total_questions}
-              </span>
-              <span className="ml-1 text-xs opacity-75">questions</span>
+            <div className={`text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${
+              remainingSeconds <= 60 ? 'bg-red-500/20 text-red-400 animate-pulse' :
+              remainingSeconds <= 300 ? 'bg-orange-500/20 text-orange-400' :
+              'bg-blue-500/20 text-blue-400'
+            }`}>
+              <Clock className="w-3.5 h-3.5" />
+              <span className="font-mono font-medium">{formatTime(remainingSeconds)}</span>
+              <span className="text-xs opacity-75">remaining</span>
             </div>
           )}
           {isClosing && (
@@ -841,7 +1131,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         )}
       </div>
     </div>
-    <ProctoringWarningModal warnings={warnings} onDismiss={dismissWarning} autoDismissDelay={5000} />
+    <ProctoringWarningModal />
     </>
   );
 }

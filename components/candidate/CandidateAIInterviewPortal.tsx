@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Video, CheckCircle, X, Play, Info, AlertTriangle, FileText, Loader2, Mic, Eye, Monitor, Camera, Wifi, Cpu, Circle, RefreshCw } from 'lucide-react';
+import { Video, CheckCircle, X, Play, Info, AlertTriangle, FileText, Loader2, Mic, Eye, Monitor, Camera, Wifi, Cpu, Circle, RefreshCw, Sun, Volume2 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
 import { InterviewUI } from '@/components/ai-interview/InterviewUI';
+import { requestFullscreen } from '@/lib/utils/browserCompat';
 
 type Step = 'loading' | 'consent' | 'system_check' | 'interview' | 'completed' | 'error';
 
@@ -32,11 +33,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [micStatus, setMicStatus] = useState<'checking' | 'granted' | 'denied'>('checking');
   const [networkStatus, setNetworkStatus] = useState<'checking' | 'stable' | 'unstable'>('checking');
   const [aiEngineStatus, setAiEngineStatus] = useState<'checking' | 'ready' | 'error'>('checking');
+  const [lightingStatus, setLightingStatus] = useState<'checking' | 'good' | 'poor'>('checking');
+  const [noiseStatus, setNoiseStatus] = useState<'checking' | 'normal' | 'noisy'>('checking');
   const [systemCheckSubmitting, setSystemCheckSubmitting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const allChecksReady = cameraStatus === 'granted' && micStatus === 'granted' && networkStatus === 'stable' && aiEngineStatus === 'ready';
+  const allChecksReady = cameraStatus === 'granted' && micStatus === 'granted' && networkStatus === 'stable' && aiEngineStatus === 'ready' && lightingStatus === 'good' && noiseStatus === 'normal';
 
   // Load interview info and determine initial step
   const loadInterview = useCallback(async () => {
@@ -73,6 +77,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     setMicStatus('checking');
     setNetworkStatus('checking');
     setAiEngineStatus('checking');
+    setLightingStatus('checking');
+    setNoiseStatus('checking');
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -82,9 +88,65 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       }
       setCameraStatus('granted');
       setMicStatus('granted');
+
+      // Lighting quality check — analyze camera frame brightness after video loads
+      setTimeout(() => {
+        try {
+          const video = videoRef.current;
+          if (video && video.videoWidth > 0) {
+            if (!canvasRef.current) {
+              canvasRef.current = document.createElement('canvas');
+            }
+            canvasRef.current.width = 160;
+            canvasRef.current.height = 120;
+            const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true });
+            if (ctx) {
+              ctx.drawImage(video, 0, 0, 160, 120);
+              const imageData = ctx.getImageData(0, 0, 160, 120);
+              let totalBrightness = 0;
+              for (let i = 0; i < imageData.data.length; i += 4) {
+                totalBrightness += (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
+              }
+              const avgBrightness = totalBrightness / (160 * 120);
+              setLightingStatus(avgBrightness >= 40 ? 'good' : 'poor');
+            } else {
+              setLightingStatus('good');
+            }
+          } else {
+            setLightingStatus('good');
+          }
+        } catch {
+          setLightingStatus('good');
+        }
+      }, 2000);
+
+      // Noise baseline check — measure ambient audio level
+      try {
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        setTimeout(() => {
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const avgLevel = sum / dataArray.length;
+          setNoiseStatus(avgLevel < 80 ? 'normal' : 'noisy');
+          audioContext.close().catch(() => {});
+        }, 2500);
+      } catch {
+        setNoiseStatus('normal');
+      }
     } catch {
       setCameraStatus('denied');
       setMicStatus('denied');
+      setLightingStatus('good');
+      setNoiseStatus('normal');
     }
 
     setTimeout(() => {
@@ -148,8 +210,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         microphone: micStatus,
         network: networkStatus,
         ai_engine: aiEngineStatus,
+        lighting: lightingStatus,
+        noise: noiseStatus,
       });
       stopMediaStream();
+
+      // Request fullscreen before starting interview (user gesture context)
+      try {
+        await requestFullscreen();
+      } catch {
+        // Continue even if fullscreen fails
+      }
+
       const result = await candidateAIInterviewService.startInterview(token);
       setInterview(result);
       setStep('interview');
@@ -242,7 +314,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   if (step === 'system_check' && interview) {
     const StatusIcon = ({ status }: { status: string }) => {
       if (status === 'checking') return <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />;
-      if (status === 'granted' || status === 'stable' || status === 'ready')
+      if (status === 'granted' || status === 'stable' || status === 'ready' || status === 'good' || status === 'normal')
         return <CheckCircle className="w-5 h-5 text-gray-800" />;
       return <X className="w-5 h-5 text-gray-400" />;
     };
@@ -252,14 +324,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (status === 'granted') return 'Granted';
       if (status === 'stable') return 'Stable';
       if (status === 'ready') return 'Ready';
+      if (status === 'good') return 'Good';
+      if (status === 'normal') return 'Normal';
       if (status === 'denied') return 'Denied';
       if (status === 'unstable') return 'Unstable';
+      if (status === 'poor') return 'Too Dark';
+      if (status === 'noisy') return 'Too Noisy';
       return 'Error';
     };
 
     const checkBorder = (status: string) => {
       if (status === 'checking') return 'border-gray-200';
-      if (status === 'granted' || status === 'stable' || status === 'ready') return 'border-gray-300 bg-gray-50';
+      if (status === 'granted' || status === 'stable' || status === 'ready' || status === 'good' || status === 'normal') return 'border-gray-300 bg-gray-50';
       return 'border-gray-300 bg-gray-100';
     };
 
@@ -336,7 +412,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
               <CheckCircle className="w-5 h-5 text-gray-500" />
               <h2 className="font-semibold text-gray-900">System Checks</h2>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className={`border rounded-lg p-4 ${checkBorder(cameraStatus)}`}>
                 <div className="flex items-center gap-3">
                   <StatusIcon status={cameraStatus} />
@@ -370,6 +446,28 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                   <div>
                     <div className="font-medium text-gray-900 text-sm">AI Engine</div>
                     <div className="text-xs text-gray-500">{statusLabel(aiEngineStatus)}</div>
+                  </div>
+                </div>
+              </div>
+              <div className={`border rounded-lg p-4 ${checkBorder(lightingStatus)}`}>
+                <div className="flex items-center gap-3">
+                  <StatusIcon status={lightingStatus} />
+                  <div>
+                    <div className="font-medium text-gray-900 text-sm">Lighting Quality</div>
+                    <div className="text-xs text-gray-500">
+                      {lightingStatus === 'checking' ? 'Analyzing...' : lightingStatus === 'good' ? 'Good' : 'Too Dark'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className={`border rounded-lg p-4 ${checkBorder(noiseStatus)}`}>
+                <div className="flex items-center gap-3">
+                  <StatusIcon status={noiseStatus} />
+                  <div>
+                    <div className="font-medium text-gray-900 text-sm">Ambient Noise</div>
+                    <div className="text-xs text-gray-500">
+                      {noiseStatus === 'checking' ? 'Measuring...' : noiseStatus === 'normal' ? 'Normal' : 'Too Noisy'}
+                    </div>
                   </div>
                 </div>
               </div>

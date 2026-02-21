@@ -1,16 +1,27 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye } from 'lucide-react';
-import { ProctoringWarning, ProctoringEventType } from '@/hooks/useProctoringMonitor';
+/**
+ * ProctoringWarningModal — Self-contained warning toast system.
+ *
+ * Subscribes to ProctoringEventBus internally → has its OWN state.
+ * Parent (InterviewUI) never re-renders when warnings appear/disappear.
+ */
 
-interface ProctoringWarningModalProps {
-  warnings: ProctoringWarning[];
-  onDismiss: (warningId: string) => void;
-  autoDismissDelay?: number; // milliseconds, default 5000
+import { useState, useEffect, useCallback, memo, type Dispatch, type SetStateAction } from 'react';
+import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye } from 'lucide-react';
+import { ProctoringEventBus, ProctoringEvent, ProctoringEventType } from '@/lib/ProctoringEventBus';
+
+interface WarningItem {
+  id: string;
+  type: ProctoringEventType;
+  message: string;
+  severity: 'low' | 'medium' | 'high';
+  timestamp: Date;
 }
 
-// Icon mapping for each event type
+const AUTO_DISMISS_MS = 2000;
+
+// Icon mapping
 const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   tab_switch: <Monitor className="w-6 h-6" />,
   copy_attempt: <Copy className="w-6 h-6" />,
@@ -23,31 +34,12 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   screenshot_attempt: <Monitor className="w-6 h-6" />,
   screen_recording_attempt: <Monitor className="w-6 h-6" />,
   window_blur: <Monitor className="w-6 h-6" />,
+  fullscreen_exit: <Maximize2 className="w-6 h-6" />,
+  face_missing: <UserX className="w-6 h-6" />,
+  multiple_faces: <Users className="w-6 h-6" />,
+  gaze_away: <ScanEye className="w-6 h-6" />,
 };
 
-// Severity colors
-const SEVERITY_COLORS: Record<'low' | 'medium' | 'high', { bg: string; border: string; text: string; icon: string }> = {
-  low: {
-    bg: 'bg-yellow-50',
-    border: 'border-yellow-400',
-    text: 'text-yellow-800',
-    icon: 'text-yellow-500',
-  },
-  medium: {
-    bg: 'bg-orange-50',
-    border: 'border-orange-400',
-    text: 'text-orange-800',
-    icon: 'text-orange-500',
-  },
-  high: {
-    bg: 'bg-red-50',
-    border: 'border-red-400',
-    text: 'text-red-800',
-    icon: 'text-red-500',
-  },
-};
-
-// Event type display names
 const EVENT_NAMES: Record<ProctoringEventType, string> = {
   tab_switch: 'Tab Switch Detected',
   copy_attempt: 'Copy Attempt Blocked',
@@ -60,50 +52,47 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   screenshot_attempt: 'Screenshot Attempt Blocked',
   screen_recording_attempt: 'Screen Recording Detected',
   window_blur: 'Window Focus Lost',
+  fullscreen_exit: 'Fullscreen Exited',
+  face_missing: 'Face Not Detected',
+  multiple_faces: 'Multiple Faces Detected',
+  gaze_away: 'Looking Away Detected',
 };
 
-function WarningCard({
+const SEVERITY_COLORS: Record<'low' | 'medium' | 'high', { bg: string; border: string; text: string; icon: string }> = {
+  low: { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-800', icon: 'text-yellow-500' },
+  medium: { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-800', icon: 'text-orange-500' },
+  high: { bg: 'bg-red-50', border: 'border-red-400', text: 'text-red-800', icon: 'text-red-500' },
+};
+
+// Individual warning card — memoized to prevent re-renders of siblings
+const WarningCard = memo(function WarningCard({
   warning,
   onDismiss,
-  autoDismissDelay,
 }: {
-  warning: ProctoringWarning;
+  warning: WarningItem;
   onDismiss: () => void;
-  autoDismissDelay: number;
 }) {
   const colors = SEVERITY_COLORS[warning.severity];
 
-  // Use a single timeout for auto-dismiss instead of requestAnimationFrame
-  // This prevents 60 re-renders per second
   useEffect(() => {
-    const timer = setTimeout(() => {
-      onDismiss();
-    }, autoDismissDelay);
-
+    const timer = setTimeout(onDismiss, AUTO_DISMISS_MS);
     return () => clearTimeout(timer);
-  }, [autoDismissDelay, onDismiss]);
+  }, [onDismiss]);
 
   return (
-    <div
-      className={`relative overflow-hidden rounded-lg border-l-4 ${colors.bg} ${colors.border} p-4 shadow-lg animate-slide-in`}
-    >
-      {/* Progress bar - using CSS animation instead of JS state updates */}
+    <div className={`relative overflow-hidden rounded-lg border-l-4 ${colors.bg} ${colors.border} p-4 shadow-lg animate-slide-in`}>
       <div
         className="absolute bottom-0 left-0 h-1 bg-current opacity-30 animate-progress-shrink"
         style={{
-          animationDuration: `${autoDismissDelay}ms`,
+          animationDuration: `${AUTO_DISMISS_MS}ms`,
           animationTimingFunction: 'linear',
-          animationFillMode: 'forwards'
+          animationFillMode: 'forwards',
         }}
       />
-
       <div className="flex items-start gap-3">
-        {/* Icon */}
         <div className={`flex-shrink-0 ${colors.icon}`}>
           {EVENT_ICONS[warning.type] || <AlertTriangle className="w-6 h-6" />}
         </div>
-
-        {/* Content */}
         <div className="flex-1 min-w-0">
           <h4 className={`font-semibold ${colors.text}`}>
             {EVENT_NAMES[warning.type] || 'Warning'}
@@ -112,48 +101,52 @@ function WarningCard({
             {warning.message}
           </p>
           <p className="text-xs mt-1 opacity-60">
-            {warning.timestamp.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: true })}
+            {warning.timestamp.toLocaleTimeString('en-US', { hour12: true })}
           </p>
         </div>
-
-        {/* Dismiss button */}
-        <button
-          onClick={onDismiss}
-          className={`flex-shrink-0 p-1 rounded hover:bg-black/5 ${colors.text}`}
-        >
+        <button onClick={onDismiss} className={`flex-shrink-0 p-1 rounded hover:bg-black/5 ${colors.text}`}>
           <X className="w-4 h-4" />
         </button>
       </div>
-
-      {/* Severity badge */}
       <div className="absolute top-2 right-10">
-        <span
-          className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-            warning.severity === 'high'
-              ? 'bg-red-200 text-red-800'
-              : warning.severity === 'medium'
-              ? 'bg-orange-200 text-orange-800'
-              : 'bg-yellow-200 text-yellow-800'
-          }`}
-        >
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+          warning.severity === 'high' ? 'bg-red-200 text-red-800' :
+          warning.severity === 'medium' ? 'bg-orange-200 text-orange-800' :
+          'bg-yellow-200 text-yellow-800'
+        }`}>
           {warning.severity.toUpperCase()}
         </span>
       </div>
     </div>
   );
-}
+});
 
-export function ProctoringWarningModal({
-  warnings,
-  onDismiss,
-  autoDismissDelay = 5000,
-}: ProctoringWarningModalProps) {
-  const handleDismiss = useCallback(
-    (warningId: string) => {
-      onDismiss(warningId);
-    },
-    [onDismiss]
-  );
+/**
+ * Self-contained proctoring warning overlay.
+ * Subscribes to ProctoringEventBus — NO props needed from parent.
+ * Parent never re-renders when warnings change.
+ */
+export function ProctoringWarningModal() {
+  const [warnings, setWarnings] = useState<WarningItem[]>([]);
+
+  // Subscribe to event bus on mount
+  useEffect(() => {
+    const unsubscribe = ProctoringEventBus.subscribe((event: ProctoringEvent) => {
+      setWarnings(prev => [...prev, {
+        id: event.id,
+        type: event.type,
+        message: event.message,
+        severity: event.severity,
+        timestamp: event.timestamp,
+      }]);
+    });
+
+    return () => { unsubscribe(); };
+  }, []);
+
+  const dismissWarning = useCallback((id: string) => {
+    setWarnings(prev => prev.filter(w => w.id !== id));
+  }, []);
 
   if (warnings.length === 0) return null;
 
@@ -163,62 +156,41 @@ export function ProctoringWarningModal({
         <div key={warning.id} className="pointer-events-auto">
           <WarningCard
             warning={warning}
-            onDismiss={() => handleDismiss(warning.id)}
-            autoDismissDelay={autoDismissDelay}
+            onDismiss={() => dismissWarning(warning.id)}
           />
         </div>
       ))}
-
       <style jsx global>{`
         @keyframes slide-in {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
         }
-        .animate-slide-in {
-          animation: slide-in 0.3s ease-out;
-        }
+        .animate-slide-in { animation: slide-in 0.3s ease-out; }
         @keyframes progress-shrink {
-          from {
-            width: 100%;
-          }
-          to {
-            width: 0%;
-          }
+          from { width: 100%; }
+          to { width: 0%; }
         }
-        .animate-progress-shrink {
-          animation-name: progress-shrink;
-        }
+        .animate-progress-shrink { animation-name: progress-shrink; }
       `}</style>
     </div>
   );
 }
 
-// Export a hook to manage warnings state
+// Legacy hook — kept for backward compatibility with assessment module
 export function useProctoringWarnings() {
-  const [warnings, setWarnings] = useState<ProctoringWarning[]>([]);
+  const [warnings, setWarnings] = useState<WarningItem[]>([]);
 
-  const addWarning = useCallback((warning: ProctoringWarning) => {
-    setWarnings((prev) => [...prev, warning]);
+  const addWarning = useCallback((warning: WarningItem) => {
+    setWarnings(prev => [...prev, warning]);
   }, []);
 
   const dismissWarning = useCallback((warningId: string) => {
-    setWarnings((prev) => prev.filter((w) => w.id !== warningId));
+    setWarnings(prev => prev.filter(w => w.id !== warningId));
   }, []);
 
   const clearAllWarnings = useCallback(() => {
     setWarnings([]);
   }, []);
 
-  return {
-    warnings,
-    addWarning,
-    dismissWarning,
-    clearAllWarnings,
-  };
+  return { warnings, addWarning, dismissWarning, clearAllWarnings };
 }

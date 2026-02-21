@@ -182,17 +182,17 @@ export default function AIInterview() {
     try {
       const { proctoringService } = await import('@/lib/services/proctoringService');
       const settings = await proctoringService.getSettings();
-      setProctoringEnabled(settings.enabled ?? false);
+      setProctoringEnabled(settings.proctoring_enabled ?? false);
       setProctoringSettings({
         webcam_monitoring: settings.webcam_monitoring ?? false,
         screen_recording: settings.screen_recording ?? false,
         tab_switch_detection: settings.tab_switch_detection ?? true,
-        copy_paste_prevention: settings.copy_paste_prevention ?? true,
+        copy_paste_prevention: settings.copy_paste_blocking ?? true,
         browser_lockdown: settings.browser_lockdown ?? false,
         ai_cheating_prevention: settings.ai_cheating_prevention ?? false,
         max_tab_switches: settings.max_tab_switches ?? 3,
-        max_violations: settings.max_violations ?? 5,
-        retention_days: settings.retention_days ?? 90,
+        max_violations: settings.max_violations_before_flag ?? 5,
+        retention_days: settings.recording_retention_days ?? 90,
       });
     } catch (error) {
       console.error('Failed to load proctoring settings:', error);
@@ -346,8 +346,16 @@ export default function AIInterview() {
     try {
       const { proctoringService } = await import('@/lib/services/proctoringService');
       await proctoringService.updateSettings({
-        enabled: proctoringEnabled,
-        ...proctoringSettings,
+        proctoring_enabled: proctoringEnabled,
+        webcam_monitoring: proctoringSettings.webcam_monitoring,
+        screen_recording: proctoringSettings.screen_recording,
+        tab_switch_detection: proctoringSettings.tab_switch_detection,
+        copy_paste_blocking: proctoringSettings.copy_paste_prevention,
+        browser_lockdown: proctoringSettings.browser_lockdown,
+        ai_cheating_prevention: proctoringSettings.ai_cheating_prevention,
+        max_tab_switches: proctoringSettings.max_tab_switches,
+        max_violations_before_flag: proctoringSettings.max_violations,
+        recording_retention_days: proctoringSettings.retention_days,
       });
       toast.success('Proctoring settings saved!');
     } catch (error) {
