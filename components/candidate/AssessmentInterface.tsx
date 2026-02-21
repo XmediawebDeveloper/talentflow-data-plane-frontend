@@ -133,6 +133,7 @@ export function AssessmentInterface({
     currentQuestion.time_limit_seconds
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
   // const [showUnansweredPopup, setShowUnansweredPopup] = useState(false); // REMOVED: Combined into showCompleteConfirm modal
   const [unansweredQuestions, setUnansweredQuestions] = useState<number[]>([]);
@@ -943,22 +944,48 @@ export function AssessmentInterface({
     }
   };
 
-  // Handle final submit - check for unanswered questions
+  // Handle final submit - save current answer first, THEN check for unanswered
   const handleFinalSubmit = async () => {
-    // Find unanswered questions by checking which ones are NOT in answerStatuses
+    if (isSubmitting) return;
+
+    // ── STEP 1: Submit & lock the current answer if it has content ───────────
+    // This is critical for the last question — the candidate may not have
+    // clicked "Submit" individually before clicking "Submit & Confirm".
+    const hasCurrentAnswer = !!(
+      answer.text_response ||
+      (answer.selected_options && answer.selected_options.length > 0) ||
+      answer.code_submission
+    );
+
+    if (hasCurrentAnswer && !isCurrentAnswerLocked) {
+      setIsSubmitting(true);
+      try {
+        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
+        // Mark current question as locked in local tracking
+        setAnswerStatuses(prev => {
+          const newMap = new Map(prev);
+          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: true });
+          return newMap;
+        });
+      } catch (error) {
+        console.error('[FINAL_SUBMIT] Failed to save current answer before completing:', error);
+        // Proceed anyway — do not block the completion flow
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+
+    // ── STEP 2: Check unanswered questions (skip current — handled above) ────
     const unanswered: number[] = [];
     for (let i = 1; i <= currentQuestion.total_questions; i++) {
+      if (i === currentQuestion.question_number) continue;
       const status = answerStatuses.get(`question_${i}`);
-      // If not tracked in answerStatuses, it means no answer was saved (draft or submitted)
       if (!status || !status.hasDraft) {
         unanswered.push(i);
       }
     }
 
-    // Show single combined popup (includes unanswered questions if any)
-    if (unanswered.length > 0) {
-      setUnansweredQuestions(unanswered);
-    }
+    setUnansweredQuestions(unanswered.length > 0 ? unanswered : []);
     setShowCompleteConfirm(true);
   };
 
@@ -987,6 +1014,8 @@ export function AssessmentInterface({
   };
 
   const handleCompleteAssessment = async () => {
+    if (isCompleting) return;
+    setIsCompleting(true);
     setShowCompleteConfirm(false);
     // Exit fullscreen when assessment completes
     await exitFullscreen();
@@ -1823,6 +1852,8 @@ export function AssessmentInterface({
                 variant="primary"
                 className="w-full"
                 onClick={handleCompleteAssessment}
+                loading={isCompleting}
+                disabled={isCompleting}
               >
                 Submit Now
               </Button>

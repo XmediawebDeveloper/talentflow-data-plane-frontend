@@ -43,29 +43,29 @@ interface ProctoringState {
   isCameraActive: boolean;
 }
 
-// Backend logging cooldown - very short for critical violations, accurate tracking (in milliseconds)
+// Backend logging cooldown — how often each event is sent to the backend (ms)
 const BACKEND_COOLDOWNS: Record<ProctoringEventType, number> = {
   tab_switch: 2000,
-  copy_attempt: 500,  // Reduced: log copy attempts more frequently
-  paste_attempt: 500, // Reduced: log paste attempts more frequently
-  voice_detected: 10000, // Increased: only log voice every 10 seconds
-  multiple_voices: 15000,
-  multiple_faces: 10000,  // Log at most every 10 seconds
-  camera_disabled: 1000,     // Reduced: immediate detection
-  microphone_disabled: 1000, // Reduced: immediate detection
-  camera_obstructed: 3000,   // Reduced: faster detection
-  screenshot_attempt: 500,   // Reduced: immediate detection
-  screen_recording_attempt: 2000, // Reduced: faster detection
+  copy_attempt: 500,
+  paste_attempt: 500,
+  voice_detected: 30000,  // Send at most every 30 s (batched anyway)
+  multiple_voices: 30000,
+  multiple_faces: 10000,  // Send at most every 10 s
+  camera_disabled: 1000,
+  microphone_disabled: 1000,
+  camera_obstructed: 3000,
+  screenshot_attempt: 500,
+  screen_recording_attempt: 2000,
   window_blur: 2000,
 };
 
-// Frontend warning cooldown - reduced for immediate feedback on violations
-const FRONTEND_WARNING_COOLDOWN = 3000; // 3 seconds for all warning pop-ups (immediate but not spammy)
+// Frontend warning cooldown — minimum gap between on-screen warning toasts (ms)
+const FRONTEND_WARNING_COOLDOWN = 8000; // 8 s — visible but not spammy
 
-// Voice detection specific settings (Throttle + Batch optimization)
-const VOICE_CHECK_INTERVAL = 1000; // Check every 1 second
-const VOICE_BATCH_INTERVAL = 10000; // Batch and send events every 10 seconds
-const VOICE_LOG_ONLY = true; // Log-only mode: don't trigger UI warnings for voice
+// Voice detection specific settings (Throttle + Batch optimisation)
+const VOICE_CHECK_INTERVAL = 1000;   // Sample every 1 s
+const VOICE_BATCH_INTERVAL = 10000;  // Flush batch to backend every 10 s
+const VOICE_LOG_ONLY = false;        // Show on-screen warnings for audio violations
 
 // Warning messages for each event type
 const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
@@ -472,7 +472,7 @@ export function useProctoringMonitor({
   }, []);
 
   // ==================== VOICE DETECTION (Web Worker) ====================
-  const setupVoiceDetection = useCallback(() => {
+  const setupVoiceDetection = useCallback(async () => {
     const currentStream = streamRef.current;
     if (!currentStream || !workerRef.current) return;
 
@@ -535,8 +535,8 @@ export function useProctoringMonitor({
 
   // ==================== MULTIPLE FACES DETECTION ====================
   const FACE_DETECTION_INTERVAL = 5000; // Check every 5 seconds
-  // CDN hosting tiny face detector model weights (~190 KB) — no local model files needed
-  const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+  // GitHub CDN hosts the actual weight files (npm package does not include them)
+  const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights/';
 
   const setupFaceDetection = useCallback(() => {
     const currentStream = streamRef.current;
