@@ -7,7 +7,7 @@
  * Parent (InterviewUI) never re-renders when warnings appear/disappear.
  */
 
-import { useState, useEffect, useCallback, memo, type Dispatch, type SetStateAction } from 'react';
+import { useState, useEffect, useCallback, useRef, memo, type Dispatch, type SetStateAction } from 'react';
 import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye } from 'lucide-react';
 import { ProctoringEventBus, ProctoringEvent, ProctoringEventType } from '@/lib/ProctoringEventBus';
 
@@ -74,10 +74,16 @@ const WarningCard = memo(function WarningCard({
 }) {
   const colors = SEVERITY_COLORS[warning.severity];
 
+  // Store onDismiss in a ref so the timer only starts ONCE on mount
+  // (Without this, every new warning causes parent re-render → new onDismiss
+  //  function → useEffect restarts → timer resets infinitely)
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+
   useEffect(() => {
-    const timer = setTimeout(onDismiss, AUTO_DISMISS_MS);
+    const timer = setTimeout(() => onDismissRef.current(), AUTO_DISMISS_MS);
     return () => clearTimeout(timer);
-  }, [onDismiss]);
+  }, []); // Empty deps — runs only on mount
 
   return (
     <div className={`relative overflow-hidden rounded-lg border-l-4 ${colors.bg} ${colors.border} p-4 shadow-lg animate-slide-in`}>

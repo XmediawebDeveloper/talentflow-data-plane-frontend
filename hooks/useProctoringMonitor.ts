@@ -682,12 +682,12 @@ export function useProctoringMonitor({
     ];
 
     // Stream-dependent: workers + track monitoring
+    // (Face detection is handled by useFaceDetection hook, not here)
     if (streamRef.current) {
       setTimeout(() => {
         setupVideoWorker();
         setupAudioWorker();
         setupTrackMonitoring();
-        setupFaceDetection();
       }, 100);
     }
 

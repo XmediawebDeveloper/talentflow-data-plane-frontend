@@ -75,6 +75,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const noResponseRetryRef = useRef(0); // 0=first attempt, 1=asked "are you there?"
   const micPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
   const handleNoResponseRef = useRef<() => void>(() => {});
+  const stopRecordingSilentRef = useRef<() => void>(() => {});
 
   // Webcam ref for hand detection
   const webcamRef = useRef<WebcamRef>(null);
@@ -477,6 +478,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         shouldDisconnectAfterAudioRef.current = true;
         break;
       case "language_error":
+        // Stop current recording first (otherwise startRecordingInternal
+        // returns early because isRecordingRef.current is still true)
+        stopRecordingSilentRef.current();
         setStatus("Let's stay focused");
         setMessages(prev => [...prev, {
           id: crypto.randomUUID(),
@@ -794,10 +798,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     }
   }, [stopRecordingSilent, avatarState, handleMicPopupNo]);
 
-  // Keep handleNoResponseRef in sync
+  // Keep refs in sync with latest callbacks
   useEffect(() => {
     handleNoResponseRef.current = handleNoResponse;
   }, [handleNoResponse]);
+  useEffect(() => {
+    stopRecordingSilentRef.current = stopRecordingSilent;
+  }, [stopRecordingSilent]);
 
   // WebSocket connection
   const connect = useCallback(() => {

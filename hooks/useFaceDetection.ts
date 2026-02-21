@@ -61,7 +61,8 @@ export function useFaceDetection(config?: UseFaceDetectionConfig) {
     videoRef.current = video;
   }, []);
 
-  // Initialize MediaPipe models
+  // Initialize MediaPipe models + start processing loop (merged into one effect
+  // so the loop starts immediately after models load — refs can't trigger effects)
   useEffect(() => {
     if (!enabled) return;
     let mounted = true;
@@ -188,73 +189,73 @@ export function useFaceDetection(config?: UseFaceDetectionConfig) {
           }
         }
 
-        if (mounted) isLoadingRef.current = false;
+        if (mounted) {
+          isLoadingRef.current = false;
+          // Start processing loop immediately after models are ready
+          startProcessingLoop();
+        }
       } catch (err) {
         console.error("[FACE_DETECTION] Init error:", err);
         if (mounted) isLoadingRef.current = false;
       }
     };
 
+    // Processing loop — sends video frames to MediaPipe at low FPS
+    const startProcessingLoop = () => {
+      if (processingRef.current) return; // Already running
+      processingRef.current = true;
+      let lastFaceDetectTime = 0;
+      let lastGazeTime = 0;
+      const FACE_DETECT_INTERVAL = 3000;
+      const GAZE_CHECK_INTERVAL = 3000;
+      let retryCount = 0;
+
+      const processFrame = async (timestamp: number) => {
+        if (!processingRef.current || !mounted) return;
+
+        if (!videoRef.current) {
+          retryCount++;
+          if (retryCount < 30) animationFrameRef.current = requestAnimationFrame(processFrame);
+          else processingRef.current = false;
+          return;
+        }
+
+        const video = videoRef.current;
+        if (video.readyState < 2 || video.videoWidth === 0) {
+          animationFrameRef.current = requestAnimationFrame(processFrame);
+          return;
+        }
+
+        if (timestamp - lastFaceDetectTime >= FACE_DETECT_INTERVAL && faceDetectorRef.current) {
+          lastFaceDetectTime = timestamp;
+          try { await faceDetectorRef.current.send({ image: video }); } catch {}
+        }
+
+        if (enableGazeTracking && faceMeshRef.current && timestamp - lastGazeTime >= GAZE_CHECK_INTERVAL) {
+          lastGazeTime = timestamp;
+          try { await faceMeshRef.current.send({ image: video }); } catch {}
+        }
+
+        animationFrameRef.current = requestAnimationFrame(processFrame);
+      };
+
+      animationFrameRef.current = requestAnimationFrame(processFrame);
+      console.log("[FACE_DETECTION] Processing loop started");
+    };
+
     initialize();
 
     return () => {
       mounted = false;
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      faceDetectorRef.current?.close();
-      faceDetectorRef.current = null;
-      faceMeshRef.current?.close();
-      faceMeshRef.current = null;
-    };
-  }, [enabled, enableGazeTracking]);
-
-  // Process video frames at very low FPS (every 3 seconds)
-  useEffect(() => {
-    if (!enabled || !faceDetectorRef.current || isLoadingRef.current || processingRef.current) return;
-
-    processingRef.current = true;
-    let lastFaceDetectTime = 0;
-    let lastGazeTime = 0;
-    const FACE_DETECT_INTERVAL = 3000;
-    const GAZE_CHECK_INTERVAL = 3000;
-    let retryCount = 0;
-
-    const processFrame = async (timestamp: number) => {
-      if (!processingRef.current) return;
-
-      if (!videoRef.current) {
-        retryCount++;
-        if (retryCount < 30) animationFrameRef.current = requestAnimationFrame(processFrame);
-        else processingRef.current = false;
-        return;
-      }
-
-      const video = videoRef.current;
-      if (video.readyState < 2 || video.videoWidth === 0) {
-        animationFrameRef.current = requestAnimationFrame(processFrame);
-        return;
-      }
-
-      if (timestamp - lastFaceDetectTime >= FACE_DETECT_INTERVAL && faceDetectorRef.current) {
-        lastFaceDetectTime = timestamp;
-        try { await faceDetectorRef.current.send({ image: video }); } catch {}
-      }
-
-      if (enableGazeTracking && faceMeshRef.current && timestamp - lastGazeTime >= GAZE_CHECK_INTERVAL) {
-        lastGazeTime = timestamp;
-        try { await faceMeshRef.current.send({ image: video }); } catch {}
-      }
-
-      animationFrameRef.current = requestAnimationFrame(processFrame);
-    };
-
-    animationFrameRef.current = requestAnimationFrame(processFrame);
-
-    return () => {
       processingRef.current = false;
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
+      faceDetectorRef.current?.close();
+      faceDetectorRef.current = null;
+      faceMeshRef.current?.close();
+      faceMeshRef.current = null;
     };
   }, [enabled, enableGazeTracking]);
 
