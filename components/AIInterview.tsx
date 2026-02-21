@@ -25,6 +25,7 @@ export default function AIInterview() {
   const router = useRouter();
   const { user, isTenantAdmin } = useAuth();
   const canRunAiInterviews = isTenantAdmin || (user?.permissions?.canRunAiInterviews ?? false);
+  const { available: aiInterviewAvailable } = usePlanFeature('ai_interview');
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);

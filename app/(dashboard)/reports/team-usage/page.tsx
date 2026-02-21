@@ -2,6 +2,7 @@
 
 import { Activity, Users, TrendingUp, BarChart3, Download, Filter, Calendar } from 'lucide-react';
 import { useState } from 'react';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 const mockTeamUsage = [
   { id: '1', name: 'John Admin', role: 'Admin', resumesScored: 145, assessmentsCreated: 12, interviews: 8, lastActive: '2 min ago' },
@@ -21,6 +22,7 @@ export default function TeamUsagePage() {
   };
 
   return (
+    <FeatureGate feature="teams">
     <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
@@ -140,5 +142,6 @@ export default function TeamUsagePage() {
         </div>
       </div>
     </main>
+    </FeatureGate>
   );
 }

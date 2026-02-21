@@ -1,8 +1,12 @@
+'use client';
+
 import { X, Upload, File, Trash2, FolderPlus, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, CreditCard, Target, Eye } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
 import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
+import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { toast } from 'sonner';
 import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 import ErrorModal from './ErrorModal';
 
@@ -72,6 +76,14 @@ interface UploadModalProps {
 }
 
 export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onUploadComplete, onCreateFolder, onViewResume, onScoreResume, onDuplicateDetected, targetFolder }: UploadModalProps) {
+  const { available: resumeUploadAvailable } = usePlanFeature('resume_upload');
+
+  if (!resumeUploadAvailable) {
+    toast.error('Resume Storage is not available in your plan');
+    onClose?.();
+    return null;
+  }
+
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadSuccess, setUploadSuccess] = useState<{ resumeId: string; candidateName: string } | null>(null);
