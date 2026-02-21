@@ -13,6 +13,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
+import { useRazorpay } from '@/lib/hooks/useRazorpay';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -188,11 +189,10 @@ interface TransactionResult {
   auto_apply_date?: string;
   current_plan_expires?: string;
   message?: string;
-  stripe?: {
-    payment_intent_id: string;
-    subscription_id: string;
+  razorpay?: {
+    payment_id: string;
+    order_id: string;
     status: string;
-    payment_method: string;
   };
 }
 
@@ -454,6 +454,9 @@ function CurrentPlanContent() {
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
 
+  // Check if user already has dedicated database isolation (cannot be downgraded)
+  const hasDedicatedDatabase = sharedQuotaData?.plan_info?.isolation_type?.toUpperCase() === 'DATABASE';
+
   // Get encoded plan from URL (from login redirect after signup)
   const encodedPlanFromUrl = searchParams.get('plan');
 
@@ -501,6 +504,8 @@ function CurrentPlanContent() {
     targetPlan?: DisplayPlan;
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Partial<PaymentFormData>>({});
+  const [paymentStep, setPaymentStep] = useState<string>('');
+  const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
 
   // Plan settings from admin API (yearly discount, database extra charge)
   const [planSettings, setPlanSettings] = useState<PlanSettings | null>(null);
@@ -977,6 +982,8 @@ function CurrentPlanContent() {
         body: JSON.stringify({
           queued_upgrade_id: selectedQueuedUpgrade.id,
           terms_accepted: true,
+          user_id: user?.id,
+          user_email: user?.email,
         }),
       });
 
@@ -1007,6 +1014,9 @@ function CurrentPlanContent() {
         setShowTCModal(false);
         setSelectedQueuedUpgrade(null);
         setTcAccepted(false);
+
+        // Refresh notifications before logout so bell updates during toast
+        window.dispatchEvent(new CustomEvent('notificationTrigger'));
 
         // Plan upgraded successfully - logout and redirect to login
         // This ensures user gets fresh session with new plan data
@@ -1060,7 +1070,9 @@ function CurrentPlanContent() {
 
       const token = localStorage.getItem('accessToken');
       const reasonParam = encodeURIComponent(cancelReason.trim() || 'Cancelled by user');
-      const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}?reason=${reasonParam}`, {
+      const userIdParam = user?.id ? `&user_id=${encodeURIComponent(user.id)}` : '';
+      const userEmailParam = user?.email ? `&user_email=${encodeURIComponent(user.email)}` : '';
+      const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}?reason=${reasonParam}${userIdParam}${userEmailParam}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1277,7 +1289,7 @@ function CurrentPlanContent() {
     // It's an upgrade or same tier - proceed normally
     setSelectedPlanForPayment(plan);
     setModalStep('isolation');
-    setIsolationType('schema'); // Default to schema (checkbox unchecked)
+    setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
     setIsNewTenant(false); // Always use existing
     // Keep the current billing period toggle state (isYearly remains as-is)
     setTransactionResult(null);
@@ -1307,36 +1319,27 @@ function CurrentPlanContent() {
       setSuccessMessage(null);
 
       const token = localStorage.getItem('accessToken');
-      const apiUrl = `${API_URL}/subscription/${tenantId}/select-plan`;
 
-      // Request body per API spec - use correct plan_id based on billing period AND availability
-      // If user selects yearly but only monthly exists, use monthly plan ID and MONTHLY interval
-      // If user selects monthly but only yearly exists, use yearly plan ID and ANNUAL interval
+      // Determine plan ID and billing interval
       const hasAnnual = !!selectedPlanForPayment.annualPlanId;
       const hasMonthly = !!selectedPlanForPayment.monthlyPlanId;
 
-      // Determine actual billing interval based on availability
       let actualBillingInterval: 'ANNUAL' | 'MONTHLY';
       let planId: number;
 
       if (isYearly && hasAnnual) {
-        // User wants yearly and it's available
         actualBillingInterval = 'ANNUAL';
         planId = selectedPlanForPayment.annualPlanId!;
       } else if (!isYearly && hasMonthly) {
-        // User wants monthly and it's available
         actualBillingInterval = 'MONTHLY';
         planId = selectedPlanForPayment.monthlyPlanId!;
       } else if (hasAnnual) {
-        // Only annual available (user wanted monthly but it's not available)
         actualBillingInterval = 'ANNUAL';
         planId = selectedPlanForPayment.annualPlanId!;
       } else if (hasMonthly) {
-        // Only monthly available (user wanted yearly but it's not available)
         actualBillingInterval = 'MONTHLY';
         planId = selectedPlanForPayment.monthlyPlanId!;
       } else {
-        // Fallback to numericId (shouldn't happen with proper validation)
         actualBillingInterval = isYearly ? 'ANNUAL' : 'MONTHLY';
         planId = selectedPlanForPayment.numericId;
       }
@@ -1350,27 +1353,83 @@ function CurrentPlanContent() {
         selectedPlanId: planId,
       });
 
-      const requestBody = {
-        plan_id: planId,
-        schema_per_tenant: isolationType === 'schema',
-        database_per_tenant: isolationType === 'database',
-        external_transaction_id: transactionId,
-        billing_interval: actualBillingInterval,
-      };
-
-      console.log('Calling API:', apiUrl);
-      console.log('Auth - Token exists:', !!token);
-      console.log('Request body:', requestBody);
-
       if (!token) {
         setError('Authentication token not found. Please login again.');
         setIsSelectingPlan(false);
         return;
       }
 
-      // Call billing API with Bearer token and timeout
+      // Step 1: Create Razorpay order
+      setPaymentStep('Creating order...');
+      let razorpayFields: { razorpay_payment_id?: string; razorpay_order_id?: string; razorpay_signature?: string } = {};
+
+      // Only create Razorpay order for paid plans (price > 0)
+      const planPrice = selectedPlanForPayment.price || 0;
+      if (planPrice > 0) {
+        const orderResponse = await fetch(`${API_URL}/subscription/${tenantId}/create-order`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            plan_id: planId,
+            billing_interval: actualBillingInterval,
+          }),
+        });
+
+        const orderData = await orderResponse.json();
+        if (!orderResponse.ok) {
+          throw new Error(orderData.detail || 'Failed to create payment order');
+        }
+
+        // Step 2: Open Razorpay checkout modal
+        setPaymentStep('Opening payment gateway...');
+        try {
+          const razorpayResult = await openCheckout({
+            orderId: orderData.order_id,
+            amount: orderData.amount,
+            currency: orderData.currency,
+            planName: orderData.plan_name || selectedPlanForPayment.name,
+            userName: user?.full_name || user?.email?.split('@')[0],
+            userEmail: user?.email,
+          });
+          razorpayFields = {
+            razorpay_payment_id: razorpayResult.razorpay_payment_id,
+            razorpay_order_id: razorpayResult.razorpay_order_id,
+            razorpay_signature: razorpayResult.razorpay_signature,
+          };
+        } catch (rzpErr: any) {
+          if (rzpErr.message?.includes('cancelled')) {
+            toast.info('Payment cancelled', { description: 'You can try again anytime.' });
+          } else {
+            toast.error('Payment failed', { description: rzpErr.message });
+          }
+          setIsSelectingPlan(false);
+          setPaymentStep('');
+          return;
+        }
+      }
+
+      // Step 3: Call select-plan with Razorpay verification details
+      setPaymentStep('Verifying payment...');
+      const apiUrl = `${API_URL}/subscription/${tenantId}/select-plan`;
+      const requestBody = {
+        plan_id: planId,
+        schema_per_tenant: isolationType === 'schema',
+        database_per_tenant: isolationType === 'database',
+        external_transaction_id: transactionId,
+        billing_interval: actualBillingInterval,
+        user_id: user?.id,
+        user_email: user?.email,
+        ...razorpayFields,
+      };
+
+      console.log('Calling API:', apiUrl);
+      console.log('Request body:', requestBody);
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
 
       let response;
       let data;
@@ -1402,6 +1461,20 @@ function CurrentPlanContent() {
         setTransactionResult(result);
         setModalStep('result');
 
+        // Queue audit verification for plan activation (non-blocking)
+        try {
+          const mod = await import('@/lib/services/auditVerificationService');
+          mod.auditVerificationService.storePendingVerification({
+            action: result.queued ? 'plan_upgrade' : 'subscription_upgrade',
+            entity_type: 'subscription',
+            entity_id: String(planId),
+            user_id: user?.id,
+            user_email: user?.email,
+            timestamp: new Date().toISOString(),
+          });
+          console.log('[AuditVerification] Queued plan purchase verification');
+        } catch (e) { console.warn('[AuditVerification] Failed to queue:', e); }
+
         // PS02 Fix: Show toast notification for payment success
         if (result.queued) {
           toast.success('Payment successful! Upgrade queued.', {
@@ -1428,6 +1501,9 @@ function CurrentPlanContent() {
             duration: 3000,
           });
 
+          // Refresh notifications before logout so bell updates during toast
+          window.dispatchEvent(new CustomEvent('notificationTrigger'));
+
           // Wait a moment for the toast to show, then logout
           setTimeout(() => {
             logout();
@@ -1439,8 +1515,9 @@ function CurrentPlanContent() {
         // Refresh data after queued upgrade
         await fetchData();
 
-        // Notify Header component to refresh quota/plan display
+        // Notify Header component to refresh quota/plan display and notifications
         window.dispatchEvent(new CustomEvent('planChanged'));
+        window.dispatchEvent(new CustomEvent('notificationTrigger'));
       } else {
         // Handle both string and object error formats
         const errorDetail = data.detail;
@@ -1495,6 +1572,7 @@ function CurrentPlanContent() {
       });
     } finally {
       setIsSelectingPlan(false);
+      setPaymentStep('');
     }
   };
 
@@ -1585,7 +1663,7 @@ function CurrentPlanContent() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col items-center justify-center py-20">
             <Loader2 className="w-12 h-12 text-gray-500 animate-spin" />
@@ -1623,7 +1701,7 @@ function CurrentPlanContent() {
     const colors = statusColors[tenantStatus.status as keyof typeof statusColors] || statusColors.PENDING;
 
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="mb-8">
@@ -1632,20 +1710,20 @@ function CurrentPlanContent() {
                 <CreditCard className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Current Plan</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Current Plan</h1>
                 <p className="text-sm text-gray-600">Manage your subscription and billing</p>
               </div>
             </div>
           </div>
 
           {/* Account Status Banner */}
-          <div className={`${colors.bg} border-2 ${colors.border} rounded-xl p-8 mb-8`}>
-            <div className="flex items-start gap-4">
-              <div className={`w-12 h-12 ${colors.bg} rounded-full flex items-center justify-center flex-shrink-0`}>
-                <Clock className={`w-6 h-6 ${colors.icon}`} />
+          <div className={`${colors.bg} border-2 ${colors.border} rounded-xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8`}>
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className={`w-10 h-10 sm:w-12 sm:h-12 ${colors.bg} rounded-full flex items-center justify-center flex-shrink-0`}>
+                <Clock className={`w-5 h-5 sm:w-6 sm:h-6 ${colors.icon}`} />
               </div>
-              <div className="flex-1">
-                <h3 className={`text-xl font-semibold ${colors.text} mb-2`}>
+              <div className="flex-1 min-w-0">
+                <h3 className={`text-base sm:text-lg lg:text-xl font-semibold ${colors.text} mb-1.5 sm:mb-2`}>
                   {tenantStatus.status === 'PENDING' ? 'Account Activation Pending' :
                    tenantStatus.status === 'SUSPENDED' ? 'Account Suspended' :
                    tenantStatus.status === 'LOCKED' ? 'Account Locked' : 'Account Status'}
@@ -1671,17 +1749,17 @@ function CurrentPlanContent() {
                     </>
                   )}
                 </div>
-                <div className="mt-6 flex gap-3">
+                <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3">
                   <button
                     onClick={() => fetchData()}
-                    className="px-4 py-2 bg-white border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                    className="px-3 sm:px-4 py-2 bg-white border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-sm"
                   >
                     <Loader2 className="w-4 h-4" />
                     Refresh Status
                   </button>
                   <a
                     href="mailto:support@talentflow.com"
-                    className={`px-4 py-2 ${colors.text} underline flex items-center gap-2`}
+                    className={`px-3 sm:px-4 py-2 ${colors.text} underline flex items-center justify-center gap-2 text-sm`}
                   >
                     <Mail className="w-4 h-4" />
                     Contact Support
@@ -1696,7 +1774,7 @@ function CurrentPlanContent() {
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -1705,7 +1783,7 @@ function CurrentPlanContent() {
               <CreditCard className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">Current Plan</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Current Plan</h1>
               <p className="text-sm text-gray-600">Manage your subscription and billing</p>
             </div>
           </div>
@@ -1727,12 +1805,12 @@ function CurrentPlanContent() {
 
         {/* Account Locked Warning */}
         {isLocked && (
-          <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6 mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <Lock className="w-8 h-8 text-red-500" />
+          <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
+            <div className="flex items-start sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+              <Lock className="w-6 h-6 sm:w-8 sm:h-8 text-red-500 flex-shrink-0" />
               <div>
-                <h3 className="text-lg font-semibold text-red-700">Account Locked</h3>
-                <p className="text-red-600">Your trial has ended and payment was not completed. Please select a plan and complete payment to continue.</p>
+                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-red-700">Account Locked</h3>
+                <p className="text-red-600 text-xs sm:text-sm">Your trial has ended and payment was not completed. Please select a plan and complete payment to continue.</p>
               </div>
             </div>
           </div>
@@ -1740,40 +1818,40 @@ function CurrentPlanContent() {
 
         {/* Pending Payment Card */}
         {isPendingPayment && selectedPlan && (
-          <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <Clock className="w-8 h-8 text-orange-500" />
+          <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 sm:mb-4 gap-2">
+              <div className="flex items-start sm:items-center gap-2 sm:gap-3">
+                <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-orange-500 flex-shrink-0" />
                 <div>
-                  <h3 className="text-lg font-semibold text-orange-700">Payment Pending</h3>
-                  <p className="text-orange-600">
+                  <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-orange-700">Payment Pending</h3>
+                  <p className="text-orange-600 text-xs sm:text-sm">
                     Complete payment for <strong>{selectedPlan.name}</strong> - {formatCurrency(selectedPlan.price || 0, selectedPlan.currency)}
                   </p>
                 </div>
               </div>
             </div>
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
               <button
                 onClick={() => handleSimulatePayment(true)}
                 disabled={isProcessingPayment}
-                className="flex-1 bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 bg-green-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
               >
                 {isProcessingPayment ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
                 ) : (
-                  <CheckCircle className="w-5 h-5" />
+                  <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 )}
                 Confirm Payment Success
               </button>
               <button
                 onClick={() => handleSimulatePayment(false)}
                 disabled={isProcessingPayment}
-                className="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 bg-red-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
               >
                 {isProcessingPayment ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
                 ) : (
-                  <XCircle className="w-5 h-5" />
+                  <XCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 )}
                 Payment Failed
               </button>
@@ -1782,11 +1860,11 @@ function CurrentPlanContent() {
         )}
 
         {/* Current Plan Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Your Current Plan</h2>
-              <p className="text-sm text-gray-600">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-2 sm:gap-0">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900">Your Current Plan</h2>
+              <p className="text-xs sm:text-sm text-gray-600">
                 {isLocked
                   ? 'Your account is locked. Please select a plan and complete payment.'
                   : isOnTrial
@@ -1801,21 +1879,21 @@ function CurrentPlanContent() {
                 }
               </p>
             </div>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${statusBadge.bg} ${statusBadge.text} flex items-center gap-2`}>
-              <StatusIcon className="w-4 h-4" />
+            <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium ${statusBadge.bg} ${statusBadge.text} flex items-center gap-1.5 sm:gap-2 w-fit`}>
+              <StatusIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               {statusBadge.label}
             </span>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">Plan</p>
-              <p className="text-xl font-semibold text-gray-900">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 lg:gap-6">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+              <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Plan</p>
+              <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial ? 'Free Trial' : (companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || '-')}
               </p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">Price</p>
-              <p className="text-xl font-semibold text-gray-900">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+              <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Price</p>
+              <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial ? (
                   'Free'
                 ) : currentPlanPrice !== null && currentPlanPrice > 0 ? (
@@ -1827,11 +1905,11 @@ function CurrentPlanContent() {
                 )}
               </p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+              <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
                 {isOnTrial ? 'Trial Started' : 'Plan Start'}
               </p>
-              <p className="text-xl font-semibold text-gray-900">
+              <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial
                   ? (companySettings?.trial_start_date
                       ? formatDate(companySettings.trial_start_date)
@@ -1842,11 +1920,11 @@ function CurrentPlanContent() {
                 }
               </p>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-1">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+              <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
                 {isOnTrial ? 'Trial Ends' : 'Plan Expires'}
               </p>
-              <p className="text-xl font-semibold text-gray-900">
+              <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial
                   ? (companySettings?.trial_end_date
                       ? formatDate(companySettings.trial_end_date)
@@ -1867,13 +1945,13 @@ function CurrentPlanContent() {
               // If no expiry date but status is expired, show expired banner directly
               if (!companySettings?.plan_expiry_date && isExpiredSubscription) {
                 return (
-                  <div className="mt-6 p-4 rounded-lg border-2 bg-red-50 border-red-300">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <AlertCircle className="w-6 h-6 text-red-600" />
+                  <div className="mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border-2 bg-red-50 border-red-300">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-start sm:items-center gap-2 sm:gap-3">
+                        <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 flex-shrink-0" />
                         <div>
-                          <h4 className="font-medium text-red-800">Plan Expired</h4>
-                          <p className="text-sm text-red-700">
+                          <h4 className="font-medium text-red-800 text-sm sm:text-base">Plan Expired</h4>
+                          <p className="text-xs sm:text-sm text-red-700">
                             Your {planName} plan has expired. Please renew to continue using all features.
                           </p>
                         </div>
@@ -1883,14 +1961,14 @@ function CurrentPlanContent() {
                           onClick={() => {
                             setSelectedPlanForPayment(currentPlan);
                             setModalStep('isolation');
-                            setIsolationType('schema');
+                            setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
                             setIsNewTenant(false);
                             setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
                             setTransactionResult(null);
                             setError(null);
                             setShowPaymentModal(true);
                           }}
-                          className="px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white"
+                          className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm w-full sm:w-auto justify-center flex-shrink-0"
                         >
                           <ArrowRight className="w-4 h-4" />
                           Renew Current Plan
@@ -1909,23 +1987,23 @@ function CurrentPlanContent() {
 
               if (isExpired || isExpiringSoon) {
                 return (
-                  <div className={`mt-6 p-4 rounded-lg border-2 ${
+                  <div className={`mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border-2 ${
                     isExpired
                       ? 'bg-red-50 border-red-300'
                       : 'bg-amber-50 border-amber-300'
                   }`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <AlertCircle className={`w-6 h-6 ${
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-start sm:items-center gap-2 sm:gap-3">
+                        <AlertCircle className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 ${
                           isExpired ? 'text-red-600' : 'text-amber-600'
                         }`} />
                         <div>
-                          <h4 className={`font-medium ${
+                          <h4 className={`font-medium text-sm sm:text-base ${
                             isExpired ? 'text-red-800' : 'text-amber-800'
                           }`}>
                             {isExpired ? 'Plan Expired' : 'Plan Expiring Soon'}
                           </h4>
-                          <p className={`text-sm ${
+                          <p className={`text-xs sm:text-sm ${
                             isExpired ? 'text-red-700' : 'text-amber-700'
                           }`}>
                             {isExpired
@@ -1940,14 +2018,14 @@ function CurrentPlanContent() {
                           onClick={() => {
                             setSelectedPlanForPayment(currentPlan);
                             setModalStep('isolation');
-                            setIsolationType('schema');
+                            setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
                             setIsNewTenant(false);
                             setIsYearly(currentPlanBillingPeriod?.toUpperCase() === 'ANNUAL');
                             setTransactionResult(null);
                             setError(null);
                             setShowPaymentModal(true);
                           }}
-                          className={`px-5 py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                          className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto justify-center flex-shrink-0 ${
                             isExpired
                               ? 'bg-red-600 hover:bg-red-700 text-white'
                               : 'bg-amber-600 hover:bg-amber-700 text-white'
@@ -1968,40 +2046,40 @@ function CurrentPlanContent() {
           {/* Quotas - Using data from quota-status API via companySettings */}
           {companySettings && (
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <h3 className="text-sm font-medium text-gray-700 mb-4">Your Plan Limits</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">
+              <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-3 sm:mb-4">Your Plan Limits</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                  <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_seats)}
                   </p>
                   <p className="text-xs text-gray-600">Team Seats</p>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                  <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_jobs)}
                   </p>
                   <p className="text-xs text-gray-600">Job Postings</p>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                  <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_resume_uploads)}
                   </p>
                   <p className="text-xs text-gray-600">Resume Storage</p>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                  <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_resume_searches)}
                   </p>
                   <p className="text-xs text-gray-600">Resume Scores</p>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                  <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_assessments)}
                   </p>
                   <p className="text-xs text-gray-600">Assessments</p>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <p className="text-2xl font-semibold text-gray-900">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                  <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_ai_interviews)}
                   </p>
                   <p className="text-xs text-gray-600">AI Interviews</p>
@@ -2119,24 +2197,24 @@ function CurrentPlanContent() {
 
         {/* Queued Upgrades Section */}
         {queuedUpgrades.length > 0 && (
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-6 mb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <Clock className="w-8 h-8 text-amber-600" />
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
+            <div className="flex items-start sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600 flex-shrink-0" />
               <div>
-                <h3 className="text-lg font-semibold text-amber-800">Pending Upgrades</h3>
-                <p className="text-sm text-amber-700">
+                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-amber-800">Pending Upgrades</h3>
+                <p className="text-xs sm:text-sm text-amber-700">
                   You have {queuedUpgrades.length} queued upgrade{queuedUpgrades.length > 1 ? 's' : ''} waiting to be applied
                 </p>
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {queuedUpgrades.map((upgrade) => (
-                <div key={upgrade.id} className="bg-white rounded-lg p-4 border border-amber-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Package className="w-5 h-5 text-gray-600" />
+                <div key={upgrade.id} className="bg-white rounded-lg p-3 sm:p-4 border border-amber-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 sm:gap-2 mb-2 flex-wrap">
+                        <Package className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                         <span className="font-semibold text-gray-900">{upgrade.new_plan_name}</span>
                         <Badge className="bg-amber-100 text-amber-700 text-xs">
                           {upgrade.status === 'SCHEDULED' ? 'Scheduled' : 'Queued'}
@@ -2147,7 +2225,7 @@ function CurrentPlanContent() {
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-xs sm:text-sm">
                         {upgrade.payment_amount !== undefined && (
                           <div>
                             <span className="text-gray-500">Amount Paid:</span>
@@ -2179,16 +2257,16 @@ function CurrentPlanContent() {
                         <p className="text-xs text-gray-500 mt-2">Reason: {upgrade.reason}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 ml-4">
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => {
                           setSelectedQueuedUpgrade(upgrade);
                           setTcAccepted(false);
                           setShowTCModal(true);
                         }}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-2"
+                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-green-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-1.5 sm:gap-2"
                       >
-                        <Zap className="w-4 h-4" />
+                        <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         Apply Now
                       </button>
                       {upgrade.can_cancel !== false && (
@@ -2199,9 +2277,9 @@ function CurrentPlanContent() {
                             setShowCancelModal(true);
                           }}
                           disabled={isCancellingUpgrade}
-                          className="px-4 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition-colors flex items-center gap-2"
+                          className="px-3 sm:px-4 py-1.5 sm:py-2 bg-red-100 text-red-700 rounded-lg text-xs sm:text-sm font-medium hover:bg-red-200 transition-colors flex items-center gap-1.5 sm:gap-2"
                         >
-                          <XCircle className="w-4 h-4" />
+                          <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           Cancel
                         </button>
                       )}
@@ -2221,19 +2299,19 @@ function CurrentPlanContent() {
         {/* Available Plans - Hidden for Billing Manager (RBAC03) */}
         {!isBillingManager && plans.length > 0 && (
           <>
-            <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 text-center">
+            <div className="mb-4 sm:mb-6">
+              <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-gray-900 text-center">
                 {isOnTrial || isLocked ? 'Choose a Plan' : 'Available Plans'}
               </h2>
               {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
-                <p className="text-sm text-amber-600 text-center mt-2">
+                <p className="text-xs sm:text-sm text-amber-600 text-center mt-2">
                   You have a pending upgrade queued. Cancel it above or apply it now to select a different plan.
                 </p>
               )}
 
               {/* Billing Period Toggle - No common discount, each plan shows its own */}
-              <div className="flex items-center justify-center gap-4 mt-6">
-                <span className={`text-lg ${!isYearly ? "text-gray-900 font-medium" : "text-gray-500"}`}>
+              <div className="flex items-center justify-center gap-3 sm:gap-4 mt-4 sm:mt-6">
+                <span className={`text-sm sm:text-base lg:text-lg ${!isYearly ? "text-gray-900 font-medium" : "text-gray-500"}`}>
                   Monthly
                 </span>
                 <button
@@ -2251,16 +2329,16 @@ function CurrentPlanContent() {
                     }`}
                   />
                 </button>
-                <span className={`text-lg ${isYearly ? "text-gray-900 font-medium" : "text-gray-500"}`}>
+                <span className={`text-sm sm:text-base lg:text-lg ${isYearly ? "text-gray-900 font-medium" : "text-gray-500"}`}>
                   Yearly
                 </span>
               </div>
             </div>
             <div
-              className={`grid gap-8 pt-8 max-w-6xl mx-auto ${
-                plans.length === 1 ? 'md:grid-cols-1 max-w-md' :
-                plans.length === 2 ? 'md:grid-cols-2 max-w-3xl' :
-                'md:grid-cols-3'
+              className={`grid gap-4 sm:gap-6 lg:gap-8 pt-4 sm:pt-6 lg:pt-8 max-w-6xl mx-auto ${
+                plans.length === 1 ? 'grid-cols-1 max-w-md' :
+                plans.length === 2 ? 'grid-cols-1 sm:grid-cols-2 max-w-3xl' :
+                'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
               }`}
               style={{ gridAutoRows: '1fr' }}
               onMouseLeave={() => setHoveredPlan(null)}
@@ -2291,7 +2369,7 @@ function CurrentPlanContent() {
                     }}
                   >
                   <Card
-                    className={`relative p-8 flex flex-col w-full transition-all duration-300 ease-out ${
+                    className={`relative p-4 sm:p-6 lg:p-8 flex flex-col w-full transition-all duration-300 ease-out ${
                       isSelectedPending
                         ? "border-2 border-orange-500 shadow-xl"
                         : isCurrentForToggle
@@ -2325,14 +2403,14 @@ function CurrentPlanContent() {
                       </div>
                     )}
 
-                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${plan.gradient} flex items-center justify-center mb-6`}>
-                      <Icon className="w-7 h-7 text-white" />
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-xl sm:rounded-2xl bg-gradient-to-br ${plan.gradient} flex items-center justify-center mb-3 sm:mb-4 lg:mb-6`}>
+                      <Icon className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white" />
                     </div>
 
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
-                    <p className="text-gray-600 mb-6 min-h-[48px]">{plan.description}</p>
+                    <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">{plan.name}</h3>
+                    <p className="text-gray-600 mb-3 sm:mb-4 lg:mb-6 min-h-[36px] sm:min-h-[48px] text-xs sm:text-sm">{plan.description}</p>
 
-                    <div className="mb-6">
+                    <div className="mb-3 sm:mb-4 lg:mb-6">
                       {(plan.monthlyPrice || plan.annualPrice) ? (
                         <div>
                           <div className="flex items-baseline gap-1">
@@ -2706,22 +2784,38 @@ function CurrentPlanContent() {
                 )}
 
                 {/* Dedicated Database Checkbox - Available for both Monthly and Annual */}
-                <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
-                  isolationType === 'database' ? 'border-amber-500 bg-amber-50' : 'border-gray-200 hover:bg-gray-50'
+                <label className={`flex items-start gap-3 p-4 border-2 rounded-xl transition-colors ${
+                  hasDedicatedDatabase
+                    ? 'border-amber-500 bg-amber-50 cursor-not-allowed opacity-80'
+                    : isolationType === 'database'
+                      ? 'border-amber-500 bg-amber-50 cursor-pointer'
+                      : 'border-gray-200 hover:bg-gray-50 cursor-pointer'
                 }`}>
                   <input
                     type="checkbox"
                     checked={isolationType === 'database'}
-                    onChange={(e) => setIsolationType(e.target.checked ? 'database' : 'schema')}
-                    className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500"
+                    onChange={(e) => {
+                      if (!hasDedicatedDatabase) {
+                        setIsolationType(e.target.checked ? 'database' : 'schema');
+                      }
+                    }}
+                    disabled={hasDedicatedDatabase}
+                    className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500 disabled:cursor-not-allowed"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <Database className="w-5 h-5 text-amber-600" />
                       <span className="font-medium text-gray-900">Dedicated Database</span>
+                      {hasDedicatedDatabase && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                          Active
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-gray-500 mt-1">
-                      Get your own dedicated database for enhanced isolation and performance
+                      {hasDedicatedDatabase
+                        ? 'Your organization already uses a dedicated database. This cannot be changed.'
+                        : 'Get your own dedicated database for enhanced isolation and performance'}
                     </p>
                     <p className="text-sm text-amber-600 font-medium mt-1">
                       +{formatCurrency(planSettings?.databasePerTenantMonthlyPrice || 5000, selectedPlanForPayment?.currency || 'INR')}/month
@@ -2893,7 +2987,7 @@ function CurrentPlanContent() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Payment ID:</span>
-                        <span className="font-medium text-gray-500 text-xs">{transactionResult.stripe?.payment_intent_id}</span>
+                        <span className="font-medium text-gray-500 text-xs">{transactionResult.razorpay?.payment_id || transactionResult.external_transaction_id}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Status:</span>
@@ -3254,7 +3348,7 @@ function CurrentPlanContent() {
             if (downgradeWarningData.targetPlan) {
               setSelectedPlanForPayment(downgradeWarningData.targetPlan);
               setModalStep('isolation');
-              setIsolationType('schema');
+              setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
               setIsNewTenant(false);
               setTransactionResult(null);
               setError(null);

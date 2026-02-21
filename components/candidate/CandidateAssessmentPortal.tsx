@@ -162,9 +162,11 @@ type AssessmentStep =
 
 interface CandidateAssessmentPortalProps {
   token: string;
+  candidateName?: string;
+  role?: string;
 }
 
-export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalProps) {
+export function CandidateAssessmentPortal({ token, candidateName, role }: CandidateAssessmentPortalProps) {
   // State
   const [step, setStep] = useState<AssessmentStep>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -356,7 +358,7 @@ export function CandidateAssessmentPortal({ token }: CandidateAssessmentPortalPr
 
     try {
       setStepSafe('loading');
-      const info = await candidateService.getAssessmentInfo(token);
+      const info = await candidateService.getAssessmentInfo(token, candidateName, role);
 
       if (!isMountedRef.current) return;
 

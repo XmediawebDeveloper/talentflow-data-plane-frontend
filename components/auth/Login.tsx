@@ -3,10 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, KeyRound } from 'lucide-react';
+import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, KeyRound, Building2 } from 'lucide-react';
 import { User } from '@/lib/types/tenant';
 import { authService, isTwoFactorRequired, LoginResponse } from '@/lib/services';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
+import { detectSubdomain } from '@/lib/utils/subdomain';
 import ForgotPasswordModal from './ForgotPasswordModal';
 
 interface LoginProps {
@@ -31,6 +33,22 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const [isMobile, setIsMobile] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+
+  // Subdomain (tenant) detection
+  const [subdomain, setSubdomain] = useState<string | null>(null);
+
+  useEffect(() => {
+    const detected = detectSubdomain(new URLSearchParams(searchParams.toString()));
+    if (detected) {
+      setSubdomain(detected);
+      // Persist immediately so getLoginUrl() can find it at logout time,
+      // even if the user navigates away and the ?org= param is no longer in the URL.
+      if (typeof window !== 'undefined') {
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocalhost) localStorage.setItem('talentflow_subdomain', detected);
+      }
+    }
+  }, [searchParams]);
 
   // 2FA State
   const [show2FA, setShow2FA] = useState(false);
@@ -72,18 +90,51 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       avatarUrl: response.user.avatar_url,
       isActive: response.user.is_active,
       permissions: {
+        // Job Descriptions - Granular CRUD
+        canReadJD: response.user.permissions.can_view_jd,
         canCreateJD: response.user.permissions.can_create_jd,
+        canUpdateJD: response.user.permissions.can_update_jd,
+        canDeleteJD: response.user.permissions.can_delete_jd,
         canManageJD: response.user.permissions.can_manage_jd,
-        canUploadResumes: response.user.permissions.can_upload_resumes,
+        // Resumes - Granular CRUD
         canViewResumes: response.user.permissions.can_view_resumes,
+        canUploadResumes: response.user.permissions.can_upload_resumes,
+        canUpdateResumes: response.user.permissions.can_update_resumes,
+        canDeleteResumes: response.user.permissions.can_delete_resumes,
+        // Resume Database - Granular CRUD
         canAccessInternalDB: response.user.permissions.can_access_internal_db,
+        canViewInternalDB: response.user.permissions.can_view_internal_db,
+        // Assessments - Granular CRUD
+        canViewAssessments: response.user.permissions.can_view_assessments,
         canCreateAssessments: response.user.permissions.can_create_assessments,
+        canUpdateAssessments: response.user.permissions.can_update_assessments,
+        canDeleteAssessments: response.user.permissions.can_delete_assessments,
+        // Analytics & Reports
         canViewAnalytics: response.user.permissions.can_view_analytics,
+        // Settings & Admin
         canManageSettings: response.user.permissions.can_manage_settings,
         canManageUsers: response.user.permissions.can_manage_users,
+        // Billing permissions
+        canViewBilling: response.user.permissions.can_view_billing,
+        canViewInvoices: response.user.permissions.can_view_invoices,
+        canViewUsage: response.user.permissions.can_view_usage,
+        // Feature permissions
+        canViewScoring: response.user.permissions.can_view_scoring,
+        canRunScoring: response.user.permissions.can_run_scoring,
+        canRunAiInterviews: response.user.permissions.can_run_ai_interviews,
+        canViewAiMatch: response.user.permissions.can_view_ai_match,
+        canRunAiMatch: response.user.permissions.can_run_ai_match,
+        canBulkOperations: response.user.permissions.can_bulk_operations,
+        canExport: response.user.permissions.can_export,
+        canApiAccess: response.user.permissions.can_api_access,
       },
       lastLogin: response.user.last_login,
       createdAt: response.user.created_at,
+      // Feature flags and tenant status
+      featureFlags: response.user.feature_flags,
+      enabledFeatures: response.user.enabled_features,
+      tenantStatus: response.user.tenant_status,
+      tenantSubdomain: response.user.tenant_subdomain,
     };
 
     // Pass tenant name from login response
@@ -102,8 +153,29 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       console.error('Error saving remember me preference:', error);
     }
 
-    // Check if tenant has pending payment - redirect to payment page first
+    // Check if user must reset password (invite flow)
+    if (response.must_reset_password) {
+      router.push('/reset-password');
+      return;
+    }
+
+    // Check if tenant has pending payment - redirect to payment page with encoded params
     if (response.pending_payment && response.pending_payment_redirect) {
+      // Backend sends raw URL like /complete-payment?tenant_id=xxx&plan_id=63
+      // Encode the params so they're not visible in the URL
+      try {
+        const url = new URL(response.pending_payment_redirect, window.location.origin);
+        const rawTenantId = url.searchParams.get('tenant_id');
+        const rawPlanId = url.searchParams.get('plan_id');
+        if (rawTenantId && rawPlanId) {
+          const encodedUrl = `/complete-payment?t=${encodeURIComponent(encodeParam(rawTenantId))}&p=${encodeURIComponent(encodePlanId(rawPlanId))}`;
+          console.log('[LOGIN] Tenant has pending payment, redirecting to encoded URL');
+          router.push(encodedUrl);
+          return;
+        }
+      } catch {
+        // Fallback to raw URL if parsing fails
+      }
       console.log('[LOGIN] Tenant has pending payment, redirecting to:', response.pending_payment_redirect);
       router.push(response.pending_payment_redirect);
       return;
@@ -123,7 +195,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     setIsLoading(true);
 
     try {
-      const response = await authService.login({ email, password });
+      const response = await authService.login({ email, password, subdomain: subdomain || undefined });
 
       // Check if 2FA is required
       if (isTwoFactorRequired(response)) {
@@ -674,6 +746,25 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
               </>
             ) : (
               <>
+                {/* Tenant subdomain banner */}
+                {subdomain && (
+                  <div style={{
+                    marginBottom: '20px',
+                    padding: '10px 14px',
+                    backgroundColor: '#EFF6FF',
+                    border: '1px solid #BFDBFE',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}>
+                    <Building2 style={{ width: 16, height: 16, color: '#2563EB', flexShrink: 0 }} />
+                    <span style={{ fontSize: '13px', color: '#1D4ED8' }}>
+                      Signing in to <strong style={{ textTransform: 'capitalize' }}>{subdomain}</strong> workspace
+                    </span>
+                  </div>
+                )}
+
                 <h2 style={formTitleStyle}>Welcome Back</h2>
                 <p style={formSubtitleStyle}>Sign in to access your recruitment dashboard</p>
 
@@ -766,7 +857,8 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
             {/* Footer */}
             <div style={footerStyle}>
-              {onSwitchToSignUp && (
+              {/* Hide "Create Account" on subdomain — subdomain is login-only */}
+              {onSwitchToSignUp && !subdomain && (
                 <p style={footerTextStyle}>
                   Don't have an account?{' '}
                   <button type="button" onClick={onSwitchToSignUp} style={switchLinkStyle}>

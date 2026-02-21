@@ -24,13 +24,30 @@ export const QUOTA_TYPE_LABELS: Record<QuotaType, string> = {
   'storage_gb': 'Storage (GB)',
 };
 
+// Session data for session-based operations (AS/AIU)
+export interface SessionData {
+  error_origin?: 'TENANT' | 'SYSTEM' | 'NONE';
+  error_code?: string;
+  session_start_time?: string;
+  interruption_time?: string;
+  session_end_time?: string;
+}
+
 // Request body interface
 export interface RecordUsageRequest {
   quota_type: QuotaType;
   amount?: number;           // Default: 1
   operation_type?: string;   // e.g., "resume_upload", "resume_scoring"
   resource_id?: string;      // e.g., "resume-abc123"
+  user_id?: string;          // User who performed the action (for audit logging)
+  user_email?: string;       // User email (for audit logging)
   metadata?: Record<string, any>;  // Additional context
+  // Session tracking fields (Audit Logs & Error Codes doc)
+  error_origin?: 'TENANT' | 'SYSTEM' | 'NONE';
+  error_code?: string;
+  session_start_time?: string;
+  interruption_time?: string;
+  session_end_time?: string;
 }
 
 // Response interface
@@ -53,6 +70,23 @@ export interface RecordUsageResponse {
 const getAccessToken = (): string | null => {
   if (typeof window === 'undefined') return null;
   return localStorage.getItem('accessToken');
+};
+
+/**
+ * Get current user info from localStorage for audit logging
+ */
+const getCurrentUser = (): { user_id?: string; user_email?: string } => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const stored = localStorage.getItem('talentflow_user');
+    if (stored) {
+      const user = JSON.parse(stored);
+      return { user_id: user.id, user_email: user.email };
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return {};
 };
 
 /**
@@ -89,6 +123,14 @@ export async function recordUsage(request: RecordUsageRequest): Promise<RecordUs
   try {
     console.log('[UsageTracking] Recording usage:', request.quota_type, request.operation_type);
 
+    // Inject user_id and user_email for audit logging (if not already provided)
+    const userInfo = getCurrentUser();
+    const enrichedRequest = {
+      ...request,
+      user_id: request.user_id || userInfo.user_id,
+      user_email: request.user_email || userInfo.user_email,
+    };
+
     // Call backend proxy endpoint (which calls Admin API)
     const response = await fetch(`${API_URL}/usage/record`, {
       method: 'POST',
@@ -96,7 +138,7 @@ export async function recordUsage(request: RecordUsageRequest): Promise<RecordUs
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(request),
+      body: JSON.stringify(enrichedRequest),
     });
 
     // Handle 401 - logout and redirect
@@ -110,6 +152,20 @@ export async function recordUsage(request: RecordUsageRequest): Promise<RecordUs
     if (response.ok) {
       // Dispatch event to refresh header quota display
       dispatchUnitsConsumed();
+
+      // Auto-queue pending audit verification (non-blocking)
+      try {
+        const { auditVerificationService } = await import('./auditVerificationService');
+        auditVerificationService.storePendingVerification({
+          action: enrichedRequest.operation_type || 'usage_recorded',
+          entity_type: 'quota',
+          entity_id: enrichedRequest.resource_id,
+          user_id: enrichedRequest.user_id,
+          user_email: enrichedRequest.user_email,
+          timestamp: new Date().toISOString(),
+        });
+      } catch { /* non-critical */ }
+
       return {
         status: 'success',
         data: data.data || data,
@@ -154,22 +210,24 @@ export async function recordResumeScoring(resourceId?: string, metadata?: Record
 }
 
 // Assessment
-export async function recordAssessment(resourceId?: string, metadata?: Record<string, any>): Promise<RecordUsageResponse> {
+export async function recordAssessment(resourceId?: string, metadata?: Record<string, any>, sessionData?: SessionData): Promise<RecordUsageResponse> {
   return recordUsage({
     quota_type: 'AS',
     operation_type: 'assessment',
     resource_id: resourceId,
     metadata,
+    ...sessionData,
   });
 }
 
 // AI Interview
-export async function recordAIInterview(resourceId?: string, metadata?: Record<string, any>): Promise<RecordUsageResponse> {
+export async function recordAIInterview(resourceId?: string, metadata?: Record<string, any>, sessionData?: SessionData): Promise<RecordUsageResponse> {
   return recordUsage({
     quota_type: 'AIU',
     operation_type: 'ai_interview',
     resource_id: resourceId,
     metadata,
+    ...sessionData,
   });
 }
 

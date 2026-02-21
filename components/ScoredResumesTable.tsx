@@ -586,9 +586,10 @@ export default function ScoredResumesTable({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by name, email, or phone..."
-              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black palaceholder-gray-500 bg-white"
             />
           </div>
+          
 
           {/* Filter and Clear buttons row */}
           <div className="flex gap-2">
@@ -629,7 +630,7 @@ export default function ScoredResumesTable({
                 <select
                   value={filterMatchStatus}
                   onChange={(e) => setFilterMatchStatus(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 >
                   <option value="all">All Statuses</option>
                   <option value="Exact Match">Exact Match</option>
@@ -649,7 +650,7 @@ export default function ScoredResumesTable({
                     min="0"
                     max="100"
                     placeholder="Min"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+                    className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   />
                   <input
                     type="number"
@@ -658,7 +659,7 @@ export default function ScoredResumesTable({
                     min="0"
                     max="100"
                     placeholder="Max"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+                    className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                   />
                 </div>
               </div>
@@ -669,7 +670,7 @@ export default function ScoredResumesTable({
                 <select
                   value={filterRecruiter}
                   onChange={(e) => setFilterRecruiter(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 >
                   <option value="all">All Recruiters</option>
                   {uniqueRecruiters.map(recruiter => (
@@ -685,7 +686,7 @@ export default function ScoredResumesTable({
                   type="date"
                   value={filterDateFrom}
                   onChange={(e) => setFilterDateFrom(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 />
               </div>
 
@@ -695,7 +696,7 @@ export default function ScoredResumesTable({
                   type="date"
                   value={filterDateTo}
                   onChange={(e) => setFilterDateTo(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  className="w-full px-3 py-2 text-sm text-gray-900 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
                 />
               </div>
             </div>

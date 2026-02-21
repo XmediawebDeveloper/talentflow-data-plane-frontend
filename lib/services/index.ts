@@ -176,6 +176,18 @@ export type {
   InternalTicketFilterParams,
 } from './internalTicketService';
 
+// Audit Verification
+export { auditVerificationService } from './auditVerificationService';
+export type {
+  VerificationStatus,
+  ExpectedAuditEntry,
+  FieldMismatch,
+  ActualAuditLog,
+  VerificationResult,
+  ReconciliationReport,
+  PendingVerification,
+} from './auditVerificationService';
+
 // Candidate Assessment (Public)
 export { candidateService } from './candidateService';
 export type {

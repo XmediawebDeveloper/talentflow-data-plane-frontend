@@ -84,22 +84,21 @@ export default function CandidateResultDetails({
           status = 'Pending';
         }
 
-        // Map section scores - Calculate using correct formula
+        // Map section scores - Use raw_score from backend (actual percentage)
         const sections = details.round_scores.map(round => {
-          // ✅ FIXED: Use formula: (total_obtained_marks / total_marks) * 100
-          // Each question is out of 10 points
-          const totalMarks = (round.questions_total || 0) * 10;
-          const obtainedMarks = (round.questions_correct || 0) * 10;
+          // Calculate actual points from question evaluations for this round
+          const roundQuestions = details.question_evaluations.filter(
+            q => q.round_type === round.round_type
+          );
+          const totalMarks = roundQuestions.reduce((sum, q) => sum + (q.points_possible || 10), 0);
+          const obtainedMarks = roundQuestions.reduce((sum, q) => sum + (q.points_earned || 0), 0);
 
-          // Calculate percentage using the correct formula
-          const percentage = totalMarks > 0 ? Math.round((obtainedMarks / totalMarks) * 100) : 0;
-
-          // Score out of 10 for display
-          const score = totalMarks > 0 ? Math.round((obtainedMarks / round.questions_total) * 10) / 10 : 0;
+          // Use raw_score from backend — it's the actual percentage
+          const percentage = Math.round(round.raw_score ?? 0);
 
           return {
             name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
-            score: obtainedMarks, // Total obtained marks
+            score: Math.round(obtainedMarks * 10) / 10, // Total obtained marks
             totalScore: totalMarks, // Total marks possible
             percentage: Math.min(percentage, 100) // Cap at 100%
           };
@@ -379,45 +378,116 @@ export default function CandidateResultDetails({
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
           <h2 className="text-gray-900 mb-4">Section-wise Performance</h2>
           <div className="space-y-4">
-            {candidateData?.sections.filter(section => !section.name.toLowerCase().includes('hr')).map((section, idx) => (
-              <div key={idx} className={`border rounded-lg p-4 ${
-                section.name.toLowerCase().includes('hr')
-                  ? 'border-gray-200 bg-gray-50/30'
-                  : 'border-green-200 bg-green-50/30'
-              }`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-900">{section.name}</span>
-                      {section.name.toLowerCase().includes('hr') ? (
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
-                          Not Scored
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
-                          Scored (0-10)
-                        </span>
-                      )}
+            {candidateData?.sections.map((section, idx) => {
+              const isHR = section.name.toLowerCase().includes('hr');
+
+              // Question attendance stats for this section (3 buckets)
+              const roundType = section.name.replace(' Section', '').toLowerCase();
+              const questionsForRound = detailedResult?.question_evaluations.filter(
+                q => q.round_type === roundType
+              ) ?? [];
+              const totalQ = questionsForRound.length;
+              const submittedQ = questionsForRound.filter(q =>
+                q.question_status === 'answered' || q.question_status === 'scored'
+              ).length;
+              const skippedQ = questionsForRound.filter(q =>
+                q.question_status === 'skipped'
+              ).length;
+              const unansweredQ = totalQ - submittedQ - skippedQ;
+              const submittedPct = totalQ > 0 ? (submittedQ / totalQ) * 100 : 0;
+              const skippedPct  = totalQ > 0 ? (skippedQ  / totalQ) * 100 : 0;
+              const unansweredPct = totalQ > 0 ? (unansweredQ / totalQ) * 100 : 0;
+
+              return (
+                <div key={idx} className={`border rounded-lg p-4 ${
+                  isHR
+                    ? 'border-gray-200 bg-gray-50/30'
+                    : 'border-green-200 bg-green-50/30'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-900">{section.name}</span>
+                        {isHR ? (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
+                            Not Scored
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                            Scored (0-10)
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {section.score}/{section.totalScore} points
+                        {!isHR && (
+                          <span className="text-gray-800 ml-2">• Pass: ≥7/10</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      {section.score}/{section.totalScore} points
-                      {!section.name.toLowerCase().includes('hr') && (
-                        <span className="text-gray-800 ml-2">• Pass: ≥7/10</span>
-                      )}
+                    <div className={`text-2xl ${isHR ? 'text-gray-400' : getScoreColor(section.percentage)}`}>
+                      {isHR ? '—' : `${section.percentage}%`}
                     </div>
                   </div>
-                  <div className={`text-2xl ${getScoreColor(section.percentage)}`}>
-                    {section.percentage}%
-                  </div>
+
+                  {/* Score progress bar (non-HR only) */}
+                  {!isHR && (
+                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-3">
+                      <div
+                        className={`h-3 rounded-full ${section.percentage >= 80 ? 'bg-green-600' : section.percentage >= 60 ? 'bg-gray-800' : section.percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'}`}
+                        style={{ width: `${Math.min(section.percentage, 100)}%` }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Question Attendance Bar */}
+                  {totalQ > 0 && (
+                    <div className={isHR ? '' : 'mt-1 pt-3 border-t border-gray-200'}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-medium text-gray-600">Question Attendance</span>
+                        <span className="text-xs text-gray-400">{totalQ} Total</span>
+                      </div>
+                      {/* Stacked bar */}
+                      <div className="w-full h-2.5 rounded-full overflow-hidden flex bg-gray-100 mb-2">
+                        {submittedQ > 0 && (
+                          <div
+                            className="h-full bg-green-500 transition-all"
+                            style={{ width: `${submittedPct}%` }}
+                          />
+                        )}
+                        {skippedQ > 0 && (
+                          <div
+                            className="h-full bg-amber-400 transition-all"
+                            style={{ width: `${skippedPct}%` }}
+                          />
+                        )}
+                        {unansweredQ > 0 && (
+                          <div
+                            className="h-full bg-red-400 transition-all"
+                            style={{ width: `${unansweredPct}%` }}
+                          />
+                        )}
+                      </div>
+                      {/* Legend */}
+                      <div className="flex items-center gap-4 text-xs">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block flex-shrink-0" />
+                          <span className="text-green-700 font-medium">{submittedQ} Submitted</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block flex-shrink-0" />
+                          <span className="text-amber-600 font-medium">{skippedQ} Skipped</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block flex-shrink-0" />
+                          <span className="text-red-600 font-medium">{unansweredQ} Unanswered</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                  <div
-                    className={`h-3 rounded-full ${section.percentage >= 80 ? 'bg-green-600' : section.percentage >= 60 ? 'bg-gray-800' : section.percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'}`}
-                    style={{ width: `${Math.min(section.percentage, 100)}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -763,6 +833,7 @@ export default function CandidateResultDetails({
                       {detailedResult.proctoring_stats?.total_violations || 0}
                     </span>
                   </button>
+
                 </div>
               </div>
 
@@ -784,23 +855,18 @@ export default function CandidateResultDetails({
                           <h3 className="text-xl text-gray-900 capitalize">{round.round_type} Round</h3>
                           <p className="text-sm text-gray-600 mt-1">
                             {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''} •
-                            <span className="ml-1">{round.questions_correct}/{round.questions_total} correct</span>
+                            <span className="ml-1">
+                              {Math.round(questionsForRound.reduce((s, q) => s + (q.points_earned || 0), 0) * 10) / 10}
+                              /{questionsForRound.reduce((s, q) => s + (q.points_possible || 10), 0)} points
+                            </span>
                           </p>
                         </div>
-                        {round.round_type.toLowerCase() !== 'hr' && (
-                          <div className="text-right">
-                            <div className="text-sm text-gray-600 mb-1">Section Score</div>
-                            <div className={`text-3xl ${getScoreColor(Math.min(
-                              round.questions_total > 0 ? Math.round((round.questions_correct / round.questions_total) * 100) : 0,
-                              100
-                            ))}`}>
-                              {Math.min(
-                                round.questions_total > 0 ? Math.round((round.questions_correct / round.questions_total) * 100) : 0,
-                                100
-                              )}%
-                            </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-600 mb-1">Section Score</div>
+                          <div className={`text-3xl ${getScoreColor(Math.round(round.raw_score ?? 0))}`}>
+                            {Math.round(round.raw_score ?? 0)}%
                           </div>
-                        )}
+                        </div>
                       </div>
 
                       {/* Questions */}
@@ -1195,6 +1261,34 @@ export default function CandidateResultDetails({
                         <div className="text-xs text-gray-500 mt-1">occurrences</div>
                       </div>
 
+                      {/* Multiple Faces */}
+                      <div className={`rounded-xl p-5 border-2 ${
+                        (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
+                          ? 'bg-violet-50 border-violet-200'
+                          : 'bg-gray-50 border-gray-200'
+                      }`}>
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                          (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
+                            ? 'bg-violet-100'
+                            : 'bg-gray-100'
+                        }`}>
+                          <User className={`w-6 h-6 ${
+                            (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
+                              ? 'text-violet-600'
+                              : 'text-gray-400'
+                          }`} />
+                        </div>
+                        <div className="text-sm text-gray-600 mb-1">Multiple Faces</div>
+                        <div className={`text-3xl font-bold ${
+                          (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
+                            ? 'text-violet-600'
+                            : 'text-gray-400'
+                        }`}>
+                          {detailedResult.proctoring_stats.multiple_faces_count || 0}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">detections</div>
+                      </div>
+
                       {/* Fullscreen Exit */}
                       {/* Fullscreen Exit - Commented out for now */}
                       {/* <div className={`rounded-xl p-5 border-2 ${
@@ -1292,6 +1386,7 @@ export default function CandidateResultDetails({
                     )}
                   </div>
                 )}
+
               </div>
             </>
           )}

@@ -128,7 +128,7 @@ export default function ApiManagementPage() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
           <p className="text-gray-600">Loading API keys...</p>
@@ -138,7 +138,7 @@ export default function ApiManagementPage() {
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -148,7 +148,7 @@ export default function ApiManagementPage() {
                 <Key className="w-7 h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">API Management</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">API Management</h1>
                 <p className="text-sm text-gray-600">Manage your API keys and access</p>
               </div>
             </div>

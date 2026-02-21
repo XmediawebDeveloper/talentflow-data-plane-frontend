@@ -542,7 +542,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
 
     setIsSaving(true);
     try {
-      await userService.updateUser(editingUser.id, {
+      const updatedUser = await userService.updateUser(editingUser.id, {
         name: editingUser.name,
         role: editingUser.role,
         can_create_jd: editingUser.permissions.can_create_jd,
@@ -554,8 +554,8 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
         can_view_analytics: editingUser.permissions.can_view_analytics,
       });
       toast.success('User updated successfully');
+      setUsers(prev => prev.map(u => u.id === editingUser.id ? updatedUser : u));
       setEditingUser(null);
-      loadUsers();
     } catch (error: any) {
       console.error('Failed to update user:', error);
       toast.error(error.message || 'Failed to update user');

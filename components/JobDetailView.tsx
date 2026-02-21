@@ -410,30 +410,47 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             if (result.hr_score !== null && result.hr_score !== undefined) {
               roundScores.push({
                 roundName: 'HR',
-                score: Math.round(result.hr_score * 10),
+                score: Math.round(Number(result.hr_score)),
                 maxScore: 100,
-                passFail: result.hr_score >= 7 ? 'Pass' : 'Fail'
+                passFail: result.hr_score >= 60 ? 'Pass' : 'Fail'
               });
             }
             if (result.technical_score !== null && result.technical_score !== undefined) {
               roundScores.push({
                 roundName: 'Technical',
-                score: Math.round(result.technical_score * 10),
+                score: Math.round(Number(result.technical_score)),
                 maxScore: 100,
-                passFail: result.technical_score >= 7 ? 'Pass' : 'Fail'
+                passFail: result.technical_score >= 60 ? 'Pass' : 'Fail'
               });
             }
             if (result.coding_score !== null && result.coding_score !== undefined) {
               roundScores.push({
                 roundName: 'Coding',
-                score: Math.round(result.coding_score * 10),
+                score: Math.round(Number(result.coding_score)),
                 maxScore: 100,
-                passFail: result.coding_score >= 7 ? 'Pass' : 'Fail'
+                passFail: result.coding_score >= 60 ? 'Pass' : 'Fail'
               });
             }
 
+            // Format duration properly
+            let duration = '-';
+            if (result.time_spent_seconds && result.time_spent_seconds > 0) {
+              const minutes = Math.floor(result.time_spent_seconds / 60);
+              const seconds = result.time_spent_seconds % 60;
+              if (minutes > 0) {
+                duration = `${minutes}m ${seconds}s`;
+              } else {
+                duration = `${seconds}s`;
+              }
+            } else if (result.status === 'pending') {
+              duration = '-';
+            } else if (result.status === 'in_progress') {
+              duration = 'In Progress';
+            }
+
             allResults.push({
-              id: result.id,
+              id: result.id || result.invitation_id,
+              candidateDisplayId: result.candidate_display_id,
               candidateName: result.candidate_name || 'Unknown',
               email: result.candidate_email || '',
               phone: result.candidate_phone || '',
@@ -445,15 +462,21 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               passFail: result.passed ? 'Pass' : 'Fail',
               completedDate: result.completed_at
                 ? new Date(result.completed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-                : 'In Progress',
+                : result.status === 'pending' ? 'Not started' : 'In Progress',
               completionTime: completionTime,
+              duration: duration,
               aiSummary: result.ai_evaluation?.summary || 'Assessment completed.',
               roundScores: roundScores,
               invitedDate: result.started_at
                 ? new Date(result.started_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
                 : 'N/A',
               invitedBy: result.invite_source || 'System',
+              inviteSource: result.invite_source || 'Manual',
               status: result.status || (result.completed_at ? 'completed' : 'in_progress'),
+              sent_at: result.sent_at || undefined,
+              started_at: result.started_at || undefined,
+              completed_at: result.completed_at || undefined,
+              created_at: result.created_at || undefined,
             });
           });
         } catch (err) {

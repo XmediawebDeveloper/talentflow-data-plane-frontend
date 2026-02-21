@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
@@ -41,7 +41,7 @@ export default function AssessmentDetailsView({
 }: AssessmentDetailsViewProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
-  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'info'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -195,27 +195,27 @@ export default function AssessmentDetailsView({
     <div className="flex-1 bg-gray-50 overflow-y-auto">
       {/* Sticky Header */}
       <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-gray-600 sticky top-0 z-20 shadow-lg">
-        <div className="px-8 py-5">
+        <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-5">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-white/90 hover:text-white mb-4 transition-colors"
+            className="flex items-center gap-1.5 sm:gap-2 text-white/90 hover:text-white mb-3 sm:mb-4 transition-colors text-sm sm:text-base"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             Back to Assessments
           </button>
           
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-4">
-              <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0">
-                <FileText className="w-8 h-8 text-white" />
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+            <div className="flex items-start gap-2 sm:gap-3 lg:gap-4 min-w-0">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-16 lg:h-16 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-white" />
               </div>
-              <div>
+              <div className="min-w-0">
                 {/* Line 1: AS-022 SQL Developer - Assessment V1  Active AI-Generated */}
-                <div className="flex items-center gap-3 mb-2 flex-wrap">
-                  <span className="px-2.5 py-1 bg-white/90 text-gray-900 rounded text-sm font-bold">
+                <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2 flex-wrap">
+                  <span className="px-1.5 sm:px-2 lg:px-2.5 py-0.5 sm:py-1 bg-white/90 text-gray-900 rounded text-xs sm:text-sm font-bold">
                     {assessment.short_id || `AS-${String(assessment.id).slice(0, 8).toUpperCase()}`}
                   </span>
-                  <h1 className="text-2xl text-white font-semibold">
+                  <h1 className="text-sm sm:text-lg lg:text-2xl text-white font-semibold truncate">
                     {assessment.jd_title || stripVersionFromTitle(assessment.title)} - Assessment
                   </h1>
                   <VersionBadge version={assessment.version} size="md" variant="primary" />
@@ -250,7 +250,7 @@ export default function AssessmentDetailsView({
                 )}
 
                 {/* Line 3: 30 min 3 sections 1 candidates Created 9 Feb 2026 at 06:46 pm Last Updated date_time */}
-                <div className="text-sm text-gray-100 flex items-center gap-4 flex-wrap">
+                <div className="text-xs sm:text-sm text-gray-100 flex items-center gap-2 sm:gap-3 lg:gap-4 flex-wrap">
                   <span>{formattedDuration}</span>
                   <span>{sections.length} section{sections.length !== 1 ? 's' : ''}</span>
                   <span>{assessment.candidates || 0} candidates</span>
@@ -277,13 +277,13 @@ export default function AssessmentDetailsView({
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               {onShare && (
                 <button
                   onClick={onShare}
-                  className="px-4 py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-2 font-medium"
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm"
                 >
-                  <Mail className="w-4 h-4" />
+                  <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Share
                 </button>
               )}
@@ -293,12 +293,12 @@ export default function AssessmentDetailsView({
       </div>
 
       {/* Tabs */}
-      <div className="bg-white border-b border-gray-200 sticky top-[168px] z-10">
-        <div className="px-8">
-          <div className="flex gap-6">
+      <div className="bg-white border-b border-gray-200 sticky top-[120px] sm:top-[148px] lg:top-[168px] z-10">
+        <div className="px-3 sm:px-5 lg:px-8">
+          <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`py-4 text-sm border-b-2 transition-colors ${
+              className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'overview'
                   ? 'border-gray-800 text-gray-800'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -308,7 +308,7 @@ export default function AssessmentDetailsView({
             </button>
             <button
               onClick={() => setActiveTab('activity')}
-              className={`py-4 text-sm border-b-2 transition-colors ${
+              className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'activity'
                   ? 'border-gray-800 text-gray-800'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -318,7 +318,7 @@ export default function AssessmentDetailsView({
             </button>
             <button
               onClick={() => setActiveTab('versions')}
-              className={`py-4 text-sm border-b-2 transition-colors ${
+              className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === 'versions'
                   ? 'border-gray-800 text-gray-800'
                   : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -326,25 +326,35 @@ export default function AssessmentDetailsView({
             >
               Version History
             </button>
+            <button
+              onClick={() => setActiveTab('info')}
+              className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === 'info'
+                  ? 'border-gray-800 text-gray-800'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Assessment Info
+            </button>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="px-8 py-6 w-full">
+      <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-6 w-full">
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Assessment Details Section */}
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-base font-medium text-gray-900 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-gray-600" />
+              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2">
+                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                   Assessment Details
                 </h3>
               </div>
 
-              <div className="p-6">
+              <div className="p-3 sm:p-4 lg:p-6">
                 {/* Total Duration Card */}
                 <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 mb-6 flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -532,7 +542,7 @@ export default function AssessmentDetailsView({
                               </div>
                             )}
 
-                            <div className="grid grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                               <div className="p-2 bg-white rounded border border-gray-200">
                                 <div className="text-xs text-gray-600 mb-1">Question Type</div>
                                 <div className="text-xs text-gray-900 font-medium">
@@ -693,80 +703,80 @@ export default function AssessmentDetailsView({
 
             {/* Invitation Status Section */}
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-base font-medium text-gray-900 flex items-center gap-2">
-                  <Mail className="w-5 h-5 text-gray-600" />
+              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+                <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2">
+                  <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                   Invitation Status
                 </h3>
                 <button
                   onClick={() => setActiveTab('activity')}
-                  className="px-4 py-2 bg-gray-700 text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2"
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gray-700 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-1.5 sm:gap-2 w-fit"
                 >
-                  <ExternalLink className="w-4 h-4" />
+                  <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   View Full Tracking
                 </button>
               </div>
 
-              <div className="p-6">
+              <div className="p-3 sm:p-4 lg:p-6">
                 {/* Quick Stats */}
-                <div className="grid grid-cols-5 gap-4 mb-6">
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-2">
-                      <Users className="w-4 h-4" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 mb-4 sm:mb-6">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
+                      <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Total</span>
                     </div>
-                    <div className="text-2xl font-semibold text-gray-900">{analyticsData.totalInvites}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.totalInvites}</div>
                   </div>
 
-                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-2">
-                      <Mail className="w-4 h-4" />
+                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
+                      <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Sent</span>
                     </div>
-                    <div className="text-2xl font-semibold text-gray-900">{analyticsData.sent || 0}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.sent || 0}</div>
                   </div>
 
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-red-600 text-xs mb-2">
-                      <XCircle className="w-4 h-4" />
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-red-600 text-xs mb-1.5 sm:mb-2">
+                      <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Failed</span>
                     </div>
-                    <div className="text-2xl font-semibold text-gray-900">{analyticsData.failed || 0}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.failed || 0}</div>
                   </div>
 
-                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-2">
-                      <Play className="w-4 h-4" />
+                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
+                      <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Started</span>
                     </div>
-                    <div className="text-2xl font-semibold text-gray-900">{analyticsData.started || 0}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.started || 0}</div>
                   </div>
 
-                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-gray-600 text-xs mb-2">
-                      <CheckCircle className="w-4 h-4" />
+                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
+                      <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       <span>Completed</span>
                     </div>
-                    <div className="text-2xl font-semibold text-gray-900">{analyticsData.completed}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.completed}</div>
                   </div>
                 </div>
 
                 {/* Recent Invitations */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-3">Recent Invitations</h4>
+                  <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Recent Invitations</h4>
                   {activityLoading ? (
-                    <div className="py-12 text-center">
-                      <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
-                      <p className="text-gray-600">Loading invitations...</p>
+                    <div className="py-8 sm:py-12 text-center">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-2 sm:mb-3"></div>
+                      <p className="text-gray-600 text-xs sm:text-sm">Loading invitations...</p>
                     </div>
                   ) : recentActivity.length === 0 ? (
-                    <div className="py-12 text-center border-2 border-dashed border-gray-200 rounded-lg">
-                      <Mail className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                      <p className="text-gray-600 mb-1">No invitations sent yet</p>
-                      <p className="text-sm text-gray-500">Invite candidates to start tracking their progress</p>
+                    <div className="py-8 sm:py-12 text-center border-2 border-dashed border-gray-200 rounded-lg">
+                      <Mail className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
+                      <p className="text-gray-600 mb-1 text-xs sm:text-sm">No invitations sent yet</p>
+                      <p className="text-xs sm:text-sm text-gray-500">Invite candidates to start tracking their progress</p>
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2 sm:space-y-3">
                       {recentActivity.slice(0, 5).map((activity: any) => {
                         const getStatusBadge = () => {
                           if (activity.status === 'completed') {
@@ -796,45 +806,45 @@ export default function AssessmentDetailsView({
                         })() : 'N/A';
 
                         return (
-                          <div key={activity.id} className="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors">
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0">
+                          <div key={activity.id} className="bg-gray-50 rounded-lg p-2.5 sm:p-3 lg:p-4 hover:bg-gray-100 transition-colors">
+                            <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
+                              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-700 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 text-xs sm:text-sm">
                                 {activity.candidate_name?.charAt(0).toUpperCase() || 'U'}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between mb-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium text-gray-900">{activity.candidate_name || 'Unknown'}</span>
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-1 gap-0.5 sm:gap-0">
+                                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                    <span className="font-medium text-gray-900 text-xs sm:text-sm truncate">{activity.candidate_name || 'Unknown'}</span>
                                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusBadge.color}`}>
                                       {statusBadge.label}
                                     </span>
                                   </div>
                                   {activity.status === 'completed' && (
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                                       {/* Show Tech Score if technical section is enabled */}
                                       {assessment.technical_enabled && activity.technical_score != null && (
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1">
                                           <span className="text-xs text-gray-600">Tech</span>
-                                          <span className="font-semibold text-gray-900">{Math.round(activity.technical_score)}%</span>
+                                          <span className="font-semibold text-gray-900 text-xs sm:text-sm">{Math.round(activity.technical_score)}%</span>
                                         </div>
                                       )}
                                       {/* Show Coding Score if coding section is enabled */}
                                       {assessment.coding_enabled && activity.coding_score != null && (
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex items-center gap-1">
                                           <span className="text-xs text-gray-600">Coding</span>
-                                          <span className="font-semibold text-gray-900">{Math.round(activity.coding_score)}%</span>
+                                          <span className="font-semibold text-gray-900 text-xs sm:text-sm">{Math.round(activity.coding_score)}%</span>
                                         </div>
                                       )}
                                     </div>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-3 text-xs text-gray-600">
-                                  <span className="flex items-center gap-1">
-                                    <Mail className="w-3 h-3" />
-                                    {activity.candidate_email}
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs text-gray-600">
+                                  <span className="flex items-center gap-1 truncate">
+                                    <Mail className="w-3 h-3 flex-shrink-0" />
+                                    <span className="truncate">{activity.candidate_email}</span>
                                   </span>
-                                  <span className="flex items-center gap-1">
-                                    <Calendar className="w-3 h-3" />
+                                  <span className="flex items-center gap-1 whitespace-nowrap">
+                                    <Calendar className="w-3 h-3 flex-shrink-0" />
                                     Sent: {formattedDate}
                                   </span>
                                 </div>
@@ -864,11 +874,11 @@ export default function AssessmentDetailsView({
 
             {/* Quick Actions */}
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-base font-medium text-gray-900">Quick Actions</h3>
+              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
+                <h3 className="text-sm sm:text-base font-medium text-gray-900">Quick Actions</h3>
               </div>
-              <div className="p-6">
-                <div className="grid grid-cols-3 gap-4">
+              <div className="p-3 sm:p-4 lg:p-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
                 <button
                   onClick={async () => {
                     if (assessment.status === 'Draft') {
@@ -1035,20 +1045,20 @@ export default function AssessmentDetailsView({
         {/* Activity Tab */}
         {activeTab === 'activity' && (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg text-gray-900">Recent Activity</h3>
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
+              <h3 className="text-sm sm:text-base lg:text-lg text-gray-900">Recent Activity</h3>
             </div>
 
             {activityLoading ? (
-              <div className="px-6 py-12 text-center">
+              <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
                 <p className="text-gray-600">Loading activity...</p>
               </div>
             ) : recentActivity.length === 0 ? (
-              <div className="px-6 py-12 text-center">
-                <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-600 mb-1">No activity recorded yet</p>
-                <p className="text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
+              <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
+                <Calendar className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
+                <p className="text-gray-600 mb-1 text-sm">No activity recorded yet</p>
+                <p className="text-xs sm:text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
@@ -1075,20 +1085,20 @@ export default function AssessmentDetailsView({
                   })() : 'N/A';
 
                   return (
-                    <div key={activity.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${info.color}`}>
-                          <ActivityIcon className="w-5 h-5" />
+                    <div key={activity.id} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start sm:items-center gap-2 sm:gap-3 lg:gap-4">
+                        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${info.color}`}>
+                          <ActivityIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                         </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <span className="font-medium text-gray-900">{activity.candidate_name || 'Unknown'}</span>
-                              <span className="text-gray-500 ml-2">{info.label}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-0">
+                            <div className="min-w-0">
+                              <span className="font-medium text-gray-900 text-xs sm:text-sm">{activity.candidate_name || 'Unknown'}</span>
+                              <span className="text-gray-500 ml-1 sm:ml-2 text-xs sm:text-sm">{info.label}</span>
                             </div>
-                            <span className="text-sm text-gray-500">{formattedDate}</span>
+                            <span className="text-xs sm:text-sm text-gray-500">{formattedDate}</span>
                           </div>
-                          <p className="text-sm text-gray-600 mt-0.5">{activity.candidate_email}</p>
+                          <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate">{activity.candidate_email}</p>
                           {activity.status === 'completed' && (
                             <div className="flex items-center gap-3 mt-2">
                               {/* Show Tech Score if technical section is enabled */}
@@ -1126,27 +1136,27 @@ export default function AssessmentDetailsView({
         {/* Version History Tab */}
         {activeTab === 'versions' && (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="px-6 py-4 border-b border-gray-200">
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
               <div className="flex items-center gap-2 mb-1">
-                <Clock className="w-5 h-5 text-gray-600" />
-                <h3 className="text-base font-medium text-gray-900">Version History</h3>
+                <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                <h3 className="text-sm sm:text-base font-medium text-gray-900">Version History</h3>
               </div>
-              <p className="text-sm text-gray-600">Complete timeline of all changes made to this assessment</p>
+              <p className="text-xs sm:text-sm text-gray-600">Complete timeline of all changes made to this assessment</p>
             </div>
 
             {versionsLoading ? (
-              <div className="px-6 py-12 text-center">
+              <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <div className="w-8 h-8 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
                 <p className="text-gray-600">Loading version history...</p>
               </div>
             ) : versionHistory.length === 0 ? (
-              <div className="px-6 py-12 text-center">
-                <Clock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-600 mb-1">No version history available</p>
-                <p className="text-sm text-gray-500">Version history will appear when the assessment is edited</p>
+              <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
+                <Clock className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
+                <p className="text-gray-600 mb-1 text-sm">No version history available</p>
+                <p className="text-xs sm:text-sm text-gray-500">Version history will appear when the assessment is edited</p>
               </div>
             ) : (
-              <div className="p-6 space-y-6">
+              <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
                 {versionHistory.map((version: any, idx: number) => {
                   const isCurrentVersion = idx === 0;
                   const dateWithZ = version.created_at + (version.created_at.includes('Z') ? '' : 'Z');
@@ -1164,45 +1174,45 @@ export default function AssessmentDetailsView({
                   return (
                     <div key={version.id} className="space-y-4">
                       {/* Version Header */}
-                      <div className="flex items-start gap-4">
-                        <div className="w-12 h-12 bg-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
-                          <span className="text-white font-bold text-sm">V{version.version}</span>
+                      <div className="flex items-start gap-2 sm:gap-3 lg:gap-4">
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 bg-teal-500 rounded-full flex items-center justify-center flex-shrink-0">
+                          <span className="text-white font-bold text-xs sm:text-sm">V{version.version}</span>
                         </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="text-base font-semibold text-gray-900">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
+                            <h4 className="text-sm sm:text-base font-semibold text-gray-900">
                               Version {version.version} {version.version === 1 ? 'Published' : 'Updated'}
                             </h4>
                             {isCurrentVersion && (
-                              <span className="px-2.5 py-1 bg-gray-700 text-white text-xs font-medium rounded">
+                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-gray-700 text-white text-xs font-medium rounded w-fit">
                                 Current Version
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-600 mb-3">
+                          <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">
                             {version.version === 1 ? 'Initial assessment created and published' : (version.change_summary || 'Assessment configuration updated')}
                           </p>
 
                           {/* User & Date Info */}
-                          <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
-                            <Users className="w-4 h-4 text-gray-500" />
+                          <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-700 mb-1 flex-wrap">
+                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                             <span className="font-medium">{version.changed_by_name || 'Unknown User'}</span>
                             <span className="text-gray-400">•</span>
                             <span className="text-gray-600">Lead Recruiter</span>
                           </div>
 
-                          <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-                            <Calendar className="w-4 h-4 text-gray-500" />
+                          <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4 flex-wrap">
+                            <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                             <span>Published on {versionDate} IST (UTC+5:30)</span>
                           </div>
 
                           {/* Configuration Details */}
-                          <div className="bg-gray-100 border border-gray-200 rounded-lg p-4">
-                            <div className="text-sm font-medium text-gray-900 mb-3">
+                          <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                            <div className="text-xs sm:text-sm font-medium text-gray-900 mb-2 sm:mb-3">
                               {version.version === 1 ? 'Initial Configuration:' : 'Updated Configuration:'}
                             </div>
-                            <ul className="space-y-2">
-                              <li className="text-sm text-gray-700 flex items-start gap-2">
+                            <ul className="space-y-1.5 sm:space-y-2">
+                              <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
                                 <span className="text-gray-600 mt-0.5">•</span>
                                 <span>Assessment type: {[
                                   version.hr_enabled && 'HR',
@@ -1210,17 +1220,17 @@ export default function AssessmentDetailsView({
                                   version.coding_enabled && 'Coding'
                                 ].filter(Boolean).join(', ')}</span>
                               </li>
-                              <li className="text-sm text-gray-700 flex items-start gap-2">
+                              <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
                                 <span className="text-gray-600 mt-0.5">•</span>
                                 <span>Duration set to {assessment.duration_minutes || 60} min</span>
                               </li>
                               {assessment.title && (
-                                <li className="text-sm text-gray-700 flex items-start gap-2">
+                                <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
                                   <span className="text-gray-600 mt-0.5">•</span>
                                   <span>Linked to job posting: {assessment.title}</span>
                                 </li>
                               )}
-                              <li className="text-sm text-gray-700 flex items-start gap-2">
+                              <li className="text-xs sm:text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
                                 <span className="text-gray-600 mt-0.5">•</span>
                                 <span>Proctoring {assessment.proctoring_enabled ? 'enabled' : 'disabled'} with AI monitoring</span>
                               </li>
@@ -1235,6 +1245,181 @@ export default function AssessmentDetailsView({
             )}
           </div>
         )}
+      {/* Assessment Info Tab */}
+      {activeTab === 'info' && (() => {
+        const complexityLabel = (val: string | null | undefined) => {
+          const map: Record<string, string> = { low: 'Low', medium: 'Medium', high: 'High', expert: 'Expert' };
+          return val ? (map[val] || val) : null;
+        };
+        const complexityColor = (val: string | null | undefined) => {
+          const map: Record<string, string> = {
+            low: 'bg-green-100 text-green-700 border-green-200',
+            medium: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+            high: 'bg-orange-100 text-orange-700 border-orange-200',
+            expert: 'bg-red-100 text-red-700 border-red-200',
+          };
+          return val ? (map[val] || 'bg-gray-100 text-gray-700 border-gray-200') : 'bg-gray-100 text-gray-700 border-gray-200';
+        };
+        const expLabel = (val: string | null | undefined) => {
+          const map: Record<string, string> = {
+            junior: 'Junior', mid: 'Mid-Level', senior: 'Senior', lead: 'Lead', expert: 'Expert',
+          };
+          return val ? (map[val] || val) : null;
+        };
+        const expColor = (val: string | null | undefined) => {
+          const map: Record<string, string> = {
+            junior: 'bg-blue-100 text-blue-700 border-blue-200',
+            mid: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+            senior: 'bg-purple-100 text-purple-700 border-purple-200',
+            lead: 'bg-pink-100 text-pink-700 border-pink-200',
+            expert: 'bg-red-100 text-red-700 border-red-200',
+          };
+          return val ? (map[val] || 'bg-gray-100 text-gray-700 border-gray-200') : 'bg-gray-100 text-gray-700 border-gray-200';
+        };
+
+        const skillDepth: any[] = assessment.jd_skill_depth || [];
+        const codingLanguages: string[] = assessment.coding_languages || [];
+        const hasData = assessment.jd_complexity || assessment.jd_experience_level || assessment.jd_primary_domain || skillDepth.length > 0 || codingLanguages.length > 0;
+
+        return (
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
+              <div className="flex items-center gap-2 mb-1">
+                <Info className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                <h3 className="text-sm sm:text-base font-medium text-gray-900">Assessment Info</h3>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-600">Metadata extracted from the job description used to generate this assessment</p>
+            </div>
+
+            {!hasData ? (
+              <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
+                <Info className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
+                <p className="text-gray-600 mb-1">No metadata available</p>
+                <p className="text-sm text-gray-500">Assessment info will appear once the JD analysis is complete</p>
+              </div>
+            ) : (
+              <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+                {/* Key Metadata Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
+                  {/* Job Complexity Level */}
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-gray-100 rounded-lg">
+                        <Layers className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Job Complexity</span>
+                    </div>
+                    {assessment.jd_complexity ? (
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${complexityColor(assessment.jd_complexity)}`}>
+                        {complexityLabel(assessment.jd_complexity)}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">Not available</span>
+                    )}
+                  </div>
+
+                  {/* Experience Level */}
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-gray-100 rounded-lg">
+                        <TrendingUp className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
+                    </div>
+                    {assessment.jd_experience_level ? (
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${expColor(assessment.jd_experience_level)}`}>
+                        {expLabel(assessment.jd_experience_level)}
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-400">Not available</span>
+                    )}
+                  </div>
+
+                  {/* Primary Domain */}
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-gray-100 rounded-lg">
+                        <Globe className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Primary Domain</span>
+                    </div>
+                    {assessment.jd_primary_domain ? (
+                      <span className="text-sm font-medium text-gray-900">{assessment.jd_primary_domain}</span>
+                    ) : (
+                      <span className="text-sm text-gray-400">Not available</span>
+                    )}
+                  </div>
+
+                  {/* Coding Requirement */}
+                  <div className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-gray-100 rounded-lg">
+                        <Code className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Coding Requirement</span>
+                    </div>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${assessment.coding_enabled ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                      {assessment.coding_enabled ? 'Required' : 'Not Required'}
+                    </span>
+                  </div>
+
+                  {/* Eligible Programming Languages */}
+                  <div className="rounded-lg border border-gray-200 p-4 sm:col-span-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="p-1.5 bg-gray-100 rounded-lg">
+                        <Zap className="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Eligible Programming Languages</span>
+                    </div>
+                    {codingLanguages.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {codingLanguages.map((lang, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200"
+                          >
+                            {lang}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">{assessment.coding_enabled ? 'No languages specified' : 'N/A — coding not required'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Skill Depth */}
+                {skillDepth.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Star className="w-4 h-4 text-gray-600" />
+                      <h4 className="text-sm font-medium text-gray-900">Skill Depth</h4>
+                      <span className="text-xs text-gray-500">(Must-have skills extracted from JD)</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {skillDepth.map((skill: any, idx: number) => {
+                        const skillName = typeof skill === 'string' ? skill : skill?.name || skill?.skill || JSON.stringify(skill);
+                        const level = typeof skill === 'object' ? (skill?.level || skill?.depth) : null;
+                        return (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-gray-50 text-gray-800 border border-gray-200"
+                          >
+                            {skillName}
+                            {level && (
+                              <span className="text-xs text-gray-500 font-normal">· {level}</span>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       </div>
     </div>
   );

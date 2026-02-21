@@ -18,11 +18,18 @@ import {
   Building2,
   Edit2,
   Archive,
+  Clock,
+  LogIn,
+  LogOut,
+  Upload,
+  Star,
+  Activity,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService } from '@/lib/services/resumeService';
+import { dashboardService, RecentActivity } from '@/lib/services/dashboardService';
 import { toast } from 'sonner';
 import { User, Tenant } from '@/lib/types/tenant';
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
@@ -95,10 +102,13 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   });
   const [quotaStatusData, setQuotaStatusData] = useState<QuotaStatusData | null>(null);
   const [loadingQuota, setLoadingQuota] = useState(true);
+  const [userActivity, setUserActivity] = useState<RecentActivity[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
 
   // Refs to prevent duplicate API calls
   const hasFetchedDashboardData = useRef(false);
   const hasFetchedQuotaStatus = useRef(false);
+  const hasFetchedActivity = useRef(false);
 
   // Permission checks
   const canCreateJD = hasPermission('canCreateJD') || isTenantAdminRole;
@@ -390,6 +400,39 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     };
   }, [user?.id]);
 
+  // Fetch current user's recent activity
+  useEffect(() => {
+    if (hasFetchedActivity.current) return;
+
+    const fetchUserActivity = async () => {
+      hasFetchedActivity.current = true;
+      setLoadingActivity(true);
+      try {
+        const data = await dashboardService.getDashboard();
+        setUserActivity(data.user_recent_activity || []);
+      } catch (error) {
+        console.error('[EnhancedDashboard] Failed to fetch user activity:', error);
+      } finally {
+        setLoadingActivity(false);
+      }
+    };
+
+    fetchUserActivity();
+  }, []);
+
+  const getActivityIcon = (action: string) => {
+    if (action.includes('login')) return <LogIn className="h-4 w-4 text-blue-500" />;
+    if (action.includes('logout')) return <LogOut className="h-4 w-4 text-gray-500" />;
+    if (action.includes('jd_create') || action.includes('jd_publish')) return <Briefcase className="h-4 w-4 text-green-500" />;
+    if (action.includes('jd_update')) return <Edit2 className="h-4 w-4 text-yellow-500" />;
+    if (action.includes('jd_archive')) return <Archive className="h-4 w-4 text-gray-500" />;
+    if (action.includes('resume_upload')) return <Upload className="h-4 w-4 text-purple-500" />;
+    if (action.includes('scoring')) return <Star className="h-4 w-4 text-orange-500" />;
+    if (action.includes('assessment')) return <CheckCircle className="h-4 w-4 text-teal-500" />;
+    if (action.includes('ai_match')) return <Sparkles className="h-4 w-4 text-indigo-500" />;
+    return <Activity className="h-4 w-4 text-gray-400" />;
+  };
+
   const handleViewJobDetails = (jd: JDResponse) => {
     if (jd.status === 'draft') {
       const stage = jd.creation_stage || 'create';
@@ -405,14 +448,14 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   };
 
   return (
-    <div className="space-y-6 p-8 bg-gray-50">
+    <div className="space-y-6 p-4 md:p-8 bg-gray-50">
       {/* Welcome Banner */}
       <WelcomeBanner user={user} tenant={tenant} />
 
       {/* JD Status Boxes */}
       <Card className="border-gray-200">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <CardTitle className="text-lg font-semibold text-gray-900">Job Description Status</CardTitle>
               <CardDescription className="text-gray-600">
@@ -431,13 +474,13 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             {/* Published JDs */}
             <div
               className="p-4 rounded-lg border-2 border-green-200 bg-green-50 hover:border-green-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=published')}
             >
-              <div className="text-4xl font-bold text-green-600 mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-600 mb-1 sm:mb-2">
                 {jdStatusCounts.published}
               </div>
               <div className="flex items-center gap-2">
@@ -456,7 +499,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               className="p-4 rounded-lg border-2 border-yellow-200 bg-yellow-50 hover:border-yellow-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=draft')}
             >
-              <div className="text-4xl font-bold text-yellow-600 mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-600 mb-1 sm:mb-2">
                 {jdStatusCounts.draft}
               </div>
               <div className="flex items-center gap-2">
@@ -475,7 +518,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               className="p-4 rounded-lg border-2 border-red-200 bg-red-50 hover:border-red-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=disabled')}
             >
-              <div className="text-4xl font-bold text-red-600 mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-red-600 mb-1 sm:mb-2">
                 {jdStatusCounts.disabled}
               </div>
               <div className="flex items-center gap-2">
@@ -494,7 +537,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50 hover:border-gray-300 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=archived')}
             >
-              <div className="text-4xl font-bold text-gray-600 mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-600 mb-1 sm:mb-2">
                 {jdStatusCounts.archived}
               </div>
               <div className="flex items-center gap-2">
@@ -508,75 +551,6 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Plan Quotas & Usage */}
-      <Card className="border-gray-200">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg font-semibold text-gray-900">
-                {quotaStatusData?.plan_name || 'Current Plan'} - Quotas & Usage
-              </CardTitle>
-              <CardDescription className="text-gray-600">
-                Monitor your plan limits and current usage
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push('/subscription/current-plan')}
-            >
-              Upgrade Plan
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loadingQuota ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              <span className="ml-2 text-gray-600">Loading quota data...</span>
-            </div>
-          ) : quotaStatusData?.quotas && quotaStatusData.quotas.length > 0 ? (
-            <div className="grid grid-cols-4 gap-4">
-              {quotaStatusData.quotas.slice(0, 4).map((quota) => {
-                const isUnlimited = quota.limit === -1;
-                const progressColor = quota.is_exhausted
-                  ? 'bg-red-600'
-                  : quota.is_low
-                  ? 'bg-yellow-600'
-                  : 'bg-green-600';
-
-                return (
-                  <div key={quota.quota_type} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">{quota.name}</span>
-                      <span className="font-medium text-gray-900">
-                        {isUnlimited
-                          ? 'Unlimited'
-                          : `${quota.used} / ${quota.limit}`}
-                      </span>
-                    </div>
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full ${progressColor} transition-all`}
-                        style={{
-                          width: isUnlimited
-                            ? '100%'
-                            : `${Math.min(quota.percentage_used, 100)}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-600">
-              No quota data available
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -770,7 +744,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             <CardDescription className="text-gray-600">Common tasks to get you started</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-4">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
               {canCreateJD && (
                 <Button
                   variant="outline"
@@ -815,6 +789,68 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           </CardContent>
         </Card>
       )}
+
+      {/* Recent Activity */}
+      <Card className="border-gray-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+            <Clock className="h-5 w-5 text-gray-600" />
+            Recent Activity
+          </CardTitle>
+          <CardDescription className="text-gray-600">
+            Your latest actions and updates
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingActivity ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            </div>
+          ) : userActivity.length === 0 ? (
+            <div className="text-center py-8">
+              <Activity className="h-10 w-10 text-gray-400 mx-auto mb-3" />
+              <p className="text-sm text-gray-600">No recent activity</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left py-2 px-3 font-medium text-gray-600 w-8"></th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-600">Action</th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-600">Details</th>
+                    <th className="text-left py-2 px-3 font-medium text-gray-600 whitespace-nowrap">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {userActivity.map((activity) => {
+                    const detail = activity.details as Record<string, any> | null;
+                    const detailText = detail?.title || detail?.name || detail?.email || activity.entity_type || '';
+                    return (
+                      <tr key={activity.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                        <td className="py-3 px-3">
+                          <div className="p-1.5 bg-gray-100 rounded-lg inline-flex">
+                            {getActivityIcon(activity.action)}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span className="font-medium text-gray-900">{activity.action_display}</span>
+                        </td>
+                        <td className="py-3 px-3 text-gray-600 max-w-xs truncate">
+                          {detailText || '—'}
+                        </td>
+                        <td className="py-3 px-3 text-gray-500 whitespace-nowrap">
+                          {activity.time_ago}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Hide scrollbar for horizontal scrollable tabs */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -377,4 +386,39 @@ a:focus:not(:focus-visible) {
   left: 50%;
   transform: translateX(-50%);
   top: 0;
+}
+
+/* ============================================
+   MOBILE RESPONSIVE STYLES
+   ============================================ */
+
+/* Mobile: Base responsive adjustments - MINIMAL CHANGES */
+@media (max-width: 768px) {
+  /* Tables: Make scrollable horizontally */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Reduce page padding on mobile */
+  main > div {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* Touch-friendly tap targets */
+  /* button,
+  a[role="button"] {
+    min-height: 44px;
+  } */
+}
+
+/* Very small screens - phones in portrait */
+@media (max-width: 640px) {
+  /* Allow text to wrap */
+  body {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
 }

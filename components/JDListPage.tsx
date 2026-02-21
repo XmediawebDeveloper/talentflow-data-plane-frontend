@@ -46,6 +46,9 @@ export default function JDListPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [selectedJds, setSelectedJds] = useState<string[]>([]);
+  // Track which JDs can be deleted (no active assessments)
+  // null = still checking, true = can delete, false = cannot delete (has active assessments)
+  const [jdDeletionStatus, setJdDeletionStatus] = useState<Record<string, { canDelete: boolean; activeCount: number } | null>>({});
 
   // FIX-003: State for inline JD creation/editing
   const [showJDSheet, setShowJDSheet] = useState(false);
@@ -170,6 +173,36 @@ export default function JDListPage() {
       setJds(response.items);
       setTotalPages(response.total_pages);
       setTotal(response.total);
+
+      // Initially mark all JDs as null (checking) — delete button hidden until confirmed safe
+      const initialStatusMap: Record<string, null> = {};
+      response.items.forEach((jd) => { initialStatusMap[jd.id] = null; });
+      setJdDeletionStatus(initialStatusMap);
+
+      // Check assessment status for each JD to determine if deletion is allowed
+      const deletionStatusChecks = await Promise.allSettled(
+        response.items.map(async (jd) => {
+          try {
+            const assessmentStatus = await jdService.checkAssessmentStatus(jd.id);
+            return { jdId: jd.id, canDelete: assessmentStatus.can_delete, activeCount: assessmentStatus.active_count };
+          } catch (error) {
+            console.error(`Failed to check assessment status for JD ${jd.id}:`, error);
+            // Fail-CLOSED: if check fails, do NOT allow deletion — safer than allowing it
+            return { jdId: jd.id, canDelete: false, activeCount: 0 };
+          }
+        })
+      );
+
+      const statusMap: Record<string, { canDelete: boolean; activeCount: number }> = {};
+      deletionStatusChecks.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          statusMap[result.value.jdId] = {
+            canDelete: result.value.canDelete,
+            activeCount: result.value.activeCount,
+          };
+        }
+      });
+      setJdDeletionStatus(statusMap);
     } catch (error: any) {
       console.error('Failed to fetch JDs:', error);
       // Handle tenant suspended/expired errors
@@ -225,11 +258,11 @@ export default function JDListPage() {
     setConfirmLoading(true);
     try {
       await jdService.delete(jdId);
-      toast.success('Job description deleted');
+      toast.success('Job description deleted successfully');
       fetchJDs();
       setConfirmDialog({ isOpen: false, type: null, jdId: null, jdTitle: '' });
-    } catch (error) {
-      toast.error('Failed to delete');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete job description');
     } finally {
       setConfirmLoading(false);
     }
@@ -741,25 +774,50 @@ export default function JDListPage() {
                               Archive Job
                             </button>
                           )}
-                          {/* Delete action */}
-                          {/* ✅ PERMISSION FIX: Only show Delete button if user has canDeleteJD permission */}
-                          {jdPerms.canDelete && (
-                            <button
-                              onClick={() => {
-                                setConfirmDialog({
-                                  isOpen: true,
-                                  type: 'delete',
-                                  jdId: jd.id,
-                                  jdTitle: jd.title,
-                                });
-                                setActiveDropdown(null);
-                              }}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete
-                            </button>
-                          )}
+                          {/* Delete section — only shown if user has delete permission */}
+                          {jdPerms.canDelete && (() => {
+                            const delStatus = jdDeletionStatus[jd.id];
+
+                            // Still loading — show nothing (delete button stays hidden)
+                            if (delStatus === null || delStatus === undefined) return null;
+
+                            // Has active assessments — show ONLY the warning message, NO delete button
+                            if (!delStatus.canDelete) {
+                              return (
+                                <div className="w-full px-4 py-3 text-sm bg-orange-50 border-t border-orange-100">
+                                  <div className="flex items-start gap-2">
+                                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-orange-500" />
+                                    <div>
+                                      <p className="font-semibold text-orange-800">Cannot Delete</p>
+                                      <p className="text-xs mt-0.5 text-orange-700">
+  You have assigned the assessment for this JD. So you will not be able to delete this JD.
+</p>
+
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            // No active assessments — show delete button
+                            return (
+                              <button
+                                onClick={() => {
+                                  setConfirmDialog({
+                                    isOpen: true,
+                                    type: 'delete',
+                                    jdId: jd.id,
+                                    jdTitle: jd.title,
+                                  });
+                                  setActiveDropdown(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Delete
+                              </button>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
@@ -877,7 +935,7 @@ export default function JDListPage() {
         <ConfirmationDialog
           isOpen={confirmDialog.isOpen}
           title="Delete Job Description?"
-          message={`Are you sure you want to permanently delete "${confirmDialog.jdTitle}"? This action cannot be undone. All associated data (applicants, scored resumes, assessments) will remain but will no longer be linked to this JD.`}
+          message={`Are you sure you want to permanently delete "${confirmDialog.jdTitle}"? This action cannot be undone.`}
           type="danger"
           confirmText="Yes, Delete"
           cancelText="Cancel"

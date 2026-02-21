@@ -95,6 +95,7 @@ export interface InvitationResponse {
   candidate_email: string;
   candidate_phone?: string;
   invite_source?: string;
+  candidate_display_id?: string;
   resume_id?: string;
   invitation_token: string;
   invitation_link?: string;
@@ -115,6 +116,7 @@ export interface AssessmentAttemptResponse {
   candidate_email: string;
   candidate_phone?: string;
   invite_source?: string;
+  candidate_display_id?: string;
   assessment_title: string;
   jd_title: string;
   started_at?: string;
@@ -160,6 +162,7 @@ export interface QuestionEvaluation {
   feedback?: string;
   strengths?: string[];
   areas_for_improvement?: string[];
+  question_status?: 'pending' | 'answered' | 'skipped' | 'scored';
 }
 
 export interface RoundScore {
@@ -178,6 +181,7 @@ export interface ProctoringStats {
   window_blur_count: number;
   video_violation_count: number;
   voice_violation_count: number;
+  multiple_faces_count: number;
   fullscreen_exit_count: number;
   other_violation_count?: number; // Uncategorized events
   total_violations: number;
@@ -203,6 +207,23 @@ export interface DetailedResultResponse {
   candidate_insights?: Record<string, any>;
   hiring_recommendation?: string;
   proctoring_stats?: ProctoringStats;
+  ai_generation_audit?: {
+    ai_model_version: string | null;
+    questions_generated_at: string | null;
+    generation_params: {
+      jd_id?: string;
+      jd_title?: string;
+      experience_level?: string;
+      duration_minutes?: number;
+      total_questions_generated?: number;
+      rounds_config?: Array<{
+        type: string;
+        weightage: number;
+        topics?: string[];
+      }>;
+      generation_timestamp?: string;
+    } | null;
+  };
 }
 
 // ==================== NEW API INTERFACES ====================
@@ -582,7 +603,9 @@ export const assessmentService = {
    */
   async deleteResult(assessmentId: string, resultId: string): Promise<void> {
     try {
-      await api.delete(`/assessments/${assessmentId}/results/${resultId}`);
+      await api.delete(`/assessments/${assessmentId}/results/${resultId}`, {
+        timeout: 30000, // 30 seconds timeout
+      });
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -791,11 +814,16 @@ export const assessmentService = {
   /**
    * 7. Export individual assessment report as PDF
    * AS-25: Individual PDF report generation
+   * If attemptId is provided, generates PDF for that specific candidate only.
    */
-  async exportPDF(assessmentId: string): Promise<Blob> {
+  async exportPDF(assessmentId: string, attemptId?: string): Promise<Blob> {
     try {
+      const params: any = {};
+      if (attemptId) params.attempt_id = attemptId;
       const response = await api.get(`/reports/export/assessment/${assessmentId}`, {
         responseType: 'blob',
+        params,
+        timeout: 120000, // 2 minutes timeout for PDF generation
       });
       return response.data;
     } catch (error) {

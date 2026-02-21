@@ -243,6 +243,7 @@ export interface CurrentQuestion {
     text_response: string | null;
     selected_options: string[] | null;
     code_submission: string | null;
+    language: string | null;  // Coding language used (python, java, etc.)
     is_locked: boolean;  // True = submitted (not editable), False = draft (editable)
   } | null;
   // All question statuses for progress tracking
@@ -486,10 +487,13 @@ export const candidateService = {
    * Get assessment information for a candidate token
    * CROSS-BROWSER: Includes retry logic for iOS/Safari network issues
    */
-  async getAssessmentInfo(token: string): Promise<AssessmentInfo> {
+  async getAssessmentInfo(token: string, candidateName?: string, role?: string): Promise<AssessmentInfo> {
     try {
+      const params: Record<string, string> = {};
+      if (candidateName) params.c = candidateName;
+      if (role) params.r = role;
       const response = await retryApiCall(() =>
-        candidateApi.get<AssessmentInfo>(`/candidate/assessment/${token}`)
+        candidateApi.get<AssessmentInfo>(`/candidate/assessment/${token}`, { params })
       );
 
       // Store session token if returned (for page refresh support)

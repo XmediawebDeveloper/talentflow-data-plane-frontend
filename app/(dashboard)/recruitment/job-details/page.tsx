@@ -246,10 +246,10 @@ function JobDetailsContent() {
   const handleDelete = async (job: Job) => {
     try {
       await jdService.delete(job.id);
-      toast.success(`"${job.title}" has been deleted`);
+      toast.success(`"${job.title}" has been deleted successfully`);
       router.push('/recruitment/job-openings');
-    } catch (error) {
-      toast.error('Failed to delete job');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete job description');
     }
   };
 

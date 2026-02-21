@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface WebSocketMessage {
-  type: 'new_notification' | 'notification_count' | 'connected' | 'pong';
+  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated';
   data?: any;
 }
 
@@ -15,6 +15,7 @@ interface UseNotificationWebSocketProps {
   token: string | null;
   onNewNotification?: (notification: any) => void;
   onCountUpdate?: (count: number) => void;
+  onPermissionsUpdated?: () => void;
   enabled?: boolean;
 }
 
@@ -46,6 +47,7 @@ export function useNotificationWebSocket({
   token,
   onNewNotification,
   onCountUpdate,
+  onPermissionsUpdated,
   enabled = true,
 }: UseNotificationWebSocketProps): UseNotificationWebSocketReturn {
   const [isConnected, setIsConnected] = useState(false);
@@ -61,6 +63,7 @@ export function useNotificationWebSocket({
   // Store callbacks in refs to avoid dependency issues
   const onNewNotificationRef = useRef(onNewNotification);
   const onCountUpdateRef = useRef(onCountUpdate);
+  const onPermissionsUpdatedRef = useRef(onPermissionsUpdated);
 
   useEffect(() => {
     onNewNotificationRef.current = onNewNotification;
@@ -69,6 +72,10 @@ export function useNotificationWebSocket({
   useEffect(() => {
     onCountUpdateRef.current = onCountUpdate;
   }, [onCountUpdate]);
+
+  useEffect(() => {
+    onPermissionsUpdatedRef.current = onPermissionsUpdated;
+  }, [onPermissionsUpdated]);
 
   const reconnect = useCallback(() => {
     reconnectAttemptsRef.current = 0;
@@ -79,12 +86,16 @@ export function useNotificationWebSocket({
 
   // Main connection effect
   useEffect(() => {
+    console.log('[WebSocket] Effect triggered — token:', token ? '✅ present' : '❌ missing', '| enabled:', enabled);
+
     if (!token || !enabled) {
+      console.log('[WebSocket] Skipping connection — token or enabled is falsy');
       return;
     }
 
     // Prevent multiple simultaneous connection attempts
     if (isConnectingRef.current || wsRef.current?.readyState === WebSocket.OPEN) {
+      console.log('[WebSocket] Already connecting/connected — readyState:', wsRef.current?.readyState, '| isConnecting:', isConnectingRef.current);
       return;
     }
 
@@ -108,17 +119,20 @@ export function useNotificationWebSocket({
 
       try {
         const wsUrl = `${WS_BASE_URL}/api/v1/ws/notifications?token=${encodeURIComponent(token)}`;
-        console.log('[WebSocket] Connecting to:', wsUrl.replace(token, '***'));
+        console.log('[WebSocket] Attempting connection to:', wsUrl.replace(token, '***TOKEN***'));
+        console.log('[WebSocket] WS_BASE_URL:', WS_BASE_URL);
 
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
+        console.log('[WebSocket] WebSocket object created — initial readyState:', ws.readyState, '(0=CONNECTING)');
 
         ws.onopen = () => {
           if (isCleaningUpRef.current) {
+            console.log('[WebSocket] onopen fired but cleanup in progress — closing');
             ws.close();
             return;
           }
-          console.log('[WebSocket] Connected');
+          console.log('[WebSocket] ✅ Connected successfully — readyState:', ws.readyState, '(1=OPEN)');
           setIsConnected(true);
           setConnectionError(null);
           reconnectAttemptsRef.current = 0;
@@ -157,6 +171,13 @@ export function useNotificationWebSocket({
               case 'pong':
                 // Keepalive response, no action needed
                 break;
+
+              case 'permissions_updated':
+                console.log('[WebSocket] Permissions updated - triggering refresh');
+                if (onPermissionsUpdatedRef.current) {
+                  onPermissionsUpdatedRef.current();
+                }
+                break;
             }
           } catch (e) {
             console.error('[WebSocket] Error parsing message:', e);
@@ -164,13 +185,14 @@ export function useNotificationWebSocket({
         };
 
         ws.onerror = (error) => {
-          console.error('[WebSocket] Error:', error);
+          console.error('[WebSocket] ❌ Error event fired:', error);
+          console.error('[WebSocket] readyState at error:', ws.readyState, '(0=CONNECTING, 1=OPEN, 2=CLOSING, 3=CLOSED)');
           setConnectionError('WebSocket connection error');
           // Note: onclose will be called after onerror, so state cleanup happens there
         };
 
         ws.onclose = (event) => {
-          console.log('[WebSocket] Closed:', event.code, event.reason);
+          console.log('[WebSocket] 🔌 Closed — code:', event.code, '| reason:', event.reason || '(no reason)', '| wasClean:', event.wasClean);
           setIsConnected(false);
           isConnectingRef.current = false;
 

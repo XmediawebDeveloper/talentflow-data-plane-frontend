@@ -206,7 +206,7 @@ function DraggableCardResumeRow({
   return (
     <div
       ref={preview as unknown as React.Ref<HTMLDivElement>}
-      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center ${
+      className={`grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-3 hover:bg-gray-50 cursor-pointer group transition-colors items-center min-w-[1200px] ${
         !isLast ? 'border-b border-gray-100' : ''
       } ${selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''} ${isDragging ? 'opacity-50' : ''}`}
       onClick={() => onViewDetails(resume)}
@@ -339,7 +339,7 @@ function DraggableCardResumeRow({
 export default function MyResumesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { user, isTenantAdmin, hasPermission, isLoading: authLoading } = useAuth();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -424,6 +424,13 @@ export default function MyResumesPage() {
 
   // AI Talent Match modal state
   const [isAITalentMatchModalOpen, setIsAITalentMatchModalOpen] = useState(false);
+
+  // Delete resume confirmation state
+  const [deleteResumeConfirm, setDeleteResumeConfirm] = useState<{
+    isOpen: boolean;
+    ids: string[];
+    names: string[];
+  }>({ isOpen: false, ids: [], names: [] });
 
   // Delete folder confirmation state
   const [deleteFolderConfirm, setDeleteFolderConfirm] = useState<{
@@ -881,24 +888,33 @@ export default function MyResumesPage() {
     setSelectedResumes(selected ? filteredResumes.map(r => r.id) : []);
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      await resumeService.delete(id);
-      setResumes(prev => prev.filter(r => r.id !== id));
-      setSelectedResumes(prev => prev.filter(r => r !== id));
-    } catch (error) {
-      toast.error('Failed to delete resume');
-    }
+  const handleDelete = (id: string) => {
+    const resume = resumes.find(r => r.id === id);
+    setDeleteResumeConfirm({
+      isOpen: true,
+      ids: [id],
+      names: [resume?.candidate_name || resume?.file_name || 'this resume'],
+    });
   };
 
-  const handleDeleteResumes = async (ids: string[]) => {
+  const handleDeleteResumes = (ids: string[]) => {
+    const names = ids.map(id => {
+      const r = resumes.find(r => r.id === id);
+      return r?.candidate_name || r?.file_name || 'Unknown';
+    });
+    setDeleteResumeConfirm({ isOpen: true, ids, names });
+  };
+
+  const confirmDeleteResumes = async () => {
+    const { ids } = deleteResumeConfirm;
+    setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] });
     try {
       await Promise.all(ids.map(id => resumeService.delete(id)));
       setResumes(prev => prev.filter(r => !ids.includes(r.id)));
-      setSelectedResumes([]);
-      toast.success(`${ids.length} resume(s) deleted`);
+      setSelectedResumes(prev => prev.filter(id => !ids.includes(id)));
+      toast.success(ids.length === 1 ? 'Resume deleted' : `${ids.length} resume(s) deleted`);
     } catch (error) {
-      toast.error('Failed to delete resumes');
+      toast.error('Failed to delete resume(s)');
     }
   };
 
@@ -1138,11 +1154,28 @@ export default function MyResumesPage() {
     }
   };
 
+  // Helper: check if a resume is archived (by flag OR by folder)
+  const isResumeArchived = (resume: Resume): boolean => {
+    if (resume.isArchived === true) return true;
+    const archivedFolder = folders.find(f => f.name === 'Archived Resumes' && !f.parentId);
+    if (archivedFolder && resume.folderId === archivedFolder.id) return true;
+    return false;
+  };
+
   // Handle apply to job
   // Single candidate: show version selector first
   // Multiple candidates: use latest version directly
   const handleApplyToJob = async () => {
     if (selectedResumes.length === 0) return;
+
+    // Check if any selected resumes are archived (by flag or folder)
+    const selectedResumeObjects = resumes.filter(r => selectedResumes.includes(r.id));
+    const archivedCount = selectedResumeObjects.filter(r => isResumeArchived(r)).length;
+
+    if (archivedCount > 0) {
+      toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be applied to any job. Please select active resumes only.`);
+      return;
+    }
 
     if (selectedResumes.length === 1) {
       // Single candidate - show version selector first
@@ -1228,6 +1261,12 @@ export default function MyResumesPage() {
   // Handle apply to job for a single resume (from table action button)
   // This is called from ResumeTable after version is selected there
   const handleSingleResumeApplyToJob = async (resume: Resume) => {
+    // Check if resume is archived (by flag OR by folder)
+    if (isResumeArchived(resume)) {
+      toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
+      return;
+    }
+
     // Resume already has selected version ID from ResumeTable's version selector
     setSingleResumeToApply(resume);
     await fetchPublishedJobs();
@@ -1789,6 +1828,20 @@ export default function MyResumesPage() {
             error: detail?.message || `Failed to upload ${files[0].name}`,
           };
         }
+        // Check for read-only mode (403 Forbidden)
+        else if (error?.response?.status === 403) {
+          const detail = error?.response?.data?.detail;
+          if (detail?.error === 'READ_ONLY_MODE') {
+            return {
+              success: false,
+              error: 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.',
+            };
+          }
+          return {
+            success: false,
+            error: 'You do not have permission to upload resumes. Please contact your administrator.',
+          };
+        }
         else {
           return { success: false, error: `Failed to upload ${files[0].name}` };
         }
@@ -1797,6 +1850,14 @@ export default function MyResumesPage() {
 
     // For multiple files, use bulk upload with async processing
     try {
+      // Auto-clear previous completed batches before starting a new upload
+      try {
+        await resumeService.deleteCompletedBatches();
+        setUploadHistory(prev => prev.filter(r => r.pending > 0 || r.status === 'processing'));
+      } catch (e) {
+        // Non-critical — proceed even if cleanup fails
+      }
+
       // Start bulk upload - returns immediately with batch info
       const batch = await resumeService.uploadBulk(files, targetFolderId);
 
@@ -1866,8 +1927,16 @@ export default function MyResumesPage() {
               : record
           ));
 
-          // Check if batch is complete
-          if (status.status === 'completed' || status.pending === 0) {
+          // Check if batch is complete.
+          // IMPORTANT: Do NOT stop on status.pending === 0 alone — the backend uses
+          // 'pending' only for queued items. Once a file moves to 'processing',
+          // pending drops to 0 but the file is still running. Stopping here causes
+          // it to freeze at "⚡ Processing..." forever.
+          const hasActiveItems = status.items?.some((item: any) =>
+            item.status === 'pending' || item.status === 'processing'
+          ) ?? false;
+
+          if (status.status === 'completed' || !hasActiveItems) {
             clearInterval(pollInterval);
             pollingIntervalsRef.current.delete(pollInterval); // Remove from tracking
 
@@ -1895,6 +1964,20 @@ export default function MyResumesPage() {
 
       return { success: true };
     } catch (error: any) {
+      // Check for read-only mode (403 Forbidden)
+      if (error?.response?.status === 403) {
+        const detail = error?.response?.data?.detail;
+        if (detail?.error === 'READ_ONLY_MODE') {
+          return {
+            success: false,
+            error: 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.',
+          };
+        }
+        return {
+          success: false,
+          error: 'You do not have permission to upload resumes. Please contact your administrator.',
+        };
+      }
       // Check for duplicate error (409 Conflict)
       if (error?.response?.status === 409) {
         const detail = error?.response?.data?.detail;
@@ -2036,24 +2119,25 @@ export default function MyResumesPage() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-    <main className="flex-1 p-8 bg-gray-50">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="text-2xl font-semibold text-gray-900">My Resume Database</h1>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
+    <main className="flex-1 p-4 sm:p-6 md:p-8 bg-gray-50">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+        <div className="w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">My Resume Database</h1>
+            <span className="inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium bg-blue-100 text-blue-700">
               {totalItems} Resumes
             </span>
           </div>
-          <p className="text-sm text-gray-600">Resumes uploaded by you</p>
+          <p className="text-xs sm:text-sm text-gray-600">Resumes uploaded by you</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={() => setIsUploadHistoryModalOpen(true)}
-            className="relative flex items-center gap-2 bg-white text-gray-700 px-4 py-2.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors"
+            className="relative flex items-center justify-center gap-1.5 sm:gap-2 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors text-xs sm:text-sm flex-1 sm:flex-initial"
           >
-            <History className="w-5 h-5" />
-            Upload History
+            <History className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Upload History</span>
+            <span className="sm:hidden">History</span>
             {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
               <span className="absolute -top-1 -right-1 flex h-5 w-5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
@@ -2065,16 +2149,17 @@ export default function MyResumesPage() {
           </button>
           <button
             onClick={() => setIsUploadModalOpen(true)}
-            disabled={!hasPermission('canUploadResumes')}
-            title={!hasPermission('canUploadResumes') ? 'You do not have permission to upload resumes. Contact your administrator.' : 'Upload Resume'}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-md transition-colors ${
-              hasPermission('canUploadResumes')
+            disabled={!authLoading && !hasPermission('canUploadResumes') && !isTenantAdmin}
+            title={!authLoading && !hasPermission('canUploadResumes') && !isTenantAdmin ? 'You do not have permission to upload resumes. Contact your administrator.' : 'Upload Resume'}
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-md transition-colors text-xs sm:text-sm flex-1 sm:flex-initial ${
+              authLoading || hasPermission('canUploadResumes') || isTenantAdmin
                 ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
             }`}
           >
-            <Plus className="w-5 h-5" />
-            Upload Resume
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="hidden sm:inline">Upload Resume</span>
+            <span className="sm:hidden">Upload</span>
           </button>
         </div>
       </div>
@@ -2086,7 +2171,7 @@ export default function MyResumesPage() {
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
-            onApplyToJob={handleApplyToJob}
+            onApplyToJob={hasPermission('canRunScoring') || isTenantAdmin ? handleApplyToJob : undefined}
             onDownload={handleBulkDownload}
             onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
@@ -2096,8 +2181,8 @@ export default function MyResumesPage() {
           />
         )}
 
-        <div className="flex items-center justify-between border-b border-gray-200">
-          <div className="flex-1">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b border-gray-200">
+          <div className="flex-1 border-b sm:border-b-0 sm:border-r border-gray-200">
             <SearchFilterBarCompact
               searchQuery={searchQuery}
               onSearchChange={handleSearchChange}
@@ -2108,36 +2193,36 @@ export default function MyResumesPage() {
             />
           </div>
           {/* View Toggle */}
-          <div className="flex items-center gap-1 px-4 py-3 border-l border-gray-200">
-            <span className="text-xs text-gray-500 mr-2">View:</span>
+          <div className="flex items-center justify-center gap-1 px-3 sm:px-4 py-2 sm:py-3">
+            <span className="text-xs text-gray-500 mr-1 sm:mr-2">View:</span>
             <button
               onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
                 viewMode === 'list'
                   ? 'bg-gray-800 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
               title="List View"
             >
-              <List className="w-4 h-4" />
+              <List className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             <button
               onClick={() => setViewMode('card')}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`p-1.5 sm:p-2 rounded-lg transition-colors ${
                 viewMode === 'card'
                   ? 'bg-gray-800 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
               title="Card View"
             >
-              <LayoutGrid className="w-4 h-4" />
+              <LayoutGrid className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
           </div>
         </div>
 
         {/* Search Results Summary */}
         {appliedSearchQuery && (
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+          <div className="px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-500" />
               <span className="text-sm text-gray-700">
@@ -2162,7 +2247,7 @@ export default function MyResumesPage() {
 
         {viewMode === 'list' ? (
           // List View with Folder Tree
-          <div className="flex">
+          <div className="flex flex-col md:flex-row">
             <FolderTree
               folders={folders}
               selectedFolder={selectedFolder}
@@ -2181,7 +2266,7 @@ export default function MyResumesPage() {
               onWidthChange={setFolderTreeWidth}
             />
 
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-w-0">
               {/* Breadcrumb Navigation for List View */}
               {selectedFolder && selectedFolder !== 'all' && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-sm">
@@ -2223,7 +2308,7 @@ export default function MyResumesPage() {
                   onSelectResume={handleSelectResume}
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
-                  onApplyToJob={handleSingleResumeApplyToJob}
+                  onApplyToJob={hasPermission('canRunScoring') || isTenantAdmin ? handleSingleResumeApplyToJob : undefined}
                   onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
                   onMoveToFolder={handleMoveToFolder}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
@@ -2231,6 +2316,10 @@ export default function MyResumesPage() {
                   highlightQuery={appliedSearchQuery}
                   onArchive={(resumeId) => handleArchiveResumes([resumeId])}
                   disablePagination={true}
+                  isArchivedFolder={
+                    folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
+                  }
+                  archivedFolderId={folders.find(f => f.name === 'Archived Resumes' && !f.parentId)?.id}
                 />
               </div>
               {totalPages > 0 && (
@@ -2247,7 +2336,7 @@ export default function MyResumesPage() {
           </div>
         ) : (
           // Card View - Folders as Cards with Breadcrumb Navigation
-          <div className="p-6">
+          <div className="p-3 sm:p-4 md:p-6">
             {(() => {
               // Get current folder data and children
               const currentFolderData = cardViewFolder ? getFolderById(cardViewFolder) : null;
@@ -2300,7 +2389,7 @@ export default function MyResumesPage() {
                 <>
                   {/* Breadcrumb Navigation */}
                   {(cardViewFolder !== null || breadcrumbPath.length > 0) && (
-                    <div className="flex items-center gap-2 mb-6 text-sm">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-4 sm:mb-6 text-xs sm:text-sm">
                       <button
                         onClick={() => navigateToFolder(null)}
                         className="flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline transition-colors"
@@ -2340,8 +2429,8 @@ export default function MyResumesPage() {
 
                   {/* Current Folder Header (when inside a folder) */}
                   {cardViewFolder !== null && cardViewFolder !== 'uncategorized' && cardViewFolder !== 'all' && currentFolderData && (
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                    <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                      <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
                         currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId
                           ? 'bg-amber-100'
                           : currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
@@ -2349,22 +2438,22 @@ export default function MyResumesPage() {
                             : 'bg-blue-100'
                       }`}>
                         {currentFolderData.name === 'Archived Resumes' && !currentFolderData.parentId ? (
-                          <Archive className="w-6 h-6 text-amber-600" />
+                          <Archive className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
                         ) : (
-                          <FolderOpen className={`w-6 h-6 ${
+                          <FolderOpen className={`w-5 h-5 sm:w-6 sm:h-6 ${
                             currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
                               ? 'text-green-600'
                               : 'text-blue-600'
                           }`} />
                         )}
                       </div>
-                      <div>
-                        <h2 className="font-semibold text-gray-900 text-lg">
+                      <div className="min-w-0 flex-1">
+                        <h2 className="font-semibold text-gray-900 text-base sm:text-lg truncate">
                           {currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
                             ? 'Root (Default)'
                             : currentFolderData.name}
                         </h2>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-xs sm:text-sm text-gray-500">
                           {foldersToDisplay.length > 0 && `${foldersToDisplay.length} subfolder${foldersToDisplay.length !== 1 ? 's' : ''}`}
                           {foldersToDisplay.length > 0 && folderResumes.length > 0 && ' • '}
                           {folderResumes.length > 0 && `${folderResumes.length} resume${folderResumes.length !== 1 ? 's' : ''}`}
@@ -2376,13 +2465,13 @@ export default function MyResumesPage() {
 
                   {/* All Resumes Header */}
                   {cardViewFolder === 'all' && (
-                    <div className="flex items-center gap-4 mb-6">
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <LayoutGrid className="w-6 h-6 text-blue-600" />
+                    <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                       </div>
-                      <div>
-                        <h2 className="font-semibold text-gray-900 text-lg">All Resumes</h2>
-                        <p className="text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
+                      <div className="min-w-0">
+                        <h2 className="font-semibold text-gray-900 text-base sm:text-lg">All Resumes</h2>
+                        <p className="text-xs sm:text-sm text-gray-500">{folderResumes.length} resume{folderResumes.length !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
                   )}
@@ -2402,11 +2491,11 @@ export default function MyResumesPage() {
 
                   {/* Subfolders Grid (if any) */}
                   {(foldersToDisplay.length > 0 || cardViewFolder === null) && (
-                    <div className="mb-6">
+                    <div className="mb-4 sm:mb-6">
                       {cardViewFolder !== null && (
-                        <h3 className="text-sm font-medium text-gray-700 mb-3">Subfolders</h3>
+                        <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Subfolders</h3>
                       )}
-                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                         {/* All Resumes card at root level */}
                         {cardViewFolder === null && (
                           <div
@@ -2416,15 +2505,15 @@ export default function MyResumesPage() {
                               setBreadcrumbPath([]);
                             }}
                           >
-                            <div className="flex items-center gap-3 p-4">
-                              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <LayoutGrid className="w-6 h-6 text-blue-600" />
+                            <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
+                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
                               </div>
-                              <div className="flex-1">
-                                <h3 className="font-semibold text-gray-900">All Resumes</h3>
-                                <p className="text-sm text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">All Resumes</h3>
+                                <p className="text-xs sm:text-sm text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
                               </div>
-                              <ChevronRight className="w-5 h-5 text-gray-400" />
+                              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
                             </div>
                           </div>
                         )}
@@ -2459,15 +2548,15 @@ export default function MyResumesPage() {
                               setBreadcrumbPath([]);
                             }}
                           >
-                            <div className="flex items-center gap-3 p-4">
-                              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                                <Folder className="w-6 h-6 text-gray-600" />
+                            <div className="flex items-center gap-2 sm:gap-3 p-3 sm:p-4">
+                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <Folder className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
                               </div>
-                              <div className="flex-1">
-                                <h3 className="font-semibold text-gray-900">Uncategorized</h3>
-                                <p className="text-sm text-gray-500">{unfolderedResumes.length} resume{unfolderedResumes.length !== 1 ? 's' : ''}</p>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">Uncategorized</h3>
+                                <p className="text-xs sm:text-sm text-gray-500">{unfolderedResumes.length} resume{unfolderedResumes.length !== 1 ? 's' : ''}</p>
                               </div>
-                              <ChevronRight className="w-5 h-5 text-gray-400" />
+                              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
                             </div>
                           </div>
                         )}
@@ -2492,10 +2581,12 @@ export default function MyResumesPage() {
                           {foldersToDisplay.length > 0 && (
                             <h3 className="text-sm font-medium text-gray-700 mb-3">Resumes in this folder</h3>
                           )}
-                          {/* Resumes Table */}
+                          {/* Resumes Table - Desktop */}
                       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto">
                         {/* Table Header */}
-                        <div className="grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <div className="grid grid-cols-[32px_auto_1fr_1fr_1fr_1fr_1fr_80px_100px_80px_60px_100px] gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[1200px]">
                           <div></div>
                           <div className="flex items-center">
                             <input
@@ -2535,6 +2626,72 @@ export default function MyResumesPage() {
                             onViewDetails={(r) => router.push(`/recruitment/resume-view/${r.id}`)}
                           />
                         ))}
+                        </div>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden space-y-3 p-3">
+                          {folderResumes.map((resume) => (
+                            <div
+                              key={resume.id}
+                              className={`bg-white border rounded-lg p-4 cursor-pointer hover:shadow-md transition-all ${
+                                selectedResumes.includes(resume.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+                              }`}
+                              onClick={() => router.push(`/recruitment/resume-view/${resume.id}`)}
+                            >
+                              <div className="flex items-start gap-3 mb-3">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedResumes.includes(resume.id)}
+                                  onChange={(e) => {
+                                    e.stopPropagation();
+                                    handleSelectResume(resume.id);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-600 mt-1"
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-gray-900 truncate">{resume.name}</div>
+                                  <div className="text-sm text-gray-500 truncate">{resume.email || '-'}</div>
+                                </div>
+                              </div>
+                              <div className="space-y-2 text-sm mb-3">
+                                {resume.phone && resume.phone !== 'No phone' && (
+                                  <div className="text-gray-600 truncate">{resume.phone}</div>
+                                )}
+                                {resume.experience && (
+                                  <div className="text-gray-600">{resume.experience} exp.</div>
+                                )}
+                                {resume.skills && resume.skills.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {resume.skills.slice(0, 3).map((skill, i) => (
+                                      <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs border border-blue-200">{skill}</span>
+                                    ))}
+                                    {resume.skills.length > 3 && (
+                                      <span className="px-2 py-0.5 text-gray-500 text-xs">+{resume.skills.length - 3}</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setQuickViewResume(resume); }}
+                                  className="flex-1 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg flex items-center justify-center gap-1"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View
+                                </button>
+                                {(hasPermission('canDeleteResumes') || isTenantAdmin) && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(resume.id); }}
+                                    className="px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center gap-1"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                         </div>
                       )}
@@ -2822,7 +2979,7 @@ export default function MyResumesPage() {
             setIsUploadHistoryMinimized(false);
             setIsUploadHistoryModalOpen(true);
           }}
-          className="fixed bottom-6 right-6 z-40 bg-blue-600 text-white px-4 py-3 rounded-xl shadow-lg hover:bg-blue-700 transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300"
+          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 bg-blue-600 text-white px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl shadow-lg hover:bg-blue-700 transition-all cursor-pointer flex items-center gap-2 sm:gap-3 animate-in slide-in-from-bottom duration-300"
         >
           <div className="relative">
             <History className="w-5 h-5" />
@@ -2854,14 +3011,14 @@ export default function MyResumesPage() {
             }}
           />
           {/* Centered Modal */}
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
               {/* Header */}
-              <div className="bg-gradient-to-r from-blue-50 to-white border-b border-gray-200 px-6 py-4 rounded-t-2xl">
+              <div className="bg-gradient-to-r from-blue-50 to-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 rounded-t-2xl">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Upload History</h2>
-                    <p className="text-sm text-gray-600 mt-0.5">View all past bulk upload reports</p>
+                  <div className="min-w-0">
+                    <h2 className="text-base sm:text-xl font-semibold text-gray-900">Upload History</h2>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-0.5">View all past bulk upload reports</p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -2886,7 +3043,7 @@ export default function MyResumesPage() {
               </div>
 
               {/* Content */}
-              <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-gray-50">
                 {(() => {
                   const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
                   const processingCount = myResumesHistory.filter(r => r.status === 'processing' || r.pending > 0).length;
@@ -2901,96 +3058,96 @@ export default function MyResumesPage() {
                   return (
                     <>
                       {/* Status Summary Cards - 6 Column Grid (Clickable Filters) */}
-                      <div className="grid grid-cols-3 gap-3 mb-6">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
                         {/* Completed */}
                         <div
                           onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'completed' ? null : 'completed')}
-                          className={`bg-gradient-to-br from-green-50 to-green-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                          className={`bg-gradient-to-br from-green-50 to-green-100/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
                             uploadHistoryFilter === 'completed' ? 'border-green-500 ring-2 ring-green-300 shadow-md' : 'border-green-200'
                           }`}
                         >
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-                              <CheckCircle className="w-4 h-4 text-white" />
+                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                             </div>
-                            <span className="text-xs text-gray-700">Completed</span>
+                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Completed</span>
                           </div>
-                          <div className="text-2xl font-bold text-green-700">{completedCount}</div>
+                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-green-700">{completedCount}</div>
                         </div>
 
                         {/* Duplicates */}
                         <div
                           onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'duplicated' ? null : 'duplicated')}
-                          className={`bg-gradient-to-br from-yellow-50 to-yellow-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                          className={`bg-gradient-to-br from-yellow-50 to-yellow-100/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
                             uploadHistoryFilter === 'duplicated' ? 'border-yellow-500 ring-2 ring-yellow-300 shadow-md' : 'border-yellow-200'
                           }`}
                         >
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
-                              <Copy className="w-4 h-4 text-white" />
+                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                             </div>
-                            <span className="text-xs text-gray-700">Duplicates</span>
+                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Duplicates</span>
                           </div>
-                          <div className="text-2xl font-bold text-yellow-700">{duplicatedCount}</div>
+                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-yellow-700">{duplicatedCount}</div>
                         </div>
 
                         {/* Versioned */}
                         <div
                           onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'versioned' ? null : 'versioned')}
-                          className={`bg-gradient-to-br from-purple-50 to-purple-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                          className={`bg-gradient-to-br from-purple-50 to-purple-100/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
                             uploadHistoryFilter === 'versioned' ? 'border-purple-500 ring-2 ring-purple-300 shadow-md' : 'border-purple-200'
                           }`}
                         >
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
-                              <GitBranch className="w-4 h-4 text-white" />
+                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                             </div>
-                            <span className="text-xs text-gray-700">Versioned</span>
+                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Versioned</span>
                           </div>
-                          <div className="text-2xl font-bold text-purple-700">{versionedCount}</div>
+                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-purple-700">{versionedCount}</div>
                         </div>
 
                         {/* Failed */}
                         <div
                           onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'error' ? null : 'error')}
-                          className={`bg-gradient-to-br from-red-50 to-red-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                          className={`bg-gradient-to-br from-red-50 to-red-100/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
                             uploadHistoryFilter === 'error' ? 'border-red-500 ring-2 ring-red-300 shadow-md' : 'border-red-200'
                           }`}
                         >
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
-                              <AlertCircle className="w-4 h-4 text-white" />
+                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                             </div>
-                            <span className="text-xs text-gray-700">Failed</span>
+                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Failed</span>
                           </div>
-                          <div className="text-2xl font-bold text-red-700">{failedCount}</div>
+                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-red-700">{failedCount}</div>
                         </div>
 
                         {/* Pending */}
                         <div
                           onClick={() => setUploadHistoryFilter(uploadHistoryFilter === 'pending' ? null : 'pending')}
-                          className={`bg-gradient-to-br from-gray-50 to-gray-100/50 border rounded-xl p-4 cursor-pointer transition-all hover:shadow-md ${
+                          className={`bg-gradient-to-br from-gray-50 to-gray-100/50 border rounded-xl p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
                             uploadHistoryFilter === 'pending' ? 'border-gray-600 ring-2 ring-gray-400 shadow-md' : 'border-gray-300'
                           }`}
                         >
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center">
-                              <Clock className="w-4 h-4 text-white" />
+                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                             </div>
-                            <span className="text-xs text-gray-700">Pending</span>
+                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Pending</span>
                           </div>
-                          <div className="text-2xl font-bold text-gray-700">{pendingCount}</div>
+                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-700">{pendingCount}</div>
                         </div>
 
                         {/* Success Rate */}
-                        <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200 rounded-xl p-4">
-                          <div className="flex items-center gap-3 mb-2">
-                            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                              <FileText className="w-4 h-4 text-white" />
+                        <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                          <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
+                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                             </div>
-                            <span className="text-xs text-gray-700">Success Rate</span>
+                            <span className="text-[10px] sm:text-xs text-gray-700 truncate">Success Rate</span>
                           </div>
-                          <div className="text-2xl font-bold text-blue-700">{successRate}%</div>
+                          <div className="text-lg sm:text-xl lg:text-2xl font-bold text-blue-700">{successRate}%</div>
                         </div>
                       </div>
 
@@ -3022,21 +3179,26 @@ export default function MyResumesPage() {
 
                       {/* Overall ETA Banner */}
                       {(() => {
-                        const activeBatches = myResumesHistory.filter(r => r.pending > 0 && r.date);
+                        // Only show for batches that still have genuinely active items
+                        const activeBatches = myResumesHistory.filter(r =>
+                          r.pending > 0 && r.date &&
+                          r.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing')
+                        );
                         if (activeBatches.length === 0) return null;
                         const totalPending = activeBatches.reduce((sum: number, r: any) => sum + r.pending, 0);
                         const totalProcessed = activeBatches.reduce((sum: number, r: any) => sum + r.completed + r.errors + r.duplicated + (r.versioned || 0), 0);
                         if (totalProcessed <= 0) {
                           return (
-                            <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl animate-pulse">
-                              <Loader2 className="w-4 h-4 text-blue-500 animate-spin flex-shrink-0" />
-                              <span className="text-sm text-blue-700">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
+                            <div className="flex items-center gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-blue-50 border border-blue-200 rounded-xl animate-pulse">
+                              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 animate-spin flex-shrink-0" />
+                              <span className="text-xs sm:text-sm text-blue-700">Processing {totalPending} resume{totalPending !== 1 ? 's' : ''}... Estimating time remaining</span>
                             </div>
                           );
                         }
-                        // Use the earliest active batch start time for overall ETA
+                        // Cap elapsed at 10 minutes so a batch that started hours ago with a
+                        // stuck file doesn't produce an absurd ETA (e.g. "233–433 mins remaining").
                         const earliestStart = Math.min(...activeBatches.map((r: any) => new Date(r.date).getTime()));
-                        const elapsed = Date.now() - earliestStart;
+                        const elapsed = Math.min(Date.now() - earliestStart, 10 * 60 * 1000);
                         const avgTimePerFile = elapsed / totalProcessed;
                         const remainingMs = totalPending * avgTimePerFile;
                         const lowMins = Math.max(1, Math.floor((remainingMs * 0.7) / 60000));
@@ -3045,10 +3207,12 @@ export default function MyResumesPage() {
                           ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
                           : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
                         return (
-                          <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl">
-                            <Clock className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                            <span className="text-sm font-medium text-blue-700">{etaText}</span>
-                            <span className="text-xs text-blue-400 ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-1 sm:gap-2 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 sm:py-3 bg-blue-50 border border-blue-200 rounded-xl">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
+                              <span className="text-xs sm:text-sm font-medium text-blue-700">{etaText}</span>
+                            </div>
+                            <span className="text-[10px] sm:text-xs text-blue-400 sm:ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
                           </div>
                         );
                       })()}
@@ -3060,12 +3224,12 @@ export default function MyResumesPage() {
                       </div>
 
                       {myResumesHistory.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center text-center py-12">
-                          <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                            <FileText className="w-10 h-10 text-blue-600" />
+                        <div className="flex flex-col items-center justify-center text-center py-8 sm:py-12">
+                          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-blue-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
+                            <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-blue-600" />
                           </div>
-                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Upload History</h3>
-                          <p className="text-sm text-gray-500 max-w-sm">Bulk upload reports will appear here. Upload multiple resumes to see detailed status reports.</p>
+                          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-1.5 sm:mb-2">No Upload History</h3>
+                          <p className="text-xs sm:text-sm text-gray-500 max-w-sm px-4">Bulk upload reports will appear here. Upload multiple resumes to see detailed status reports.</p>
                         </div>
                       ) : (
                         <div className="space-y-4">
@@ -3082,40 +3246,41 @@ export default function MyResumesPage() {
                               return (
                                 <div
                                   key={record.id}
-                                  className="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-300 hover:shadow-lg transition-all cursor-pointer"
+                                  className="bg-white border border-gray-200 rounded-xl p-3 sm:p-4 lg:p-5 hover:border-blue-300 hover:shadow-lg transition-all cursor-pointer"
                                 >
                                   {/* Header Row */}
-                                  <div className="flex items-start justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                                        <FileText className="w-5 h-5 text-blue-600" />
+                                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-3 sm:mb-4 gap-2 sm:gap-3">
+                                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                                       </div>
-                                      <div>
-                                        <span className="font-medium text-gray-900 text-sm block">{record.fileName}</span>
+                                      <div className="min-w-0">
+                                        <span className="font-medium text-gray-900 text-xs sm:text-sm block truncate">{record.fileName}</span>
                                         {record.date && (
-                                          <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                                            <Calendar className="w-3 h-3" />
-                                            {formatDateTimeIST(record.date)}
+                                          <span className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                            <Calendar className="w-3 h-3 flex-shrink-0" />
+                                            <span className="truncate">{formatDateTimeIST(record.date)}</span>
                                           </span>
                                         )}
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2 sm:gap-3 ml-10 sm:ml-0">
                                       {isUploading && (
-                                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 text-blue-700 text-xs rounded-full border border-blue-200 animate-pulse">
+                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-blue-100 text-blue-700 text-[10px] sm:text-xs rounded-full border border-blue-200 animate-pulse">
                                           <Loader2 className="w-3 h-3 animate-spin" />
                                           Uploading...
                                         </span>
                                       )}
                                       {!isUploading && hasIssues && (
-                                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full border border-yellow-200">
-                                          <AlertCircle className="w-3 h-3" />
-                                          Needs Review
+                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-yellow-100 text-yellow-700 text-[10px] sm:text-xs rounded-full border border-yellow-200">
+                                          <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                                          <span className="hidden sm:inline">Needs Review</span>
+                                          <span className="sm:hidden">Review</span>
                                         </span>
                                       )}
                                       {!isUploading && (
                                         <div className="text-right">
-                                          <div className={`text-xl font-bold ${
+                                          <div className={`text-base sm:text-xl font-bold ${
                                             percentage === 100 ? 'text-green-600' :
                                             percentage >= 90 ? 'text-blue-600' :
                                             percentage >= 70 ? 'text-yellow-600' :
@@ -3123,44 +3288,44 @@ export default function MyResumesPage() {
                                           }`}>
                                             {percentage}%
                                           </div>
-                                          <div className="text-xs text-gray-500">Success</div>
+                                          <div className="text-[10px] sm:text-xs text-gray-500">Success</div>
                                         </div>
                                       )}
-                                      <ChevronRight className="w-5 h-5 text-gray-400" />
+                                      <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
                                     </div>
                                   </div>
 
                                   {/* Mini Stats */}
-                                  <div className="grid grid-cols-5 gap-2 mb-4">
-                                    <div className="text-center p-2 bg-green-50 rounded-lg border border-green-100">
-                                      <div className="text-sm font-semibold text-green-700">{record.completed}</div>
-                                      <div className="text-xs text-gray-600">Done</div>
+                                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+                                    <div className="text-center p-1.5 sm:p-2 bg-green-50 rounded-lg border border-green-100">
+                                      <div className="text-xs sm:text-sm font-semibold text-green-700">{record.completed}</div>
+                                      <div className="text-[10px] sm:text-xs text-gray-600">Done</div>
                                     </div>
-                                    <div className="text-center p-2 bg-yellow-50 rounded-lg border border-yellow-100">
-                                      <div className="text-sm font-semibold text-yellow-700">{record.duplicated}</div>
-                                      <div className="text-xs text-gray-600">Duplicates</div>
+                                    <div className="text-center p-1.5 sm:p-2 bg-yellow-50 rounded-lg border border-yellow-100">
+                                      <div className="text-xs sm:text-sm font-semibold text-yellow-700">{record.duplicated}</div>
+                                      <div className="text-[10px] sm:text-xs text-gray-600">Duplicates</div>
                                     </div>
-                                    <div className="text-center p-2 bg-purple-50 rounded-lg border border-purple-100">
-                                      <div className="text-sm font-semibold text-purple-700">{record.versioned || 0}</div>
-                                      <div className="text-xs text-gray-600">Version</div>
+                                    <div className="text-center p-1.5 sm:p-2 bg-purple-50 rounded-lg border border-purple-100">
+                                      <div className="text-xs sm:text-sm font-semibold text-purple-700">{record.versioned || 0}</div>
+                                      <div className="text-[10px] sm:text-xs text-gray-600">Version</div>
                                     </div>
-                                    <div className="text-center p-2 bg-red-50 rounded-lg border border-red-100">
-                                      <div className="text-sm font-semibold text-red-700">{record.errors}</div>
-                                      <div className="text-xs text-gray-600">Failed</div>
+                                    <div className="text-center p-1.5 sm:p-2 bg-red-50 rounded-lg border border-red-100">
+                                      <div className="text-xs sm:text-sm font-semibold text-red-700">{record.errors}</div>
+                                      <div className="text-[10px] sm:text-xs text-gray-600">Failed</div>
                                     </div>
-                                    <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
-                                      <div className="text-sm font-semibold text-blue-700">{record.pending}</div>
-                                      <div className="text-xs text-gray-600">Pending</div>
+                                    <div className="text-center p-1.5 sm:p-2 bg-blue-50 rounded-lg border border-blue-100">
+                                      <div className="text-xs sm:text-sm font-semibold text-blue-700">{record.pending}</div>
+                                      <div className="text-[10px] sm:text-xs text-gray-600">Pending</div>
                                     </div>
                                   </div>
 
                                   {/* Progress Bar */}
-                                  <div className="mb-4">
-                                    <div className="flex items-center justify-between text-xs text-gray-600 mb-1.5">
+                                  <div className="mb-3 sm:mb-4">
+                                    <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">
                                       <span>Progress</span>
                                       <span>{processed} of {record.totalFiles}</span>
                                     </div>
-                                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div className="h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
                                       <div
                                         className={`h-full transition-all ${
                                           percentage === 100 ? 'bg-green-500' :
@@ -3173,13 +3338,17 @@ export default function MyResumesPage() {
                                     </div>
                                   </div>
 
-                                  {/* Estimated Time Remaining */}
-                                  {record.pending > 0 && record.date && (() => {
-                                    const elapsed = Date.now() - new Date(record.date).getTime();
+                                  {/* Estimated Time Remaining — only show when items are genuinely active */}
+                                  {record.pending > 0 && record.date &&
+                                   record.statuses?.some((s: any) => s.status === 'pending' || s.status === 'processing') &&
+                                   (() => {
+                                    // Cap elapsed at 10 minutes to prevent absurd ETAs when a file
+                                    // is stuck at 'processing' and the batch started hours ago.
+                                    const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
                                     if (processed <= 0 || elapsed <= 0) {
                                       return (
-                                        <div className="flex items-center gap-1.5 mb-4 text-xs text-blue-600">
-                                          <Clock className="w-3.5 h-3.5" />
+                                        <div className="flex items-center gap-1.5 mb-3 sm:mb-4 text-[10px] sm:text-xs text-blue-600">
+                                          <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                                           <span>Estimating time remaining...</span>
                                         </div>
                                       );
@@ -3192,10 +3361,12 @@ export default function MyResumesPage() {
                                       ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
                                       : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
                                     return (
-                                      <div className="flex items-center gap-1.5 mb-4 text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
-                                        <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-                                        <span>{etaText}</span>
-                                        <span className="text-blue-400 ml-auto">{record.pending} file{record.pending !== 1 ? 's' : ''} left</span>
+                                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-0.5 sm:gap-1.5 mb-3 sm:mb-4 text-[10px] sm:text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-2.5 sm:px-3 py-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
+                                          <span>{etaText}</span>
+                                        </div>
+                                        <span className="text-blue-400 sm:ml-auto">{record.pending} file{record.pending !== 1 ? 's' : ''} left</span>
                                       </div>
                                     );
                                   })()}
@@ -3300,7 +3471,7 @@ export default function MyResumesPage() {
                                                 });
                                               }
                                             }}
-                                            className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                                            className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-lg border transition-all ${
                                               isVersioned && isSelected ? 'bg-purple-100 border-purple-400 ring-1 ring-purple-300' :
                                               file.status === 'completed' ? 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300' :
                                               file.status === 'versioned' ? 'bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300' :
@@ -3335,7 +3506,7 @@ export default function MyResumesPage() {
                                               />
                                             )}
                                             {/* Status Icon */}
-                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                                               file.status === 'completed' ? 'bg-green-500' :
                                               file.status === 'versioned' ? 'bg-purple-500' :
                                               file.status === 'processing' ? 'bg-blue-500' :
@@ -3343,17 +3514,17 @@ export default function MyResumesPage() {
                                               file.status === 'error' ? 'bg-red-500' :
                                               'bg-gray-400'
                                             }`}>
-                                              {file.status === 'completed' && <CheckCircle className="w-4 h-4 text-white" />}
-                                              {file.status === 'versioned' && <GitBranch className="w-4 h-4 text-white" />}
-                                              {file.status === 'processing' && <Loader2 className="w-4 h-4 text-white animate-spin" />}
-                                              {file.status === 'duplicate' && <Copy className="w-4 h-4 text-white" />}
-                                              {file.status === 'error' && <AlertCircle className="w-4 h-4 text-white" />}
-                                              {file.status === 'pending' && <Clock className="w-4 h-4 text-white animate-pulse" />}
+                                              {file.status === 'completed' && <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
+                                              {file.status === 'versioned' && <GitBranch className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
+                                              {file.status === 'processing' && <Loader2 className="w-3 h-3 sm:w-4 sm:h-4 text-white animate-spin" />}
+                                              {file.status === 'duplicate' && <Copy className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
+                                              {file.status === 'error' && <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4 text-white" />}
+                                              {file.status === 'pending' && <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-white animate-pulse" />}
                                             </div>
                                             {/* File Info */}
                                             <div className="flex-1 min-w-0">
-                                              <div className="font-medium text-gray-900 text-sm truncate">{file.fileName}</div>
-                                              <div className="text-xs text-gray-500 mt-0.5">
+                                              <div className="font-medium text-gray-900 text-[11px] sm:text-sm truncate">{file.fileName}</div>
+                                              <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 truncate">
                                                 {file.status === 'completed' && (file.candidateName ? `✓ ${file.candidateName}` : '✓ Uploaded successfully')}
                                                 {file.status === 'versioned' && (file.candidateName ? `↑ ${file.candidateName} - Version update detected` : '↑ Version update detected - Pending resolution')}
                                                 {file.status === 'processing' && '⚡ Processing...'}
@@ -3363,7 +3534,7 @@ export default function MyResumesPage() {
                                               </div>
                                             </div>
                                             {/* Status Badge */}
-                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                            <span className={`hidden sm:inline px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold flex-shrink-0 ${
                                               file.status === 'completed' ? 'bg-green-100 text-green-700' :
                                               file.status === 'versioned' ? 'bg-purple-100 text-purple-700' :
                                               file.status === 'processing' ? 'bg-blue-100 text-blue-700' :
@@ -3407,41 +3578,41 @@ export default function MyResumesPage() {
 
               {/* Floating Resolve Selected Bar */}
               {selectedVersionedItems.size > 0 && (
-                <div className="border-t border-purple-200 px-6 py-3 bg-gradient-to-r from-purple-50 to-violet-50 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-purple-500 rounded-lg flex items-center justify-center">
-                      <GitBranch className="w-4 h-4 text-white" />
+                <div className="border-t border-purple-200 px-3 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-50 to-violet-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                     </div>
-                    <div>
-                      <span className="text-sm font-semibold text-purple-900">
+                    <div className="min-w-0">
+                      <span className="text-xs sm:text-sm font-semibold text-purple-900">
                         {selectedVersionedItems.size} versioned resume{selectedVersionedItems.size !== 1 ? 's' : ''} selected
                       </span>
-                      <p className="text-xs text-purple-600">Choose how to resolve these version conflicts</p>
+                      <p className="text-[10px] sm:text-xs text-purple-600">Choose how to resolve these version conflicts</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setSelectedVersionedItems(new Map())}
-                      className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors"
+                      className="px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-white transition-colors"
                     >
                       Clear
                     </button>
                     <button
                       onClick={() => setIsBulkResolveModalOpen(true)}
-                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-2"
+                      className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors shadow-sm flex items-center justify-center gap-1.5 sm:gap-2"
                     >
-                      <GitBranch className="w-4 h-4" />
-                      Resolve Selected ({selectedVersionedItems.size})
+                      <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      Resolve ({selectedVersionedItems.size})
                     </button>
                   </div>
                 </div>
               )}
 
               {/* Footer */}
-              <div className="border-t border-gray-200 px-6 py-4 bg-white rounded-b-2xl">
+              <div className="border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 bg-white rounded-b-2xl">
                 <button
                   onClick={handleCloseUploadHistory}
-                  className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm"
+                  className="w-full px-4 py-2 sm:py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm text-sm sm:text-base"
                 >
                   Close
                 </button>
@@ -3831,6 +4002,39 @@ export default function MyResumesPage() {
           }}
         />
       )}
+
+      {/* Delete Resume Confirmation Dialog */}
+      <AlertDialog
+        open={deleteResumeConfirm.isOpen}
+        onOpenChange={(open) => {
+          if (!open) setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] });
+        }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-500" />
+              Delete {deleteResumeConfirm.ids.length === 1 ? 'Resume' : `${deleteResumeConfirm.ids.length} Resumes`}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteResumeConfirm.ids.length === 1 ? (
+                <>Are you sure you want to delete <span className="font-medium text-gray-900">{deleteResumeConfirm.names[0]}</span>? This action cannot be undone.</>
+              ) : (
+                <>Are you sure you want to delete <span className="font-medium text-gray-900">{deleteResumeConfirm.ids.length} resumes</span>? This action cannot be undone.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeleteResumes}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Folder Confirmation Dialog */}
       <AlertDialog

@@ -6,6 +6,7 @@ import {
   SubscriptionInactiveDetail,
   clearTokens
 } from '@/lib/services/api';
+import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter, usePathname } from 'next/navigation';
 
 // Pages where the modal should NOT appear (user needs access to renew)
@@ -53,9 +54,10 @@ export default function SubscriptionInactiveModal() {
   }, [isAllowedPath, isOpen]);
 
   const handleLogout = () => {
+    const loginUrl = getLoginUrl();
     clearTokens();
     setIsOpen(false);
-    router.push('/login');
+    router.push(loginUrl);
   };
 
   const handleContactSupport = () => {

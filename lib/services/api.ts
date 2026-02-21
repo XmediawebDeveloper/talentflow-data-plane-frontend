@@ -5,6 +5,7 @@
 
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import Cookies from 'js-cookie';
+import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -166,13 +167,37 @@ export const clearTokens = () => {
 // Can be called from any component using fetch directly
 export const handleUnauthorized = () => {
   console.log('[API] 401 Unauthorized - logging out user');
-  clearTokens();
   if (typeof window !== 'undefined') {
-    // Clear any other auth-related storage
+    // Import getLoginUrl inline to avoid circular dependency
+    // (api.ts is imported by authService.ts which defines getLoginUrl)
+    const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+    let loginUrl = '/login';
+    try {
+      if (isLocalhost) {
+        // Read subdomain from stored user data first (most reliable source)
+        const storedUser = localStorage.getItem('talentflow_user');
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          if (user?.tenantSubdomain) loginUrl = `/login?org=${user.tenantSubdomain}`;
+        }
+        if (loginUrl === '/login') {
+          const sub = localStorage.getItem('talentflow_subdomain');
+          if (sub) loginUrl = `/login?org=${sub}`;
+        }
+      } else if (hostname.endsWith(`.${BASE_DOMAIN}`)) {
+        // Production subdomain: myorg.0sms.com → https://myorg.0sms.com/login
+        const subdomain = hostname.slice(0, -(BASE_DOMAIN.length + 1));
+        if (subdomain) loginUrl = `https://${subdomain}.${BASE_DOMAIN}/login`;
+      }
+    } catch {}
+
+    clearTokens();
     localStorage.removeItem('user');
     sessionStorage.clear();
-    // Redirect to login
-    window.location.href = '/login';
+    window.location.href = loginUrl;
   }
 };
 
@@ -399,7 +424,9 @@ api.interceptors.response.use(
         // Redirect to payment completion page (only if not already on that page)
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/complete-payment')) {
           const { tenant_id, plan_id } = detail.detail;
-          window.location.href = `/complete-payment?tenant_id=${tenant_id}&plan_id=${plan_id}`;
+          const t = encodeParam(tenant_id);
+          const p = encodePlanId(plan_id);
+          window.location.href = `/complete-payment?t=${encodeURIComponent(t)}&p=${encodeURIComponent(p)}`;
         }
         return Promise.reject(error);
       }
@@ -497,6 +524,8 @@ export const handleApiError = (error: unknown): never => {
         message = detail.message || 'OpenAI API quota exceeded. Please try again later or contact support.';
       } else if (detail.message) {
         message = detail.message;
+      } else if (detail.error) {
+        message = detail.error;
       } else {
         message = error.message;
       }

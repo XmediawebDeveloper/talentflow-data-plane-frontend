@@ -32,6 +32,11 @@ export default function JobOpeningsPage() {
     jobTitle: string;
     usageDetails: string;
   }>({ open: false, jobTitle: '', usageDetails: '' });
+  const [deleteWarningDialog, setDeleteWarningDialog] = useState<{
+    open: boolean;
+    jobTitle: string;
+    usageDetails: string;
+  }>({ open: false, jobTitle: '', usageDetails: '' });
   const [disableDialog, setDisableDialog] = useState<{
     open: boolean;
     job: Job | null;
@@ -290,13 +295,28 @@ export default function JobOpeningsPage() {
   };
 
   const handleDeleteJob = async (job: Job) => {
+    // Check if JD is in use before allowing delete
+    try {
+      const usageStatus = await jdService.getUsageStatus(job.id);
+      if (usageStatus && usageStatus.is_used) {
+        const usageDetails = [
+          usageStatus.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
+          usageStatus.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
+          usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : ''
+        ].filter(Boolean).join(', ');
+        setDeleteWarningDialog({ open: true, jobTitle: job.title, usageDetails });
+        return;
+      }
+    } catch (error) {
+      console.error('Failed to check JD usage status:', error);
+    }
     if (!await dialog.confirm({ title: 'Delete Job Opening', message: `Are you sure you want to delete "${job.title}"? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) return;
     try {
       await jdService.delete(job.id);
       setJobs(prev => prev.filter(j => j.id !== job.id));
       toast.success(`"${job.title}" has been deleted`);
-    } catch (error) {
-      toast.error('Failed to delete job');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete job');
     }
   };
 
@@ -368,6 +388,54 @@ export default function JobOpeningsPage() {
           <AlertDialogFooter className="mt-6 flex gap-3 sm:justify-end">
             <AlertDialogAction
               onClick={() => setEditWarningDialog({ open: false, jobTitle: '', usageDetails: '' })}
+              className="bg-gray-900 hover:bg-gray-800 text-white"
+            >
+              I Understand
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Warning Dialog - shown when JD is in use */}
+      <AlertDialog open={deleteWarningDialog.open} onOpenChange={(open) => setDeleteWarningDialog(prev => ({ ...prev, open }))}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
+              </div>
+              <div className="flex-1 pt-1">
+                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
+                  Cannot Delete Job Description
+                </AlertDialogTitle>
+                <AlertDialogDescription className="mt-2 text-sm text-gray-600">
+                  <span className="font-medium text-gray-800">&quot;{deleteWarningDialog.jobTitle}&quot;</span> has been used in:
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          <div className="mt-4 ml-16">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <div className="flex flex-wrap gap-2">
+                {deleteWarningDialog.usageDetails.split(', ').map((usage, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                  >
+                    {usage}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-gray-600">
+              You have assigned the assessment for this JD. So you will not be able to delete this JD.
+            </p>
+          </div>
+
+          <AlertDialogFooter className="mt-6 flex gap-3 sm:justify-end">
+            <AlertDialogAction
+              onClick={() => setDeleteWarningDialog({ open: false, jobTitle: '', usageDetails: '' })}
               className="bg-gray-900 hover:bg-gray-800 text-white"
             >
               I Understand

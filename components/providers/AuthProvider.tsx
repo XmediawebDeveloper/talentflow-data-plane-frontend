@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User, Tenant, Permission, FeatureFlags, UserRole } from '@/lib/types/tenant';
 import { authService, clearTokens } from '@/lib/services';
+import { getLoginUrl } from '@/lib/services/authService';
 import { mockTenant } from '@/lib/mockData/tenantData';
 import { useRouter } from 'next/navigation';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
@@ -200,6 +201,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     suspensionReason: apiUser.suspension_reason,
     suspensionNotes: apiUser.suspension_notes,
     suspendedAt: apiUser.suspended_at,
+    tenantSubdomain: apiUser.tenant_subdomain,
   };
 }
 
@@ -294,59 +296,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // ✅ NEW: Check permission version on page load (hard refresh)
-        // This ensures permissions are fresh even when user hits F5
-        try {
-          const accessToken = localStorage.getItem('accessToken');
-          const storedVersion = localStorage.getItem('permission_version');
-
-          if (accessToken && storedVersion) {
-            // Make a lightweight API call to check server's permission version
-            const versionCheckResponse = await authService.checkPermissionVersion();
-            const serverVersion = versionCheckResponse.permission_version;
-            const currentVersion = parseInt(storedVersion, 10);
-
-            if (serverVersion > currentVersion) {
-              console.log(`[AUTH] Permission version outdated on hard refresh: ${currentVersion} → ${serverVersion}`);
-              console.log('[AUTH] Refreshing token to get updated permissions...');
-
-              // Refresh token to get latest permissions
-              const refreshToken = localStorage.getItem('refreshToken');
-              if (refreshToken) {
-                const refreshResponse = await authService.refreshToken(refreshToken);
-                // Token will be automatically updated by setTokens call in authService
-
-                // Fetch updated user data with new permissions
-                const apiUserData = await authService.getCurrentUser();
-                const userData = mapApiUserToUser(apiUserData);
-                // Preserve lastLogin and createdAt from cached user if API doesn't return them
-                if (!userData.lastLogin && storedUser.lastLogin) {
-                  userData.lastLogin = storedUser.lastLogin;
-                }
-                if (!userData.createdAt && storedUser.createdAt) {
-                  userData.createdAt = storedUser.createdAt;
-                }
-                setUser(userData);
-                saveUserToStorage(userData);
-                setTenant(storedTenant || mockTenant);
-                console.log('[AUTH] Permissions refreshed on hard refresh ✅');
-
-                // ✅ Dispatch event to notify UI components (like Sidebar) to re-render
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('permissions-updated'));
-                }
-
-                setIsLoading(false);
-                return;
-              }
-            } else {
-              console.log('[AUTH] Permission version up to date:', currentVersion);
-            }
-          }
-        } catch (versionError) {
-          console.warn('[AUTH] Permission version check failed, continuing with cached permissions:', versionError);
-          // Don't block - fall through to normal restore
-        }
+        // Permission version is now tracked via response headers (x-permission-version)
+        // and handled by the axios interceptor in api.ts - no polling needed
+        // ❌ REMOVED: Permission version polling (was calling deleted /permission-version endpoint)
+        // Permission updates now use event-driven approach via refreshUser() which dispatches 'permissions-updated' event
+        // On hard refresh, user data is loaded from localStorage - permission updates happen via backend save + refreshUser()
 
         console.log('[AUTH] Restored user from localStorage:', storedUser.email);
         setUser(storedUser);
@@ -367,30 +321,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           setUser(userData);
           saveUserToStorage(userData);
+          // Mirror tenantSubdomain to talentflow_subdomain so getLoginUrl() has it
+          // even if talentflow_user is cleared before getLoginUrl() is called
+          if (userData.tenantSubdomain && typeof window !== 'undefined') {
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            if (isLocalhost) localStorage.setItem('talentflow_subdomain', userData.tenantSubdomain);
+          }
           console.log('[AUTH] User validated with API');
         } catch (error: unknown) {
           // Check if this is a subscription inactive error (403)
-          // The modal event is already dispatched by axios interceptor
-          const axiosError = error as { response?: { status?: number; data?: { detail?: { error_code?: string } } } };
-          if (axiosError?.response?.status === 403 &&
-              axiosError?.response?.data?.detail?.error_code === 'SUBSCRIPTION_INACTIVE') {
+          // handleApiError throws ApiError with .status property, not AxiosError with .response
+          const apiError = error as { status?: number; message?: string };
+          const isSubscriptionInactive = apiError?.status === 403 &&
+            (apiError?.message?.includes('inactive') || apiError?.message?.includes('SUBSCRIPTION'));
+
+          if (isSubscriptionInactive) {
             // Check if user is on subscription page - they need to stay logged in to renew
             const isOnSubscriptionPage = typeof window !== 'undefined' &&
               window.location.pathname.includes('/subscription/current-plan');
 
             if (isOnSubscriptionPage) {
               console.warn('[AUTH] Subscription inactive but on subscription page, keeping session for renewal');
-              // Keep the user logged in so they can renew
               return;
             }
 
-            console.warn('[AUTH] Subscription inactive, clearing session');
-            clearTokens();
-            clearUserFromStorage();
-            clearTenantFromStorage();
-            setUser(null);
-            setTenant(null);
-            // Don't redirect - let the modal handle it
+            console.warn('[AUTH] Subscription inactive, keeping session for modal handling');
+            // Don't clear tokens - let the SUBSCRIPTION_INACTIVE event modal handle it
+            // The axios interceptor already dispatched the event
             return;
           }
           console.warn('[AUTH] API validation failed, using cached user:', error);
@@ -405,22 +362,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AUTH] Fetching current user from API...');
           const apiUserData = await authService.getCurrentUser();
           console.log('[AUTH] Got user data:', apiUserData);
-          console.log('[AUTH] API Permissions:', apiUserData.permissions);
-          console.log('[AUTH] 🔍 API has can_view_scoring:', apiUserData.permissions.can_view_scoring);
-          console.log('[AUTH] 🔍 API has can_view_ai_match:', apiUserData.permissions.can_view_ai_match);
           const userData = mapApiUserToUser(apiUserData);
-          console.log('[AUTH] Mapped Permissions:', userData.permissions);
-          console.log('[AUTH] 🔍 Mapped has canViewScoring:', userData.permissions.canViewScoring);
-          console.log('[AUTH] 🔍 Mapped has canViewAiMatch:', userData.permissions.canViewAiMatch);
           setUser(userData);
           setTenant(mockTenant);
           saveUserToStorage(userData);
-          console.log('[AUTH] ✅ Session restored with fresh permissions from API');
-        } catch (error) {
+          console.log('[AUTH] Session restored with fresh permissions from API');
+        } catch (error: unknown) {
           console.error('[AUTH] Session restore failed:', error);
-          clearTokens();
-          clearUserFromStorage();
-          clearTenantFromStorage();
+          // Only clear tokens for actual auth failures (401), not temporary errors
+          const apiError = error as { status?: number };
+          if (apiError?.status === 401) {
+            console.log('[AUTH] Token invalid (401), clearing session');
+            clearTokens();
+            clearUserFromStorage();
+            clearTenantFromStorage();
+          } else {
+            console.warn('[AUTH] Keeping tokens - error may be temporary:', apiError?.status);
+            // Don't clear tokens for 403, 500, network errors, etc.
+            // Let the user stay on the page and let specific error handlers deal with it
+          }
         }
       } else {
         console.log('[AUTH] No token found, skipping session restore');
@@ -529,37 +489,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      try {
-        const storedVersion = localStorage.getItem('permission_version');
-        if (!storedVersion) return;
-
-        const { permission_version } = await authService.checkPermissionVersion();
-        const currentVersion = parseInt(storedVersion, 10);
-
-        if (permission_version > currentVersion) {
-          console.log(`[AUTH] 🔄 Permission change detected via polling: ${currentVersion} → ${permission_version}`);
-          // Update the stored version
-          localStorage.setItem('permission_version', permission_version.toString());
-
-          // Trigger user data refresh
-          const apiUserData = await authService.getCurrentUser();
-          const userData = mapApiUserToUser(apiUserData);
-          // Preserve lastLogin and createdAt from current user if API doesn't return them
-          const currentUser = getUserFromStorage();
-          if (!userData.lastLogin && currentUser?.lastLogin) {
-            userData.lastLogin = currentUser.lastLogin;
-          }
-          if (!userData.createdAt && currentUser?.createdAt) {
-            userData.createdAt = currentUser.createdAt;
-          }
-          setUser(userData);
-          saveUserToStorage(userData);
-          console.log('[AUTH] ✅ Permissions refreshed - sidebar & features updated!');
-        }
-      } catch (error) {
-        // Silent fail - don't disrupt user experience with polling errors
-        console.debug('[AUTH] Permission polling check failed (normal if idle):', error);
-      }
+      // Permission updates are now handled instantly via WebSocket push (permissions_updated event).
+      // This polling loop is kept only for activity tracking / idle detection.
+      // See: useNotificationWebSocket → onPermissionsUpdated → refreshUser()
     };
 
     const restartPolling = () => {
@@ -596,6 +528,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       // Save current login time for next session
       localStorage.setItem(LAST_LOGIN_KEY, new Date().toISOString());
+
+      // Store subdomain for later use by getLoginUrl() at logout time.
+      // We capture it NOW because: at login the ?org= param is still in the URL,
+      // but after navigating to /dashboard the URL no longer carries ?org= and
+      // the tf-subdomain cookie gets cleared by middleware.
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocalhost) {
+        // Prefer ?org= from URL, fall back to tenant_subdomain from the API login response
+        const org = new URLSearchParams(window.location.search).get('org') || userData.tenantSubdomain;
+        if (org) {
+          localStorage.setItem('talentflow_subdomain', org);
+          console.log('[AUTH] Stored subdomain for logout redirect:', org);
+        }
+      }
     }
 
     setUser(userData);
@@ -620,6 +566,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     console.log('[AUTH] Logout called');
 
+    // Ensure talentflow_subdomain is always fresh from live React state before getLoginUrl() reads it.
+    // This handles stale localStorage sessions where talentflow_subdomain was never stored.
+    if (typeof window !== 'undefined') {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const subdomain = user?.tenantSubdomain;
+      if (isLocalhost && subdomain) {
+        localStorage.setItem('talentflow_subdomain', subdomain);
+      }
+    }
+
+    // Capture login URL before clearing storage (subdomain lives in tenant storage)
+    const loginUrl = getLoginUrl();
+
     // Call backend logout API so the event is recorded in activity logs
     try {
       await authService.logout();
@@ -637,11 +596,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // ✅ PERMISSION CACHE FIX: Clear permission version on logout
     if (typeof window !== 'undefined') {
       localStorage.removeItem('permission_version');
+      localStorage.removeItem('talentflow_subdomain');
       // Note: Keep LAST_LOGIN_KEY so it persists for next login by the same user
       console.log('[AUTH] Permission version cache cleared on logout');
     }
 
-    router.push('/login');
+    router.push(loginUrl);
   };
 
   const updateUser = (userData: User) => {
@@ -653,7 +613,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     if (!authService.isAuthenticated()) return;
     try {
-      console.log('[AUTH] Refreshing user data...');
+      console.log('[AUTH] refreshUser() called — fetching latest user from API...');
       const apiUserData = await authService.getCurrentUser();
       const userData = mapApiUserToUser(apiUserData);
       // Preserve lastLogin and createdAt from current user if API doesn't return them
@@ -667,12 +627,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(userData);
       saveUserToStorage(userData);
       console.log('[AUTH] User data refreshed');
-
-      // ✅ Dispatch event to notify UI components (like Sidebar) to re-render
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('permissions-updated'));
-        console.log('[AUTH] Dispatched permissions-updated event after refresh');
-      }
+      // NOTE: Do NOT dispatch 'permissions-updated' here — that event is reserved for the
+      // API interceptor (version-mismatch detection). Dispatching it here creates a feedback
+      // loop: handlePermissionsUpdated catches it, makes a second API call, and calls setUser()
+      // again, causing a double Header re-render that can update wsToken and trigger an
+      // unnecessary WebSocket reconnect.
+      // The Sidebar and other components re-render naturally because setUser() above changes
+      // the AuthContext user, which propagates through props automatically.
     } catch (error) {
       console.error('[AUTH] Failed to refresh user:', error);
     }

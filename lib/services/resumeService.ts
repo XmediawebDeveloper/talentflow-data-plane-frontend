@@ -38,6 +38,8 @@ export interface Resume {
   version: number;
   version_count: number;  // Total versions for this candidate
   is_duplicate: boolean;
+  is_archived?: boolean;  // Whether resume is archived
+  archived_at?: string;  // When resume was archived
   created_at: string;
   updated_at: string;
   // Additional sections (snake_case from backend)
@@ -117,6 +119,7 @@ export interface ResumeSearchParams {
   page?: number;
   page_size?: number;
   sort_by?: string;
+  include_archived?: boolean;
 }
 
 export const resumeService = {

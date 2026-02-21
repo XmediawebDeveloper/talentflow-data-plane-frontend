@@ -413,7 +413,7 @@ export default function FolderTree({
 
   return (
     <div
-      className="border-r border-gray-200 bg-white p-4"
+      className="border-b md:border-b-0 md:border-r border-gray-200 bg-white p-3 sm:p-4 max-md:!w-full max-md:!max-w-full max-md:!min-w-0"
       style={{ width: `${width}px`, minWidth: '200px', maxWidth: '400px' }}
     >
       <div className="flex items-center justify-between mb-4">
@@ -456,7 +456,7 @@ export default function FolderTree({
                 setIsCreatingFolder(false);
                 setNewFolderName('');
               }}
-              className="flex-1 px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              className="flex-1 px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 text-black"
             >
               Cancel
             </button>

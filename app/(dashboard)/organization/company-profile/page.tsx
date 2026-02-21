@@ -201,7 +201,7 @@ export default function CompanyProfilePage() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
         <div className="max-w-4xl mx-auto flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
           <span className="ml-2 text-gray-600">Loading organization profile...</span>
@@ -211,17 +211,17 @@ export default function CompanyProfilePage() {
   }
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
-                <Building2 className="w-7 h-7 text-white" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
+                <Building2 className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Company Profile</h1>
+                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Company Profile</h1>
                 <p className="text-sm text-gray-600">Manage your organization's information</p>
               </div>
             </div>
@@ -274,7 +274,7 @@ export default function CompanyProfilePage() {
         {/* Company Info Card */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h2>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
               <input
@@ -339,10 +339,10 @@ export default function CompanyProfilePage() {
         </div>
 
         {/* Address Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Address</h2>
-          <div className="grid grid-cols-2 gap-6">
-            <div className="col-span-2">
+          <div className="space-y-4 sm:space-y-6">
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Street Address</label>
               <input
                 type="text"
@@ -352,45 +352,49 @@ export default function CompanyProfilePage() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-              <input
-                type="text"
-                value={companyData.city}
-                onChange={(e) => setCompanyData({ ...companyData, city: e.target.value })}
-                disabled={!isEditing}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">City</label>
+                <input
+                  type="text"
+                  value={companyData.city}
+                  onChange={(e) => setCompanyData({ ...companyData, city: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">State</label>
+                <input
+                  type="text"
+                  value={companyData.state}
+                  onChange={(e) => setCompanyData({ ...companyData, state: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-              <input
-                type="text"
-                value={companyData.state}
-                onChange={(e) => setCompanyData({ ...companyData, state: e.target.value })}
-                disabled={!isEditing}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
-              <input
-                type="text"
-                value={companyData.country}
-                onChange={(e) => setCompanyData({ ...companyData, country: e.target.value })}
-                disabled={!isEditing}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">ZIP/Postal Code</label>
-              <input
-                type="text"
-                value={companyData.zipCode}
-                onChange={(e) => setCompanyData({ ...companyData, zipCode: e.target.value })}
-                disabled={!isEditing}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">Country</label>
+                <input
+                  type="text"
+                  value={companyData.country}
+                  onChange={(e) => setCompanyData({ ...companyData, country: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 whitespace-nowrap">ZIP/Postal Code</label>
+                <input
+                  type="text"
+                  value={companyData.zipCode}
+                  onChange={(e) => setCompanyData({ ...companyData, zipCode: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-gray-700 disabled:bg-gray-50"
+                />
+              </div>
             </div>
           </div>
         </div>

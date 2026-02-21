@@ -22,6 +22,9 @@ type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'proces
 
 export default function AIInterview() {
   const router = useRouter();
+  const { user, isTenantAdmin } = useAuth();
+  const canRunAiInterviews = isTenantAdmin || (user?.permissions?.canRunAiInterviews ?? false);
+
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
   const [archivedConfigs, setArchivedConfigs] = useState<AIInterviewResponse[]>([]);
@@ -428,9 +431,9 @@ export default function AIInterview() {
     <div className="flex-1 p-8 overflow-y-auto">
       <div className="w-full">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-gray-900 mb-2">AI Interview Platform</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">AI Interview Platform</h1>
             <p className="text-sm text-gray-600">
               Configure and manage AI-powered interview sessions
             </p>
@@ -505,7 +508,7 @@ export default function AIInterview() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6">
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">

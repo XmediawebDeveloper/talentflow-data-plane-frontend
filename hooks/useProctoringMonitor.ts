@@ -687,6 +687,7 @@ export function useProctoringMonitor({
         setupVideoWorker();
         setupAudioWorker();
         setupTrackMonitoring();
+        setupFaceDetection();
       }, 100);
     }
 

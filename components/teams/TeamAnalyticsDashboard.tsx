@@ -7,6 +7,8 @@ import {
   Users,
   FileText,
   ClipboardCheck,
+  Upload,
+  Briefcase,
   Calendar,
   Loader2,
   AlertCircle,
@@ -48,12 +50,14 @@ const COLORS = {
   RS: '#3B82F6', // Blue for Resume Scoring
   AS: '#10B981', // Green for Assessment
   AIU: '#8B5CF6', // Purple for AI Interview
+  RU: '#F97316', // Orange for Resume Upload
 };
 
 const UNIT_LABELS: Record<string, string> = {
   RS: 'Resume Scoring',
   AS: 'Assessment',
   AIU: 'AI Interview',
+  RU: 'Resume Upload',
 };
 
 export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashboardProps) {
@@ -108,10 +112,14 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
       RS: team.by_type?.RS?.total_consumed || 0,
       AS: team.by_type?.AS?.total_consumed || 0,
       AIU: team.by_type?.AIU?.total_consumed || 0,
+      RU: team.by_type?.RU?.total_consumed || 0,
+      JDs: team.jds_created || 0,
+      Assessments: team.assessments_created || 0,
       total:
         (team.by_type?.RS?.total_consumed || 0) +
         (team.by_type?.AS?.total_consumed || 0) +
-        (team.by_type?.AIU?.total_consumed || 0),
+        (team.by_type?.AIU?.total_consumed || 0) +
+        (team.by_type?.RU?.total_consumed || 0),
     }));
   }, [teamsUsage]);
 
@@ -119,12 +127,13 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
   const unitDistributionData = useMemo(() => {
     if (!teamsUsage?.teams) return [];
 
-    const totals = { RS: 0, AS: 0, AIU: 0 };
+    const totals = { RS: 0, AS: 0, AIU: 0, RU: 0 };
 
     teamsUsage.teams.forEach((team) => {
       totals.RS += team.by_type?.RS?.total_consumed || 0;
       totals.AS += team.by_type?.AS?.total_consumed || 0;
       totals.AIU += team.by_type?.AIU?.total_consumed || 0;
+      totals.RU += team.by_type?.RU?.total_consumed || 0;
     });
 
     return Object.entries(totals)
@@ -138,33 +147,47 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
   // Calculate totals and trends
   const totals = useMemo(() => {
-    if (!teamsUsage?.teams) return { RS: 0, AS: 0, AIU: 0, total: 0 };
+    if (!teamsUsage?.teams) return { RS: 0, AS: 0, AIU: 0, RU: 0, total: 0 };
 
-    const result = { RS: 0, AS: 0, AIU: 0, total: 0 };
+    const result = { RS: 0, AS: 0, AIU: 0, RU: 0, total: 0 };
 
     teamsUsage.teams.forEach((team) => {
       result.RS += team.by_type?.RS?.total_consumed || 0;
       result.AS += team.by_type?.AS?.total_consumed || 0;
       result.AIU += team.by_type?.AIU?.total_consumed || 0;
+      result.RU += team.by_type?.RU?.total_consumed || 0;
     });
 
-    result.total = result.RS + result.AS + result.AIU;
+    result.total = result.RS + result.AS + result.AIU + result.RU;
     return result;
   }, [teamsUsage]);
 
   // Calculate action counts
   const actionCounts = useMemo(() => {
-    if (!teamsUsage?.teams) return { RS: 0, AS: 0, AIU: 0, total: 0 };
+    if (!teamsUsage?.teams) return { RS: 0, AS: 0, AIU: 0, RU: 0, total: 0 };
 
-    const result = { RS: 0, AS: 0, AIU: 0, total: 0 };
+    const result = { RS: 0, AS: 0, AIU: 0, RU: 0, total: 0 };
 
     teamsUsage.teams.forEach((team) => {
       result.RS += team.by_type?.RS?.consumption_count || 0;
       result.AS += team.by_type?.AS?.consumption_count || 0;
       result.AIU += team.by_type?.AIU?.consumption_count || 0;
+      result.RU += team.by_type?.RU?.consumption_count || 0;
     });
 
-    result.total = result.RS + result.AS + result.AIU;
+    result.total = result.RS + result.AS + result.AIU + result.RU;
+    return result;
+  }, [teamsUsage]);
+
+  // Calculate creation counts (JDs and Assessments)
+  const creationCounts = useMemo(() => {
+    if (!teamsUsage?.teams) return { jds: 0, assessments: 0 };
+
+    const result = { jds: 0, assessments: 0 };
+    teamsUsage.teams.forEach((team) => {
+      result.jds += team.jds_created || 0;
+      result.assessments += team.assessments_created || 0;
+    });
     return result;
   }, [teamsUsage]);
 
@@ -282,16 +305,16 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Summary Cards - Unit Consumption */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
               <FileText className="w-5 h-5 text-blue-600" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{totals.RS.toFixed(1)}</p>
-          <p className="text-sm text-gray-600">Resume Scoring Units</p>
+          <p className="text-2xl font-bold text-gray-900">{Math.round(totals.RS)}</p>
+          <p className="text-sm text-gray-600">Resume Scoring</p>
           <p className="text-xs text-gray-500 mt-1">{actionCounts.RS} actions</p>
         </div>
 
@@ -302,7 +325,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
             </div>
           </div>
           <p className="text-2xl font-bold text-gray-900">{totals.AS.toFixed(1)}</p>
-          <p className="text-sm text-gray-600">Assessment Units</p>
+          <p className="text-sm text-gray-600">Assessment</p>
           <p className="text-xs text-gray-500 mt-1">{actionCounts.AS} actions</p>
         </div>
 
@@ -312,9 +335,40 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
               <Users className="w-5 h-5 text-purple-600" />
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-900">{totals.AIU.toFixed(1)}</p>
-          <p className="text-sm text-gray-600">AI Interview Units</p>
+          <p className="text-2xl font-bold text-gray-900">{Math.round(totals.AIU)}</p>
+          <p className="text-sm text-gray-600">AI Interview</p>
           <p className="text-xs text-gray-500 mt-1">{actionCounts.AIU} actions</p>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+              <Upload className="w-5 h-5 text-orange-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{Math.round(totals.RU)}</p>
+          <p className="text-sm text-gray-600">Resume Upload</p>
+          <p className="text-xs text-gray-500 mt-1">{actionCounts.RU} actions</p>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+              <Briefcase className="w-5 h-5 text-indigo-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{creationCounts.jds}</p>
+          <p className="text-sm text-gray-600">JDs Created</p>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
+              <ClipboardCheck className="w-5 h-5 text-teal-600" />
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-gray-900">{creationCounts.assessments}</p>
+          <p className="text-sm text-gray-600">Assessments Created</p>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -358,6 +412,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                   <Bar dataKey="RS" name="Resume Scoring" fill={COLORS.RS} stackId="stack" />
                   <Bar dataKey="AS" name="Assessment" fill={COLORS.AS} stackId="stack" />
                   <Bar dataKey="AIU" name="AI Interview" fill={COLORS.AIU} stackId="stack" />
+                  <Bar dataKey="RU" name="Resume Upload" fill={COLORS.RU} stackId="stack" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -429,9 +484,12 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">{team.name}</p>
                   <div className="flex gap-4 mt-1">
-                    <span className="text-xs text-blue-600">RS: {team.RS.toFixed(1)}</span>
+                    <span className="text-xs text-blue-600">RS: {Math.round(team.RS)}</span>
                     <span className="text-xs text-green-600">AS: {team.AS.toFixed(1)}</span>
-                    <span className="text-xs text-purple-600">AIU: {team.AIU.toFixed(1)}</span>
+                    <span className="text-xs text-purple-600">AIU: {Math.round(team.AIU)}</span>
+                    <span className="text-xs text-orange-600">RU: {Math.round(team.RU)}</span>
+                    <span className="text-xs text-indigo-600">JDs: {team.JDs}</span>
+                    <span className="text-xs text-teal-600">AS Created: {team.Assessments}</span>
                   </div>
                 </div>
                 <div className="text-right">
