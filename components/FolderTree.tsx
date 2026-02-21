@@ -456,7 +456,7 @@ export default function FolderTree({
                 setIsCreatingFolder(false);
                 setNewFolderName('');
               }}
-              className="flex-1 px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50"
+              className="flex-1 px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 text-black"
             >
               Cancel
             </button>

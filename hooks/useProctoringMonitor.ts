@@ -9,6 +9,7 @@ export type ProctoringEventType =
   | 'paste_attempt'
   | 'voice_detected'
   | 'multiple_voices'
+  | 'multiple_faces'
   | 'camera_disabled'
   | 'microphone_disabled'
   | 'camera_obstructed'
@@ -49,6 +50,7 @@ const BACKEND_COOLDOWNS: Record<ProctoringEventType, number> = {
   paste_attempt: 500, // Reduced: log paste attempts more frequently
   voice_detected: 10000, // Increased: only log voice every 10 seconds
   multiple_voices: 15000,
+  multiple_faces: 10000,  // Log at most every 10 seconds
   camera_disabled: 1000,     // Reduced: immediate detection
   microphone_disabled: 1000, // Reduced: immediate detection
   camera_obstructed: 3000,   // Reduced: faster detection
@@ -61,7 +63,7 @@ const BACKEND_COOLDOWNS: Record<ProctoringEventType, number> = {
 const FRONTEND_WARNING_COOLDOWN = 3000; // 3 seconds for all warning pop-ups (immediate but not spammy)
 
 // Voice detection specific settings (Throttle + Batch optimization)
-const VOICE_CHECK_INTERVAL = 2000; // Check every 2 seconds instead of 100ms
+const VOICE_CHECK_INTERVAL = 1000; // Check every 1 second
 const VOICE_BATCH_INTERVAL = 10000; // Batch and send events every 10 seconds
 const VOICE_LOG_ONLY = true; // Log-only mode: don't trigger UI warnings for voice
 
@@ -72,6 +74,7 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   paste_attempt: 'Pasting is not allowed during the assessment.',
   voice_detected: 'Voice activity detected. Please maintain silence during the assessment.',
   multiple_voices: 'Multiple voices detected. Please ensure you are alone.',
+  multiple_faces: 'Multiple faces detected in camera. Only you should be visible.',
   camera_disabled: 'Camera has been disabled. Please enable your camera to continue.',
   microphone_disabled: 'Microphone has been disabled. Please enable your microphone.',
   camera_obstructed: 'Camera appears to be blocked. Please ensure your face is visible.',
@@ -87,6 +90,7 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'low' | 'medium' | 'high'> = {
   paste_attempt: 'medium',
   voice_detected: 'medium',
   multiple_voices: 'high',
+  multiple_faces: 'high',
   camera_disabled: 'high',
   microphone_disabled: 'high',
   camera_obstructed: 'high',
@@ -134,6 +138,10 @@ export function useProctoringMonitor({
   // Voice batching: collect events and send periodically
   const voiceBatchRef = useRef<Array<{ timestamp: string; details: Record<string, any> }>>([]);
   const voiceBatchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Face detection refs
+  const faceVideoRef = useRef<HTMLVideoElement | null>(null);
+  const faceIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Use refs for all props to prevent infinite re-renders
   const onWarningRef = useRef(onWarning);
@@ -283,7 +291,7 @@ export function useProctoringMonitor({
   const getWorkerCode = () => `
     // Voice detection state
     let voiceConsecutiveFrames = 0;
-    const VOICE_FRAME_THRESHOLD = 10;
+    const VOICE_FRAME_THRESHOLD = 3;
 
     // Camera obstruction state
     let obstructionConsecutiveFrames = 0;
@@ -464,7 +472,7 @@ export function useProctoringMonitor({
   }, []);
 
   // ==================== VOICE DETECTION (Web Worker) ====================
-  const setupVoiceDetection = useCallback(() => {
+  const setupVoiceDetection = useCallback(async () => {
     const currentStream = streamRef.current;
     if (!currentStream || !workerRef.current) return;
 
@@ -473,6 +481,10 @@ export function useProctoringMonitor({
 
     try {
       audioContextRef.current = new AudioContext();
+      // AudioContext may start suspended — resume it to allow processing
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
       const source = audioContextRef.current.createMediaStreamSource(currentStream);
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
@@ -520,6 +532,76 @@ export function useProctoringMonitor({
       console.error('[PROCTORING] Failed to setup voice detection:', error);
     }
   }, [flushVoiceBatch]); // flushVoiceBatch is stable (useCallback with no deps)
+
+  // ==================== MULTIPLE FACES DETECTION ====================
+  const FACE_DETECTION_INTERVAL = 5000; // Check every 5 seconds
+  // CDN hosting tiny face detector model weights (~190 KB) — no local model files needed
+  const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights';
+
+  const setupFaceDetection = useCallback(() => {
+    const currentStream = streamRef.current;
+    if (!currentStream) return;
+
+    const videoTracks = currentStream.getVideoTracks();
+    if (videoTracks.length === 0) return;
+
+    const video = document.createElement('video');
+    video.srcObject = currentStream;
+    video.muted = true;
+    faceVideoRef.current = video;
+
+    video.play().then(async () => {
+      try {
+        // ── Path A: Native FaceDetector (Chrome/Edge, no model download) ──
+        if ('FaceDetector' in window) {
+          const FaceDetectorAPI = (window as any).FaceDetector;
+          const detector = new FaceDetectorAPI({ fastMode: true, maxDetectedFaces: 5 });
+
+          faceIntervalRef.current = setInterval(async () => {
+            if (!isMonitoringRef.current || !faceVideoRef.current) return;
+            try {
+              const faces = await detector.detect(faceVideoRef.current);
+              if (faces.length >= 2) {
+                logEventRef.current('multiple_faces', { face_count: faces.length, method: 'native' });
+                console.log(`[PROCTORING] Multiple faces: ${faces.length} (native)`);
+              }
+            } catch { /* low-quality frames — ignore */ }
+          }, FACE_DETECTION_INTERVAL);
+
+          console.log('[PROCTORING] Face detection started (native FaceDetector — Chrome/Edge)');
+          return;
+        }
+
+        // ── Path B: face-api.js with TinyFaceDetector (Firefox / Safari) ──
+        const faceapi = await import('face-api.js');
+
+        if (!faceapi.nets.tinyFaceDetector.isLoaded) {
+          console.log('[PROCTORING] Loading TinyFaceDetector model (~190 KB)…');
+          await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
+          console.log('[PROCTORING] TinyFaceDetector model loaded');
+        }
+
+        const detectorOptions = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
+
+        faceIntervalRef.current = setInterval(async () => {
+          if (!isMonitoringRef.current || !faceVideoRef.current) return;
+          try {
+            const detections = await faceapi.detectAllFaces(faceVideoRef.current, detectorOptions);
+            if (detections.length >= 2) {
+              logEventRef.current('multiple_faces', { face_count: detections.length, method: 'face-api.js' });
+              console.log(`[PROCTORING] Multiple faces: ${detections.length} (face-api.js)`);
+            }
+          } catch { /* low-quality frames — ignore */ }
+        }, FACE_DETECTION_INTERVAL);
+
+        console.log('[PROCTORING] Face detection started (face-api.js — Firefox/Safari compatible)');
+      } catch (err) {
+        console.error('[PROCTORING] Face detection setup failed:', err);
+      }
+    }).catch(err => {
+      console.error('[PROCTORING] Face detection video failed to play:', err);
+    });
+  }, []); // uses refs internally
 
   // ==================== CAMERA OBSTRUCTION DETECTION (Web Worker) ====================
   const setupCameraObstructionDetection = useCallback(() => {
@@ -953,6 +1035,7 @@ export function useProctoringMonitor({
         setupVoiceDetection();
         setupCameraObstructionDetection();
         setupTrackMonitoring();
+        setupFaceDetection();
       }, 100);
     }
 
@@ -997,6 +1080,16 @@ export function useProctoringMonitor({
       if (cameraIntervalRef.current) {
         clearInterval(cameraIntervalRef.current);
         cameraIntervalRef.current = null;
+      }
+
+      // Cleanup face detection
+      if (faceIntervalRef.current) {
+        clearInterval(faceIntervalRef.current);
+        faceIntervalRef.current = null;
+      }
+      if (faceVideoRef.current) {
+        faceVideoRef.current.srcObject = null;
+        faceVideoRef.current = null;
       }
 
       // Cleanup audio context

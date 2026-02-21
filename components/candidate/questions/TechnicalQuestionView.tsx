@@ -85,7 +85,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
             maxLength={3000}
             disabled={isLocked}
             readOnly={isLocked}
-            className={`w-full h-48 p-4 border-2 rounded-xl text-gray-800 placeholder-gray-400 resize-none transition-colors ${
+            className={`w-full h-40 sm:h-48 p-3 sm:p-4 border-2 rounded-xl text-gray-800 placeholder-gray-400 resize-none transition-colors ${
               isLocked
                 ? 'bg-gray-50 border-gray-200 cursor-not-allowed'
                 : 'border-gray-200 focus:border-gray-800 focus:outline-none'
@@ -142,7 +142,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
               key={option.id}
               onClick={() => handleOptionClick(option.id)}
               disabled={isLocked}
-              className={`w-full flex items-start gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+              className={`w-full flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-2 transition-all text-left ${
                 isLocked
                   ? selected
                     ? 'border-green-500 bg-green-50 cursor-not-allowed'

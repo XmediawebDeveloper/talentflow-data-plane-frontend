@@ -108,16 +108,14 @@ export function useRefreshPrevention(options: UseRefreshPreventionOptions = {}) 
   );
 
   // Handle beforeunload (browser close, refresh, navigate away)
+  // Only fires the callback — does NOT show a browser warning dialog
   const handleBeforeUnload = useCallback(
     (event: BeforeUnloadEvent) => {
       if (!enabled) return;
 
-      event.preventDefault();
-      event.returnValue = message;
       onAttempt?.('close');
-      return message;
     },
-    [enabled, message, onAttempt]
+    [enabled, onAttempt]
   );
 
   // Handle popstate (back/forward navigation)
