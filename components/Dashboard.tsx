@@ -27,7 +27,8 @@ import {
   CreditCard,
   Upload,
   Send,
-  Activity
+  Activity,
+  XCircle
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
@@ -38,6 +39,8 @@ import { handleUnauthorized } from '@/lib/services/api';
 import { User, Tenant, getRemainingUnits } from '@/lib/types/tenant';
 import UnitsWarningBanner from './UnitsWarningBanner';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { PLAN_FEATURE_METADATA, PlanFeatureKey } from '@/lib/types/planFeatures';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -85,6 +88,9 @@ export default function Dashboard({
 }: DashboardProps = {}) {
   // Get permission helpers from auth context
   const { hasPermission, isTenantAdmin } = useAuth();
+
+  // Plan feature gating
+  const { hasPlanFeature, features: planFeatures } = usePlanFeatures();
 
   // Get usage data from tenant
   const subscription = tenant?.subscription;
@@ -296,7 +302,7 @@ export default function Dashboard({
         const [publishedResponse, draftResponse, statsResponse] = await Promise.allSettled([
           jdService.list({ status: 'published', page_size: 5, page: 1, source: 'my-jds' }),
           jdService.list({ status: 'draft', page_size: 5, page: 1, source: 'my-jds' }),
-          assessmentService.getStats(),
+          hasPlanFeature('assessment') ? assessmentService.getStats() : Promise.resolve({ total_assessments: 0, active_assessments: 0, units_consumed: 0 }),
         ]);
 
         // Check for permission denied errors
@@ -453,7 +459,7 @@ export default function Dashboard({
           {/* Usage Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {/* Resume Upload Units */}
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
+            {hasPlanFeature('resume_upload') && <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                   <Users className="w-5 h-5 text-gray-800" />
@@ -475,7 +481,7 @@ export default function Dashboard({
               <div className="text-xs text-gray-500">
                 {usage?.resumeUploads?.toLocaleString() || '1,593'} used of {limits?.resumeUploads?.toLocaleString() || '2,450'}
               </div>
-            </div>
+            </div>}
 
             {/* Job Posting Units */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
@@ -503,7 +509,7 @@ export default function Dashboard({
             </div>
 
             {/* Assessment Units */}
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
+            {hasPlanFeature('assessment') && <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0">
                   <FileText className="w-5 h-5 text-yellow-600" />
@@ -525,10 +531,10 @@ export default function Dashboard({
               <div className="text-xs text-gray-500">
                 {assessmentStats.units_consumed} used of {limits?.assessments || '500'}
               </div>
-            </div>
+            </div>}
 
             {/* AI Interview Units */}
-            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
+            {hasPlanFeature('ai_interview') && <div className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-3">
                 <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
                   <Video className="w-5 h-5 text-gray-800" />
@@ -540,55 +546,47 @@ export default function Dashboard({
               <div className="text-xs text-gray-600 mb-3">AI Interviews</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-gray-800 h-2 rounded-full" 
-                    style={{ 
-                      width: limits?.aiInterviews === 'unlimited' 
-                        ? '100%' 
-                        : `${typeof limits?.aiInterviews === 'number' ? Math.round((usage?.aiInterviews || 0) / limits.aiInterviews * 100) : 100}%` 
+                  <div
+                    className="bg-gray-800 h-2 rounded-full"
+                    style={{
+                      width: limits?.aiInterviews === 'unlimited'
+                        ? '100%'
+                        : `${typeof limits?.aiInterviews === 'number' ? Math.round((usage?.aiInterviews || 0) / limits.aiInterviews * 100) : 100}%`
                     }}
                   ></div>
                 </div>
                 <span className="text-xs text-gray-600 w-10 text-right">
-                  {limits?.aiInterviews === 'unlimited' ? '∞' : 
+                  {limits?.aiInterviews === 'unlimited' ? '∞' :
                     typeof limits?.aiInterviews === 'number' ? `${Math.round((usage?.aiInterviews || 0) / limits.aiInterviews * 100)}%` : '∞'}
                 </span>
               </div>
               <div className="text-xs text-gray-500">
-                {limits?.aiInterviews === 'unlimited' 
+                {limits?.aiInterviews === 'unlimited'
                   ? `${usage?.aiInterviews || '87'} conducted this month`
                   : `${usage?.aiInterviews || '87'} used of ${limits?.aiInterviews || 'Unlimited'}`}
               </div>
-            </div>
+            </div>}
           </div>
 
-          {/* Plan Features */}
+          {/* Plan Features - Dynamic based on actual plan */}
           <div className="pt-4 border-t border-gray-200">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <span className="text-gray-700">Unlimited Team Members</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <span className="text-gray-700">Advanced Analytics</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <span className="text-gray-700">Priority Support</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <span className="text-gray-700">Custom Branding</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <span className="text-gray-700">API Access</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                <span className="text-gray-700">White Label Option</span>
-              </div>
+              {(Object.keys(planFeatures) as PlanFeatureKey[])
+                .filter(key => key !== 'seats') // seats is always included, skip display
+                .map(key => {
+                  const included = planFeatures[key];
+                  const meta = PLAN_FEATURE_METADATA[key];
+                  return (
+                    <div key={key} className="flex items-center gap-2">
+                      {included ? (
+                        <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                      )}
+                      <span className={included ? 'text-gray-700' : 'text-gray-400'}>{meta.name}</span>
+                    </div>
+                  );
+                })}
             </div>
           </div>
         </div>
@@ -681,7 +679,7 @@ export default function Dashboard({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 ml-4">
-                        {onAIMatch && (
+                        {onAIMatch && hasPlanFeature('ai_talent_match') && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -885,7 +883,8 @@ export default function Dashboard({
             <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
               <h3 className="text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-3">
-                <button 
+                {hasPlanFeature('resume_upload') && (
+                <button
                   onClick={() => onNavigateToMyResumes?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
@@ -894,7 +893,8 @@ export default function Dashboard({
                   </div>
                   <span className="text-sm text-gray-900">Upload Resume</span>
                 </button>
-                <button 
+                )}
+                <button
                   onClick={() => onNavigateToJDCreation?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
@@ -903,7 +903,8 @@ export default function Dashboard({
                   </div>
                   <span className="text-sm text-gray-900">Post New Job</span>
                 </button>
-                <button 
+                {hasPlanFeature('ai_interview') && (
+                <button
                   onClick={() => onNavigateToAIInterview?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
@@ -912,7 +913,9 @@ export default function Dashboard({
                   </div>
                   <span className="text-sm text-gray-900">Schedule Interview</span>
                 </button>
-                <button 
+                )}
+                {hasPlanFeature('assessment') && (
+                <button
                   onClick={() => onNavigateToAssessments?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
@@ -921,6 +924,7 @@ export default function Dashboard({
                   </div>
                   <span className="text-sm text-gray-900">Create Assessment</span>
                 </button>
+                )}
                 <button 
                   onClick={() => onNavigateToUsage?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"

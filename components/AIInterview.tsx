@@ -5,15 +5,21 @@ import { useState } from 'react';
 import { recordAIInterview } from '@/lib/services/usageTrackingService';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 
 export default function AIInterview() {
   const { user, isTenantAdmin } = useAuth();
   const canRunAiInterviews = isTenantAdmin || (user?.permissions?.canRunAiInterviews ?? false);
+  const { available: aiInterviewAvailable } = usePlanFeature('ai_interview');
 
   const [activeTab, setActiveTab] = useState<'scheduled' | 'completed' | 'settings'>('scheduled');
 
   // Handler for scheduling an interview - tracks usage
   const handleScheduleInterview = () => {
+    if (!aiInterviewAvailable) {
+      toast.error('AI Interview is not available in your plan');
+      return;
+    }
     // In a real app, this would open a modal to schedule
     // For now, track the usage when scheduling
     recordAIInterview(`interview-${Date.now()}`, {
@@ -25,6 +31,10 @@ export default function AIInterview() {
 
   // Handler for starting an interview - tracks usage
   const handleStartInterview = (interviewId: number, candidateName: string) => {
+    if (!aiInterviewAvailable) {
+      toast.error('AI Interview is not available in your plan');
+      return;
+    }
     recordAIInterview(`interview-${interviewId}`, {
       action: 'start',
       candidate: candidateName

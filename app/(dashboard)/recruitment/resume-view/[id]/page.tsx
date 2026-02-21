@@ -199,6 +199,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import ApplyToJobModal from '@/components/ApplyToJobModal';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 export default function ResumeViewPage() {
   const params = useParams();
@@ -737,6 +738,7 @@ Best regards`);
   };
 
   return (
+    <FeatureGate feature="resume_upload">
     <div className="flex-1 bg-gray-100 min-h-screen">
       {/* Header */}
       <div className="bg-gray-200 border-b border-gray-300 px-6 py-4">
@@ -2184,5 +2186,6 @@ Best regards`);
         </div>
       )}
     </div>
+    </FeatureGate>
   );
 }

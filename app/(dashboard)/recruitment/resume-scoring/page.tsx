@@ -9,6 +9,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { Resume, Folder } from '@/lib/types/types';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 interface ScoredResumeData {
   id: string;
@@ -676,21 +677,23 @@ export default function ResumeScoringRoute() {
   }
 
   return (
-    <ResumeScoringPage
-      jobs={jobs}
-      resumes={resumes}
-      folders={folders}
-      scoredHistory={scoredHistory}
-      onSaveScores={saveScoredHistory}
-      onRefreshHistory={loadScoredHistory}
-      onLoadJdScores={loadJdScores}
-      onRefreshResumes={refreshResumes}
-      initialJdId={initialJdId}
-      initialScoreId={initialScoreId}
-      initialShowProgress={showProgress}
-      initialNewScoring={initialNewScoring}
-      pendingScoringData={pendingScoringData}
-      batchProgress={batchProgress}
-    />
+    <FeatureGate feature="resume_scoring">
+      <ResumeScoringPage
+        jobs={jobs}
+        resumes={resumes}
+        folders={folders}
+        scoredHistory={scoredHistory}
+        onSaveScores={saveScoredHistory}
+        onRefreshHistory={loadScoredHistory}
+        onLoadJdScores={loadJdScores}
+        onRefreshResumes={refreshResumes}
+        initialJdId={initialJdId}
+        initialScoreId={initialScoreId}
+        initialShowProgress={showProgress}
+        initialNewScoring={initialNewScoring}
+        pendingScoringData={pendingScoringData}
+        batchProgress={batchProgress}
+      />
+    </FeatureGate>
   );
 }
