@@ -253,7 +253,7 @@ const DraggableSkill = ({
               if (e.key === 'Enter') onSaveEdit();
               if (e.key === 'Escape') onCancelEdit();
             }}
-            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm text-black focus:outline-none focus:ring-2 focus:ring-gray-600"
             autoFocus
           />
           <div className="flex gap-1 ml-2">
@@ -423,7 +423,7 @@ const DraggableComment = ({
               if (e.key === 'Enter') onSaveEdit();
               if (e.key === 'Escape') onCancelEdit();
             }}
-            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+            className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm text-black focus:outline-none focus:ring-2 focus:ring-gray-600"
             autoFocus
           />
           <div className="flex gap-1 ml-2">
@@ -3614,7 +3614,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <div className="space-y-5">
                     <div>
                       <label className="block text-sm text-gray-700 mb-2">
-                        Job Title <span className="text-red-500">*</span>
+                        Job Title<span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -3623,7 +3623,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Senior Java Developer – Banking Domain"
                         disabled={isJDInUse}
-                        className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
+                        className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
                             : jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
@@ -3657,7 +3657,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="Describe what you're looking for in this role... e.g., 'We need a senior full-stack developer with React and Node.js experience, 5+ years, remote position, who can lead a team of 3 developers'"
                         rows={12}
                         disabled={isJDInUse}
-                        className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
+                        className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-black placeholder-gray-500 ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
                             : aiPrompt.trim().length > VALIDATION.AI_PROMPT.max
@@ -3692,9 +3692,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                     {/* Warning when JD is in use */}
                     {isJDInUse && (
-                      <div className="mb-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                        <div className="flex items-start gap-3">
-                          <AlertTriangle className="w-5 h-5 text-orange-600 mt-0.5 flex-shrink-0" />
+                      <div className="mb-4 p-3 sm:p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                        <div className="flex items-start gap-2 sm:gap-3">
+                          <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 mt-0.5 flex-shrink-0" />
                           <div>
                             <p className="text-sm font-medium text-orange-800">This JD cannot be edited</p>
                             <p className="text-xs text-orange-700 mt-1">
@@ -3775,7 +3775,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         maxLength={VALIDATION.JOB_TITLE.max}
                         placeholder="e.g., Senior Java Developer"
                         disabled={isJDInUse}
-                        className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
+                        className={`w-full px-4 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-black ${
                           isJDInUse
                             ? 'bg-gray-100 cursor-not-allowed'
                             : jobTitle.length > 0 && !isValidLength(jobTitle, VALIDATION.JOB_TITLE.min, VALIDATION.JOB_TITLE.max)
@@ -3803,7 +3803,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         maxLength={VALIDATION.MANUAL_JD.max}
                         placeholder="Paste or write your job description here..."
                         rows={20}
-                        className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent ${
+                        className={`w-full px-4 py-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-black placeholder-gray-500 ${
                           manualJD.length > 0 && (!isValidLength(manualJD, VALIDATION.MANUAL_JD.min, VALIDATION.MANUAL_JD.max) || !containsMeaningfulText(manualJD))
                             ? 'border-red-300 bg-red-50'
                             : 'border-gray-300'
@@ -3937,7 +3937,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           value={generatedJD}
                           onChange={(e) => setGeneratedJD(e.target.value)}
                           readOnly={isJDInUse}
-                          className={`w-full h-[300px] sm:h-[400px] lg:h-[600px] px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent font-mono text-xs sm:text-sm ${isJDInUse ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                          className={`w-full h-[300px] sm:h-[400px] lg:h-[600px] px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent font-mono text-xs sm:text-sm text-black ${isJDInUse ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         />
                       ) : (
                         <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 rounded-md bg-white markdown-content">
@@ -4039,7 +4039,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         {/* Step 2: Extract & Modify Skills */}
         {step === 'extract' && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Drag & Drop Tips */}
             {showDragTips && (
               <div className="bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-3 sm:p-5">
@@ -4087,14 +4087,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
             {/* Regeneration Notice - Removed Regenerate JD button as per requirement */}
             {extractedDataModified && mode === 'ai' && (
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center">
-                    <Wand2 className="w-5 h-5 text-white" />
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-3 sm:p-4">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+                    <Wand2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
                   <div>
-                    <h4 className="text-blue-800 font-medium">Parameters Modified</h4>
-                    <p className="text-sm text-blue-600">
+                    <h4 className="text-sm sm:text-base text-blue-800 font-medium">Parameters Modified</h4>
+                    <p className="text-xs sm:text-sm text-blue-600">
                       You&apos;ve made changes to skills or comments. The JD will be regenerated when you continue to Review.
                     </p>
                   </div>
@@ -4116,7 +4116,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Column 1: Must-Have Skills */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-900">Must-Have Skills <span className="text-red-500">*</span></h3>
+                    <h3 className="text-sm sm:text-base text-gray-900">Must-Have Skills <span className="text-red-500">*</span></h3>
                     {!isRegenerating && (
                       <button
                         onClick={() => setEditingCategory('mustHave')}
@@ -4135,7 +4135,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setNewSkill(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('mustHaveSkills')}
                         placeholder="Enter skill..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
                         autoFocus
                       />
                       <button
@@ -4179,7 +4179,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Column 2: Nice-to-Have Skills */}
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-gray-900">Nice-to-Have Skills</h3>
+                    <h3 className="text-sm sm:text-base text-gray-900">Nice-to-Have Skills</h3>
                     {!isRegenerating && (
                       <button
                         onClick={() => setEditingCategory('niceToHave')}
@@ -4198,7 +4198,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setNewSkill(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('niceToHaveSkills')}
                         placeholder="Enter skill..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
                         autoFocus
                       />
                       <button
@@ -4238,7 +4238,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* Must-Have Comments */}
                   <div>
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-gray-900">Must-Have Comments</h3>
+                      <h3 className="text-sm sm:text-base text-gray-900">Must-Have Comments</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('comments')}
@@ -4257,7 +4257,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onChange={(e) => setNewComment(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
                           placeholder="Enter comment..."
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
                           autoFocus
                         />
                         <button
@@ -4302,7 +4302,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <div>
                     {console.log('[DEBUG] Rendering Nice-to-Have Comments, count:', extractedData.niceToHaveComments?.length, 'data:', extractedData.niceToHaveComments)}
                     <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-gray-900">Nice-to-Have Comments ({extractedData.niceToHaveComments?.length || 0})</h3>
+                      <h3 className="text-sm sm:text-base text-gray-900">Nice-to-Have Comments ({extractedData.niceToHaveComments?.length || 0})</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('nice-comments')}
@@ -4321,7 +4321,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onChange={(e) => setNewComment(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddNiceComment()}
                           placeholder="Enter nice-to-have comment..."
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
                           autoFocus
                         />
                         <button
@@ -4362,7 +4362,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 {/* Experience */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Experience <span className="text-red-500">*</span></h3>
+                  <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Experience <span className="text-red-500">*</span></h3>
                   <select
                     value={extractedData.experience}
                     onChange={(e) => {
@@ -4373,7 +4373,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         setValidationErrors(prev => ({ ...prev, experience: undefined }));
                       }
                     }}
-                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${
+                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black mb-3 ${
                       validationErrors.experience ? 'border-red-500' : 'border-gray-300'
                     } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={masterDataLoading || isRegenerating}
@@ -4403,7 +4403,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                 {/* Education */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Education <span className="text-red-500">*</span></h3>
+                  <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Education <span className="text-red-500">*</span></h3>
                   <select
                     value={extractedData.education}
                     onChange={(e) => {
@@ -4414,7 +4414,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         setValidationErrors(prev => ({ ...prev, education: undefined }));
                       }
                     }}
-                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${
+                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black mb-3 ${
                       validationErrors.education ? 'border-red-500' : 'border-gray-300'
                     } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={masterDataLoading || isRegenerating}
@@ -4444,7 +4444,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                 {/* Industry Type */}
                 <div>
-                  <h3 className="text-gray-900 mb-4">Industry Type <span className="text-red-500">*</span></h3>
+                  <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Industry Type <span className="text-red-500">*</span></h3>
                   <select
                     value={extractedData.industryType}
                     onChange={(e) => {
@@ -4455,7 +4455,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         setValidationErrors(prev => ({ ...prev, industryType: undefined }));
                       }
                     }}
-                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm mb-3 ${
+                    className={`w-full px-3 py-2.5 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black mb-3 ${
                       validationErrors.industryType ? 'border-red-500' : 'border-gray-300'
                     } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={masterDataLoading || isRegenerating}
@@ -4502,14 +4502,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
                         placeholder="From (e.g., 50000)"
-                        className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm ${
+                        className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black ${
                           validationErrors.salaryRange ? 'border-red-500' : 'border-gray-300'
                         } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         disabled={isRegenerating}
                         readOnly={isRegenerating}
                       />
                     </div>
-                    <span className="text-gray-400">–</span>
+                    <span className="text-gray-400 hidden sm:block">–</span>
                     <div className="relative flex-1">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
                       <input
@@ -4524,7 +4524,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
                         placeholder="To (e.g., 100000)"
-                        className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm ${
+                        className={`w-full pl-7 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black ${
                           validationErrors.salaryRange ? 'border-red-500' : 'border-gray-300'
                         } ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                         disabled={isRegenerating}
@@ -4534,7 +4534,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <select
                       value={extractedData.compensationType}
                       onChange={(e) => { setExtractedData(prev => ({ ...prev, compensationType: e.target.value as 'hourly' | 'daily' | 'monthly' | 'yearly' })); markExtractedDataModified(); }}
-                      className={`px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      className={`px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                       disabled={isRegenerating}
                     >
                       <option value="hourly">Hourly</option>
@@ -4555,7 +4555,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               {/* Locations Section */}
               <div>
                 <div className="flex items-center gap-3 mb-4">
-                  <h3 className="text-gray-900">Locations</h3>
+                  <h3 className="text-sm sm:text-base text-gray-900">Locations</h3>
                   <label className={`flex items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
@@ -4580,7 +4580,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         setLocationStateFilter(e.target.value);
                         setNewLocation(prev => ({ ...prev, city: '' }));
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black"
                     >
                       <option value="all">All States</option>
                       <option value="Andhra Pradesh">Andhra Pradesh</option>
@@ -4607,7 +4607,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <select
                       value={newLocation.city}
                       onChange={(e) => setNewLocation(prev => ({ ...prev, city: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black"
                     >
                       <option value="">Select a city</option>
                       {(locationStateFilter === 'all' || locationStateFilter === 'Maharashtra') && (
@@ -4711,7 +4711,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <select
                       value={newLocation.radius}
                       onChange={(e) => setNewLocation(prev => ({ ...prev, radius: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm text-black"
                     >
                       <option value="10">10 km</option>
                       <option value="25">25 km</option>
@@ -4761,14 +4761,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <div className="mt-4 sm:mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Employment Type */}
                 <div>
-                  <h3 className="text-gray-900 mb-2">Employment Type</h3>
+                  <h3 className="text-sm sm:text-base text-gray-900 mb-2">Employment Type</h3>
                   <select
                     value={extractedData.employmentType}
                     onChange={(e) => { setExtractedData(prev => ({
                       ...prev,
                       employmentType: e.target.value as ExtractedData['employmentType']
                     })); markExtractedDataModified(); }}
-                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={isRegenerating}
                   >
                     <option value="full_time">Full Time</option>
@@ -4781,14 +4781,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                 {/* Work Model */}
                 <div>
-                  <h3 className="text-gray-900 mb-2">Work Mode</h3>
+                  <h3 className="text-sm sm:text-base text-gray-900 mb-2">Work Mode</h3>
                   <select
                     value={extractedData.workModel}
                     onChange={(e) => { setExtractedData(prev => ({
                       ...prev,
                       workModel: e.target.value as ExtractedData['workModel']
                     })); markExtractedDataModified(); }}
-                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black bg-white ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     disabled={isRegenerating}
                   >
                     <option value="onsite">Onsite</option>
@@ -4803,8 +4803,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <div className="mt-4 sm:mt-6 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-gray-900 mb-1">Allow Overqualified Candidates</h3>
-                    <p className="text-sm text-gray-600">Accept candidates who exceed the required qualifications</p>
+                    <h3 className="text-sm sm:text-base text-gray-900 mb-1">Allow Overqualified Candidates</h3>
+                    <p className="text-xs sm:text-sm text-gray-600">Accept candidates who exceed the required qualifications</p>
                   </div>
                   <label className={`relative inline-flex items-center ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
@@ -4843,7 +4843,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setNewCertification(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddCertification()}
                         placeholder="e.g., AWS Certified Solutions Architect"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
                         autoFocus
                       />
                       <button
@@ -4900,7 +4900,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setNewDomainKeyword(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddDomainKeyword()}
                         placeholder="e.g., Banking, Fintech, Cloud"
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black"
                         autoFocus
                       />
                       <button
@@ -4943,7 +4943,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Assessment Guidance - Left */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-gray-900">Assessment Guidance</h3>
+                    <h3 className="text-sm sm:text-base text-gray-900">Assessment Guidance</h3>
                     <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">Optional</span>
                   </div>
                   <p className="text-sm text-gray-600 mb-3 flex items-center gap-1">
@@ -4953,7 +4953,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     value={extractedData.assessmentGuidance}
                     onChange={(e) => { setExtractedData(prev => ({ ...prev, assessmentGuidance: e.target.value.slice(0, 500) })); markExtractedDataModified(); }}
                     placeholder="e.g., Focus on system design, coding best practices, problem-solving approach..."
-                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
                     disabled={isRegenerating}
                     readOnly={isRegenerating}
@@ -4964,7 +4964,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Internal Recruiter Notes - Right */}
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-gray-900">Internal Recruiter Notes</h3>
+                    <h3 className="text-sm sm:text-base text-gray-900">Internal Recruiter Notes</h3>
                     <span className="text-xs text-gray-500 bg-yellow-100 px-2 py-0.5 rounded flex items-center gap-1">
                       🔒 Private
                     </span>
@@ -4979,7 +4979,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       internalRecruiterComments: e.target.value.split('\n').filter(c => c.trim())
                     })); markExtractedDataModified(); }}
                     placeholder="Add internal notes for recruiters..."
-                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                    className={`w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm text-black resize-none ${isRegenerating ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                     rows={4}
                     disabled={isRegenerating}
                     readOnly={isRegenerating}
@@ -4989,15 +4989,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
             {/* Validation Warning Banner - Show when required fields are missing */}
             {!validationStatus.isValid && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-6">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 sm:p-4 mt-4 sm:mt-6">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="text-amber-800 font-medium">Cannot Proceed - Missing Required Fields</h4>
-                    <p className="text-sm text-amber-700 mt-1">
+                    <h4 className="text-sm sm:text-base text-amber-800 font-medium">Cannot Proceed - Missing Required Fields</h4>
+                    <p className="text-xs sm:text-sm text-amber-700 mt-1">
                       Please complete the following before {isEditingPublished ? 'republishing' : 'publishing'}:
                     </p>
-                    <ul className="text-sm text-amber-700 mt-2 list-disc list-inside">
+                    <ul className="text-xs sm:text-sm text-amber-700 mt-2 list-disc list-inside">
                       {validationStatus.missingFields.map((field, index) => (
                         <li key={index}>{field}</li>
                       ))}
@@ -5052,7 +5052,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         {/* Step 3: Review & Publish */}
         {step === 'review' && !isPublished && (
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
                 {/* Header */}
                 <div className="bg-gradient-to-r from-gray-800 to-gray-800 rounded-lg p-4 sm:p-6 text-white">
                   <h2 className="text-lg sm:text-2xl mb-1 sm:mb-2">{isEditingPublished ? 'Review & Republish' : 'Review & Publish'}</h2>
@@ -5088,7 +5088,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         navigator.clipboard.writeText(text);
                         toast.success({ title: 'Copied!', description: 'Job description copied to clipboard' });
                       }}
-                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-xs sm:text-sm"
+                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-xs sm:text-sm text-black"
                       title="Copy to clipboard"
                     >
                       <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -5107,7 +5107,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         URL.revokeObjectURL(url);
                         toast.success({ title: 'Downloaded!', description: 'Job description saved as text file' });
                       }}
-                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-xs sm:text-sm"
+                      className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-xs sm:text-sm text-black"
                     >
                       <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Download
@@ -5203,7 +5203,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               {/* Job Title */}
               <div className="p-4 sm:p-6 border-b border-gray-200">
                 <h3 className="text-sm text-gray-500 mb-2">Job Title</h3>
-                <p className="text-xl text-gray-900">{jobTitle}</p>
+                <p className="text-base sm:text-xl text-gray-900">{jobTitle}</p>
               </div>
 
               {/* Skills Section */}
@@ -5298,8 +5298,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
                   {/* Experience */}
                   <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-sm text-gray-600 mb-2">Experience</h4>
-                    <p className="text-gray-900">{getExperienceLabel(extractedData.experience)}</p>
+                    <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h4>
+                    <p className="text-sm sm:text-base text-gray-900">{getExperienceLabel(extractedData.experience)}</p>
                     <p className="text-xs text-gray-500 mt-1">
                       {extractedData.experienceRequired ? '✓ Required' : '○ Preferred'}
                     </p>
@@ -5307,8 +5307,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                   {/* Education */}
                   <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-sm text-gray-600 mb-2">Education</h4>
-                    <p className="text-gray-900">{getEducationLabel(extractedData.education)}</p>
+                    <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Education</h4>
+                    <p className="text-sm sm:text-base text-gray-900">{getEducationLabel(extractedData.education)}</p>
                     <p className="text-xs text-gray-500 mt-1">
                       {extractedData.educationRequired ? '✓ Required' : '○ Preferred'}
                     </p>
@@ -5317,8 +5317,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* Industry Type - Only show if specified */}
                   {extractedData.industryType && (
                     <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                      <h4 className="text-sm text-gray-600 mb-2">Industry Type</h4>
-                      <p className="text-gray-900">{getIndustryLabel(extractedData.industryType)}</p>
+                      <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h4>
+                      <p className="text-sm sm:text-base text-gray-900">{getIndustryLabel(extractedData.industryType)}</p>
                       <p className="text-xs text-gray-500 mt-1">
                         {extractedData.industryTypeRequired ? '✓ Required' : '○ Preferred'}
                       </p>
@@ -5339,12 +5339,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     Edit
                   </button>
                 </div>
-                <div className="bg-green-50 p-4 rounded-lg inline-flex items-center gap-2">
-                  <span className="text-gray-900">
+                <div className="bg-green-50 p-3 sm:p-4 rounded-lg inline-flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span className="text-sm sm:text-base text-gray-900">
                     ₹{extractedData.salaryFrom ? parseInt(extractedData.salaryFrom).toLocaleString('en-IN') : '0'} -
                     ₹{extractedData.salaryTo ? parseInt(extractedData.salaryTo).toLocaleString('en-IN') : '0'}
                   </span>
-                  <span className="text-gray-600 text-sm">/ {extractedData.compensationType}</span>
+                  <span className="text-gray-600 text-xs sm:text-sm">/ {extractedData.compensationType}</span>
                 </div>
               </div>
 
@@ -5362,8 +5362,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-sm text-gray-600 mb-2">Employment Type</h4>
-                    <p className="text-gray-900">
+                    <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Employment Type</h4>
+                    <p className="text-sm sm:text-base text-gray-900">
                       {extractedData.employmentType === 'full_time' ? 'Full Time' :
                        extractedData.employmentType === 'part_time' ? 'Part Time' :
                        extractedData.employmentType === 'contract' ? 'Contract' :
@@ -5372,8 +5372,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     </p>
                   </div>
                   <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
-                    <h4 className="text-sm text-gray-600 mb-2">Work Mode</h4>
-                    <p className="text-gray-900">
+                    <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Work Mode</h4>
+                    <p className="text-sm sm:text-base text-gray-900">
                       {extractedData.workModel === 'onsite' ? 'Onsite' :
                        extractedData.workModel === 'remote' ? 'Remote' :
                        extractedData.workModel === 'hybrid' ? 'Hybrid' :
@@ -5405,13 +5405,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               {/* Assessment Guidance */}
               {extractedData.assessmentGuidance && (
                 <div className="p-4 sm:p-6 border-b border-gray-200">
-                  <h3 className="text-gray-900 mb-3 flex items-center gap-2">
+                  <h3 className="text-sm sm:text-base text-gray-900 mb-3 flex items-center gap-2">
                     Assessment Guidance
                     <span className="text-xs text-gray-800 bg-gray-50 px-2 py-1 rounded">
                       ℹ️ Visible to assessment team
                     </span>
                   </h3>
-                  <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">
+                  <div className="bg-gray-50 p-3 sm:p-4 rounded-lg text-xs sm:text-sm text-gray-700 whitespace-pre-wrap">
                     {extractedData.assessmentGuidance}
                   </div>
                 </div>
@@ -5420,7 +5420,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               {/* Internal Recruiter Comments */}
               {extractedData.internalRecruiterComments.length > 0 && (
                 <div className="p-4 sm:p-6 border-b border-gray-200">
-                  <h3 className="text-gray-900 mb-3 flex items-center gap-2">
+                  <h3 className="text-sm sm:text-base text-gray-900 mb-3 flex items-center gap-2">
                     Internal Recruiter Notes
                     <span className="text-xs text-gray-500 bg-yellow-100 px-2 py-1 rounded">
                       🔒 Private
@@ -5428,7 +5428,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </h3>
                   <div className="space-y-2">
                     {extractedData.internalRecruiterComments.map((comment, index) => (
-                      <div key={index} className="bg-yellow-50 p-3 rounded-lg text-sm text-gray-700 border border-yellow-200">
+                      <div key={index} className="bg-yellow-50 p-2.5 sm:p-3 rounded-lg text-xs sm:text-sm text-gray-700 border border-yellow-200">
                         {comment}
                       </div>
                     ))}
@@ -5438,20 +5438,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
               {/* Candidate Preferences */}
               <div className="p-4 sm:p-6">
-                <h3 className="text-gray-900 mb-4">Candidate Preferences</h3>
-                <div className="flex items-center gap-3 bg-gray-50 p-4 rounded-lg">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Candidate Preferences</h3>
+                <div className="flex items-center gap-3 bg-gray-50 p-3 sm:p-4 rounded-lg">
+                  <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                     extractedData.allowOverqualified ? 'bg-green-100' : 'bg-gray-200'
                   }`}>
                     {extractedData.allowOverqualified ? (
-                      <CheckCircle className="w-6 h-6 text-green-600" />
+                      <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                     ) : (
-                      <X className="w-6 h-6 text-gray-400" />
+                      <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
                     )}
                   </div>
                   <div>
-                    <p className="text-gray-900">Allow Overqualified Candidates</p>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm sm:text-base text-gray-900">Allow Overqualified Candidates</p>
+                    <p className="text-xs sm:text-sm text-gray-600">
                       {extractedData.allowOverqualified 
                         ? 'Accepting candidates who exceed requirements'
                         : 'Only accepting candidates within requirements'}
@@ -5468,7 +5468,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               <div className="flex gap-2 sm:gap-3 order-2 sm:order-1">
                 <button
                   onClick={() => setStep('extract')}
-                  className="px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base"
+                  className="px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-black"
                 >
                   ← Back
                 </button>
@@ -5486,7 +5486,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   onClick={handleSaveDraft}
                   disabled={isSavingDraft || isJDInUse}
                   title={isJDInUse ? 'This JD is in use and cannot be modified' : ''}
-                  className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 text-sm sm:text-base"
+                  className="flex items-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 text-sm sm:text-base text-black"
                 >
                   {isSavingDraft ? (
                     <>
@@ -5542,7 +5542,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {publishedJobCode}
                 </span>
               )}
-              <span className="text-lg font-semibold text-gray-900">{jobTitle}</span>
+              <span className="text-base sm:text-lg font-semibold text-gray-900">{jobTitle}</span>
               {publishedVersion && (
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
                   v{publishedVersion}
@@ -5593,14 +5593,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     internalRecruiterComments: [],
                   });
                 }}
-                className="px-4 sm:px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base"
+                className="px-4 sm:px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-black"
               >
                 Create Another JD
               </button>
               {publishedJdId && (
                 <button
                   onClick={() => router.push(`/recruitment/job-details?id=${publishedJdId}`)}
-                  className="px-4 sm:px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base"
+                  className="px-4 sm:px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-black"
                 >
                   View JD
                 </button>
@@ -5619,24 +5619,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       {/* Unsaved Changes Dialog */}
       <Dialog open={showUnsavedDialog} onOpenChange={(open) => !open && handleCancelDialog()}>
-        <DialogContent>
+        <DialogContent className="p-4 sm:p-6 gap-3 sm:gap-4">
           <DialogHeader>
-            <DialogTitle>Unsaved Changes</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Unsaved Changes</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
               You have unsaved changes. Would you like to save them as a draft before leaving?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <button
               onClick={handleDiscardAndNavigate}
-              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700"
             >
               Discard Changes
             </button>
             <button
               onClick={handleSaveAndNavigate}
               disabled={isSavingDraft}
-              className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
             >
               {isSavingDraft ? (
                 <>
@@ -5653,24 +5653,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       {/* Cancel JD Creation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={(open) => !open && setShowCancelDialog(false)}>
-        <DialogContent>
+        <DialogContent className="p-4 sm:p-6 gap-3 sm:gap-4">
           <DialogHeader>
-            <DialogTitle>Cancel JD Creation?</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-base sm:text-lg">Cancel JD Creation?</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
               Are you sure you want to cancel? {editingId ? 'This will delete the current draft and all your progress will be lost.' : 'All your progress will be lost.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <button
               onClick={() => setShowCancelDialog(false)}
-              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700 text-white"
             >
               Continue Editing
             </button>
             <button
               onClick={confirmCancelJD}
               disabled={isCancelling}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
             >
               {isCancelling ? (
                 <>

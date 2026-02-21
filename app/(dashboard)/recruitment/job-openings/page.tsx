@@ -350,45 +350,45 @@ export default function JobOpeningsPage() {
 
       {/* Edit Warning Dialog */}
       <AlertDialog open={editWarningDialog.open} onOpenChange={(open) => setEditWarningDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-amber-600" />
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
               </div>
               <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
+                <AlertDialogTitle className="text-base sm:text-lg font-semibold text-gray-900">
                   Cannot Edit Job Description
                 </AlertDialogTitle>
-                <AlertDialogDescription className="mt-2 text-sm text-gray-600">
+                <AlertDialogDescription className="mt-2 text-xs sm:text-sm text-gray-600">
                   <span className="font-medium text-gray-800">&quot;{editWarningDialog.jobTitle}&quot;</span> has been used in:
                 </AlertDialogDescription>
               </div>
             </div>
           </AlertDialogHeader>
 
-          <div className="mt-4 ml-16">
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <div className="flex flex-wrap gap-2">
+          <div className="mt-3 sm:mt-4 ml-0 sm:ml-16">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 sm:p-3">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {editWarningDialog.usageDetails.split(', ').map((usage, index) => (
                   <span
                     key={index}
-                    className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
+                    className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
                   >
                     {usage}
                   </span>
                 ))}
               </div>
             </div>
-            <p className="mt-3 text-sm text-gray-600">
+            <p className="mt-2.5 sm:mt-3 text-xs sm:text-sm text-gray-600">
               To maintain data integrity, this job description cannot be modified. Please create a new job description instead.
             </p>
           </div>
 
-          <AlertDialogFooter className="mt-6 flex gap-3 sm:justify-end">
+          <AlertDialogFooter className="mt-4 sm:mt-6 flex gap-3 sm:justify-end">
             <AlertDialogAction
               onClick={() => setEditWarningDialog({ open: false, jobTitle: '', usageDetails: '' })}
-              className="bg-gray-900 hover:bg-gray-800 text-white"
+              className="bg-gray-900 hover:bg-gray-800 text-white text-sm sm:text-base"
             >
               I Understand
             </AlertDialogAction>
@@ -398,45 +398,45 @@ export default function JobOpeningsPage() {
 
       {/* Delete Warning Dialog - shown when JD is in use */}
       <AlertDialog open={deleteWarningDialog.open} onOpenChange={(open) => setDeleteWarningDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
               </div>
               <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
+                <AlertDialogTitle className="text-base sm:text-lg font-semibold text-gray-900">
                   Cannot Delete Job Description
                 </AlertDialogTitle>
-                <AlertDialogDescription className="mt-2 text-sm text-gray-600">
+                <AlertDialogDescription className="mt-2 text-xs sm:text-sm text-gray-600">
                   <span className="font-medium text-gray-800">&quot;{deleteWarningDialog.jobTitle}&quot;</span> has been used in:
                 </AlertDialogDescription>
               </div>
             </div>
           </AlertDialogHeader>
 
-          <div className="mt-4 ml-16">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-              <div className="flex flex-wrap gap-2">
+          <div className="mt-3 sm:mt-4 ml-0 sm:ml-16">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 sm:p-3">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {deleteWarningDialog.usageDetails.split(', ').map((usage, index) => (
                   <span
                     key={index}
-                    className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                    className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"
                   >
                     {usage}
                   </span>
                 ))}
               </div>
             </div>
-            <p className="mt-3 text-sm text-gray-600">
+            <p className="mt-2.5 sm:mt-3 text-xs sm:text-sm text-gray-600">
               You have assigned the assessment for this JD. So you will not be able to delete this JD.
             </p>
           </div>
 
-          <AlertDialogFooter className="mt-6 flex gap-3 sm:justify-end">
+          <AlertDialogFooter className="mt-4 sm:mt-6 flex gap-3 sm:justify-end">
             <AlertDialogAction
               onClick={() => setDeleteWarningDialog({ open: false, jobTitle: '', usageDetails: '' })}
-              className="bg-gray-900 hover:bg-gray-800 text-white"
+              className="bg-gray-900 hover:bg-gray-800 text-white text-sm sm:text-base"
             >
               I Understand
             </AlertDialogAction>
@@ -446,47 +446,47 @@ export default function JobOpeningsPage() {
 
       {/* Disable Job Confirmation Dialog */}
       <AlertDialog open={disableDialog.open} onOpenChange={(open) => setDisableDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="w-6 h-6 text-red-600" />
+            <div className="flex items-start gap-3 sm:gap-4">
+              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
               </div>
               <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
+                <AlertDialogTitle className="text-base sm:text-lg font-semibold text-gray-900">
                   Disable Job Description?
                 </AlertDialogTitle>
-                <AlertDialogDescription className="mt-2 text-sm text-gray-600">
+                <AlertDialogDescription className="mt-2 text-xs sm:text-sm text-gray-600">
                   Are you sure you want to disable <span className="font-medium text-gray-800">&quot;{disableDialog.job?.title}&quot;</span>?
                 </AlertDialogDescription>
               </div>
             </div>
           </AlertDialogHeader>
 
-          <div className="mt-4 ml-16">
-            <p className="text-sm text-gray-600 mb-3">
+          <div className="mt-3 sm:mt-4 ml-0 sm:ml-16">
+            <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">
               If you disable this JD, it will be removed from:
             </p>
-            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+            <ul className="list-disc list-inside text-xs sm:text-sm text-gray-600 space-y-1">
               <li>Resume Scoring</li>
               <li>Assessment Generation</li>
               <li>AI Talent Match</li>
             </ul>
-            <p className="mt-3 text-sm text-gray-500">
+            <p className="mt-2.5 sm:mt-3 text-xs sm:text-sm text-gray-500">
               You can re-enable this JD later if needed.
             </p>
           </div>
 
-          <AlertDialogFooter className="mt-6 flex gap-3 sm:justify-end">
+          <AlertDialogFooter className="mt-4 sm:mt-6 flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
             <button
               onClick={() => setDisableDialog({ open: false, job: null })}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
+              className="px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors"
             >
               Cancel
             </button>
             <AlertDialogAction
               onClick={confirmDisableJob}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm"
             >
               Yes, Disable
             </AlertDialogAction>

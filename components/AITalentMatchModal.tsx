@@ -194,15 +194,15 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-gray-800" />
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-2 sm:mx-0">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800" />
             </div>
-            <div>
-              <h2 className="text-xl text-gray-900">AI Talent Match</h2>
-              <p className="text-sm text-gray-500">{job.title}</p>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-xl text-gray-900">AI Talent Match</h2>
+              <p className="text-xs sm:text-sm text-gray-500 truncate">{job.title}</p>
             </div>
           </div>
           <button
@@ -213,18 +213,18 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
           </button>
         </div>
 
-        <div className="p-8">
+        <div className="p-4 sm:p-8">
           {/* Step 1: JD Embedding */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-4">
+          <div className="mb-4 sm:mb-8">
+            <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
               {currentStep === 'embedding' ? (
                 <Loader2 className="w-6 h-6 text-gray-800 animate-spin" />
               ) : (
                 <CheckCircle2 className="w-6 h-6 text-green-600" />
               )}
               <div className="flex-1">
-                <h3 className="text-gray-900 mb-1">Step 1: JD Embedding Check</h3>
-                <p className="text-sm text-gray-600">
+                <h3 className="text-sm sm:text-base text-gray-900 mb-1">Step 1: JD Embedding Check</h3>
+                <p className="text-xs sm:text-sm text-gray-600">
                   {jdEmbeddingExists && currentStep !== 'embedding'
                     ? 'JD vector found in database'
                     : currentStep !== 'embedding'
@@ -235,11 +235,11 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
             </div>
 
             {currentStep === 'embedding' && (
-              <div className="ml-9">
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3 mb-3">
-                    <Database className="w-5 h-5 text-gray-800 mt-0.5" />
-                    <p className="text-sm text-gray-800">{processDetails}</p>
+              <div className="ml-6 sm:ml-9">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
+                  <div className="flex items-start gap-2 sm:gap-3 mb-3">
+                    <Database className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 mt-0.5 flex-shrink-0" />
+                    <p className="text-xs sm:text-sm text-gray-800">{processDetails}</p>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
@@ -251,7 +251,7 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
                 </div>
 
                 {!jdEmbeddingExists && progress > 0 && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <h4 className="text-xs text-gray-700 mb-2">Embedding Process:</h4>
                     <ul className="text-xs text-gray-600 space-y-1">
                       <li className="flex items-center gap-2">
@@ -278,8 +278,8 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
           </div>
 
           {/* Step 2: Cosine Similarity Matching */}
-          <div className="mb-8">
-            <div className="flex items-center gap-3 mb-4">
+          <div className="mb-4 sm:mb-8">
+            <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
               {currentStep === 'matching' ? (
                 <Loader2 className="w-6 h-6 text-gray-800 animate-spin" />
               ) : currentStep === 'complete' ? (
@@ -288,10 +288,10 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
                 <div className="w-6 h-6 rounded-full border-2 border-gray-300" />
               )}
               <div className="flex-1">
-                <h3 className={`mb-1 ${currentStep === 'embedding' ? 'text-gray-400' : 'text-gray-900'}`}>
+                <h3 className={`text-sm sm:text-base mb-1 ${currentStep === 'embedding' ? 'text-gray-400' : 'text-gray-900'}`}>
                   Step 2: Cosine Similarity Matching
                 </h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs sm:text-sm text-gray-600">
                   {currentStep === 'complete'
                     ? 'Matching complete - candidates ranked by relevance'
                     : currentStep === 'matching'
@@ -302,11 +302,11 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
             </div>
 
             {currentStep === 'matching' && (
-              <div className="ml-9">
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3 mb-3">
-                    <Sparkles className="w-5 h-5 text-gray-800 mt-0.5" />
-                    <p className="text-sm text-gray-800">{processDetails}</p>
+              <div className="ml-6 sm:ml-9">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
+                  <div className="flex items-start gap-2 sm:gap-3 mb-3">
+                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 mt-0.5 flex-shrink-0" />
+                    <p className="text-xs sm:text-sm text-gray-800">{processDetails}</p>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div
@@ -317,20 +317,20 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
                   <div className="text-xs text-gray-900 mt-2 text-right">{progress}%</div>
                 </div>
 
-                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <h4 className="text-xs text-gray-700 mb-2">Matching Algorithm:</h4>
                   <div className="text-xs text-gray-600 space-y-2">
-                    <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                    <div className="flex items-center justify-between p-1.5 sm:p-2 bg-white rounded border border-gray-200">
                       <span>Algorithm:</span>
-                      <span className="font-mono text-gray-800">Cosine Similarity</span>
+                      <span className="font-mono text-gray-800 text-[10px] sm:text-xs">Cosine Similarity</span>
                     </div>
-                    <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                    <div className="flex items-center justify-between p-1.5 sm:p-2 bg-white rounded border border-gray-200">
                       <span>Resume Database:</span>
-                      <span className="font-mono text-gray-800">1,247 vectors</span>
+                      <span className="font-mono text-gray-800 text-[10px] sm:text-xs">1,247 vectors</span>
                     </div>
-                    <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                    <div className="flex items-center justify-between p-1.5 sm:p-2 bg-white rounded border border-gray-200">
                       <span>Embedding Model:</span>
-                      <span className="font-mono text-gray-800">text-embedding-3</span>
+                      <span className="font-mono text-gray-800 text-[10px] sm:text-xs">text-embedding-3</span>
                     </div>
                   </div>
                 </div>
@@ -340,10 +340,10 @@ export default function AITalentMatchModal({ job, onClose, onComplete }: AITalen
 
           {/* Step 3: Complete */}
           {currentStep === 'complete' && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
-              <CheckCircle2 className="w-12 h-12 text-green-600 mx-auto mb-3" />
-              <h3 className="text-lg text-gray-900 mb-2">Matching Complete!</h3>
-              <p className="text-sm text-gray-600 mb-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 sm:p-6 text-center">
+              <CheckCircle2 className="w-10 h-10 sm:w-12 sm:h-12 text-green-600 mx-auto mb-3" />
+              <h3 className="text-base sm:text-lg text-gray-900 mb-2">Matching Complete!</h3>
+              <p className="text-xs sm:text-sm text-gray-600 mb-4">
                 Found top matching candidates ranked by AI relevance score
               </p>
               <div className="flex items-center justify-center gap-2 text-sm text-green-700">
