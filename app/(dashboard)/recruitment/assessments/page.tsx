@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Assessments from '@/components/Assessments';
 import { jdService } from '@/lib/services/jdService';
 import { Job } from '@/lib/types/types';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 export default function AssessmentsRoute() {
   const searchParams = useSearchParams();
@@ -78,11 +79,13 @@ export default function AssessmentsRoute() {
   }
 
   return (
-    <Assessments
-      jobs={jobs}
-      autoOpenCreate={autoCreate}
-      preSelectedJdId={preSelectedJdId || undefined}
-      preSelectedJdTitle={preSelectedJdTitle ? decodeURIComponent(preSelectedJdTitle) : undefined}
-    />
+    <FeatureGate feature="assessment">
+      <Assessments
+        jobs={jobs}
+        autoOpenCreate={autoCreate}
+        preSelectedJdId={preSelectedJdId || undefined}
+        preSelectedJdTitle={preSelectedJdTitle ? decodeURIComponent(preSelectedJdTitle) : undefined}
+      />
+    </FeatureGate>
   );
 }

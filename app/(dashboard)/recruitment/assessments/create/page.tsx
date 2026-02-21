@@ -6,6 +6,7 @@ import AssessmentCreation from '@/components/AssessmentCreation';
 import { jdService } from '@/lib/services/jdService';
 import api from '@/lib/services/api';
 import { Job } from '@/lib/types/types';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 interface TopicSettings {
   hr_enabled: boolean;
@@ -111,13 +112,15 @@ export default function CreateAssessmentPage() {
   }
 
   return (
-    <AssessmentCreation
-      onBack={handleBack}
-      jobs={jobs}
-      onCreateAssessment={handleCreateAssessment}
-      onCreateNewJD={handleNavigateToJDCreation}
-      topicSettings={topicSettings}
-      preSelectedJobId={preSelectedJdId || undefined}
-    />
+    <FeatureGate feature="assessment">
+      <AssessmentCreation
+        onBack={handleBack}
+        jobs={jobs}
+        onCreateAssessment={handleCreateAssessment}
+        onCreateNewJD={handleNavigateToJDCreation}
+        topicSettings={topicSettings}
+        preSelectedJobId={preSelectedJdId || undefined}
+      />
+    </FeatureGate>
   );
 }

@@ -1,11 +1,12 @@
 'use client';
 
-import { Lock, Shield, Smartphone, Clock, MapPin, Save, Check, Loader2, X, AlertTriangle, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Lock, Shield, Smartphone, Clock, MapPin, Save, Check, Loader2, X, AlertTriangle, Eye, EyeOff, CheckCircle, KeyRound } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { userSettingsApi, sessionsApi, Session, UserSettings } from '@/lib/services/settingsService';
 import { clearTokens } from '@/lib/services/api';
 import { toast } from 'sonner';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 // Password strength validation
 const getPasswordStrength = (password: string) => {
@@ -631,6 +632,26 @@ export default function SecurityPage() {
             )}
           </div>
         </div>
+
+        {/* SSO (Single Sign-On) */}
+        <FeatureGate feature="sso" mode="section">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <KeyRound className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Single Sign-On (SSO)</h2>
+                <p className="text-sm text-gray-500">Configure SSO integration for your organization</p>
+              </div>
+            </div>
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-sm text-blue-700">
+                SSO is available for your plan. Contact your administrator to configure SAML or OIDC integration for your organization.
+              </p>
+            </div>
+          </div>
+        </FeatureGate>
 
         {/* Active Sessions */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">

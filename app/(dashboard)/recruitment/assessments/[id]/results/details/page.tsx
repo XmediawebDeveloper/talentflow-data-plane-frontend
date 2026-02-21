@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
 import CandidateResultDetails from '@/components/CandidateResultDetails';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 function DetailsContent() {
   const params = useParams();
@@ -95,12 +96,14 @@ function DetailsContent() {
 
 export default function CandidateResultDetailsPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    }>
-      <DetailsContent />
-    </Suspense>
+    <FeatureGate feature="assessment">
+      <Suspense fallback={
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        </div>
+      }>
+        <DetailsContent />
+      </Suspense>
+    </FeatureGate>
   );
 }

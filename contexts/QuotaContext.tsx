@@ -24,6 +24,7 @@ interface QuotaData {
     billing_interval?: string;
     allocated_quotas?: Record<string, number>;  // Tenant-specific: quotas allocated to this tenant
     isolation_type?: 'SCHEMA' | 'DATABASE' | 'DEDICATED' | string | null;
+    features?: string[];  // Boolean plan features (api_access, sso, etc.)
   };
   billing_period?: {
     start?: string;

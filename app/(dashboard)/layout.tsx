@@ -10,6 +10,7 @@ import { SessionTimeoutProvider } from '@/components/SessionTimeoutProvider';
 import { toast } from 'sonner';
 import { scoringService } from '@/lib/services/scoringService';
 import { QuotaProvider } from '@/contexts/QuotaContext';
+import { PlanFeaturesProvider } from '@/components/providers/PlanFeaturesProvider';
 import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail } from '@/lib/services/api';
 
 // Admin-only routes that require tenant_admin role
@@ -306,55 +307,57 @@ export default function DashboardLayout({
 
   return (
     <QuotaProvider>
-      <SessionTimeoutProvider skipSettingsLoad={subscriptionExpired !== false}>
-        <Suspense fallback={null}>
-          <SearchParamsErrorHandler />
-        </Suspense>
-        <div className="flex h-screen bg-gray-50">
-          {/* Mobile Menu Overlay */}
-          {isMobileMenuOpen && (
+      <PlanFeaturesProvider>
+        <SessionTimeoutProvider skipSettingsLoad={subscriptionExpired !== false}>
+          <Suspense fallback={null}>
+            <SearchParamsErrorHandler />
+          </Suspense>
+          <div className="flex h-screen bg-gray-50">
+            {/* Mobile Menu Overlay */}
+            {isMobileMenuOpen && (
+              <div
+                className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+                onClick={() => setIsMobileMenuOpen(false)}
+              />
+            )}
+
+            {/* Sidebar - Hidden on mobile, slide-in overlay when open */}
             <div
-              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-              onClick={() => setIsMobileMenuOpen(false)}
-            />
-          )}
-
-          {/* Sidebar - Hidden on mobile, slide-in overlay when open */}
-          <div
-            className={`
-              fixed lg:static inset-y-0 left-0 z-50
-              transform transition-transform duration-300 ease-in-out
-              ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-            `}
-          >
-            <Sidebar
-              user={user || undefined}
-              tenant={tenant || undefined}
-              subscriptionExpired={subscriptionExpired}
-              accountSuspended={accountSuspended}
-              onClose={() => setIsMobileMenuOpen(false)}
-            />
-          </div>
-
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <Header
-              user={user}
-              tenant={tenant}
-              onLogout={logout}
-              onOpenSettings={() => router.push('/settings')}
-              onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              isMobileMenuOpen={isMobileMenuOpen}
-            />
-
-            <div className="flex-1 overflow-y-auto">
-              {children}
+              className={`
+                fixed lg:static inset-y-0 left-0 z-50
+                transform transition-transform duration-300 ease-in-out
+                ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+              `}
+            >
+              <Sidebar
+                user={user || undefined}
+                tenant={tenant || undefined}
+                subscriptionExpired={subscriptionExpired}
+                accountSuspended={accountSuspended}
+                onClose={() => setIsMobileMenuOpen(false)}
+              />
             </div>
-          </div>
 
-          {/* Global subscription inactive modal - shown on all dashboard pages */}
-          <SubscriptionInactiveModal />
-        </div>
-      </SessionTimeoutProvider>
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <Header
+                user={user}
+                tenant={tenant}
+                onLogout={logout}
+                onOpenSettings={() => router.push('/settings')}
+                onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                isMobileMenuOpen={isMobileMenuOpen}
+              />
+
+              <div className="flex-1 overflow-y-auto">
+                {children}
+              </div>
+            </div>
+
+            {/* Global subscription inactive modal - shown on all dashboard pages */}
+            <SubscriptionInactiveModal />
+          </div>
+        </SessionTimeoutProvider>
+      </PlanFeaturesProvider>
     </QuotaProvider>
   );
 }
