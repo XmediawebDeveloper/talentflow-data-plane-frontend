@@ -129,6 +129,8 @@ export interface User {
   enabled_features?: string[];
   last_login?: string;
   created_at: string;
+  // Tenant info
+  tenant_name?: string;
   // Tenant status info (for suspension/expiry display)
   tenant_status?: 'ACTIVE' | 'SUSPENDED' | 'EXPIRED' | 'PENDING_ACTIVATION' | 'PROVISIONING' | 'DELETED';
   suspension_reason?: string;

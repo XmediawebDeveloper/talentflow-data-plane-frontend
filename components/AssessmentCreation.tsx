@@ -1,3 +1,5 @@
+'use client';
+
 import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -5,6 +7,7 @@ import { Job } from '@/lib/types/types';
 import { assessmentService, jdService } from '@/lib/services';
 import JDCreation from '@/components/JDCreation';
 import { toast } from 'sonner';
+import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 
 // 1:1 JD-Assessment relationship: JDs that already have assessments cannot be selected
 
@@ -37,6 +40,7 @@ interface SectionConfig {
 export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId }: AssessmentCreationProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { available: assessmentAvailable } = usePlanFeature('assessment');
 
   // Read initial step from URL, default to 'select-jd'
   const urlStep = searchParams.get('step') as 'select-jd' | 'configure' | 'preview' | null;
@@ -1271,6 +1275,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Use localJobs which includes newly created JDs
   const availableJobs = localJobs.length > 0 ? localJobs : jobs;
+
+  // Plan feature gate: assessment creation not available on current plan
+  useEffect(() => {
+    if (!assessmentAvailable) {
+      toast.error('Assessment creation is not available on your current plan. Please upgrade to access this feature.');
+    }
+  }, [assessmentAvailable]);
+
+  if (!assessmentAvailable) {
+    return null;
+  }
 
   // Step 1: Select JD
   if (step === 'select-jd') {

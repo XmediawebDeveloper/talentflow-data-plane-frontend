@@ -46,12 +46,18 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const faceCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Scroll to top when component mounts
     window.scrollTo(0, 0);
 
     return () => {
+      // Stop periodic face detection
+      if (faceCheckIntervalRef.current) {
+        clearInterval(faceCheckIntervalRef.current);
+        faceCheckIntervalRef.current = null;
+      }
       // DON'T cleanup stream on unmount - keep it alive for assessment
       // The parent (CandidateAssessmentPortal) will handle stream cleanup
       // This prevents the black screen gap between system check and assessment
@@ -201,6 +207,31 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     }
   };
 
+  // Run face detection on the video element using FaceDetector API (Chrome/Edge)
+  // Falls back to trusting the video track on unsupported browsers
+  const runFaceDetection = async () => {
+    if (!videoRef.current) return;
+    try {
+      const FaceDetector = (window as any).FaceDetector;
+      const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+      const faces = await detector.detect(videoRef.current);
+      if (faces.length > 0) {
+        setCameraCheck({ status: 'success', message: 'Camera ready — face detected' });
+      } else {
+        setCameraCheck({ status: 'error', message: 'No face detected. Look directly at the camera.' });
+      }
+    } catch {
+      // FaceDetector failed or not supported — just mark camera as working
+      setCameraCheck({ status: 'success', message: 'Camera working' });
+    }
+  };
+
+  const startFaceDetectionPolling = () => {
+    if (faceCheckIntervalRef.current) clearInterval(faceCheckIntervalRef.current);
+    // Re-check every 2.5 s so status updates as user moves into/out of frame
+    faceCheckIntervalRef.current = setInterval(runFaceDetection, 2500);
+  };
+
   const checkCameraAndMicrophone = async () => {
     // Request both camera and microphone together to avoid permission conflicts
     try {
@@ -217,7 +248,16 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       const audioTracks = stream.getAudioTracks();
 
       if (videoTracks.length > 0) {
-        setCameraCheck({ status: 'success', message: 'Camera working' });
+        const hasFaceAPI = 'FaceDetector' in window;
+        if (hasFaceAPI) {
+          setCameraCheck({ status: 'checking', message: 'Detecting face...' });
+          // Give the video element a moment to render actual frames
+          await new Promise(r => setTimeout(r, 800));
+          await runFaceDetection();
+          startFaceDetectionPolling();
+        } else {
+          setCameraCheck({ status: 'success', message: 'Camera working' });
+        }
       } else {
         setCameraCheck({ status: 'error', message: 'No video track available' });
       }

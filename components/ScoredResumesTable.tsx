@@ -586,9 +586,10 @@ export default function ScoredResumesTable({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by name, email, or phone..."
-              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black palaceholder-gray-500 bg-white"
             />
           </div>
+          
 
           {/* Filter and Clear buttons row */}
           <div className="flex gap-2">

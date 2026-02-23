@@ -75,19 +75,19 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
   if (compact) {
     return (
       <>
-        <div className={`p-3 rounded-lg border ${
+        <div className={`p-2.5 sm:p-3 rounded-lg border ${
           limits.is_at_limit
             ? 'bg-red-50 border-red-200'
             : limits.approaching_limit
             ? 'bg-amber-50 border-amber-200'
             : 'bg-gray-50 border-gray-200'
         }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className={`w-4 h-4 ${
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <Users className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${
                 limits.is_at_limit ? 'text-red-500' : limits.approaching_limit ? 'text-amber-500' : 'text-gray-500'
               }`} />
-              <span className="text-sm font-medium text-gray-700">
+              <span className="text-xs sm:text-sm font-medium text-gray-700 truncate">
                 {limits.current_users}/{limits.max_users === -1 ? '∞' : limits.max_users} users
               </span>
             </div>
@@ -100,14 +100,14 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                     setShowAddSeatsModal(true);
                   }
                 }}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs font-medium rounded hover:bg-red-700 transition-colors"
+                className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-[10px] sm:text-xs font-medium rounded hover:bg-red-700 transition-colors flex-shrink-0"
               >
                 <Plus className="w-3 h-3" />
                 Add Seats
               </button>
             )}
           </div>
-          <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div className="mt-1.5 sm:mt-2 h-1 sm:h-1.5 bg-gray-200 rounded-full overflow-hidden">
             <div
               className={`h-full ${progressColor} transition-all`}
               style={{ width: `${progressPercentage}%` }}
@@ -129,40 +129,40 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
   }
 
   return (
-    <div className={`p-4 rounded-lg border ${
+    <div className={`p-3 sm:p-4 rounded-lg border ${
       limits.is_at_limit
         ? 'bg-red-50 border-red-200'
         : limits.approaching_limit
         ? 'bg-amber-50 border-amber-200'
         : 'bg-white border-gray-200'
     }`}>
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="flex items-center gap-2">
-            <Users className={`w-5 h-5 ${
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Users className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 ${
               limits.is_at_limit ? 'text-red-500' : limits.approaching_limit ? 'text-amber-500' : 'text-gray-700'
             }`} />
-            <h3 className="font-medium text-gray-900">User Seats</h3>
+            <h3 className="text-sm sm:text-base font-medium text-gray-900">User Seats</h3>
           </div>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-xs sm:text-sm text-gray-500 mt-1">
             {limits.plan_name} Plan
           </p>
         </div>
 
         <div className="text-right">
-          <div className="text-2xl font-bold text-gray-900">
+          <div className="text-lg sm:text-2xl font-bold text-gray-900">
             {limits.current_users}
-            <span className="text-lg text-gray-400">/{limits.max_users}</span>
+            <span className="text-sm sm:text-lg text-gray-400">/{limits.max_users}</span>
           </div>
-          <p className="text-sm text-gray-500">
+          <p className="text-xs sm:text-sm text-gray-500">
             {limits.available_slots} available
           </p>
         </div>
       </div>
 
       {/* Progress bar */}
-      <div className="mt-4">
-        <div className="flex items-center justify-between text-sm mb-1">
+      <div className="mt-3 sm:mt-4">
+        <div className="flex items-center justify-between text-xs sm:text-sm mb-1">
           <span className="text-gray-500">Usage</span>
           <span className={`font-medium ${
             limits.is_at_limit ? 'text-red-600' : limits.approaching_limit ? 'text-amber-600' : 'text-gray-700'
@@ -170,7 +170,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
             {Math.round(limits.usage_percentage)}%
           </span>
         </div>
-        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className="h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
           <div
             className={`h-full ${progressColor} transition-all`}
             style={{ width: `${progressPercentage}%` }}
@@ -180,14 +180,14 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
 
       {/* Warning messages */}
       {limits.is_at_limit && (
-        <div className="mt-4 flex items-start gap-2 p-3 bg-red-100 rounded-lg">
-          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-red-800">User limit reached</p>
-            <p className="text-sm text-red-700 mt-0.5">
+        <div className="mt-3 sm:mt-4 flex items-start gap-2 p-2.5 sm:p-3 bg-red-100 rounded-lg">
+          <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs sm:text-sm font-medium text-red-800">User limit reached</p>
+            <p className="text-[10px] sm:text-sm text-red-700 mt-0.5">
               You cannot add more users. Purchase additional seats, upgrade your plan, or deactivate existing users.
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-2 sm:mt-3 flex flex-wrap gap-2">
               <button
                 onClick={() => {
                   if (onAddSeatsClick) {
@@ -196,17 +196,17 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                     setShowAddSeatsModal(true);
                   }
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-red-600 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Add Seats
               </button>
               {onUpgradeClick && (
                 <button
                   onClick={onUpgradeClick}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-red-700 text-sm font-medium rounded-lg border border-red-300 hover:bg-red-50 transition-colors"
+                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-white text-red-700 text-xs sm:text-sm font-medium rounded-lg border border-red-300 hover:bg-red-50 transition-colors"
                 >
-                  <TrendingUp className="w-4 h-4" />
+                  <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Upgrade Plan
                 </button>
               )}
@@ -216,11 +216,11 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
       )}
 
       {limits.approaching_limit && !limits.is_at_limit && (
-        <div className="mt-4 flex items-start gap-2 p-3 bg-amber-100 rounded-lg">
-          <Info className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-amber-800">Approaching user limit</p>
-            <p className="text-sm text-amber-700 mt-0.5">
+        <div className="mt-3 sm:mt-4 flex items-start gap-2 p-2.5 sm:p-3 bg-amber-100 rounded-lg">
+          <Info className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs sm:text-sm font-medium text-amber-800">Approaching user limit</p>
+            <p className="text-[10px] sm:text-sm text-amber-700 mt-0.5">
               Only {limits.available_slots} user slot{limits.available_slots !== 1 ? 's' : ''} remaining.
               Consider adding more seats or upgrading your plan.
             </p>
@@ -233,7 +233,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                     setShowAddSeatsModal(true);
                   }
                 }}
-                className="inline-flex items-center gap-1 text-sm font-medium text-amber-800 hover:text-amber-900 underline"
+                className="inline-flex items-center gap-1 text-xs sm:text-sm font-medium text-amber-800 hover:text-amber-900 underline"
               >
                 <Plus className="w-3 h-3" />
                 Add Seats

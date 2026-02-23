@@ -196,6 +196,8 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     // RBAC06: Feature flags
     featureFlags: mapApiFeatureFlagsToFeatureFlags(apiUser.feature_flags),
     enabledFeatures: apiUser.enabled_features,
+    // Tenant info
+    tenantName: apiUser.tenant_name,
     // Tenant status info (for suspension/expiry display)
     tenantStatus: apiUser.tenant_status,
     suspensionReason: apiUser.suspension_reason,
@@ -304,11 +306,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         console.log('[AUTH] Restored user from localStorage:', storedUser.email);
         setUser(storedUser);
-        // Use stored tenant if available, otherwise use mock as fallback
-        setTenant(storedTenant || mockTenant);
+        // Use stored tenant if available, otherwise build a minimal tenant from stored user
+        setTenant(storedTenant || {
+          ...mockTenant,
+          id: storedUser.tenantId,
+          name: storedUser.tenantName || 'My Organization',
+        });
         setIsLoading(false);
 
-        // Optionally validate with API in background (don't block UI)
+        // Validate with API in background and refresh tenant name
         try {
           const apiUserData = await authService.getCurrentUser();
           const userData = mapApiUserToUser(apiUserData);
@@ -321,6 +327,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           setUser(userData);
           saveUserToStorage(userData);
+          // Update tenant name from API response (fixes stale name after hard refresh)
+          if (userData.tenantName) {
+            setTenant(prev => {
+              const updated = prev ? { ...prev, name: userData.tenantName! } : { ...mockTenant, id: userData.tenantId, name: userData.tenantName! };
+              saveTenantToStorage(updated);
+              return updated;
+            });
+          }
           // Mirror tenantSubdomain to talentflow_subdomain so getLoginUrl() has it
           // even if talentflow_user is cleared before getLoginUrl() is called
           if (userData.tenantSubdomain && typeof window !== 'undefined') {
@@ -364,7 +378,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AUTH] Got user data:', apiUserData);
           const userData = mapApiUserToUser(apiUserData);
           setUser(userData);
-          setTenant(mockTenant);
+          const freshTenant = {
+            ...mockTenant,
+            id: userData.tenantId,
+            name: userData.tenantName || 'My Organization',
+          };
+          setTenant(freshTenant);
+          saveTenantToStorage(freshTenant);
           saveUserToStorage(userData);
           console.log('[AUTH] Session restored with fresh permissions from API');
         } catch (error: unknown) {
@@ -544,13 +564,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Store tenant name on user for localStorage persistence across refreshes
+    if (tenantName) {
+      userData.tenantName = tenantName;
+    }
     setUser(userData);
 
     // Create tenant object from login response
     const tenantData: Tenant = {
       ...mockTenant, // Use mock as base for structure
       id: userData.tenantId,
-      name: tenantName || mockTenant.name,
+      name: tenantName || 'My Organization',
     };
     setTenant(tenantData);
     saveUserToStorage(userData);

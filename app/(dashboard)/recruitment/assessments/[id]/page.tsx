@@ -7,6 +7,7 @@ import ShareAssessmentModal from '@/components/ShareAssessmentModal';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentEditModal from '@/components/AssessmentEditModal';
 import { assessmentService } from '@/lib/services';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 export default function AssessmentDetailsPage() {
   const params = useParams();
@@ -135,42 +136,44 @@ export default function AssessmentDetailsPage() {
   }
 
   return (
-    <>
-      <AssessmentDetailsView
-        assessment={assessment}
-        onBack={handleBack}
-        onEdit={() => setShowEditModal(true)}
-        onPreview={() => setShowPreviewModal(true)}
-        onShare={() => setShowShareModal(true)}
-        onViewResults={handleViewResults}
-        onRefresh={fetchAssessment}
-      />
-
-      {/* Modals */}
-      {showShareModal && (
-        <ShareAssessmentModal
-          isOpen={showShareModal}
-          onClose={() => setShowShareModal(false)}
+    <FeatureGate feature="assessment">
+      <>
+        <AssessmentDetailsView
           assessment={assessment}
+          onBack={handleBack}
+          onEdit={() => setShowEditModal(true)}
+          onPreview={() => setShowPreviewModal(true)}
+          onShare={() => setShowShareModal(true)}
+          onViewResults={handleViewResults}
+          onRefresh={fetchAssessment}
         />
-      )}
 
-      {showPreviewModal && (
-        <AssessmentPreviewModal
-          isOpen={showPreviewModal}
-          onClose={() => setShowPreviewModal(false)}
-          assessment={assessment}
-        />
-      )}
+        {/* Modals */}
+        {showShareModal && (
+          <ShareAssessmentModal
+            isOpen={showShareModal}
+            onClose={() => setShowShareModal(false)}
+            assessment={assessment}
+          />
+        )}
 
-      {showEditModal && (
-        <AssessmentEditModal
-          isOpen={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          assessment={assessment}
-          onSave={handleEditSave}
-        />
-      )}
-    </>
+        {showPreviewModal && (
+          <AssessmentPreviewModal
+            isOpen={showPreviewModal}
+            onClose={() => setShowPreviewModal(false)}
+            assessment={assessment}
+          />
+        )}
+
+        {showEditModal && (
+          <AssessmentEditModal
+            isOpen={showEditModal}
+            onClose={() => setShowEditModal(false)}
+            assessment={assessment}
+            onSave={handleEditSave}
+          />
+        )}
+      </>
+    </FeatureGate>
   );
 }
