@@ -268,35 +268,40 @@ export default function ResumeScoringRoute() {
       matchStatus: item.matchStatus,
     }));
 
+    // Accumulate items across poll cycles so completed items are never dropped
+    // from the UI when the API stops returning them.
+    type BatchItem = { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored'; score?: number; matchStatus?: string; errorMessage?: string };
+    const accumulatedItems = new Map<string, BatchItem>();
+
+    // Seed the map from sessionStorage so all candidates are shown immediately
+    storedResumeItems.forEach(item => {
+      accumulatedItems.set(item.resumeId, {
+        resumeId: item.resumeId,
+        candidateName: item.candidateName || 'Unknown',
+        status: 'queued',
+      });
+    });
+
     const pollInterval = setInterval(async () => {
       try {
         const status = await scoringService.getBatchStatus(pendingBatchId);
 
-        let batchItems: { resumeId: string; candidateName: string; status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored'; score?: number; matchStatus?: string; errorMessage?: string }[];
-
         if (status.items && status.items.length > 0) {
-          // Map items from API response, but use sessionStorage for candidate names if API has 'Unknown'
-          batchItems = status.items.map((item: any) => ({
-            resumeId: item.resume_id,
-            candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
-            status: item.status,
-            score: item.overall_score,
-            matchStatus: item.match_status,
-            errorMessage: item.error_message,
-          }));
-        } else if (storedResumeItems.length > 0) {
-          // API returned empty items, use sessionStorage items as placeholders
-          batchItems = storedResumeItems.map(item => ({
-            resumeId: item.resumeId,
-            candidateName: item.candidateName || 'Unknown',
-            status: 'queued' as const,
-          }));
-        } else {
-          batchItems = [];
+          // Merge API-returned items into the accumulated map
+          status.items.forEach((item: any) => {
+            accumulatedItems.set(item.resume_id, {
+              resumeId: item.resume_id,
+              candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
+              status: item.status,
+              score: item.overall_score,
+              matchStatus: item.match_status,
+              errorMessage: item.error_message,
+            });
+          });
         }
 
-        // Merge batch items with already-scored items
-        const allItems = [...alreadyScoredProgressItems, ...batchItems];
+        // Build the final list: always-scored items first, then accumulated batch items
+        const allItems = [...alreadyScoredProgressItems, ...Array.from(accumulatedItems.values())];
 
         setBatchProgress({
           jobId: status.jd_id,
