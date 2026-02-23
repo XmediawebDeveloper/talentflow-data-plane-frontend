@@ -1,18 +1,21 @@
 "use client";
 
 /**
- * useFaceDetection — MediaPipe-based face presence + gaze tracking.
+ * useInterviewFaceDetection — MediaPipe-based face presence + gaze tracking.
+ *
+ * Forked from hooks/useFaceDetection.ts for AI interview isolation.
+ * This hook is standalone (no proctoring imports).
  *
  * Performance rules:
  *   - MediaPipe needs WebGL/DOM so stays on main thread
  *   - Runs at very low FPS (every 3 seconds) to minimize CPU impact
- *   - Uses REFS for detection state (no React state → no re-renders)
- *   - Emits events via callback (caller routes to ProctoringEventBus)
+ *   - Uses REFS for detection state (no React state -> no re-renders)
+ *   - Emits events via callback (caller routes to InterviewEventBus)
  */
 
 import { useEffect, useRef, useCallback } from "react";
 
-interface UseFaceDetectionConfig {
+interface UseInterviewFaceDetectionConfig {
   enabled?: boolean;
   enableGazeTracking?: boolean;
   onFaceMissing?: () => void;
@@ -22,7 +25,7 @@ interface UseFaceDetectionConfig {
   onGazeRestored?: () => void;
 }
 
-export function useFaceDetection(config?: UseFaceDetectionConfig) {
+export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConfig) {
   // ALL state stored in refs — zero re-renders
   const isFaceDetectedRef = useRef(true);
   const faceCountRef = useRef(0);
@@ -122,7 +125,7 @@ export function useFaceDetection(config?: UseFaceDetectionConfig) {
         });
 
         faceDetectorRef.current = faceDetection;
-        console.log("[FACE_DETECTION] Initialized");
+        console.log("[INTERVIEW_FACE_DETECTION] Initialized");
 
         // Gaze tracking (FaceMesh)
         if (enableGazeTracking) {
@@ -183,9 +186,9 @@ export function useFaceDetection(config?: UseFaceDetectionConfig) {
             });
 
             faceMeshRef.current = faceMesh;
-            console.log("[FACE_DETECTION] Gaze tracking initialized");
+            console.log("[INTERVIEW_FACE_DETECTION] Gaze tracking initialized");
           } catch (err) {
-            console.warn("[FACE_DETECTION] FaceMesh failed:", err);
+            console.warn("[INTERVIEW_FACE_DETECTION] FaceMesh failed:", err);
           }
         }
 
@@ -195,7 +198,7 @@ export function useFaceDetection(config?: UseFaceDetectionConfig) {
           startProcessingLoop();
         }
       } catch (err) {
-        console.error("[FACE_DETECTION] Init error:", err);
+        console.error("[INTERVIEW_FACE_DETECTION] Init error:", err);
         if (mounted) isLoadingRef.current = false;
       }
     };
@@ -240,7 +243,7 @@ export function useFaceDetection(config?: UseFaceDetectionConfig) {
       };
 
       animationFrameRef.current = requestAnimationFrame(processFrame);
-      console.log("[FACE_DETECTION] Processing loop started");
+      console.log("[INTERVIEW_FACE_DETECTION] Processing loop started");
     };
 
     initialize();

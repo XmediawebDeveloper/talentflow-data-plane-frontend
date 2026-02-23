@@ -1,15 +1,18 @@
 'use client';
 
 import { ArrowLeft, Clock, Plus, X, Sparkles, CheckCircle2, Loader2, Users, Brain, Shield, TrendingUp, MessageSquare, Lightbulb, Trash2, Save, Globe } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface RoundConfig {
   type: string;
   percentage: number;
+  mustHavePercentage?: number;
+  niceToHavePercentage?: number;
   topics: string[];
   suggestedTopics: string[];
   enabled: boolean;
@@ -27,7 +30,7 @@ const ROUND_TYPES = [
 
 const DEFAULT_ROUNDS: RoundConfig[] = [
   { type: 'hr', percentage: 20, topics: [], suggestedTopics: [], enabled: true, order: 1 },
-  { type: 'technical', percentage: 50, topics: [], suggestedTopics: [], enabled: true, order: 2 },
+  { type: 'technical', percentage: 50, mustHavePercentage: 35, niceToHavePercentage: 15, topics: [], suggestedTopics: [], enabled: true, order: 2 },
   { type: 'behavioral', percentage: 30, topics: [], suggestedTopics: [], enabled: true, order: 3 },
 ];
 
@@ -48,6 +51,12 @@ export default function AIInterviewConfig() {
   const [publishing, setPublishing] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [suggestingTopics, setSuggestingTopics] = useState<string | null>(null);
+
+  // Auto-save draft state
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const isNavigatingRef = useRef(false);
+  const isPublishedRef = useRef(false);
 
   // Load selected JD
   useEffect(() => {
@@ -79,11 +88,95 @@ export default function AIInterviewConfig() {
     loadJD();
   }, [jdId, router]);
 
+  // Warn before closing browser tab/window if JD is selected
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (selectedJd && !isPublishedRef.current && !isNavigatingRef.current) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [selectedJd]);
+
+  // Intercept navigation clicks (sidebar, links) if JD is selected
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (!selectedJd || isPublishedRef.current || isNavigatingRef.current) return;
+
+      let target = e.target as HTMLElement;
+      while (target && target !== document.body) {
+        if (target.tagName === 'A' || target.getAttribute('role') === 'link') {
+          const href = target.getAttribute('href');
+          if (href && href.startsWith('/') && !href.startsWith('/#')) {
+            e.preventDefault();
+            e.stopPropagation();
+            setPendingNavigation(href);
+            setShowUnsavedDialog(true);
+            return;
+          }
+        }
+        target = target.parentElement as HTMLElement;
+      }
+    };
+
+    document.addEventListener('click', handleClick, true);
+    return () => document.removeEventListener('click', handleClick, true);
+  }, [selectedJd]);
+
+  // Handle back button - auto-save draft and navigate
+  const handleBackClick = async () => {
+    if (isNavigatingRef.current || savingDraft) return;
+    isNavigatingRef.current = true;
+
+    if (selectedJd) {
+      await saveDraft(true);
+      toast.success('Draft saved automatically');
+    }
+    router.push('/recruitment/ai-interviews/jd-selection');
+  };
+
+  // Unsaved dialog handlers
+  const handleSaveAndNavigate = async () => {
+    setShowUnsavedDialog(false);
+    isNavigatingRef.current = true;
+    await saveDraft(true);
+    toast.success('Draft saved automatically');
+    if (pendingNavigation) router.push(pendingNavigation);
+    setPendingNavigation(null);
+  };
+
+  const handleDiscardAndNavigate = () => {
+    setShowUnsavedDialog(false);
+    isNavigatingRef.current = true;
+    if (pendingNavigation) router.push(pendingNavigation);
+    setPendingNavigation(null);
+  };
+
+  const handleCancelDialog = () => {
+    setShowUnsavedDialog(false);
+    setPendingNavigation(null);
+  };
+
   // Round management
   const enabledRounds = rounds.filter(r => r.enabled);
   const totalPercentage = enabledRounds.reduce((sum, r) => sum + r.percentage, 0);
   const percentageValid = totalPercentage === 100;
   const roundDurationsValid = enabledRounds.every(r => Math.round(r.percentage * totalDuration / 100) >= 5);
+  const technicalSubValid = enabledRounds.every(r => {
+    if (r.type !== 'technical') return true;
+    const mh = r.mustHavePercentage ?? 0;
+    const nth = r.niceToHavePercentage ?? 0;
+    if (mh === 0 && nth === 0) return false;
+    const mhMin = Math.round(mh * totalDuration / 100);
+    const nthMin = Math.round(nth * totalDuration / 100);
+    if (mh > 0 && mhMin < 2) return false;
+    if (nth > 0 && nthMin < 2) return false;
+    return true;
+  });
 
   const getRoundDuration = (percentage: number) => Math.round(percentage * totalDuration / 100);
 
@@ -93,6 +186,18 @@ export default function AIInterviewConfig() {
 
   const handleRoundPercentage = (index: number, value: number) => {
     setRounds(prev => prev.map((r, i) => i === index ? { ...r, percentage: value } : r));
+  };
+
+  const handleMustHavePercentage = (index: number, value: number) => {
+    setRounds(prev => prev.map((r, i) =>
+      i === index ? { ...r, mustHavePercentage: value, percentage: value + (r.niceToHavePercentage || 0) } : r
+    ));
+  };
+
+  const handleNiceToHavePercentage = (index: number, value: number) => {
+    setRounds(prev => prev.map((r, i) =>
+      i === index ? { ...r, niceToHavePercentage: value, percentage: (r.mustHavePercentage || 0) + value } : r
+    ));
   };
 
   const handleAddTopic = (roundIndex: number, topic: string) => {
@@ -152,41 +257,76 @@ export default function AIInterviewConfig() {
   const availableRoundTypes = ROUND_TYPES.filter(rt => !rounds.some(r => r.type === rt.value));
 
   const buildRoundsConfig = (): AIInterviewRoundConfig[] => {
-    return enabledRounds.map(r => ({
-      type: r.type,
-      percentage: r.percentage,
-      duration_minutes: getRoundDuration(r.percentage),
-      topics: r.topics,
-      enabled: true,
-      order: r.order,
-    }));
+    return enabledRounds.map(r => {
+      const base: AIInterviewRoundConfig = {
+        type: r.type,
+        percentage: r.percentage,
+        duration_minutes: getRoundDuration(r.percentage),
+        topics: r.topics,
+        enabled: true,
+        order: r.order,
+      };
+      if (r.type === 'technical' && r.mustHavePercentage != null && r.niceToHavePercentage != null) {
+        base.must_have_percentage = r.mustHavePercentage;
+        base.nice_to_have_percentage = r.niceToHavePercentage;
+      }
+      return base;
+    });
   };
 
-  const handleSaveAsDraft = async () => {
-    if (!selectedJd || !percentageValid || !roundDurationsValid) return;
+  // Build rounds config for draft (no strict validation)
+  const buildDraftRoundsConfig = (): AIInterviewRoundConfig[] => {
+    return enabledRounds.map(r => {
+      const base: AIInterviewRoundConfig = {
+        type: r.type,
+        percentage: r.percentage,
+        duration_minutes: Math.max(0, getRoundDuration(r.percentage)),
+        topics: r.topics,
+        enabled: true,
+        order: r.order,
+      };
+      if (r.type === 'technical' && r.mustHavePercentage != null && r.niceToHavePercentage != null) {
+        base.must_have_percentage = r.mustHavePercentage;
+        base.nice_to_have_percentage = r.niceToHavePercentage;
+      }
+      return base;
+    });
+  };
+
+  // Core draft save function (used by button, auto-save, and dialog)
+  const saveDraft = async (silent = false): Promise<boolean> => {
+    if (!selectedJd) return false;
     setSavingDraft(true);
     try {
       await aiInterviewService.create({
         position: selectedJd.title,
         jd_id: selectedJd.id,
         duration_minutes: totalDuration,
-        rounds_config: buildRoundsConfig(),
+        rounds_config: buildDraftRoundsConfig(),
         recording_enabled: recordingEnabled,
         special_instructions: specialInstructions || undefined,
         title: `${selectedJd.title} - AI Interview`,
+        save_as_draft: true,
       });
-      toast.success('AI Interview configuration saved as draft!');
-      router.push('/recruitment/ai-interviews');
+      if (!silent) toast.success('AI Interview configuration saved as draft!');
+      return true;
     } catch (error) {
       console.error('Failed to save draft:', error);
-      toast.error('Failed to save draft');
+      if (!silent) toast.error('Failed to save draft');
+      return false;
     } finally {
       setSavingDraft(false);
     }
   };
 
+  const handleSaveAsDraft = async () => {
+    if (!selectedJd) return;
+    const saved = await saveDraft();
+    if (saved) router.push('/recruitment/ai-interviews');
+  };
+
   const handlePublish = async () => {
-    if (!selectedJd || !percentageValid || !roundDurationsValid) return;
+    if (!selectedJd || !percentageValid || !roundDurationsValid || !technicalSubValid) return;
     setPublishing(true);
     try {
       const interview = await aiInterviewService.create({
@@ -199,6 +339,7 @@ export default function AIInterviewConfig() {
         title: `${selectedJd.title} - AI Interview`,
       });
       await aiInterviewService.publishConfig(interview.id);
+      isPublishedRef.current = true;
       toast.success('AI Interview configuration published!');
       router.push('/recruitment/ai-interviews');
     } catch (error) {
@@ -228,7 +369,8 @@ export default function AIInterviewConfig() {
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <button
-            onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
+            onClick={handleBackClick}
+            disabled={savingDraft}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -270,6 +412,13 @@ export default function AIInterviewConfig() {
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {selectedJd.must_have_skills.slice(0, 5).map(s => (
                         <span key={s} className="px-2 py-0.5 bg-white text-gray-600 text-xs rounded-full border border-gray-200">{s}</span>
+                      ))}
+                    </div>
+                  )}
+                  {selectedJd.nice_to_have_skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {selectedJd.nice_to_have_skills.slice(0, 5).map(s => (
+                        <span key={s} className="px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded-full">{s}</span>
                       ))}
                     </div>
                   )}
@@ -326,24 +475,75 @@ export default function AIInterviewConfig() {
                         {round.enabled && (
                           <>
                             {/* Percentage Weight */}
-                            <div className="mb-3">
-                              <div className="flex items-center justify-between mb-1">
-                                <label className="text-xs text-gray-500">Percentage Weight</label>
-                                <span className="text-xs text-gray-400">{getRoundDuration(round.percentage)} min</span>
+                            {round.type === 'technical' ? (
+                              <div className="mb-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-xs text-gray-500">Skill-Category Weightage</label>
+                                  <span className="text-xs font-medium text-gray-900">Total: {round.percentage}% ({getRoundDuration(round.percentage)} min)</span>
+                                </div>
+                                {/* Must-Have Skills sub-slider */}
+                                <div className="mb-2">
+                                  <div className="flex items-center justify-between mb-0.5">
+                                    <label className="text-xs text-gray-600">Must-Have Skills</label>
+                                    <span className="text-xs text-gray-400">{getRoundDuration(round.mustHavePercentage || 0)} min</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={100}
+                                      step={5}
+                                      value={round.mustHavePercentage || 0}
+                                      onChange={e => handleMustHavePercentage(index, parseInt(e.target.value))}
+                                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-700"
+                                    />
+                                    <span className="text-sm font-medium text-gray-900 w-10 text-right">{round.mustHavePercentage || 0}%</span>
+                                  </div>
+                                </div>
+                                {/* Nice-to-Have Skills sub-slider */}
+                                <div className="mb-2">
+                                  <div className="flex items-center justify-between mb-0.5">
+                                    <label className="text-xs text-gray-600">Nice-to-Have Skills</label>
+                                    <span className="text-xs text-gray-400">{getRoundDuration(round.niceToHavePercentage || 0)} min</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="range"
+                                      min={0}
+                                      max={100}
+                                      step={5}
+                                      value={round.niceToHavePercentage || 0}
+                                      onChange={e => handleNiceToHavePercentage(index, parseInt(e.target.value))}
+                                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                    />
+                                    <span className="text-sm font-medium text-gray-900 w-10 text-right">{round.niceToHavePercentage || 0}%</span>
+                                  </div>
+                                </div>
+                                {/* Sub-breakdown summary */}
+                                <div className="text-xs text-gray-500 bg-purple-50 rounded-md px-2 py-1">
+                                  Must-Have: {round.mustHavePercentage || 0}% ({getRoundDuration(round.mustHavePercentage || 0)} min) | Nice-to-Have: {round.niceToHavePercentage || 0}% ({getRoundDuration(round.niceToHavePercentage || 0)} min)
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="range"
-                                  min={0}
-                                  max={100}
-                                  step={5}
-                                  value={round.percentage}
-                                  onChange={e => handleRoundPercentage(index, parseInt(e.target.value))}
-                                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
-                                />
-                                <span className="text-sm font-medium text-gray-900 w-10 text-right">{round.percentage}%</span>
+                            ) : (
+                              <div className="mb-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-xs text-gray-500">Percentage Weight</label>
+                                  <span className="text-xs text-gray-400">{getRoundDuration(round.percentage)} min</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="range"
+                                    min={0}
+                                    max={100}
+                                    step={5}
+                                    value={round.percentage}
+                                    onChange={e => handleRoundPercentage(index, parseInt(e.target.value))}
+                                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
+                                  />
+                                  <span className="text-sm font-medium text-gray-900 w-10 text-right">{round.percentage}%</span>
+                                </div>
                               </div>
-                            </div>
+                            )}
 
                             {/* Topics */}
                             <div>
@@ -376,9 +576,20 @@ export default function AIInterviewConfig() {
                               </div>
 
                               {/* Suggested topics */}
-                              {round.suggestedTopics.length > 0 && (
+                              {round.suggestedTopics.filter(st => !round.topics.includes(st)).length > 0 && (
                                 <div className="mb-2">
-                                  <div className="text-xs text-gray-400 mb-1">Suggestions (click to add):</div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <div className="text-xs text-gray-400">Suggestions (click to add):</div>
+                                    <button
+                                      onClick={() => setRounds(prev => prev.map((r, i) =>
+                                        i === index ? { ...r, suggestedTopics: [] } : r
+                                      ))}
+                                      className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
+                                    >
+                                      <X className="w-3 h-3" />
+                                      Clear
+                                    </button>
+                                  </div>
                                   <div className="flex flex-wrap gap-1">
                                     {round.suggestedTopics
                                       .filter(st => !round.topics.includes(st))
@@ -535,15 +746,34 @@ export default function AIInterviewConfig() {
                     Each round must be at least 5 minutes. Increase total duration or adjust percentages.
                   </div>
                 )}
+                {percentageValid && roundDurationsValid && !technicalSubValid && (
+                  <div className="bg-red-50 border border-red-200 rounded-md p-2 text-xs text-red-600">
+                    Technical round: each skill category with weight &gt; 0 must have at least 2 minutes, and at least one category must be &gt; 0%.
+                  </div>
+                )}
 
                 <div className="border-t border-gray-100 pt-3">
                   <div className="text-xs text-gray-500 mb-2">Rounds breakdown:</div>
                   {enabledRounds.map(r => {
                     const info = getRoundInfo(r.type);
                     return (
-                      <div key={r.type} className="flex items-center justify-between py-1">
-                        <span className="text-xs text-gray-600">{info?.label || r.type}</span>
-                        <span className="text-xs text-gray-900">{r.percentage}% / {getRoundDuration(r.percentage)} min</span>
+                      <div key={r.type} className="py-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-gray-600">{info?.label || r.type}</span>
+                          <span className="text-xs text-gray-900">{r.percentage}% / {getRoundDuration(r.percentage)} min</span>
+                        </div>
+                        {r.type === 'technical' && r.mustHavePercentage != null && r.niceToHavePercentage != null && (
+                          <div className="ml-2 mt-0.5 space-y-0.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-purple-600">Must-Have</span>
+                              <span className="text-[10px] text-gray-500">{r.mustHavePercentage}% / {getRoundDuration(r.mustHavePercentage)} min</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] text-blue-500">Nice-to-Have</span>
+                              <span className="text-[10px] text-gray-500">{r.niceToHavePercentage}% / {getRoundDuration(r.niceToHavePercentage)} min</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -554,9 +784,9 @@ export default function AIInterviewConfig() {
               <div className="mt-4 space-y-2">
                 <button
                   onClick={handlePublish}
-                  disabled={!percentageValid || !roundDurationsValid || enabledRounds.length === 0 || publishing}
+                  disabled={!percentageValid || !roundDurationsValid || !technicalSubValid || enabledRounds.length === 0 || publishing}
                   className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
-                    percentageValid && roundDurationsValid && enabledRounds.length > 0 && !publishing
+                    percentageValid && roundDurationsValid && technicalSubValid && enabledRounds.length > 0 && !publishing
                       ? 'bg-gray-800 text-white hover:bg-gray-900'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
@@ -570,9 +800,9 @@ export default function AIInterviewConfig() {
                 </button>
                 <button
                   onClick={handleSaveAsDraft}
-                  disabled={!percentageValid || !roundDurationsValid || enabledRounds.length === 0 || savingDraft}
+                  disabled={savingDraft}
                   className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors border ${
-                    percentageValid && roundDurationsValid && enabledRounds.length > 0 && !savingDraft
+                    !savingDraft
                       ? 'border-gray-300 text-gray-700 hover:bg-gray-50'
                       : 'border-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
@@ -589,6 +819,40 @@ export default function AIInterviewConfig() {
           </div>
         </div>
       </div>
+
+      {/* Unsaved Changes Dialog */}
+      <Dialog open={showUnsavedDialog} onOpenChange={(open) => !open && handleCancelDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+            <DialogDescription>
+              You have unsaved changes. Would you like to save them as a draft before leaving?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={handleDiscardAndNavigate}
+              className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Discard Changes
+            </button>
+            <button
+              onClick={handleSaveAndNavigate}
+              disabled={savingDraft}
+              className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {savingDraft ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Draft'
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

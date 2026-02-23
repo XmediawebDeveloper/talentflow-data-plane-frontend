@@ -11,6 +11,8 @@ export interface AIInterviewRoundConfig {
   topics: string[];
   enabled: boolean;
   order: number;
+  must_have_percentage?: number;
+  nice_to_have_percentage?: number;
 }
 
 export interface AIInterviewCreate {
@@ -31,6 +33,7 @@ export interface AIInterviewCreate {
   jd_id?: string;
   rounds_config?: AIInterviewRoundConfig[];
   title?: string;
+  save_as_draft?: boolean;
 }
 
 export interface AIInterviewUpdate {
@@ -58,15 +61,22 @@ export interface TopicSuggestionResponse {
 
 export interface PublishedJD {
   id: string;
+  job_id?: string;
   title: string;
   department?: string;
   location?: string;
+  employment_type?: string;
   job_level?: string;
   must_have_skills: string[];
   nice_to_have_skills: string[];
   experience_min?: number;
   experience_max?: number;
+  coding_required?: boolean;
   created_at?: string;
+  published_at?: string;
+  current_version?: number;
+  created_by_name?: string;
+  has_published_config?: boolean;
 }
 
 export interface AIInterviewInviteRequest {
@@ -82,6 +92,7 @@ export interface AIInterviewResponse {
   id: string;
   tenant_id: string;
   config_id?: string;
+  display_id?: string;
   candidate_name?: string;
   candidate_email?: string;
   position?: string;
@@ -91,8 +102,10 @@ export interface AIInterviewResponse {
   status: string;
   jd_id?: string;
   jd_title?: string;
+  jd_version?: number;
   jd_experience_level?: string;
   jd_must_have_skills?: string[];
+  jd_nice_to_have_skills?: string[];
   rounds_config?: AIInterviewRoundConfig[];
   interview_token?: string;
   interview_link?: string;
@@ -114,6 +127,7 @@ export interface AIInterviewResponse {
   ai_evaluation?: Record<string, any>;
   invitation_sent: boolean;
   created_by: string;
+  created_by_name?: string;
   scheduled_at?: string;
   started_at?: string;
   completed_at?: string;
