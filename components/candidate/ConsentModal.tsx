@@ -9,7 +9,6 @@ import {
   Monitor,
   Copy,
   BarChart3,
-  Timer,
   FileText,
   Shield,
   Wifi,
@@ -79,7 +78,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
   ];
 
   const importantInstructions = [
-    { icon: Timer, text: 'Once started, the timer cannot be paused or stopped.' },
+    { icon: Clock, text: 'Once started, the timer cannot be paused or stopped.' },
     { icon: RefreshCcw, text: 'You cannot return to previous sections once submitted.' },
     { icon: Wifi, text: 'Ensure you have a stable internet connection throughout the test.' },
     { icon: AlertCircle, text: 'Do not refresh the page or navigate away during the assessment.' },
@@ -90,7 +89,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
     { icon: Monitor, label: 'Tab switching detection', description: 'Navigating away from the test tab will be recorded.' },
     { icon: Copy, label: 'Copy-paste monitoring', description: 'Attempts to copy questions or paste answers will be flagged.' },
     { icon: BarChart3, label: 'Pattern analysis', description: 'AI will analyze answer patterns for irregularities.' },
-    { icon: Timer, label: 'Time tracking', description: 'Time spent on each question will be monitored.' }
+    { icon: Clock, label: 'Time tracking', description: 'Time spent on each question will be monitored.' }
   ];
 
   // Progress steps

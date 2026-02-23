@@ -24,6 +24,7 @@ import {
   ShoppingCart,
   TrendingUp,
   Tag,
+  Shield,
   Cpu,
   Loader2 as Loader2Icon,
 } from 'lucide-react';
@@ -851,7 +852,7 @@ export default function AuditTrailPage() {
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  <Timer className="w-4 h-4" />
+                  <Clock className="w-4 h-4" />
                   <span className="text-sm">Sessions</span>
                 </button>
               </div>
