@@ -535,8 +535,8 @@ export default function CandidateResultDetails({
           </div>
         </div>
 
-        {/* Scoring Rules & Pass/Fail Criteria */}
-        <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
+        {/* Scoring Rules & Pass/Fail Criteria — hidden */}
+        {false && <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="flex items-start gap-3 mb-4">
             <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
               <Info className="w-6 h-6 text-white" />
@@ -645,7 +645,7 @@ export default function CandidateResultDetails({
               <span>Remember: HR section is excluded from final PASS/FAIL calculation</span>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Candidate Insights - AI Generated Analysis */}
         {detailedResult && detailedResult.scoring_status === 'completed' && (
