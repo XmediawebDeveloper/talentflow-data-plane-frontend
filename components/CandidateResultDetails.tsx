@@ -1,8 +1,9 @@
 'use client';
 
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
+import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
 import { toast } from 'sonner';
 
 interface CandidateResultDetailsProps {
@@ -42,6 +43,31 @@ export default function CandidateResultDetails({
   const [activeTab, setActiveTab] = useState<string>('technical-knowledge');
   const [candidateData, setCandidateData] = useState<CandidateBasicInfo | null>(null);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+  const [proctoringEvents, setProctoringEvents] = useState<ProctoringEvent[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [eventsPage, setEventsPage] = useState(1);
+  const EVENTS_PER_PAGE = 10;
+
+  // Group events by minute + event_type so each row shows: event, timestamp (HH:MM), count
+  const groupedEvents = Object.values(
+    proctoringEvents.reduce((acc, event) => {
+      const minuteKey = event.timestamp
+        ? new Date(event.timestamp).toISOString().slice(0, 16) // "YYYY-MM-DDTHH:MM"
+        : 'unknown';
+      const key = `${minuteKey}__${event.event_type}`;
+      if (!acc[key]) {
+        acc[key] = { event_type: event.event_type, minuteKey, timestamp: event.timestamp ?? '', count: 0 };
+      }
+      acc[key].count++;
+      return acc;
+    }, {} as Record<string, { event_type: string; minuteKey: string; timestamp: string; count: number }>)
+  ).sort((a, b) => (a.minuteKey < b.minuteKey ? -1 : a.minuteKey > b.minuteKey ? 1 : 0));
+
+  const eventsTotalPages = Math.ceil(groupedEvents.length / EVENTS_PER_PAGE);
+  const eventsPageItems = groupedEvents.slice(
+    (eventsPage - 1) * EVENTS_PER_PAGE,
+    eventsPage * EVENTS_PER_PAGE
+  );
 
   // Fetch detailed results
   useEffect(() => {
@@ -134,6 +160,24 @@ export default function CandidateResultDetails({
 
     fetchDetailedResults();
   }, [assessmentId, candidateId]);
+
+  // Fetch proctoring events when violations tab is opened
+  useEffect(() => {
+    if (activeTab !== 'violations' || !candidateId) return;
+    if (proctoringEvents.length > 0) return; // already loaded
+    const fetchEvents = async () => {
+      setIsLoadingEvents(true);
+      try {
+        const response = await proctoringService.getEvents({ attempt_id: candidateId, page_size: 100 });
+        setProctoringEvents(response.items);
+      } catch (err) {
+        console.error('[CandidateResultDetails] Failed to fetch proctoring events:', err);
+      } finally {
+        setIsLoadingEvents(false);
+      }
+    };
+    fetchEvents();
+  }, [activeTab, candidateId]);
 
   // Helper functions
   const getScoreColor = (score: number) => {
@@ -491,8 +535,8 @@ export default function CandidateResultDetails({
           </div>
         </div>
 
-        {/* Scoring Rules & Pass/Fail Criteria */}
-        <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
+        {/* Scoring Rules & Pass/Fail Criteria — hidden */}
+        {false && <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="flex items-start gap-3 mb-4">
             <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
               <Info className="w-6 h-6 text-white" />
@@ -601,7 +645,7 @@ export default function CandidateResultDetails({
               <span>Remember: HR section is excluded from final PASS/FAIL calculation</span>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Candidate Insights - AI Generated Analysis */}
         {detailedResult && detailedResult.scoring_status === 'completed' && (
@@ -1290,8 +1334,7 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Fullscreen Exit */}
-                      {/* Fullscreen Exit - Commented out for now */}
-                      {/* <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
                           ? 'bg-blue-50 border-blue-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1316,7 +1359,7 @@ export default function CandidateResultDetails({
                           {detailedResult.proctoring_stats.fullscreen_exit_count || 0}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">times</div>
-                      </div> */}
+                      </div>
 
                       {/* Other Violations (uncategorized) - Commented out for now */}
                       {/* {(detailedResult.proctoring_stats.other_violation_count || 0) > 0 && (
@@ -1359,6 +1402,164 @@ export default function CandidateResultDetails({
                         </div>
                         <div className="text-xs text-gray-500 mt-1">total</div>
                       </div>
+                    </div>
+
+                    {/* Event Log / Timeline */}
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Activity className="w-5 h-5 text-gray-500" />
+                        <h4 className="text-base font-semibold text-gray-800">Event Log</h4>
+                        {!isLoadingEvents && proctoringEvents.length > 0 && (
+                          <span className="ml-auto text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                            {proctoringEvents.length} event{proctoringEvents.length !== 1 ? 's' : ''} · {groupedEvents.length} row{groupedEvents.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+
+                      {isLoadingEvents ? (
+                        <div className="flex items-center justify-center py-10 text-gray-400">
+                          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                          <span className="text-sm">Loading events…</span>
+                        </div>
+                      ) : proctoringEvents.length === 0 ? (
+                        <div className="text-center py-8 text-gray-400 border border-dashed border-gray-200 rounded-lg">
+                          <ShieldAlert className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                          <p className="text-sm">No individual events recorded</p>
+                        </div>
+                      ) : (
+                        <div className="border border-gray-200 rounded-xl overflow-hidden">
+                          {/* Table header */}
+                          <div className="grid grid-cols-[40px_2fr_1fr_1fr_80px] bg-gray-50 border-b border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            <span>S.No</span>
+                            <span>Event</span>
+                            <span>Timestamp</span>
+                            <span>Severity</span>
+                            <span className="text-center">Count</span>
+                          </div>
+
+                          {/* Rows — current page only */}
+                          <div className="divide-y divide-gray-100">
+                            {eventsPageItems.map((row, idx) => {
+                              const globalIdx = (eventsPage - 1) * EVENTS_PER_PAGE + idx + 1;
+
+                              const cfg = (() => {
+                                switch (row.event_type) {
+                                  case 'tab_switch':               return { label: 'Tab Switch',               icon: <Monitor className="w-4 h-4" />,      color: 'text-orange-600', bg: 'bg-orange-50',  severity: 'medium' };
+                                  case 'window_blur':              return { label: 'Window Blur / Focus Lost', icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',    bg: 'bg-red-50',     severity: 'high'   };
+                                  case 'copy_attempt':             return { label: 'Copy Attempt',             icon: <Clipboard className="w-4 h-4" />,    color: 'text-yellow-600', bg: 'bg-yellow-50',  severity: 'medium' };
+                                  case 'paste_attempt':            return { label: 'Paste Attempt',            icon: <MousePointer className="w-4 h-4" />, color: 'text-yellow-600', bg: 'bg-yellow-50',  severity: 'medium' };
+                                  case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-gray-600',   bg: 'bg-gray-50',    severity: 'low'    };
+                                  case 'camera_obstructed':        return { label: 'Camera Obstructed',        icon: <Eye className="w-4 h-4" />,          color: 'text-purple-600', bg: 'bg-purple-50',  severity: 'high'   };
+                                  case 'microphone_disabled':      return { label: 'Microphone Disabled',      icon: <Volume2 className="w-4 h-4" />,      color: 'text-gray-600',   bg: 'bg-gray-50',    severity: 'low'    };
+                                  case 'voice_detected':           return { label: 'Voice Detected',           icon: <Volume2 className="w-4 h-4" />,      color: 'text-pink-600',   bg: 'bg-pink-50',    severity: 'medium' };
+                                  case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-pink-600',   bg: 'bg-pink-50',    severity: 'high'   };
+                                  case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-violet-600', bg: 'bg-violet-50',  severity: 'critical' };
+                                  case 'screenshot_attempt':       return { label: 'Screenshot Attempt',       icon: <Maximize className="w-4 h-4" />,     color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'high'   };
+                                  case 'screen_recording_attempt': return { label: 'Screen Recording',         icon: <Monitor className="w-4 h-4" />,      color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'critical' };
+                                  case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'medium'   };
+                                  default:                         return { label: row.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), icon: <AlertCircle className="w-4 h-4" />, color: 'text-gray-600', bg: 'bg-gray-50', severity: 'low' };
+                                }
+                              })();
+
+                              const severityBadge = (() => {
+                                switch (cfg.severity) {
+                                  case 'critical': return 'bg-red-100 text-red-700 border border-red-200';
+                                  case 'high':     return 'bg-orange-100 text-orange-700 border border-orange-200';
+                                  case 'medium':   return 'bg-yellow-100 text-yellow-700 border border-yellow-200';
+                                  case 'low':      return 'bg-green-100 text-green-700 border border-green-200';
+                                  default:         return 'bg-gray-100 text-gray-600 border border-gray-200';
+                                }
+                              })();
+
+                              const timeStr = row.timestamp
+                                ? new Date(row.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                                : '—';
+
+                              return (
+                                <div
+                                  key={`${row.minuteKey}__${row.event_type}`}
+                                  className={`grid grid-cols-[40px_2fr_1fr_1fr_80px] items-center px-4 py-3 text-sm ${cfg.bg}`}
+                                >
+                                  {/* S.No */}
+                                  <span className="text-gray-400 text-xs font-medium">{globalIdx}</span>
+
+                                  {/* Event */}
+                                  <div className="flex items-center gap-2">
+                                    <span className={`flex-shrink-0 ${cfg.color}`}>{cfg.icon}</span>
+                                    <span className={`font-medium ${cfg.color}`}>{cfg.label}</span>
+                                  </div>
+
+                                  {/* Timestamp — minute only */}
+                                  <span className="text-gray-600 text-xs font-mono">{timeStr}</span>
+
+                                  {/* Severity */}
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold w-fit ${severityBadge}`}>
+                                    {cfg.severity.charAt(0).toUpperCase() + cfg.severity.slice(1)}
+                                  </span>
+
+                                  {/* Count */}
+                                  <div className="flex justify-center">
+                                    <span className={`inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs font-bold ${
+                                      row.count >= 5 ? 'bg-red-100 text-red-700' :
+                                      row.count >= 3 ? 'bg-orange-100 text-orange-700' :
+                                      'bg-gray-100 text-gray-700'
+                                    }`}>
+                                      {row.count}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Pagination footer */}
+                          {eventsTotalPages > 1 && (
+                            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+                              <span className="text-xs text-gray-500">
+                                Showing {(eventsPage - 1) * EVENTS_PER_PAGE + 1}–{Math.min(eventsPage * EVENTS_PER_PAGE, groupedEvents.length)} of {groupedEvents.length} rows ({proctoringEvents.length} total events)
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => setEventsPage(p => Math.max(1, p - 1))}
+                                  disabled={eventsPage === 1}
+                                  className="px-2.5 py-1 rounded text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  ‹ Prev
+                                </button>
+                                {Array.from({ length: eventsTotalPages }, (_, i) => i + 1).map(page => {
+                                  const show = page === 1 || page === eventsTotalPages || Math.abs(page - eventsPage) <= 1;
+                                  const showEllipsisBefore = page === eventsPage - 2 && eventsPage - 2 > 1;
+                                  const showEllipsisAfter  = page === eventsPage + 2 && eventsPage + 2 < eventsTotalPages;
+                                  if (!show && !showEllipsisBefore && !showEllipsisAfter) return null;
+                                  if (showEllipsisBefore || showEllipsisAfter) {
+                                    return <span key={`ellipsis-${page}`} className="px-1 text-gray-400 text-xs">…</span>;
+                                  }
+                                  return (
+                                    <button
+                                      key={page}
+                                      onClick={() => setEventsPage(page)}
+                                      className={`min-w-[28px] px-2 py-1 rounded text-xs font-medium border transition-colors ${
+                                        page === eventsPage
+                                          ? 'bg-gray-800 text-white border-gray-800'
+                                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
+                                      }`}
+                                    >
+                                      {page}
+                                    </button>
+                                  );
+                                })}
+                                <button
+                                  onClick={() => setEventsPage(p => Math.min(eventsTotalPages, p + 1))}
+                                  disabled={eventsPage === eventsTotalPages}
+                                  className="px-2.5 py-1 rounded text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  Next ›
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Summary Note */}

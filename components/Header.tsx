@@ -216,10 +216,11 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     statusCheckCalledRef.current = true;
 
     // Build quota payload from quotaData
-    // All numeric values must be finite integers for the backend Pydantic schema
+    // safeInt: coerce any value to a finite integer safe for Pydantic's `int` field.
+    // Handles NaN/Infinity (JSON.stringify gives null for these, causing 422), floats, and strings.
     const safeInt = (v: unknown): number => {
-      const n = typeof v === 'number' ? v : 0;
-      return Number.isFinite(n) ? Math.floor(n) : 0;
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.round(n) : 0;
     };
     const quotaPayload: Record<string, { total_remaining: number; total_limit: number; is_unlimited: boolean }> = {};
     if (quotaData.quotas) {
@@ -230,8 +231,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           const subLimit = safeInt(quota.subscription?.limit);
           const addonPurchased = safeInt(quota.addon?.total_purchased);
           quotaPayload[key] = {
-            total_remaining: totalRemaining,
-            total_limit: subLimit + addonPurchased,
+            total_remaining: safeInt(quota.total_remaining),
+            total_limit: safeInt(quota.subscription?.limit) + safeInt(quota.addon?.total_purchased),
             is_unlimited: isUnlimited,
           };
         }

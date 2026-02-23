@@ -45,172 +45,61 @@ interface ProctoringState {
   isCameraActive: boolean;
 }
 
-// ==================== CONSTANTS ====================
-
-// UI warning cooldown per event TYPE (prevents toast spam while allowing different types)
-const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
-  tab_switch: 5000,
-  copy_attempt: 2000,
-  paste_attempt: 2000,
-  voice_detected: 10000,
-  multiple_voices: 10000,
-  camera_disabled: 5000,
-  microphone_disabled: 5000,
-  camera_obstructed: 10000,
-  screenshot_attempt: 2000,
-  screen_recording_attempt: 5000,
-  window_blur: 5000,
-  fullscreen_exit: 5000,
-  face_missing: 8000,
-  multiple_faces: 8000,
-  gaze_away: 8000,
+// Backend logging cooldown — how often each event is sent to the backend (ms)
+const BACKEND_COOLDOWNS: Record<ProctoringEventType, number> = {
+  tab_switch: 2000,
+  copy_attempt: 500,
+  paste_attempt: 500,
+  voice_detected: 30000,  // Send at most every 30 s (batched anyway)
+  multiple_voices: 30000,
+  multiple_faces: 10000,  // Send at most every 10 s
+  camera_disabled: 1000,
+  microphone_disabled: 1000,
+  camera_obstructed: 3000,
+  screenshot_attempt: 500,
+  screen_recording_attempt: 2000,
+  window_blur: 2000,
 };
 
-// Backend batch flush interval
-const BACKEND_FLUSH_INTERVAL = 5000; // Flush every 5 seconds
+// Frontend warning cooldown — minimum gap between on-screen warning toasts (ms)
+const FRONTEND_WARNING_COOLDOWN = 8000; // 8 s — visible but not spammy
 
-// Worker check intervals
-const VIDEO_CHECK_INTERVAL = 500;    // Sample video at 2 FPS (main thread capture)
-const VOICE_CHECK_INTERVAL = 3000;   // Check voice every 3 seconds
+// Voice detection specific settings (Throttle + Batch optimisation)
+const VOICE_CHECK_INTERVAL = 1000;   // Sample every 1 s
+const VOICE_BATCH_INTERVAL = 10000;  // Flush batch to backend every 10 s
+const VOICE_LOG_ONLY = false;        // Show on-screen warnings for audio violations
 
-// ==================== WORKER CODE ====================
+// Warning messages for each event type
+const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
+  tab_switch: 'Tab switching detected. Please stay on the assessment page.',
+  copy_attempt: 'Copying is not allowed during the assessment.',
+  paste_attempt: 'Pasting is not allowed during the assessment.',
+  voice_detected: 'Voice activity detected. Please maintain silence during the assessment.',
+  multiple_voices: 'Multiple voices detected. Please ensure you are alone.',
+  multiple_faces: 'Multiple faces detected in camera. Only you should be visible.',
+  camera_disabled: 'Camera has been disabled. Please enable your camera to continue.',
+  microphone_disabled: 'Microphone has been disabled. Please enable your microphone.',
+  camera_obstructed: 'Camera appears to be blocked. Please ensure your face is visible.',
+  screenshot_attempt: 'Screenshot attempt detected. Screenshots are not allowed.',
+  screen_recording_attempt: 'Screen recording detected. Recording is not allowed.',
+  window_blur: 'You navigated away from the assessment window.',
+};
 
-const getVideoWorkerCode = () => `
-  // Camera obstruction analysis — runs in worker, posts only state changes
-  let isObstructed = false;
-  let consecutiveObstructed = 0;
-  let consecutiveClear = 0;
-  const OBSTRUCT_THRESHOLD = 15;  // frames to confirm obstruction
-  const CLEAR_THRESHOLD = 5;      // frames to confirm clear
-  let reducedFrequency = false;
-
-  function analyze(imageData, width, height, threshold) {
-    let totalBrightness = 0;
-    let minBrightness = 255;
-    let maxBrightness = 0;
-    const step = 16; // Sample every 16th pixel
-
-    for (let i = 0; i < imageData.length; i += step * 4) {
-      const r = imageData[i];
-      const g = imageData[i + 1];
-      const b = imageData[i + 2];
-      const brightness = (r + g + b) / 3;
-      totalBrightness += brightness;
-      minBrightness = Math.min(minBrightness, brightness);
-      maxBrightness = Math.max(maxBrightness, brightness);
-    }
-
-    const sampledPixels = Math.floor(imageData.length / (step * 4));
-    const avgBrightness = totalBrightness / sampledPixels;
-    const brightnessRange = maxBrightness - minBrightness;
-    const isDark = avgBrightness < threshold;
-    const isUniform = brightnessRange < 20;
-
-    return { isDark, isUniform, avgBrightness, brightnessRange };
-  }
-
-  self.onmessage = function(e) {
-    const { type, data } = e.data;
-
-    if (type === 'ANALYZE_FRAME') {
-      const result = analyze(
-        new Uint8ClampedArray(data.imageData),
-        data.width, data.height, data.threshold
-      );
-      const frameObstructed = result.isDark || result.isUniform;
-
-      if (frameObstructed) {
-        consecutiveObstructed++;
-        consecutiveClear = 0;
-        if (!isObstructed && consecutiveObstructed >= OBSTRUCT_THRESHOLD) {
-          isObstructed = true;
-          self.postMessage({
-            type: 'STATE_CHANGE',
-            data: { obstructed: true, reason: result.isDark ? 'too_dark' : 'too_uniform',
-                    avgBrightness: result.avgBrightness, brightnessRange: result.brightnessRange }
-          });
-        }
-      } else {
-        consecutiveClear++;
-        consecutiveObstructed = 0;
-        if (isObstructed && consecutiveClear >= CLEAR_THRESHOLD) {
-          isObstructed = false;
-          self.postMessage({
-            type: 'STATE_CHANGE',
-            data: { obstructed: false, avgBrightness: result.avgBrightness }
-          });
-        }
-      }
-    } else if (type === 'SET_FREQUENCY') {
-      reducedFrequency = data.reduced;
-    } else if (type === 'RESET') {
-      isObstructed = false;
-      consecutiveObstructed = 0;
-      consecutiveClear = 0;
-    }
-  };
-  self.postMessage({ type: 'READY' });
-`;
-
-const getAudioWorkerCode = () => `
-  // Voice detection — runs in worker, posts only state changes
-  let isVoiceActive = false;
-  let consecutiveVoice = 0;
-  let consecutiveSilent = 0;
-  const VOICE_THRESHOLD_FRAMES = 2;   // 2 consecutive checks to confirm voice
-  const SILENCE_THRESHOLD_FRAMES = 3; // 3 consecutive checks to confirm silence
-
-  function analyzeVoice(frequencyData, threshold, sampleRate) {
-    const bufferLength = frequencyData.length;
-    const binSize = sampleRate / (bufferLength * 2);
-    const speechStartBin = Math.floor(300 / binSize);
-    const speechEndBin = Math.min(Math.floor(3000 / binSize), bufferLength);
-
-    let sum = 0;
-    for (let i = speechStartBin; i < speechEndBin; i++) {
-      sum += frequencyData[i];
-    }
-    return sum / (speechEndBin - speechStartBin);
-  }
-
-  self.onmessage = function(e) {
-    const { type, data } = e.data;
-
-    if (type === 'ANALYZE_VOICE') {
-      const avg = analyzeVoice(
-        new Uint8Array(data.frequencyData),
-        data.threshold, data.sampleRate
-      );
-      const detected = avg > data.threshold;
-
-      if (detected) {
-        consecutiveVoice++;
-        consecutiveSilent = 0;
-        if (!isVoiceActive && consecutiveVoice >= VOICE_THRESHOLD_FRAMES) {
-          isVoiceActive = true;
-          self.postMessage({
-            type: 'STATE_CHANGE',
-            data: { voiceDetected: true, averageVolume: avg, threshold: data.threshold }
-          });
-        }
-      } else {
-        consecutiveSilent++;
-        consecutiveVoice = 0;
-        if (isVoiceActive && consecutiveSilent >= SILENCE_THRESHOLD_FRAMES) {
-          isVoiceActive = false;
-          // Don't post silence — we only care about voice presence
-        }
-      }
-    } else if (type === 'RESET') {
-      isVoiceActive = false;
-      consecutiveVoice = 0;
-      consecutiveSilent = 0;
-    }
-  };
-  self.postMessage({ type: 'READY' });
-`;
-
-// ==================== HOOK ====================
+// Severity levels for each event type
+const EVENT_SEVERITY: Record<ProctoringEventType, 'low' | 'medium' | 'high'> = {
+  tab_switch: 'low',
+  copy_attempt: 'medium',
+  paste_attempt: 'medium',
+  voice_detected: 'medium',
+  multiple_voices: 'high',
+  multiple_faces: 'high',
+  camera_disabled: 'high',
+  microphone_disabled: 'high',
+  camera_obstructed: 'high',
+  screenshot_attempt: 'high',
+  screen_recording_attempt: 'high',
+  window_blur: 'low',
+};
 
 export function useProctoringMonitor({
   token,
@@ -438,13 +327,23 @@ export function useProctoringMonitor({
         console.error('[PROCTORING] Audio worker error:', err);
       };
 
-      // Setup AudioContext + Analyser
-      try {
-        audioContextRef.current = new AudioContext();
-      } catch (ctxErr) {
-        console.error('[PROCTORING] AudioContext creation failed:', ctxErr);
-        return;
-      }
+      console.log('[PROCTORING] Web Worker initialized (inline)');
+    } catch (error) {
+      console.error('[PROCTORING] Failed to initialize Web Worker:', error);
+    }
+  }, []);
+
+  // ==================== VOICE DETECTION (Web Worker) ====================
+  const setupVoiceDetection = useCallback(async () => {
+    const currentStream = streamRef.current;
+    if (!currentStream || !workerRef.current) return;
+
+    const audioTracks = currentStream.getAudioTracks();
+    if (audioTracks.length === 0) return;
+
+    try {
+      audioContextRef.current = new AudioContext();
+      // AudioContext may start suspended — resume it to allow processing
       if (audioContextRef.current.state === 'suspended') {
         audioContextRef.current.resume().catch(() => {});
       }
@@ -475,11 +374,88 @@ export function useProctoringMonitor({
         }, [dataToSend.buffer]);
       }, VOICE_CHECK_INTERVAL);
 
-      console.log(`[PROCTORING] Audio worker started (${VOICE_CHECK_INTERVAL}ms interval)`);
-    } catch (err) {
-      console.error('[PROCTORING] Failed to setup audio worker:', err);
+      // Start batch flush interval - send batched voice events every VOICE_BATCH_INTERVAL
+      voiceBatchIntervalRef.current = setInterval(() => {
+        if (voiceBatchRef.current.length > 0) {
+          flushVoiceBatch();
+        }
+      }, VOICE_BATCH_INTERVAL);
+
+      console.log(`[PROCTORING] Voice detection started (Web Worker, check: ${VOICE_CHECK_INTERVAL}ms, batch: ${VOICE_BATCH_INTERVAL}ms, log-only: ${VOICE_LOG_ONLY})`);
+    } catch (error) {
+      console.error('[PROCTORING] Failed to setup voice detection:', error);
     }
-  }, []);
+  }, [flushVoiceBatch]); // flushVoiceBatch is stable (useCallback with no deps)
+
+  // ==================== MULTIPLE FACES DETECTION ====================
+  const FACE_DETECTION_INTERVAL = 5000; // Check every 5 seconds
+  // GitHub CDN hosts the actual weight files (npm package does not include them)
+  const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights/';
+
+  const setupFaceDetection = useCallback(() => {
+    const currentStream = streamRef.current;
+    if (!currentStream) return;
+
+    const videoTracks = currentStream.getVideoTracks();
+    if (videoTracks.length === 0) return;
+
+    const video = document.createElement('video');
+    video.srcObject = currentStream;
+    video.muted = true;
+    faceVideoRef.current = video;
+
+    video.play().then(async () => {
+      try {
+        // ── Path A: Native FaceDetector (Chrome/Edge, no model download) ──
+        if ('FaceDetector' in window) {
+          const FaceDetectorAPI = (window as any).FaceDetector;
+          const detector = new FaceDetectorAPI({ fastMode: true, maxDetectedFaces: 5 });
+
+          faceIntervalRef.current = setInterval(async () => {
+            if (!isMonitoringRef.current || !faceVideoRef.current) return;
+            try {
+              const faces = await detector.detect(faceVideoRef.current);
+              if (faces.length >= 2) {
+                logEventRef.current('multiple_faces', { face_count: faces.length, method: 'native' });
+                console.log(`[PROCTORING] Multiple faces: ${faces.length} (native)`);
+              }
+            } catch { /* low-quality frames — ignore */ }
+          }, FACE_DETECTION_INTERVAL);
+
+          console.log('[PROCTORING] Face detection started (native FaceDetector — Chrome/Edge)');
+          return;
+        }
+
+        // ── Path B: face-api.js with TinyFaceDetector (Firefox / Safari) ──
+        const faceapi = await import('face-api.js');
+
+        if (!faceapi.nets.tinyFaceDetector.isLoaded) {
+          console.log('[PROCTORING] Loading TinyFaceDetector model (~190 KB)…');
+          await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
+          console.log('[PROCTORING] TinyFaceDetector model loaded');
+        }
+
+        const detectorOptions = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
+
+        faceIntervalRef.current = setInterval(async () => {
+          if (!isMonitoringRef.current || !faceVideoRef.current) return;
+          try {
+            const detections = await faceapi.detectAllFaces(faceVideoRef.current, detectorOptions);
+            if (detections.length >= 2) {
+              logEventRef.current('multiple_faces', { face_count: detections.length, method: 'face-api.js' });
+              console.log(`[PROCTORING] Multiple faces: ${detections.length} (face-api.js)`);
+            }
+          } catch { /* low-quality frames — ignore */ }
+        }, FACE_DETECTION_INTERVAL);
+
+        console.log('[PROCTORING] Face detection started (face-api.js — Firefox/Safari compatible)');
+      } catch (err) {
+        console.error('[PROCTORING] Face detection setup failed:', err);
+      }
+    }).catch(err => {
+      console.error('[PROCTORING] Face detection video failed to play:', err);
+    });
+  }, []); // uses refs internally
 
   // ==================== EVENT-DRIVEN DETECTIONS (main thread, cheap) ====================
 

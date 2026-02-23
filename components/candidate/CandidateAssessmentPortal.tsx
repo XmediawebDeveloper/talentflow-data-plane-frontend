@@ -46,30 +46,22 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
 
     try {
       if (!document.fullscreenElement) {
-        // Request fullscreen
-        await document.documentElement.requestFullscreen({
-          navigationUI: 'hide' // Hides browser UI like F11
-        });
-
-        // Wait a moment for fullscreen to take effect
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        // Verify we're in fullscreen
-        if (document.fullscreenElement) {
-          console.log('[FULLSCREEN] Successfully entered fullscreen mode');
-          // Start the assessment
-          onFullscreenReady();
-        } else {
-          throw new Error('Failed to enter fullscreen mode');
+        // Request fullscreen — navigationUI option omitted for broad browser compatibility
+        try {
+          await document.documentElement.requestFullscreen();
+          await new Promise(resolve => setTimeout(resolve, 300));
+          console.log('[FULLSCREEN] Entered fullscreen mode');
+        } catch (fsErr) {
+          // Permissions check failed (iframe, browser policy, etc.) — proceed without fullscreen
+          console.warn('[FULLSCREEN] Could not enter fullscreen, proceeding anyway:', fsErr);
         }
-      } else {
-        // Already in fullscreen, just start
-        onFullscreenReady();
       }
+      // Start the assessment regardless of fullscreen outcome
+      onFullscreenReady();
     } catch (err) {
-      console.error('[FULLSCREEN] Error entering fullscreen:', err);
-      setError('Failed to enter fullscreen mode. Please try again or enable fullscreen in your browser settings.');
-      setIsEnteringFullscreen(false);
+      console.error('[FULLSCREEN] Unexpected error:', err);
+      // Still start — fullscreen is best-effort
+      onFullscreenReady();
     }
   };
 

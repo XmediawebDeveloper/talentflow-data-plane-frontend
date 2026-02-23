@@ -1914,26 +1914,24 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* Stats Cards - Dynamic based on available roles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
           <p className="text-xs sm:text-sm text-gray-600">Total Users</p>
           <p className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 mt-1">{users.length}</p>
-          <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
-            ({users.filter(u => u.is_active).length} Active, {users.filter(u => !u.is_active).length} Inactive)
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
+          <p className="text-xs sm:text-sm text-gray-600">Active Users</p>
+          <p className="text-xl sm:text-2xl lg:text-3xl font-semibold text-green-600 mt-1">
+            {users.filter(u => u.is_active).length}
           </p>
         </div>
-        {availableRoles.slice(0, 3).map((role, index) => (
-          <div key={role.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
-            <p className="text-xs sm:text-sm text-gray-600">{role.name}s</p>
-            <p className={`text-xl sm:text-2xl lg:text-3xl font-semibold mt-1 ${
-              index === 0 ? 'text-gray-800' : index === 1 ? 'text-gray-700' : 'text-gray-600'
-            }`}>
-              {users.filter(u => u.role.toLowerCase() === role.code.toLowerCase() ||
-                (role.code.toLowerCase() === 'admin' && u.role.toLowerCase() === 'tenant_admin')).length}
-            </p>
-          </div>
-        ))}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
+          <p className="text-xs sm:text-sm text-gray-600">Inactive Users</p>
+          <p className="text-xl sm:text-2xl lg:text-3xl font-semibold text-red-500 mt-1">
+            {users.filter(u => !u.is_active).length}
+          </p>
+        </div>
       </div>
 
       {/* Users Table */}
