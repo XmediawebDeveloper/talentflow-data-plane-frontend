@@ -216,10 +216,11 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     statusCheckCalledRef.current = true;
 
     // Build quota payload from quotaData
-    // All numeric values must be finite integers for the backend Pydantic schema
+    // safeInt: coerce any value to a finite integer safe for Pydantic's `int` field.
+    // Handles NaN/Infinity (JSON.stringify gives null for these, causing 422), floats, and strings.
     const safeInt = (v: unknown): number => {
-      const n = typeof v === 'number' ? v : 0;
-      return Number.isFinite(n) ? Math.floor(n) : 0;
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.round(n) : 0;
     };
     const quotaPayload: Record<string, { total_remaining: number; total_limit: number; is_unlimited: boolean }> = {};
     if (quotaData.quotas) {
@@ -230,8 +231,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           const subLimit = safeInt(quota.subscription?.limit);
           const addonPurchased = safeInt(quota.addon?.total_purchased);
           quotaPayload[key] = {
-            total_remaining: totalRemaining,
-            total_limit: subLimit + addonPurchased,
+            total_remaining: safeInt(quota.total_remaining),
+            total_limit: safeInt(quota.subscription?.limit) + safeInt(quota.addon?.total_purchased),
             is_unlimited: isUnlimited,
           };
         }
@@ -539,7 +540,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowHelpMenu(false)}
               ></div>
-              <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
                 <div className="px-4 py-3 bg-gray-800 text-white">
                   <h3 className="font-medium flex items-center gap-2">
                     <HelpCircle className="w-5 h-5" />
@@ -724,7 +725,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowNotifications(false)}
               ></div>
-              <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20">
                 <div className="px-4 py-3 bg-gray-800 text-white">
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium flex items-center gap-2">
@@ -877,7 +878,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowUserMenu(false)}
               ></div>
-              <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden z-20 max-h-[calc(100vh-80px)] overflow-y-auto">
                 {/* User Profile Header */}
                 <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-5 py-4">
                   <div className="flex items-center gap-4">

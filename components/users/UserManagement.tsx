@@ -727,7 +727,6 @@ export default function UserManagement() {
     checkPermission();
   }, [router]);
 
-
   // Load users, roles, and permissions
   // Auto-sync with Admin API first to ensure accurate counts
   useEffect(() => {
@@ -1902,26 +1901,24 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* Stats Cards - Dynamic based on available roles */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
           <p className="text-xs sm:text-sm text-gray-600">Total Users</p>
           <p className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 mt-1">{users.length}</p>
-          <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
-            ({users.filter(u => u.is_active).length} Active, {users.filter(u => !u.is_active).length} Inactive)
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
+          <p className="text-xs sm:text-sm text-gray-600">Active Users</p>
+          <p className="text-xl sm:text-2xl lg:text-3xl font-semibold text-green-600 mt-1">
+            {users.filter(u => u.is_active).length}
           </p>
         </div>
-        {availableRoles.slice(0, 3).map((role, index) => (
-          <div key={role.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
-            <p className="text-xs sm:text-sm text-gray-600">{role.name}s</p>
-            <p className={`text-xl sm:text-2xl lg:text-3xl font-semibold mt-1 ${
-              index === 0 ? 'text-gray-800' : index === 1 ? 'text-gray-700' : 'text-gray-600'
-            }`}>
-              {users.filter(u => u.role.toLowerCase() === role.code.toLowerCase() ||
-                (role.code.toLowerCase() === 'admin' && u.role.toLowerCase() === 'tenant_admin')).length}
-            </p>
-          </div>
-        ))}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
+          <p className="text-xs sm:text-sm text-gray-600">Inactive Users</p>
+          <p className="text-xl sm:text-2xl lg:text-3xl font-semibold text-red-500 mt-1">
+            {users.filter(u => !u.is_active).length}
+          </p>
+        </div>
       </div>
 
       {/* Users Table */}
@@ -2115,56 +2112,17 @@ export default function UserManagement() {
                   Email <span className="text-red-500">*</span>
                 </label>
 
-                {/* Email input with locked domain */}
-                <div className="relative flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-600 overflow-hidden">
-                  {/* Username input */}
-                  <input
-                    type="text"
-                    value={emailUsername}
-                    onChange={(e) => {
-                      let value = e.target.value;
-                      const hadAtSymbol = value.includes('@');
-
-                      // Remove @ symbol if user tries to type it
-                      value = value.replace(/@/g, '');
-
-                      // Show brief message if @ was blocked
-                      if (hadAtSymbol && value !== e.target.value) {
-                        setShowAtBlockedMessage(true);
-                        setTimeout(() => setShowAtBlockedMessage(false), 2000);
-                      }
-
-                      setEmailUsername(value);
-                      checkEmailAvailability(value);
-                    }}
-                    placeholder="username"
-                    className="flex-1 px-4 py-2.5 border-0 focus:outline-none focus:ring-0"
-                  />
-
-                  {/* @ symbol and locked domain */}
-                  <div className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-600 font-medium border-l border-gray-300">
-                    <span className="text-gray-900">@</span>
-                    <span className="ml-1">
-                      {tenantEmailDomain || 'loading...'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Preview of full email */}
-                {emailUsername && tenantEmailDomain && (
-                  <div className="mt-1 text-xs text-gray-500">
-                    Full email: <span className="font-medium">{emailUsername}@{tenantEmailDomain}</span>
-                  </div>
-                )}
-
-                {/* @ symbol blocked message */}
-                {showAtBlockedMessage && (
-                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-xs text-blue-700">
-                      ℹ️ Just type the username. Domain is added automatically.
-                    </p>
-                  </div>
-                )}
+                <input
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewUser({ ...newUser, email: value });
+                    checkEmailAvailability(value);
+                  }}
+                  placeholder="user@example.com"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                />
 
                 {/* Email validation feedback */}
                 {isCheckingEmail && (

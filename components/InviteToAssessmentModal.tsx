@@ -212,12 +212,12 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   if (showSuccess) {
     return (
       <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-10 h-10 text-green-600" />
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 sm:p-8 text-center">
+          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+            <CheckCircle className="w-7 h-7 sm:w-10 sm:h-10 text-green-600" />
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Invitations Sent!</h3>
-          <p className="text-gray-600 text-sm">
+          <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">Invitations Sent!</h3>
+          <p className="text-gray-600 text-xs sm:text-sm">
             {candidates.filter(c => c.name.trim() && c.email.trim()).length} candidate{candidates.length > 1 ? 's' : ''} will receive the assessment invitation
           </p>
         </div>
@@ -229,13 +229,13 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   if (showDuplicateError) {
     return (
       <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-10 h-10 text-amber-600" />
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 sm:p-8 max-h-[90vh] overflow-y-auto">
+          <div className="text-center mb-4 sm:mb-6">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+              <AlertTriangle className="w-7 h-7 sm:w-10 sm:h-10 text-amber-600" />
             </div>
-            <h3 className="text-gray-900 text-lg font-medium mb-2">Invitation Already Sent</h3>
-            <p className="text-gray-600 text-sm">
+            <h3 className="text-gray-900 text-base sm:text-lg font-medium mb-2">Invitation Already Sent</h3>
+            <p className="text-gray-600 text-xs sm:text-sm">
               {duplicateEmails.length === 1 ? (
                 <>An invitation has already been sent to <span className="font-medium text-gray-800">{duplicateEmails[0]}</span> for this assessment.</>
               ) : (
@@ -245,28 +245,28 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             {duplicateEmails.length > 1 && (
               <div className="mt-2 p-2 bg-amber-50 rounded-lg">
                 {duplicateEmails.map((email, idx) => (
-                  <p key={idx} className="text-sm font-medium text-amber-800">{email}</p>
+                  <p key={idx} className="text-xs sm:text-sm font-medium text-amber-800">{email}</p>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <p className="text-sm text-gray-700 mb-2">You can:</p>
-            <ul className="text-sm text-gray-600 space-y-1">
+          <div className="bg-gray-50 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+            <p className="text-xs sm:text-sm text-gray-700 mb-2">You can:</p>
+            <ul className="text-xs sm:text-sm text-gray-600 space-y-1">
               <li>• Try a <span className="font-medium">different email address</span></li>
               <li>• Send invitation for a <span className="font-medium">different assessment</span></li>
               <li>• Check the candidate&apos;s existing invitation status in Assessment Results</li>
             </ul>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <button
               onClick={() => {
                 setShowDuplicateError(false);
                 setDuplicateEmails([]);
               }}
-              className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+              className="flex-1 px-4 py-2 bg-gray-800 text-white text-sm sm:text-base rounded-lg hover:bg-gray-900 transition-colors"
             >
               Try Different Email
             </button>
@@ -276,7 +276,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                 setDuplicateEmails([]);
                 onClose();
               }}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 text-sm sm:text-base rounded-lg hover:bg-gray-100 transition-colors"
             >
               Close
             </button>
@@ -290,10 +290,10 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   if (view === 'loading' || isLoadingAssessments) {
     return (
       <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-gray-600 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Assessments...</h3>
-          <p className="text-gray-500 text-sm">Checking for existing assessments</p>
+        <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 sm:p-8 text-center">
+          <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 animate-spin text-gray-600 mx-auto mb-3 sm:mb-4" />
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Loading Assessments...</h3>
+          <p className="text-gray-500 text-xs sm:text-sm">Checking for existing assessments</p>
         </div>
       </div>
     );
@@ -303,48 +303,48 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   if (view === 'no-assessment') {
     return (
       <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden">
+        <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden max-h-[90vh] overflow-y-auto">
           {/* Header - Grey Theme */}
-          <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-6 py-5 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-white" />
+          <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-white">No Assessment Found</h2>
-                <p className="text-gray-300 text-sm">{jobTitle}</p>
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-semibold text-white truncate">No Assessment Found</h2>
+                <p className="text-gray-300 text-xs sm:text-sm truncate">{jobTitle}</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+              className="text-white hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           </div>
 
           {/* Content */}
-          <div className="p-6 text-center">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <FileText className="w-10 h-10 text-gray-600" />
+          <div className="p-4 sm:p-6 text-center">
+            <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+              <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-gray-600" />
             </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Assessment Created</h3>
-            <p className="text-gray-600 mb-6">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">No Assessment Created</h3>
+            <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
               There is no assessment configured for this job description yet.
               Create an assessment first to invite candidates.
             </p>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2 sm:gap-3">
               <button
                 onClick={handleStartCreateAssessment}
-                className="w-full px-6 py-3 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-lg hover:from-gray-800 hover:to-gray-900 transition-colors flex items-center justify-center gap-2 font-medium"
+                className="w-full px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-gray-700 to-gray-800 text-white text-sm sm:text-base rounded-lg hover:from-gray-800 hover:to-gray-900 transition-colors flex items-center justify-center gap-2 font-medium"
               >
-                <Sparkles className="w-5 h-5" />
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
                 Create Assessment
               </button>
               <button
                 onClick={onClose}
-                className="w-full px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="w-full px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-300 text-gray-700 text-sm sm:text-base rounded-lg hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
@@ -362,33 +362,33 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-teal-600 px-6 py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-              <Mail className="w-5 h-5 text-white" />
+        <div className="bg-gradient-to-r from-green-600 to-teal-600 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-white">Invite Candidates</h2>
-              <p className="text-green-100 text-sm">{jobTitle}</p>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-semibold text-white truncate">Invite Candidates</h2>
+              <p className="text-green-100 text-xs sm:text-sm truncate">{jobTitle}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+            className="text-white hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Assessment Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select Assessment *</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Select Assessment *</label>
             <select
               value={selectedAssessment}
               onChange={(e) => setSelectedAssessment(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm sm:text-base text-black"
             >
               <option value="">-- Choose an assessment --</option>
               {assessments.map((assessment) => (
@@ -413,20 +413,20 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
           {/* Candidates */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-medium text-gray-700">Candidates *</label>
+            <div className="flex items-center justify-between mb-2 sm:mb-3">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700">Candidates *</label>
               <button
                 onClick={addCandidate}
-                className="text-sm text-green-600 hover:text-green-700 flex items-center gap-1"
+                className="text-xs sm:text-sm text-green-600 hover:text-green-700 flex items-center gap-1"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Add Candidate
               </button>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               {candidates.map((cand) => (
-                <div key={cand.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex-1 grid grid-cols-2 gap-3">
+                <div key={cand.id} className="flex items-start sm:items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                     <div>
                       <label className="text-xs text-gray-500 mb-1 block">Full Name</label>
                       <input
@@ -434,7 +434,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                         value={cand.name}
                         onChange={(e) => updateCandidate(cand.id, 'name', e.target.value)}
                         placeholder="John Doe"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
                     </div>
                     <div>
@@ -444,14 +444,14 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                         value={cand.email}
                         onChange={(e) => updateCandidate(cand.id, 'email', e.target.value)}
                         placeholder="john.doe@email.com"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       />
                     </div>
                   </div>
                   {candidates.length > 1 && (
                     <button
                       onClick={() => removeCandidate(cand.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 mt-5 sm:mt-0"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -463,11 +463,11 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
           {/* Expiry Settings */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Link Expiry</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">Link Expiry</label>
             <select
               value={expiryDays}
               onChange={(e) => setExpiryDays(Number(e.target.value))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm sm:text-base text-black"
             >
               <option value={1}>1 day</option>
               <option value={3}>3 days</option>
@@ -479,12 +479,12 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
           {/* Preview */}
           {selectedAssessment && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle className="w-5 h-5 text-green-600" />
-                <span className="font-medium text-green-800">Ready to Send</span>
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+                <span className="text-sm sm:text-base font-medium text-green-800">Ready to Send</span>
               </div>
-              <div className="text-sm text-green-700 space-y-1">
+              <div className="text-xs sm:text-sm text-green-700 space-y-1">
                 <p><strong>Assessment:</strong> {selectedAssessmentData?.title}</p>
                 <p><strong>Duration:</strong> {selectedAssessmentData?.duration_minutes} minutes</p>
                 <p><strong>Recipients:</strong> {candidates.filter(c => c.name.trim() && c.email.trim()).length} candidate(s)</p>
@@ -495,31 +495,33 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-between gap-3">
+          <div className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
             {candidates.filter(c => c.name.trim() && c.email.trim()).length} candidate{candidates.length !== 1 ? 's' : ''} will receive invitations
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={onClose}
-              className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+              className="flex-1 sm:flex-none px-4 sm:px-5 py-2 border border-gray-300 text-gray-700 text-sm sm:text-base rounded-lg hover:bg-gray-100 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSendInvitations}
               disabled={!isValid || isSubmitting}
-              className="px-6 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white text-sm sm:text-base rounded-lg hover:from-green-700 hover:to-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Sending...
+                  <span className="hidden sm:inline">Sending...</span>
+                  <span className="sm:hidden">...</span>
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4" />
-                  Send Invitations
+                  <span className="hidden sm:inline">Send Invitations</span>
+                  <span className="sm:hidden">Send</span>
                 </>
               )}
             </button>

@@ -84,7 +84,7 @@ export default function NotificationCenter({
           />
 
           {/* Panel */}
-          <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 animate-scale-in">
+          <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 animate-scale-in max-h-[calc(100vh-80px)] overflow-y-auto">
             {/* Header */}
             <div className="px-4 py-3 border-b border-gray-200">
               <div className="flex items-center justify-between mb-2">

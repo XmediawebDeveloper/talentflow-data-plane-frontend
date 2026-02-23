@@ -289,34 +289,34 @@ function JobDetailsContent() {
       {/* Disable Confirmation Modal */}
       {showDisableModal && (
         <div className="fixed inset-0 bg-gray-900/10 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 p-6 border-2 border-gray-300">
-            <h3 className="text-xl font-semibold text-gray-900 mb-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full mx-4 p-4 sm:p-6 border-2 border-gray-300">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-3 sm:mb-4">
               Disable Job Description?
             </h3>
-            <p className="text-gray-700 mb-4">
+            <p className="text-sm sm:text-base text-gray-700 mb-3 sm:mb-4">
               If you disable this JD, it will be removed from:
             </p>
-            <ul className="list-disc list-inside text-gray-700 mb-6 space-y-2">
+            <ul className="list-disc list-inside text-sm sm:text-base text-gray-700 mb-4 sm:mb-6 space-y-1.5 sm:space-y-2">
               <li>Resume Scoring</li>
               <li>Assessment Generation</li>
               <li>AI Talent Match</li>
             </ul>
-            <p className="text-sm text-gray-600 mb-6">
+            <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">
               You can re-enable this JD later if needed.
             </p>
-            <div className="flex gap-3 justify-end">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end">
               <button
                 onClick={() => {
                   setShowDisableModal(false);
                   setJobToDisable(null);
                 }}
-                className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                className="px-4 py-2 bg-gray-100 text-sm sm:text-base text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmDisable}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                className="px-4 py-2 bg-red-600 text-sm sm:text-base text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
               >
                 Yes, Disable
               </button>
