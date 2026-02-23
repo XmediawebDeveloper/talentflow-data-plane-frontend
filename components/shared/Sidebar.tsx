@@ -45,6 +45,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
+import { PlanFeatureKey, PLAN_FEATURE_METADATA } from '@/lib/types/planFeatures';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 
 interface SidebarProps {
   user?: User;
@@ -69,6 +71,7 @@ interface NavItem {
   permissions?: string[];        // Multiple permissions check (show if ANY match)
   adminOnly?: boolean;
   internalUserOnly?: boolean;    // Show only to non-admin users (for internal help desk)
+  planFeature?: PlanFeatureKey;  // Plan-level feature gate
 }
 
 interface NavSection {
@@ -80,6 +83,7 @@ interface NavSection {
 
 export default function Sidebar({ user, tenant, subscriptionExpired, accountSuspended, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const { hasPlanFeature, loading: planFeaturesLoading } = usePlanFeatures();
   const [expandedSections, setExpandedSections] = useState<string[]>([
     'administration', 'recruitment', 'resume-management', 'evaluation',
     'organization', 'user-management-section', 'masters', 'subscription', 'settings', 'reports', 'audits'
@@ -250,8 +254,8 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       label: 'RECRUITMENT',
       items: [
         { id: 'job-openings', label: 'Job Descriptions', icon: Briefcase, href: '/recruitment/job-openings', permissions: ['canReadJD', 'canCreateJD', 'canUpdateJD', 'canDeleteJD'] },
-        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permissions: ['canViewScoring'] },  // ✅ FIX: Check VIEW permission, not RUN
-        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permissions: ['canViewAiMatch'] },  // ✅ FIX: Check VIEW permission, not RUN
+        { id: 'resume-scoring', label: 'Resume Scoring', icon: Target, href: '/recruitment/resume-scoring', permissions: ['canViewScoring'], planFeature: 'resume_scoring' },
+        { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, href: '/recruitment/ai-talent-match', permissions: ['canViewAiMatch'], planFeature: 'ai_talent_match' },
       ]
     },
 
@@ -260,8 +264,8 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       id: 'resume-management',
       label: 'RESUME MANAGEMENT',
       items: [
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes'] },
-        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permissions: ['canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'] },
+        { id: 'my-resumes', label: 'My Resumes', icon: Users, href: '/recruitment/my-resumes', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes'], planFeature: 'resume_upload' },
+        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permissions: ['canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'], planFeature: 'resume_upload' },
       ]
     },
 
@@ -270,8 +274,8 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       id: 'evaluation',
       label: 'EVALUATION',
       items: [
-        { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permissions: ['canViewAssessments', 'canCreateAssessments', 'canUpdateAssessments', 'canDeleteAssessments'] },
-        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canViewResumes', 'canRunAiInterviews'] },
+        { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permissions: ['canViewAssessments', 'canCreateAssessments', 'canUpdateAssessments', 'canDeleteAssessments'], planFeature: 'assessment' },
+        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canViewResumes', 'canRunAiInterviews'], planFeature: 'ai_interview' },
       ]
     },
 
@@ -291,8 +295,8 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       items: [
         { id: 'user-management', label: 'Users', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
-        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canManageUsers' },
-        { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat' },  // ✅ Available to ALL users (bypass permission check)
+        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canManageUsers', planFeature: 'teams' },
+        { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat', planFeature: 'teams' },
       ]
     },
 
@@ -329,7 +333,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       items: [
         { id: 'general-settings', label: 'General Settings', icon: Settings, href: '/settings/general-settings', permission: 'canManageSettings' },
         { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canManageUsers', adminOnly: true },
-        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canManageSettings' },
+        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canManageSettings', planFeature: 'api_access' },
         { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canManageSettings' },
         // { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' }, // Hidden for demo
         { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canManageSettings' },
@@ -468,6 +472,22 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                       </div>
                     );
                   }
+                }
+
+                // Plan feature gate: check BEFORE subscription status
+                if (item.planFeature && !planFeaturesLoading && !hasPlanFeature(item.planFeature)) {
+                  const featureMeta = PLAN_FEATURE_METADATA[item.planFeature];
+                  return (
+                    <div
+                      key={item.id}
+                      className="w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm text-gray-400 cursor-not-allowed opacity-50"
+                      style={{ width: 'calc(100% - 16px)' }}
+                      title={`Upgrade your plan to access ${featureMeta?.name || item.label}`}
+                    >
+                      <Lock className="w-4 h-4 flex-shrink-0 text-gray-300" />
+                      <span>{item.label}</span>
+                    </div>
+                  );
                 }
 
                 // Lock menus if subscriptionExpired is true OR undefined (loading/unknown)

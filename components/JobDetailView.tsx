@@ -24,6 +24,7 @@ import { assessmentService } from '@/lib/services/assessmentService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
 import { toast } from 'sonner';
+import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 
 // Helper function to format UTC date to IST
 const formatToIST = (dateString: string): string => {
@@ -144,6 +145,8 @@ interface JobDetailViewProps {
 
 export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant }: JobDetailViewProps) {
   const router = useRouter();
+  const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
+  const { hasPlanFeature } = usePlanFeatures();
 
   const handleEdit = () => {
     if (onEdit) {
@@ -236,12 +239,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     }
   }, [job.id]);
 
-  // Fetch assessment results on component mount
+  // Fetch assessment results on component mount (only if plan includes assessment)
   useEffect(() => {
-    if (job.id) {
+    if (job.id && hasPlanFeature('assessment')) {
       fetchAssessmentResults();
     }
-  }, [job.id]);
+  }, [job.id, hasPlanFeature]);
 
 
   const fetchJDHistory = async () => {
@@ -849,8 +852,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             </div>
 
             <div className="flex items-center gap-3 ml-6">
-            {/* AI Talent Match Button - COMMENTED OUT */}
-            {false && (job.status !== 'Disabled' ? (
+            {/* AI Talent Match Button - COMMENTED OUT (gated by aiTalentMatchAvailable) */}
+            {false && aiTalentMatchAvailable && (job.status !== 'Disabled' ? (
               <button
                 onClick={handleAITalentMatch}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors shadow-sm"
@@ -1042,46 +1045,50 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
             )}
           </button>
-          <button
-            onClick={() => setActiveTab('scored-resumes')}
-            className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
-              activeTab === 'scored-resumes'
-                ? 'text-blue-600 bg-blue-50'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            Scored Resumes
-            <span className={`px-2 py-0.5 rounded-full text-xs ${
-              activeTab === 'scored-resumes'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-600'
-            }`}>
-              {scoredResumesStats.total}
-            </span>
-            {activeTab === 'scored-resumes' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('assessment-results')}
-            className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
-              activeTab === 'assessment-results'
-                ? 'text-blue-600 bg-blue-50'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-            }`}
-          >
-            Assessment Results
-            <span className={`px-2 py-0.5 rounded-full text-xs ${
-              activeTab === 'assessment-results'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-600'
-            }`}>
-              {assessmentResults.length}
-            </span>
-            {activeTab === 'assessment-results' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-            )}
-          </button>
+          {hasPlanFeature('resume_scoring') && (
+            <button
+              onClick={() => setActiveTab('scored-resumes')}
+              className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
+                activeTab === 'scored-resumes'
+                  ? 'text-blue-600 bg-blue-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              Scored Resumes
+              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                activeTab === 'scored-resumes'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-600'
+              }`}>
+                {scoredResumesStats.total}
+              </span>
+              {activeTab === 'scored-resumes' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              )}
+            </button>
+          )}
+          {hasPlanFeature('assessment') && (
+            <button
+              onClick={() => setActiveTab('assessment-results')}
+              className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
+                activeTab === 'assessment-results'
+                  ? 'text-blue-600 bg-blue-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              Assessment Results
+              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                activeTab === 'assessment-results'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-600'
+              }`}>
+                {assessmentResults.length}
+              </span>
+              {activeTab === 'assessment-results' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1197,7 +1204,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           </div>
 
           {/* Internal Recruiter Notes & Assessment Guidance - Side by Side */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className={`grid ${hasPlanFeature('assessment') ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
             {/* Internal Recruiter Notes */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="text-gray-900 mb-4">Internal Recruiter Notes</h3>
@@ -1214,17 +1221,19 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               </div>
             </div>
 
-            {/* Assessment Guidance */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <h3 className="text-gray-900 mb-4">Assessment Guidance</h3>
-              <div className="text-sm text-gray-600">
-                {job.assessmentGuidance ? (
-                  <p className="whitespace-pre-wrap">{job.assessmentGuidance}</p>
-                ) : (
-                  <p className="text-gray-500 italic">No assessment guidance provided</p>
-                )}
+            {/* Assessment Guidance - only if plan includes assessment */}
+            {hasPlanFeature('assessment') && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 className="text-gray-900 mb-4">Assessment Guidance</h3>
+                <div className="text-sm text-gray-600">
+                  {job.assessmentGuidance ? (
+                    <p className="whitespace-pre-wrap">{job.assessmentGuidance}</p>
+                  ) : (
+                    <p className="text-gray-500 italic">No assessment guidance provided</p>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -1234,8 +1243,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h3 className="text-gray-900 mb-4">Quick Actions</h3>
             <div className="space-y-2">
-              {/* 1. Invite for Assessment - Permission + Feature flag + JD Status */}
-              {permissions.canCreateAssessments && (
+              {/* 1. Invite for Assessment - Permission + Plan feature + Feature flag + JD Status */}
+              {permissions.canCreateAssessments && hasPlanFeature('assessment') && (
                 <QuickActionButton
                   icon={<Mail className="w-4 h-4" />}
                   label="Invite for Assessment"
@@ -1249,8 +1258,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* 2. AI Talent Match - Permission + Feature flag + JD Status */}
-              {permissions.canRunAiMatch && (
+              {/* 2. AI Talent Match - Permission + Feature flag + Plan feature + JD Status */}
+              {permissions.canRunAiMatch && aiTalentMatchAvailable && (
                 <QuickActionButton
                   icon={<Brain className="w-4 h-4" />}
                   label="AI Talent Match"
@@ -1277,8 +1286,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* 4. Assessment Status - Permission + Feature flag */}
-              {permissions.canViewAssessments && (
+              {/* 4. Assessment Status - Permission + Plan feature + Feature flag */}
+              {permissions.canViewAssessments && hasPlanFeature('assessment') && (
                 <QuickActionButton
                   icon={<BarChart className="w-4 h-4" />}
                   label="Assessment Status"
@@ -1288,8 +1297,8 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* 5. Add Applicants - Permission + Feature flag + JD Status */}
-              {permissions.canUploadResumes && features.resume_upload && (
+              {/* 5. Add Applicants - Permission + Plan feature + Feature flag + JD Status */}
+              {permissions.canUploadResumes && hasPlanFeature('resume_upload') && features.resume_upload && (
                 <QuickActionButton
                   icon={<UserPlus className="w-4 h-4" />}
                   label="Add Applicants"

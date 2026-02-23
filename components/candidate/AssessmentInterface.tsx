@@ -159,20 +159,20 @@ export function AssessmentInterface({
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
 
   // Global assessment timer (30 minutes)
+  // Store parsed start time and total duration for accurate wall-clock computation
+  const assessmentStartTimeRef = useRef<number>(0);
+  const totalDurationSecsRef = useRef(durationMinutes * 60);
+
+  // Initialize: compute from wall clock (not decrement-based) to be accurate
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
-    // CRITICAL: Ensure startedAt is parsed as UTC by appending 'Z' if missing
-    // Server sends ISO timestamps without timezone indicator, which JS interprets as local time
     const utcStartedAt = startedAt.endsWith('Z') ? startedAt : startedAt + 'Z';
     const startTime = new Date(utcStartedAt).getTime();
-    const totalDuration = durationMinutes * 60; // Convert to seconds
+    assessmentStartTimeRef.current = startTime;
+    const totalDuration = durationMinutes * 60;
+    totalDurationSecsRef.current = totalDuration;
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     console.log('[TIMER] Calculating initial time:', {
-      startedAt,
-      utcStartedAt,
-      startTime,
-      now: Date.now(),
-      elapsed,
-      totalDuration,
+      startedAt, utcStartedAt, startTime, now: Date.now(), elapsed, totalDuration,
       remaining: Math.max(0, totalDuration - elapsed)
     });
     return Math.max(0, totalDuration - elapsed);
@@ -694,18 +694,20 @@ export function AssessmentInterface({
       return;
     }
 
+    // Use wall-clock calculation on each tick for accuracy.
+    // This prevents drift when the browser throttles background tabs or the system sleeps.
     globalTimerRef.current = setInterval(() => {
-      setGlobalTimeRemaining(prev => {
-        if (prev <= 1) {
-          console.log('[TIMER] Timer reached zero during countdown');
-          setIsGlobalTimeExpired(true);
-          // Auto-submit entire assessment
-          exitFullscreen();
-          onComplete();
-          return 0;
-        }
-        return prev - 1;
-      });
+      const elapsed = Math.floor((Date.now() - assessmentStartTimeRef.current) / 1000);
+      const remaining = Math.max(0, totalDurationSecsRef.current - elapsed);
+
+      setGlobalTimeRemaining(remaining);
+
+      if (remaining <= 0) {
+        console.log('[TIMER] Timer reached zero during countdown');
+        setIsGlobalTimeExpired(true);
+        exitFullscreen();
+        onComplete();
+      }
     }, 1000);
 
     return () => {
@@ -713,8 +715,6 @@ export function AssessmentInterface({
         clearInterval(globalTimerRef.current);
       }
     };
-    // Note: globalTimeRemaining removed from deps to prevent infinite loop
-    // We use setGlobalTimeRemaining(prev => prev - 1) which doesn't need it
   }, [isGlobalTimeExpired, onComplete, isInitialized]);
 
   // Automatic time-based unit deduction check (every 60 seconds)
@@ -1096,7 +1096,7 @@ export function AssessmentInterface({
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const getRoundIcon = (roundType: string) => {

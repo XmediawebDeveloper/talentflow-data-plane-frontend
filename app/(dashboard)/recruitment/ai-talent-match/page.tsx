@@ -5,6 +5,7 @@ import AITalentMatchPage from '@/components/AITalentMatchPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { aiMatchService, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
 import { Loader2 } from 'lucide-react';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 interface Job {
   id: string;
@@ -166,5 +167,9 @@ export default function AITalentMatchRoute() {
     );
   }
 
-  return <AITalentMatchPage jobs={jobs} matchHistory={matchHistory} />;
+  return (
+    <FeatureGate feature="ai_talent_match">
+      <AITalentMatchPage jobs={jobs} matchHistory={matchHistory} />
+    </FeatureGate>
+  );
 }

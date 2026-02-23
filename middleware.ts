@@ -15,6 +15,7 @@ const publicRoutes = [
   '/signup',
   '/reset-password', // Invite-based first-login password setup
   '/assessment', // Candidate assessment portal (public)
+  '/ai-interview', // Candidate AI interview portal (public)
 ];
 
 // Define protected dashboard routes (authentication required)

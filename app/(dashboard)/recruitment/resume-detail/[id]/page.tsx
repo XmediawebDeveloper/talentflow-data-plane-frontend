@@ -7,6 +7,7 @@ import { Resume, ResumeVersion } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
 import { Resume as ApiResume } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 interface ResumeVersion {
   id: string;
@@ -219,6 +220,7 @@ export default function ResumeDetailPage() {
   }
 
   return (
+    <FeatureGate feature="resume_upload">
     <main className="flex-1 bg-gray-50 min-h-screen flex flex-col">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-8 py-6">
@@ -620,5 +622,6 @@ export default function ResumeDetailPage() {
         </div>
       </div>
     </main>
+    </FeatureGate>
   );
 }

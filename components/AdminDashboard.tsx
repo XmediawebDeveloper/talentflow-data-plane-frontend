@@ -8,6 +8,7 @@ import { dashboardService, DashboardStats, RecentActivity, SubscriptionUnits, JD
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 
 interface AdminDashboardProps {
   user?: User;
@@ -30,6 +31,7 @@ export default function AdminDashboard({
   const { quotaData } = useQuota();
   const isTenantAdmin = user?.role === 'tenant_admin';
   const { hasPermission } = useAuth();
+  const { hasPlanFeature } = usePlanFeatures();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [subscriptionUnits, setSubscriptionUnits] = useState<SubscriptionUnits | null>(null);  // JD02A
@@ -276,8 +278,8 @@ export default function AdminDashboard({
       {/* Stats Cards */}
     
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-        {/* Resumes Card - Clickable with navigation links */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition-all">
+        {/* Resumes Card - Clickable with navigation links (only if plan includes resume_upload) */}
+        {hasPlanFeature('resume_upload') && <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-blue-300 transition-all">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Resumes</p>
@@ -302,7 +304,7 @@ export default function AdminDashboard({
               <FileText className="w-6 h-6 text-blue-600" />
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Job Descriptions Card - Clickable with status filters */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md hover:border-purple-300 transition-all">
@@ -363,30 +365,32 @@ export default function AdminDashboard({
           </div>
         </div>
 
-        {/* Assessments Card - Clickable */}
-        <div
-          className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-orange-300 transition-all"
-          onClick={() => router.push('/recruitment/assessments')}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Assessments</p>
-              <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_assessments || 0}</p>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className="text-xs text-green-600">{stats?.assessment_completed_count || 0} Completed</span>
-                {stats?.assessment_average_score !== null && stats?.assessment_average_score !== undefined && (
-                  <>
-                    <span className="text-xs text-gray-400">|</span>
-                    <span className="text-xs text-blue-600">Avg: {stats.assessment_average_score}%</span>
-                  </>
-                )}
+        {/* Assessments Card - Clickable (only if plan includes assessment) */}
+        {hasPlanFeature('assessment') && (
+          <div
+            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md hover:border-orange-300 transition-all"
+            onClick={() => router.push('/recruitment/assessments')}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Assessments</p>
+                <p className="text-3xl font-semibold text-gray-900 mt-1">{stats?.total_assessments || 0}</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="text-xs text-green-600">{stats?.assessment_completed_count || 0} Completed</span>
+                  {stats?.assessment_average_score !== null && stats?.assessment_average_score !== undefined && (
+                    <>
+                      <span className="text-xs text-gray-400">|</span>
+                      <span className="text-xs text-blue-600">Avg: {stats.assessment_average_score}%</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Award className="w-6 h-6 text-orange-600" />
               </div>
             </div>
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Award className="w-6 h-6 text-orange-600" />
-            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* JD02A: Subscription Units */}
@@ -395,7 +399,7 @@ export default function AdminDashboard({
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Units</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
             {/* Resume Upload Units */}
-            {subscriptionUnits.RU && (
+            {subscriptionUnits.RU && hasPlanFeature('resume_upload') && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -423,7 +427,7 @@ export default function AdminDashboard({
             )}
 
             {/* Resume Scoring Units */}
-            {subscriptionUnits.RS && (
+            {subscriptionUnits.RS && hasPlanFeature('resume_scoring') && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -451,7 +455,7 @@ export default function AdminDashboard({
             )}
 
             {/* Assessment Units */}
-            {subscriptionUnits.AS && (
+            {subscriptionUnits.AS && hasPlanFeature('assessment') && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -479,7 +483,7 @@ export default function AdminDashboard({
             )}
 
             {/* AI Interview Units */}
-            {subscriptionUnits.AIU && (
+            {subscriptionUnits.AIU && hasPlanFeature('ai_interview') && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
