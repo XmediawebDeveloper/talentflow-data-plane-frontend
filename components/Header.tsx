@@ -216,17 +216,20 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     statusCheckCalledRef.current = true;
 
     // Build quota payload from quotaData
+    // safeInt: coerce any value to a finite integer safe for Pydantic's `int` field.
+    // Handles NaN/Infinity (JSON.stringify gives null for these, causing 422), floats, and strings.
+    const safeInt = (v: unknown): number => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.round(n) : 0;
+    };
     const quotaPayload: Record<string, { total_remaining: number; total_limit: number; is_unlimited: boolean }> = {};
     if (quotaData.quotas) {
       for (const [key, quota] of Object.entries(quotaData.quotas)) {
         if (quota) {
           const isUnlimited = !!(quota as any).is_unlimited;
-          const totalRemaining = typeof quota.total_remaining === 'number' ? quota.total_remaining : 0;
-          const subLimit = typeof quota.subscription?.limit === 'number' ? quota.subscription.limit : 0;
-          const addonPurchased = quota.addon?.total_purchased || 0;
           quotaPayload[key] = {
-            total_remaining: totalRemaining,
-            total_limit: subLimit + addonPurchased,
+            total_remaining: safeInt(quota.total_remaining),
+            total_limit: safeInt(quota.subscription?.limit) + safeInt(quota.addon?.total_purchased),
             is_unlimited: isUnlimited,
           };
         }
