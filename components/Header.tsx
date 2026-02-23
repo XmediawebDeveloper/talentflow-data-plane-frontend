@@ -216,11 +216,6 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     statusCheckCalledRef.current = true;
 
     // Build quota payload from quotaData
-    // All numeric values must be finite integers for the backend Pydantic schema
-    const safeInt = (v: unknown): number => {
-      const n = typeof v === 'number' ? v : 0;
-      return Number.isFinite(n) ? Math.floor(n) : 0;
-    };
     // safeInt: coerce any value to a finite integer safe for Pydantic's `int` field.
     // Handles NaN/Infinity (JSON.stringify gives null for these, causing 422), floats, and strings.
     const safeInt = (v: unknown): number => {
