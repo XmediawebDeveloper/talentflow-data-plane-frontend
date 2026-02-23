@@ -100,7 +100,7 @@ export default function ResumeQuickViewModal({ resume, onClose }: ResumeQuickVie
           <div className="flex items-center gap-2">
             <button
               onClick={handleDownload}
-              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-black"
             >
               <Download className="w-4 h-4" />
               Download

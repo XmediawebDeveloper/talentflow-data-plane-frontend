@@ -483,26 +483,27 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Header */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center justify-between mb-4">
+      <div className="p-3 sm:p-4 md:p-6 border-b border-gray-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
           <div>
-            <h2 className="text-gray-900">Assessment Results</h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <h2 className="text-sm sm:text-base text-gray-900">Assessment Results</h2>
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">
               {filteredResults.length} {filteredResults.length === 1 ? 'result' : 'results'}
               {searchTerm && ` matching "${searchTerm}"`}
               {activeFiltersCount > 0 && ` with ${activeFiltersCount} filter${activeFiltersCount !== 1 ? 's' : ''} applied`}
             </p>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* Export Excel */}
             {selectedResults.length === 0 && (
               <button
                 onClick={handleExportExcel}
-                className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1.5 sm:gap-2"
               >
-                <FileDown className="w-4 h-4" />
-                Export to Excel
+                <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Export to Excel</span>
+                <span className="sm:hidden">Export</span>
               </button>
             )}
 
@@ -512,21 +513,21 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 <button
                   onClick={handleDownloadBulkPDFs}
                   disabled={downloadingBulkPDF}
-                  className="px-4 py-2 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {downloadingBulkPDF ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
                   ) : (
-                    <Archive className="w-4 h-4" />
+                    <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   )}
-                  {downloadingBulkPDF ? 'Downloading...' : `Download PDFs (${selectedResults.length})`}
+                  {downloadingBulkPDF ? 'Downloading...' : `PDFs (${selectedResults.length})`}
                 </button>
                 <button
                   onClick={handleExportExcel}
-                  className="px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-1.5 sm:gap-2"
                 >
-                  <FileDown className="w-4 h-4" />
-                  Export to Excel
+                  <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Export
                 </button>
               </>
             )}
@@ -534,15 +535,15 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
         </div>
 
         {/* Search and Inline Filter Bar */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex-1 min-w-[200px] relative">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex-1 min-w-[150px] sm:min-w-[200px] relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
               placeholder="Search by name or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+              className="w-full pl-10 pr-4 py-2 text-xs sm:text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
             />
           </div>
 
@@ -552,7 +553,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending')}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
             >
               <option value="all">All</option>
               <option value="Completed">Completed</option>
@@ -567,7 +568,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <select
               value={filterPassFail}
               onChange={(e) => setFilterPassFail(e.target.value as 'all' | 'Pass' | 'Fail')}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+              className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
             >
               <option value="all">All</option>
               <option value="Pass">Pass</option>
@@ -585,7 +586,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
                   setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
               >
                 <option value="all">All</option>
                 <option value="50-70">50-70%</option>
@@ -605,7 +606,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
                   setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
                 }}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm"
+                className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
               >
                 <option value="all">All</option>
                 <option value="50-70">50-70%</option>
@@ -1236,15 +1237,15 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
       {/* Export Format & Scope Selection Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             {/* Step 1: Format Selection */}
             {exportStep === 'format' && (
               <>
-                <div className="flex items-center justify-between p-5 border-b border-gray-200">
+                <div className="flex items-center justify-between p-3 sm:p-5 border-b border-gray-200">
                   <div>
-                    <h3 className="text-lg font-medium text-gray-900">Export Assessment Results</h3>
-                    <p className="text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
+                    <h3 className="text-base sm:text-lg font-medium text-gray-900">Export Assessment Results</h3>
+                    <p className="text-xs sm:text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
                   </div>
                   <button
                     onClick={() => {

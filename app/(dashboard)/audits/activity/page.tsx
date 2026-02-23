@@ -221,7 +221,7 @@ export default function ActivityLogsPage() {
               <select
                 value={limit}
                 onChange={(e) => setLimit(parseInt(e.target.value))}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500"
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 text-black"
               >
                 <option value="25">Last 25</option>
                 <option value="50">Last 50</option>
@@ -229,7 +229,7 @@ export default function ActivityLogsPage() {
               </select>
               <button
                 onClick={fetchRecentActivity}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-black"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
@@ -381,7 +381,7 @@ export default function ActivityLogsPage() {
           <div className="mt-6 text-center">
             <button
               onClick={() => setLimit(l => l + 50)}
-              className="px-6 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
+              className="px-6 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm text-black"
             >
               Load More
             </button>

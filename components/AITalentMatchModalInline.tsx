@@ -227,15 +227,15 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl my-8">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white rounded-t-xl z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-gray-800" />
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl my-4 sm:my-8 mx-2 sm:mx-0">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 sticky top-0 bg-white rounded-t-xl z-10">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800" />
             </div>
-            <div>
-              <h2 className="text-xl text-gray-900">AI Talent Match</h2>
-              <p className="text-sm text-gray-500">{jobTitle}</p>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-xl text-gray-900">AI Talent Match</h2>
+              <p className="text-xs sm:text-sm text-gray-500 truncate">{jobTitle}</p>
             </div>
           </div>
           <button
@@ -247,18 +247,18 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
         </div>
 
         {currentStep !== 'results' ? (
-          <div className="p-8">
+          <div className="p-4 sm:p-8">
             {/* Step 1: JD Embedding */}
-            <div className="mb-8">
-              <div className="flex items-center gap-3 mb-4">
+            <div className="mb-4 sm:mb-8">
+              <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                 {currentStep === 'embedding' ? (
                   <Loader2 className="w-6 h-6 text-gray-800 animate-spin" />
                 ) : (
                   <CheckCircle2 className="w-6 h-6 text-green-600" />
                 )}
                 <div className="flex-1">
-                  <h3 className="text-gray-900 mb-1">Step 1: JD Embedding Check</h3>
-                  <p className="text-sm text-gray-600">
+                  <h3 className="text-sm sm:text-base text-gray-900 mb-1">Step 1: JD Embedding Check</h3>
+                  <p className="text-xs sm:text-sm text-gray-600">
                     {jdEmbeddingExists && currentStep !== 'embedding'
                       ? 'JD vector found in database'
                       : currentStep !== 'embedding'
@@ -269,11 +269,11 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
               </div>
 
               {currentStep === 'embedding' && (
-                <div className="ml-9">
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3 mb-3">
-                      <Database className="w-5 h-5 text-gray-800 mt-0.5" />
-                      <p className="text-sm text-gray-800">{processDetails}</p>
+                <div className="ml-6 sm:ml-9">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
+                    <div className="flex items-start gap-2 sm:gap-3 mb-3">
+                      <Database className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs sm:text-sm text-gray-800">{processDetails}</p>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
@@ -285,7 +285,7 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
                   </div>
 
                   {!jdEmbeddingExists && progress > 0 && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
                       <h4 className="text-xs text-gray-700 mb-2">Embedding Process:</h4>
                       <ul className="text-xs text-gray-600 space-y-1">
                         <li className="flex items-center gap-2">
@@ -312,18 +312,18 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
             </div>
 
             {/* Step 2: Cosine Similarity Matching */}
-            <div className="mb-8">
-              <div className="flex items-center gap-3 mb-4">
+            <div className="mb-4 sm:mb-8">
+              <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                 {currentStep === 'matching' ? (
                   <Loader2 className="w-6 h-6 text-gray-800 animate-spin" />
                 ) : (
                   <div className="w-6 h-6 rounded-full border-2 border-gray-300" />
                 )}
                 <div className="flex-1">
-                  <h3 className={`mb-1 ${currentStep === 'embedding' ? 'text-gray-400' : 'text-gray-900'}`}>
+                  <h3 className={`text-sm sm:text-base mb-1 ${currentStep === 'embedding' ? 'text-gray-400' : 'text-gray-900'}`}>
                     Step 2: Cosine Similarity Matching
                   </h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-xs sm:text-sm text-gray-600">
                     {currentStep === 'matching'
                       ? 'Comparing JD with resume vectors...'
                       : 'Waiting for embedding to complete'}
@@ -332,11 +332,11 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
               </div>
 
               {currentStep === 'matching' && (
-                <div className="ml-9">
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-start gap-3 mb-3">
-                      <Sparkles className="w-5 h-5 text-gray-800 mt-0.5" />
-                      <p className="text-sm text-gray-800">{processDetails}</p>
+                <div className="ml-6 sm:ml-9">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
+                    <div className="flex items-start gap-2 sm:gap-3 mb-3">
+                      <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs sm:text-sm text-gray-800">{processDetails}</p>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
@@ -347,20 +347,20 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
                     <div className="text-xs text-gray-900 mt-2 text-right">{progress}%</div>
                   </div>
 
-                  <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <h4 className="text-xs text-gray-700 mb-2">Matching Algorithm:</h4>
                     <div className="text-xs text-gray-600 space-y-2">
-                      <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                      <div className="flex items-center justify-between p-1.5 sm:p-2 bg-white rounded border border-gray-200">
                         <span>Algorithm:</span>
-                        <span className="font-mono text-gray-800">Cosine Similarity</span>
+                        <span className="font-mono text-gray-800 text-[10px] sm:text-xs">Cosine Similarity</span>
                       </div>
-                      <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                      <div className="flex items-center justify-between p-1.5 sm:p-2 bg-white rounded border border-gray-200">
                         <span>Resume Database:</span>
-                        <span className="font-mono text-gray-800">1,247 vectors</span>
+                        <span className="font-mono text-gray-800 text-[10px] sm:text-xs">1,247 vectors</span>
                       </div>
-                      <div className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                      <div className="flex items-center justify-between p-1.5 sm:p-2 bg-white rounded border border-gray-200">
                         <span>Embedding Model:</span>
-                        <span className="font-mono text-gray-800">text-embedding-3</span>
+                        <span className="font-mono text-gray-800 text-[10px] sm:text-xs">text-embedding-3</span>
                       </div>
                     </div>
                   </div>
@@ -372,67 +372,68 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
           /* Results View */
           <div>
             {/* Stats Bar */}
-            <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-t border-b border-gray-200 px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-8">
-                  <div>
-                    <div className="text-2xl text-gray-900">{matchResults.length}</div>
-                    <div className="text-sm text-gray-600">Total Candidates</div>
+            <div className="bg-gradient-to-r from-gray-50 to-gray-50 border-t border-b border-gray-200 px-3 sm:px-6 py-3 sm:py-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="grid grid-cols-4 gap-2 sm:flex sm:items-center sm:gap-8">
+                  <div className="text-center sm:text-left">
+                    <div className="text-lg sm:text-2xl text-gray-900">{matchResults.length}</div>
+                    <div className="text-[10px] sm:text-sm text-gray-600">Total</div>
                   </div>
-                  <div className="w-px h-10 bg-gray-300" />
-                  <div>
-                    <div className="text-2xl text-green-600">
+                  <div className="hidden sm:block w-px h-10 bg-gray-300" />
+                  <div className="text-center sm:text-left">
+                    <div className="text-lg sm:text-2xl text-green-600">
                       {matchResults.filter(r => r.matchScore >= 85).length}
                     </div>
-                    <div className="text-sm text-gray-600">Excellent (85%+)</div>
+                    <div className="text-[10px] sm:text-sm text-gray-600"><span className="hidden sm:inline">Excellent </span>85%+</div>
                   </div>
-                  <div className="w-px h-10 bg-gray-300" />
-                  <div>
-                    <div className="text-2xl text-gray-800">
+                  <div className="hidden sm:block w-px h-10 bg-gray-300" />
+                  <div className="text-center sm:text-left">
+                    <div className="text-lg sm:text-2xl text-gray-800">
                       {matchResults.filter(r => r.matchScore >= 70 && r.matchScore < 85).length}
                     </div>
-                    <div className="text-sm text-gray-600">Good (70-84%)</div>
+                    <div className="text-[10px] sm:text-sm text-gray-600"><span className="hidden sm:inline">Good </span>70-84%</div>
                   </div>
-                  <div className="w-px h-10 bg-gray-300" />
-                  <div>
-                    <div className="text-2xl text-yellow-600">
+                  <div className="hidden sm:block w-px h-10 bg-gray-300" />
+                  <div className="text-center sm:text-left">
+                    <div className="text-lg sm:text-2xl text-yellow-600">
                       {matchResults.filter(r => r.matchScore >= 50 && r.matchScore < 70).length}
                     </div>
-                    <div className="text-sm text-gray-600">Moderate (50-69%)</div>
+                    <div className="text-[10px] sm:text-sm text-gray-600"><span className="hidden sm:inline">Moderate </span>50-69%</div>
                   </div>
                 </div>
 
                 {/* Filter */}
-                <div className="flex items-center gap-3">
-                  <Filter className="w-4 h-4 text-gray-500" />
-                  <span className="text-sm text-gray-700">Min Match:</span>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <Filter className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm text-gray-700 whitespace-nowrap">Min Match:</span>
                   <select
                     value={filterThreshold}
                     onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+                    className="px-2 sm:px-3 py-1.5 border border-gray-300 rounded-md text-xs sm:text-sm text-black focus:outline-none focus:ring-2 focus:ring-gray-600 w-full sm:w-auto"
                   >
                     <option value={0}>All (0%+)</option>
-                    <option value={50}>Moderate (50%+)</option>
-                    <option value={70}>Good (70%+)</option>
-                    <option value={85}>Excellent (85%+)</option>
+                    <option value={50}>50%+</option>
+                    <option value={70}>70%+</option>
+                    <option value={85}>85%+</option>
                   </select>
                 </div>
               </div>
             </div>
 
             {/* Results List */}
-            <div className="p-6 max-h-[600px] overflow-y-auto">
-              <div className="mb-4 flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  Showing <span className="text-gray-900">{filteredResults.length}</span> candidates ranked by AI relevance
+            <div className="p-3 sm:p-6 max-h-[600px] overflow-y-auto">
+              <div className="mb-3 sm:mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="text-xs sm:text-sm text-gray-600">
+                  Showing <span className="text-gray-900">{filteredResults.length}</span> candidates
                 </div>
                 {selectedCandidates.length > 0 && (
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-600">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <span className="text-xs sm:text-sm text-gray-600">
                       {selectedCandidates.length} selected
                     </span>
-                    <button className="px-4 py-2 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-900 transition-colors">
-                      Add as Applicants
+                    <button className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-800 text-white text-xs sm:text-sm rounded-md hover:bg-gray-900 transition-colors">
+                      <span className="hidden sm:inline">Add as Applicants</span>
+                      <span className="sm:hidden">Add</span>
                     </button>
                   </div>
                 )}
@@ -444,11 +445,11 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
                     key={candidate.id}
                     className="bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all"
                   >
-                    <div className="p-5">
-                      <div className="flex items-start gap-4">
+                    <div className="p-3 sm:p-5">
+                      <div className="flex items-start gap-2 sm:gap-4">
                         {/* Rank Badge */}
                         <div className="flex-shrink-0">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-base ${
+                          <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-sm sm:text-base ${
                             index === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-300' :
                             index === 1 ? 'bg-gray-100 text-gray-700 border-2 border-gray-300' :
                             index === 2 ? 'bg-orange-100 text-orange-700 border-2 border-orange-300' :
@@ -462,8 +463,8 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className="text-base text-gray-900 truncate">{candidate.name}</h3>
+                              <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                                <h3 className="text-sm sm:text-base text-gray-900 truncate">{candidate.name}</h3>
                                 {index < 3 && (
                                   <Star className={`w-4 h-4 flex-shrink-0 ${
                                     index === 0 ? 'text-yellow-500 fill-yellow-500' :
@@ -472,30 +473,30 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
                                   }`} />
                                 )}
                               </div>
-                              <p className="text-sm text-gray-600 mb-2">{candidate.title}</p>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
-                                <span className="flex items-center gap-1">
+                              <p className="text-xs sm:text-sm text-gray-600 mb-2">{candidate.title}</p>
+                              <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 text-[10px] sm:text-xs text-gray-600">
+                                <span className="flex items-center gap-1 hidden sm:flex">
                                   <Mail className="w-3 h-3" />
                                   {candidate.email}
                                 </span>
-                                <span className="flex items-center gap-1">
+                                <span className="flex items-center gap-1 hidden sm:flex">
                                   <Phone className="w-3 h-3" />
                                   {candidate.phone}
                                 </span>
                                 <span className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" />
+                                  <MapPin className="w-3 h-3 flex-shrink-0" />
                                   {candidate.location}
                                 </span>
                                 <span className="flex items-center gap-1">
-                                  <Building2 className="w-3 h-3" />
+                                  <Building2 className="w-3 h-3 flex-shrink-0" />
                                   {candidate.currentCompany}
                                 </span>
                               </div>
                             </div>
 
                             {/* Match Score */}
-                            <div className="text-right ml-4 flex-shrink-0">
-                              <div className={`text-2xl mb-1 ${getMatchColor(candidate.matchScore)}`}>
+                            <div className="text-right ml-2 sm:ml-4 flex-shrink-0">
+                              <div className={`text-lg sm:text-2xl mb-1 ${getMatchColor(candidate.matchScore)}`}>
                                 {candidate.matchScore}%
                               </div>
                               <div className={`inline-block px-2 py-0.5 rounded-full text-xs border ${getMatchBgColor(candidate.matchScore)}`}>
@@ -552,13 +553,13 @@ export default function AITalentMatchModalInline({ jobTitle, onClose, onResultsC
               </div>
 
               {filteredResults.length === 0 && (
-                <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-                  <Filter className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg text-gray-900 mb-2">No candidates match this threshold</h3>
-                  <p className="text-gray-600 mb-4">Try lowering the minimum match percentage</p>
+                <div className="bg-white rounded-lg border border-gray-200 p-6 sm:p-12 text-center">
+                  <Filter className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
+                  <h3 className="text-base sm:text-lg text-gray-900 mb-2">No candidates match this threshold</h3>
+                  <p className="text-xs sm:text-base text-gray-600 mb-4">Try lowering the minimum match percentage</p>
                   <button
                     onClick={() => setFilterThreshold(0)}
-                    className="px-6 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                    className="px-4 sm:px-6 py-2 bg-gray-800 text-white text-sm rounded-md hover:bg-gray-900 transition-colors"
                   >
                     Show All Candidates
                   </button>

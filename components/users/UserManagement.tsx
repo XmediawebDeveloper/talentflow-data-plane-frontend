@@ -22,6 +22,7 @@ import { handleUnauthorized } from '@/lib/services/api';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
+import { tenantService } from '@/lib/services/tenantService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
 import { UserRole } from '@/lib/types/tenant';
 import FeaturePermissionManager from './FeaturePermissionManager';
@@ -693,6 +694,9 @@ export default function UserManagement() {
     available: true,
   });
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [emailUsername, setEmailUsername] = useState('');
+  const [showAtBlockedMessage, setShowAtBlockedMessage] = useState(false);
+  const [tenantEmailDomain, setTenantEmailDomain] = useState<string | null>(null);
   const emailCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Current user state (for hiding Edit/Delete buttons on self)
@@ -727,6 +731,12 @@ export default function UserManagement() {
     checkPermission();
   }, [router]);
 
+  // Load tenant email domain for the "Add User" email field
+  useEffect(() => {
+    tenantService.getTenantEmailDomain()
+      .then((domain) => setTenantEmailDomain(domain))
+      .catch((err) => console.error('Failed to load tenant email domain:', err));
+  }, []);
 
   // Load users, roles, and permissions
   // Auto-sync with Admin API first to ensure accurate counts
@@ -1355,6 +1365,8 @@ export default function UserManagement() {
     // Clear email validation state
     setEmailCheckResult({ error: null, available: true });
     setIsCheckingEmail(false);
+    setEmailUsername('');
+    setShowAtBlockedMessage(false);
     if (emailCheckTimeoutRef.current) {
       clearTimeout(emailCheckTimeoutRef.current);
     }
@@ -2133,7 +2145,9 @@ export default function UserManagement() {
                       }
 
                       setEmailUsername(value);
-                      checkEmailAvailability(value);
+                      if (tenantEmailDomain) {
+                        checkEmailAvailability(`${value}@${tenantEmailDomain}`);
+                      }
                     }}
                     placeholder="username"
                     className="flex-1 px-4 py-2.5 border-0 focus:outline-none focus:ring-0"

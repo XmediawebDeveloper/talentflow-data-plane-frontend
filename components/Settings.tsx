@@ -173,7 +173,7 @@ export default function Settings() {
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header */}
       <div className="mb-6 sm:mb-8">
-        <div className="flex items-center gap-3 mb-3">
+        <div className="block sm:flex sm:items-center sm:gap-3 mb-3">dashboard
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
             <User className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
           </div>
@@ -188,15 +188,15 @@ export default function Settings() {
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
         {/* Left Sidebar - Tabs */}
         <div className="w-full lg:w-64 flex-shrink-0">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 sticky top-8">
-            <nav className="space-y-1">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 lg:sticky lg:top-8">
+            <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all ${
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-all whitespace-nowrap flex-shrink-0 lg:flex-shrink ${
                       activeTab === tab.id
                         ? 'bg-gray-800 text-white shadow-md'
                         : 'text-gray-700 hover:bg-gray-100'
@@ -210,7 +210,7 @@ export default function Settings() {
             </nav>
 
             {/* Role Info */}
-            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="hidden lg:block mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div className="text-xs text-gray-800 uppercase tracking-wider mb-1">Role</div>
               <div className="text-sm text-gray-800 font-medium">{user?.role || 'Recruiter'}</div>
               <div className="text-xs text-gray-900 mt-1">Access Level: {user?.role === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
@@ -220,7 +220,7 @@ export default function Settings() {
 
         {/* Right Content Area */}
         <div className="flex-1">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 lg:p-8">
             {/* Profile Settings */}
             {activeTab === 'profile' && (
               <div>
@@ -234,17 +234,19 @@ export default function Settings() {
                 {/* Profile Picture */}
                 <div className="mb-8 pb-8 border-b border-gray-200">
                   <label className="block text-sm font-medium text-gray-900 mb-3">Profile Picture</label>
-                  <div className="flex items-center gap-4">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center shadow-lg text-2xl">
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center shadow-lg text-2xl flex-shrink-0">
                       {profileData.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
                     </div>
-                    <div>
-                      <button className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm mr-2">
-                        Upload New
-                      </button>
-                      <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm">
-                        Remove
-                      </button>
+                    <div className="text-center sm:text-left">
+                      <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                        <button className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm">
+                          Upload New
+                        </button>
+                        <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                          Remove
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF. Max size 5MB.</p>
                     </div>
                   </div>
@@ -252,7 +254,7 @@ export default function Settings() {
 
                 {/* Form Fields */}
                 <div className="space-y-6">
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-900 mb-2">Full Name</label>
                       <input
@@ -274,7 +276,7 @@ export default function Settings() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-900 mb-2">Phone Number</label>
                       <div className="relative">
@@ -654,7 +656,7 @@ export default function Settings() {
                   {/* Theme */}
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-3">Theme</label>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                       {[
                         { value: 'light', label: 'Light', desc: 'Classic bright theme' },
                         { value: 'dark', label: 'Dark', desc: 'Easy on the eyes' },
@@ -744,7 +746,7 @@ export default function Settings() {
             )}
 
             {/* Save Button */}
-            <div className="mt-8 pt-6 border-t border-gray-200 flex items-center justify-between">
+            <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 flex flex-col-reverse sm:flex-row items-center justify-between gap-4">
               <div className="text-sm text-gray-600">
                 {saveSuccess && (
                   <div className="flex items-center gap-2 text-green-600">
@@ -756,7 +758,7 @@ export default function Settings() {
               <button
                 onClick={handleSave}
                 disabled={isSaving}
-                className="px-8 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-lg hover:shadow-xl flex items-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto px-8 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors shadow-lg hover:shadow-xl flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving ? (
                   <>

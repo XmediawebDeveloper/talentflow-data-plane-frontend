@@ -260,19 +260,19 @@ export default function CandidateResultDetails({
     <div className="flex-1 bg-gray-50 overflow-y-auto">
       {/* Sticky Header - Assessment & JD Title */}
       <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-gray-600 sticky top-0 z-20 shadow-lg">
-        <div className="px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-                <FileText className="w-6 h-6 text-white" />
+        <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <div>
-                <div className="text-white/80 text-xs mb-1">Assessment</div>
-                <h1 className="text-white text-xl">{assessmentTitle}</h1>
+              <div className="min-w-0">
+                <div className="text-white/80 text-xs mb-0.5 sm:mb-1">Assessment</div>
+                <h1 className="text-white text-base sm:text-xl truncate">{assessmentTitle}</h1>
                 {jdTitle && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <Briefcase className="w-3.5 h-3.5 text-gray-200" />
-                    <span className="text-gray-100 text-sm">Linked to: {jdTitle}</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
+                    <Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-200 flex-shrink-0" />
+                    <span className="text-gray-100 text-xs sm:text-sm truncate">Linked to: {jdTitle}</span>
                   </div>
                 )}
               </div>
@@ -294,9 +294,9 @@ export default function CandidateResultDetails({
                   toast.error('Failed to export results. Please try again.');
                 }
               }}
-              className="px-6 py-2.5 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg transition-colors flex items-center gap-2 border border-white/30"
+              className="px-3 sm:px-6 py-2 sm:py-2.5 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 border border-white/30 text-xs sm:text-sm self-start sm:self-auto whitespace-nowrap"
             >
-              <FileText className="w-5 h-5" />
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
               Export Results
             </button>
           </div>
@@ -304,26 +304,26 @@ export default function CandidateResultDetails({
       </div>
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-[88px] z-10">
-        <div className="px-8 py-6">
+      <div className="bg-white border-b border-gray-200 sticky top-[72px] sm:top-[88px] z-10">
+        <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 transition-colors text-sm sm:text-base"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             Back to Results Overview
           </button>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0">
                 {(candidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
-              <div>
-                <h1 className="text-gray-900 mb-1">{candidateData?.name || 'Unknown'}</h1>
-                <p className="text-sm text-gray-600">{candidateData?.email}</p>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-base md:text-lg text-gray-900 mb-0.5 sm:mb-1 truncate">{candidateData?.name || 'Unknown'}</h1>
+                <p className="text-xs sm:text-sm text-gray-600 truncate">{candidateData?.email}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 self-start sm:self-auto">
               {/* Status Badge */}
               {(() => {
                 let displayStatus = candidateData?.status || 'In Progress';
@@ -346,35 +346,35 @@ export default function CandidateResultDetails({
       </div>
 
       {/* Content */}
-      <div className="px-8 py-6">
+      <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
         {/* Assessment Info */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <div className="grid grid-cols-3 gap-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-gray-800" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800" />
               </div>
-              <div>
-                <div className="text-sm text-gray-600">Assessment</div>
-                <div className="text-gray-900">{assessmentTitle}</div>
+              <div className="min-w-0">
+                <div className="text-xs sm:text-sm text-gray-600">Assessment</div>
+                <div className="text-sm sm:text-base text-gray-900 truncate">{assessmentTitle}</div>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-green-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
               <div>
-                <div className="text-sm text-gray-600">Completed</div>
-                <div className="text-gray-900">{candidateData?.completedDate}</div>
+                <div className="text-xs sm:text-sm text-gray-600">Completed</div>
+                <div className="text-sm sm:text-base text-gray-900">{candidateData?.completedDate}</div>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-6 h-6 text-gray-800" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800" />
               </div>
               <div>
-                <div className="text-sm text-gray-600">Time Taken</div>
-                <div className="text-gray-900">{candidateData?.duration}</div>
+                <div className="text-xs sm:text-sm text-gray-600">Time Taken</div>
+                <div className="text-sm sm:text-base text-gray-900">{candidateData?.duration}</div>
               </div>
             </div>
           </div>
@@ -419,8 +419,8 @@ export default function CandidateResultDetails({
         })()}
 
         {/* Section Scores */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <h2 className="text-gray-900 mb-4">Section-wise Performance</h2>
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+          <h2 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Section-wise Performance</h2>
           <div className="space-y-4">
             {candidateData?.sections.map((section, idx) => {
               const isHR = section.name.toLowerCase().includes('hr');
@@ -536,7 +536,7 @@ export default function CandidateResultDetails({
         </div>
 
         {/* Scoring Rules & Pass/Fail Criteria */}
-        <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-6 mb-6">
+        <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="flex items-start gap-3 mb-4">
             <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
               <Info className="w-6 h-6 text-white" />
@@ -547,9 +547,9 @@ export default function CandidateResultDetails({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {/* HR Section Rules */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
                   <FileText className="w-4 h-4 text-gray-600" />
@@ -650,13 +650,13 @@ export default function CandidateResultDetails({
         {/* Candidate Insights - AI Generated Analysis */}
         {detailedResult && detailedResult.scoring_status === 'completed' && (
           <div className="bg-white rounded-lg border-2 border-blue-200 overflow-hidden shadow-lg mb-6">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h2 className="text-white flex items-center gap-2">
-                  <Award className="w-5 h-5" />
+                <h2 className="text-white flex items-center gap-2 text-sm sm:text-base">
+                  <Award className="w-4 h-4 sm:w-5 sm:h-5" />
                   AI-Generated Candidate Insights
                 </h2>
-                <p className="text-blue-100 text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
+                <p className="text-blue-100 text-xs sm:text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
               </div>
               {(!detailedResult.candidate_insights?.interview_strength) && (
                 <button
@@ -678,9 +678,9 @@ export default function CandidateResultDetails({
                 </button>
               )}
             </div>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {detailedResult.candidate_insights?.interview_strength ? (
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Interview Strength */}
                 {detailedResult.candidate_insights.interview_strength && (
                   <div className="bg-green-50 rounded-lg p-4 border border-green-200">
@@ -765,11 +765,11 @@ export default function CandidateResultDetails({
 
         {/* Detailed Answers */}
         <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-lg">
-          <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5">
-            <div className="flex items-center justify-between">
+          <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-4 sm:px-6 py-4 sm:py-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h2 className="text-white">Detailed Question Analysis</h2>
-                <p className="text-gray-100 text-sm mt-1">Review questions and answers for each section</p>
+                <h2 className="text-white text-sm sm:text-base">Detailed Question Analysis</h2>
+                <p className="text-gray-100 text-xs sm:text-sm mt-1">Review questions and answers for each section</p>
               </div>
               {/* Agent Status Badge */}
               {detailedResult && (
@@ -829,7 +829,7 @@ export default function CandidateResultDetails({
             <>
               {/* Tab Navigation */}
               <div className="border-b border-gray-200 bg-gray-50">
-                <div className="flex gap-2 px-6 py-3">
+                <div className="flex gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 overflow-x-auto">
                   {detailedResult.round_scores.map((round, idx) => {
                     const isActive = activeTab === round.round_type;
                     const questionsForRound = detailedResult.question_evaluations.filter(
@@ -840,13 +840,13 @@ export default function CandidateResultDetails({
                       <button
                         key={idx}
                         onClick={() => setActiveTab(round.round_type)}
-                        className={`px-6 py-3 rounded-t-lg transition-all flex items-center gap-2 ${
+                        className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                           isActive
                             ? 'bg-white text-gray-800 border-t-2 border-x border-gray-800 shadow-sm'
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                       >
-                        <span className="font-medium capitalize">{round.round_type} Round</span>
+                        <span className="font-medium capitalize text-xs sm:text-sm">{round.round_type} Round</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs ${
                           isActive ? 'bg-gray-100 text-gray-900' : 'bg-gray-200 text-gray-600'
                         }`}>
@@ -859,7 +859,7 @@ export default function CandidateResultDetails({
                   {/* Violations Tab */}
                   <button
                     onClick={() => setActiveTab('violations')}
-                    className={`px-6 py-3 rounded-t-lg transition-all flex items-center gap-2 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                       activeTab === 'violations'
                         ? 'bg-white text-red-700 border-t-2 border-x border-red-500 shadow-sm'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -882,7 +882,7 @@ export default function CandidateResultDetails({
               </div>
 
               {/* Tab Content */}
-              <div className="p-6">
+              <div className="p-3 sm:p-4 md:p-6">
                 {detailedResult.round_scores.map((round, roundIdx) => {
                   const isActiveTab = activeTab === round.round_type;
                   if (!isActiveTab) return null;
@@ -894,9 +894,9 @@ export default function CandidateResultDetails({
                   return (
                     <div key={roundIdx} className="space-y-6">
                       {/* Section Header */}
-                      <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-200">
                         <div>
-                          <h3 className="text-xl text-gray-900 capitalize">{round.round_type} Round</h3>
+                          <h3 className="text-base sm:text-xl text-gray-900 capitalize">{round.round_type} Round</h3>
                           <p className="text-sm text-gray-600 mt-1">
                             {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''} •
                             <span className="ml-1">
@@ -905,9 +905,9 @@ export default function CandidateResultDetails({
                             </span>
                           </p>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm text-gray-600 mb-1">Section Score</div>
-                          <div className={`text-3xl ${getScoreColor(Math.round(round.raw_score ?? 0))}`}>
+                        <div className="text-left sm:text-right">
+                          <div className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Section Score</div>
+                          <div className={`text-xl sm:text-3xl ${getScoreColor(Math.round(round.raw_score ?? 0))}`}>
                             {Math.round(round.raw_score ?? 0)}%
                           </div>
                         </div>
@@ -919,12 +919,12 @@ export default function CandidateResultDetails({
                           {questionsForRound.map((q, qIdx) => (
                             <div key={qIdx} className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
                               {/* Question Header */}
-                              <div className={`px-6 py-4 border-b border-gray-200 ${
+                              <div className={`px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 ${
                                 q.is_correct ? 'bg-green-50' : 'bg-red-50'
                               }`}>
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2">
+                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                                       <span className="px-3 py-1 bg-gray-800 text-white rounded-full text-xs font-medium">
                                         Q{qIdx + 1}
                                       </span>
@@ -948,8 +948,8 @@ export default function CandidateResultDetails({
                                     </div>
                                     <div className="text-gray-900 leading-relaxed">{q.question_text}</div>
                                   </div>
-                                  <div className="ml-6 text-right flex-shrink-0">
-                                    <div className="text-xs text-gray-600 mb-1">Score</div>
+                                  <div className="sm:ml-6 text-left sm:text-right flex-shrink-0">
+                                    <div className="text-xs text-gray-600 mb-0.5 sm:mb-1">Score</div>
                                     <div className="flex items-center gap-2">
                                       {(() => {
                                         // Normalize scores to be out of 10
@@ -959,11 +959,11 @@ export default function CandidateResultDetails({
 
                                         return (
                                           <>
-                                            <div className={`text-2xl font-bold ${getScoreColor(percentage)}`}>
+                                            <div className={`text-lg sm:text-2xl font-bold ${getScoreColor(percentage)}`}>
                                               {Math.round(normalizedEarned * 10) / 10}
                                             </div>
                                             <div className="text-gray-400">/</div>
-                                            <div className="text-xl text-gray-600">{normalizedPossible}</div>
+                                            <div className="text-base sm:text-xl text-gray-600">{normalizedPossible}</div>
                                           </>
                                         );
                                       })()}
@@ -973,7 +973,7 @@ export default function CandidateResultDetails({
                               </div>
 
                               {/* Question Content */}
-                              <div className="p-6 space-y-4">
+                              <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
                                 {/* Candidate's Answer */}
                                 <div>
                                   <div className="flex items-center gap-2 mb-3">
@@ -1107,11 +1107,11 @@ export default function CandidateResultDetails({
 
                 {/* Violations Tab Content */}
                 {activeTab === 'violations' && detailedResult.proctoring_stats && (
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     {/* Violations Header */}
-                    <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-200">
                       <div>
-                        <h3 className="text-xl text-gray-900">Proctoring Violations</h3>
+                        <h3 className="text-base sm:text-xl text-gray-900">Proctoring Violations</h3>
                         <p className="text-sm text-gray-600 mt-1">
                           {detailedResult.proctoring_stats.total_violations} total violation{detailedResult.proctoring_stats.total_violations !== 1 ? 's' : ''} detected during the assessment
                         </p>
@@ -1134,9 +1134,9 @@ export default function CandidateResultDetails({
                     </div>
 
                     {/* Violations Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                       {/* Mouse Movement */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         detailedResult.proctoring_stats.window_blur_count > 0
                           ? 'bg-red-50 border-red-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1164,7 +1164,7 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Tab Switch */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         detailedResult.proctoring_stats.tab_switch_count > 0
                           ? 'bg-orange-50 border-orange-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1192,7 +1192,7 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Copy Count */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         (detailedResult.proctoring_stats.copy_count || 0) > 0
                           ? 'bg-yellow-50 border-yellow-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1220,7 +1220,7 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Paste Count */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         (detailedResult.proctoring_stats.paste_count || 0) > 0
                           ? 'bg-yellow-50 border-yellow-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1249,7 +1249,7 @@ export default function CandidateResultDetails({
 
                       {/* Video Violations - HIDDEN as per user request */}
                       {false && (
-                        <div className={`rounded-xl p-5 border-2 ${
+                        <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                           detailedResult.proctoring_stats.video_violation_count > 0
                             ? 'bg-purple-50 border-purple-200'
                             : 'bg-gray-50 border-gray-200'
@@ -1278,7 +1278,7 @@ export default function CandidateResultDetails({
                       )}
 
                       {/* Voice Violations */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         detailedResult.proctoring_stats.voice_violation_count > 0
                           ? 'bg-pink-50 border-pink-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1334,7 +1334,7 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Fullscreen Exit */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
                           ? 'bg-blue-50 border-blue-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1363,7 +1363,7 @@ export default function CandidateResultDetails({
 
                       {/* Other Violations (uncategorized) - Commented out for now */}
                       {/* {(detailedResult.proctoring_stats.other_violation_count || 0) > 0 && (
-                        <div className="rounded-xl p-5 border-2 bg-gray-50 border-gray-300">
+                        <div className="rounded-xl p-3 sm:p-5 border-2 bg-gray-50 border-gray-300">
                           <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-3 bg-gray-200">
                             <AlertCircle className="w-6 h-6 text-gray-600" />
                           </div>
@@ -1376,7 +1376,7 @@ export default function CandidateResultDetails({
                       )} */}
 
                       {/* Total Violations */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         detailedResult.proctoring_stats.total_violations > 0
                           ? 'bg-red-50 border-red-300'
                           : 'bg-green-50 border-green-200'

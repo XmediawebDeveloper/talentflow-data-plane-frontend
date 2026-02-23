@@ -549,7 +549,7 @@ export default function BulkScoringProgressModal({
         <div className="p-3 sm:p-5 border-b border-gray-200 bg-white">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1 sm:mb-1.5">
                 Search Candidate
               </label>
               <input
@@ -557,7 +557,7 @@ export default function BulkScoringProgressModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by name..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-black text-xs sm:text-sm"
               />
             </div>
 
@@ -568,7 +568,7 @@ export default function BulkScoringProgressModal({
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-black text-xs sm:text-sm"
               >
                 <option value="all">All Status</option>
                 <option value="queued">Queued</option>
@@ -586,7 +586,7 @@ export default function BulkScoringProgressModal({
               <select
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-black text-xs sm:text-sm"
               >
                 <option value="all">All Sources</option>
                 {/* Only show Internal DB option if user has permission */}

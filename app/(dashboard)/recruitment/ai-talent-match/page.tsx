@@ -138,10 +138,10 @@ export default function AITalentMatchRoute() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 via-blue-50 to-white min-h-screen">
+      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 via-blue-50 to-white min-h-screen p-4">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-gray-800 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Loading jobs...</p>
+          <Loader2 className="w-8 h-8 sm:w-12 sm:h-12 text-gray-800 animate-spin mx-auto mb-4" />
+          <p className="text-sm sm:text-base text-gray-600 font-medium">Loading jobs...</p>
         </div>
       </div>
     );
@@ -149,16 +149,16 @@ export default function AITalentMatchRoute() {
 
   if (error) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 via-blue-50 to-white min-h-screen">
+      <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 via-blue-50 to-white min-h-screen p-4">
         <div className="text-center max-w-md">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-red-600 text-2xl">!</span>
+          <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-red-600 text-xl sm:text-2xl">!</span>
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Jobs</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <h2 className="text-base sm:text-xl font-semibold text-gray-900 mb-2">Failed to Load Jobs</h2>
+          <p className="text-sm sm:text-base text-gray-600 mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium"
+            className="px-4 sm:px-6 py-2.5 bg-gray-800 text-white text-sm sm:text-base rounded-lg hover:bg-gray-900 transition-colors font-medium"
           >
             Retry
           </button>
