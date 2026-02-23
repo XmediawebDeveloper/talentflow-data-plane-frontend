@@ -300,6 +300,8 @@ export interface ModuleCRUDPermissions {
   canCreate: boolean;
   canUpdate: boolean;
   canDelete: boolean;
+  canArchive: boolean;
+  canDisable: boolean;
   hasAnyAccess: boolean; // True if ANY permission is granted
 }
 
@@ -322,6 +324,8 @@ export function useModulePermissions(module: ModuleType): ModuleCRUDPermissions 
       canCreate: true,
       canUpdate: true,
       canDelete: true,
+      canArchive: true,
+      canDisable: true,
       hasAnyAccess: true,
     };
   }
@@ -333,6 +337,8 @@ export function useModulePermissions(module: ModuleType): ModuleCRUDPermissions 
       canCreate: false,
       canUpdate: false,
       canDelete: false,
+      canArchive: false,
+      canDisable: false,
       hasAnyAccess: false,
     };
   }
@@ -349,6 +355,8 @@ export function useModulePermissions(module: ModuleType): ModuleCRUDPermissions 
         canCreate: perms.canCreateJD ?? false,
         canUpdate: perms.canUpdateJD ?? false,
         canDelete: perms.canDeleteJD ?? false,
+        canArchive: perms.canArchiveJD ?? false,
+        canDisable: perms.canDisableJD ?? false,
         hasAnyAccess: false,
       };
       break;
@@ -359,6 +367,8 @@ export function useModulePermissions(module: ModuleType): ModuleCRUDPermissions 
         canCreate: perms.canUploadResumes ?? false,
         canUpdate: perms.canUpdateResumes ?? false,
         canDelete: perms.canDeleteResumes ?? false,
+        canArchive: false,
+        canDisable: false,
         hasAnyAccess: false,
       };
       break;
@@ -369,6 +379,8 @@ export function useModulePermissions(module: ModuleType): ModuleCRUDPermissions 
         canCreate: perms.canCreateAssessments ?? false,
         canUpdate: perms.canUpdateAssessments ?? false,
         canDelete: perms.canDeleteAssessments ?? false,
+        canArchive: false,
+        canDisable: false,
         hasAnyAccess: false,
       };
       break;
@@ -379,6 +391,8 @@ export function useModulePermissions(module: ModuleType): ModuleCRUDPermissions 
         canCreate: false, // Internal DB doesn't have create (resumes are uploaded elsewhere)
         canUpdate: perms.canUpdateInternalDB ?? false,
         canDelete: perms.canDeleteInternalDB ?? false,
+        canArchive: false,
+        canDisable: false,
         hasAnyAccess: false,
       };
       break;
@@ -389,12 +403,14 @@ export function useModulePermissions(module: ModuleType): ModuleCRUDPermissions 
         canCreate: false,
         canUpdate: false,
         canDelete: false,
+        canArchive: false,
+        canDisable: false,
         hasAnyAccess: false,
       };
   }
 
   // Calculate hasAnyAccess
-  result.hasAnyAccess = result.canRead || result.canCreate || result.canUpdate || result.canDelete;
+  result.hasAnyAccess = result.canRead || result.canCreate || result.canUpdate || result.canDelete || result.canArchive || result.canDisable;
 
   return result;
 }

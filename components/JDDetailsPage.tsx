@@ -891,7 +891,7 @@ export default function JDDetailsPage() {
                   Edit
                 </button>
               )}
-              {jdPerms.canUpdate && jd.status !== 'archived' && (
+              {jdPerms.canArchive && jd.status !== 'archived' && (
                 <button
                   onClick={handleArchive}
                   className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"

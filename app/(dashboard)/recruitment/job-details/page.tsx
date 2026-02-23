@@ -329,9 +329,9 @@ function JobDetailsContent() {
         job={job}
         onBack={handleBack}
         onEdit={handleEdit}
-        onDisable={isTenantAdmin || hasPermission('canUpdateJD') ? handleDisable : undefined}
-        onEnable={isTenantAdmin || hasPermission('canUpdateJD') ? handleEnable : undefined}
-        onArchive={isTenantAdmin || hasPermission('canUpdateJD') ? handleArchive : undefined}
+        onDisable={isTenantAdmin || hasPermission('canDisableJD') ? handleDisable : undefined}
+        onEnable={isTenantAdmin || hasPermission('canDisableJD') ? handleEnable : undefined}
+        onArchive={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchive : undefined}
         onUnarchive={handleUnarchive}  // Unarchive handler for archived JDs
         onDelete={handleDelete}
         onNavigateToAITalentMatch={handleNavigateToAITalentMatch}
