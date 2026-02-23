@@ -5,9 +5,11 @@ import { Avatar } from "./Avatar";
 import { Webcam, WebcamRef } from "./Webcam";
 import { useAvatarState } from "@/hooks/useAvatarState";
 import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
-import { useFaceDetection } from "@/hooks/useFaceDetection";
-import { useProctoringMonitor } from "@/hooks/useProctoringMonitor";
-import { ProctoringWarningModal } from "@/components/candidate/ProctoringWarningModal";
+import {
+  useInterviewFaceDetection,
+  useInterviewProctoringMonitor,
+  InterviewProctoringWarnings,
+} from './proctoring';
 import { CandidateInterviewInfo, candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
 import { Maximize2, Clock } from "lucide-react";
@@ -103,7 +105,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     return candidateAIInterviewService.reportProctorEvent(t, event);
   }, []);
 
-  const { state: proctoringState, emitEvent, setReducedFrequency } = useProctoringMonitor({
+  const { state: proctoringState, emitEvent, setReducedFrequency } = useInterviewProctoringMonitor({
     token,
     stream: webcamStream,
     enabled: isConnected,
@@ -147,7 +149,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     emitEvent('gaze_away', { direction });
   }, [emitEvent]);
 
-  const faceDetection = useFaceDetection({
+  const faceDetection = useInterviewFaceDetection({
     enabled: isConnected && webcamReady,
     enableGazeTracking: true,
     onFaceMissing: handleFaceMissing,
@@ -1138,7 +1140,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         )}
       </div>
     </div>
-    <ProctoringWarningModal />
+    <InterviewProctoringWarnings />
     </>
   );
 }

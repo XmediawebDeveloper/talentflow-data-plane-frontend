@@ -625,9 +625,19 @@ export default function AIInterview() {
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
+                              {config.display_id && (
+                                <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-gray-900 text-white rounded">
+                                  {config.display_id}
+                                </span>
+                              )}
                               <h3 className="font-medium text-gray-900">
                                 {config.jd_title || config.position || 'Untitled'}
                               </h3>
+                              {config.jd_version && (
+                                <span className="px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-500 rounded">
+                                  v{config.jd_version}
+                                </span>
+                              )}
                               <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(config.status)}`}>
                                 {getStatusLabel(config.status)}
                               </span>
@@ -647,8 +657,13 @@ export default function AIInterview() {
                               )}
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
-                                {new Date(config.created_at).toLocaleDateString()}
+                                {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                               </span>
+                              {config.created_by_name && (
+                                <span className="text-xs text-gray-400">
+                                  by {config.created_by_name}
+                                </span>
+                              )}
                             </div>
                             {config.jd_must_have_skills && config.jd_must_have_skills.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-2">

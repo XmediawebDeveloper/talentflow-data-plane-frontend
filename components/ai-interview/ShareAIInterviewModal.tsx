@@ -18,8 +18,8 @@ interface CandidateEmail {
   id: string;
   name: string;
   email: string;
-  scheduledDate: string;
-  scheduledTime: string;
+  // scheduledDate: string;   // Commented out - schedule feature disabled for now
+  // scheduledTime: string;   // Commented out - schedule feature disabled for now
   source: 'manual' | 'database';
   resumeId?: string;
 }
@@ -55,7 +55,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   const [inputMode, setInputMode] = useState<'manual' | 'database'>('manual');
   const [candidates, setCandidates] = useState<CandidateEmail[]>([
-    { id: '1', name: '', email: '', scheduledDate: '', scheduledTime: '', source: 'manual' },
+    { id: '1', name: '', email: '', /* scheduledDate: '', scheduledTime: '', */ source: 'manual' },
   ]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -150,7 +150,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const addCandidate = () => {
     setCandidates([
       ...candidates,
-      { id: Date.now().toString(), name: '', email: '', scheduledDate: '', scheduledTime: '', source: 'manual' },
+      { id: Date.now().toString(), name: '', email: '', /* scheduledDate: '', scheduledTime: '', */ source: 'manual' },
     ]);
   };
 
@@ -178,8 +178,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       id: Date.now().toString() + Math.random(),
       name: resume.name,
       email: resume.email,
-      scheduledDate: '',
-      scheduledTime: '',
+      // scheduledDate: '',   // Commented out - schedule feature disabled for now
+      // scheduledTime: '',   // Commented out - schedule feature disabled for now
       source: 'database' as const,
       resumeId: resume.id,
     }));
@@ -227,17 +227,18 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       }
 
       for (const candidate of candidatesWithData) {
-        let scheduled_at: string | undefined;
-        if (candidate.scheduledDate && candidate.scheduledTime) {
-          scheduled_at = new Date(`${candidate.scheduledDate}T${candidate.scheduledTime}`).toISOString();
-        } else if (candidate.scheduledDate) {
-          scheduled_at = new Date(`${candidate.scheduledDate}T09:00:00`).toISOString();
-        }
+        // Schedule date/time - commented out for now, uncomment when needed
+        // let scheduled_at: string | undefined;
+        // if (candidate.scheduledDate && candidate.scheduledTime) {
+        //   scheduled_at = new Date(`${candidate.scheduledDate}T${candidate.scheduledTime}`).toISOString();
+        // } else if (candidate.scheduledDate) {
+        //   scheduled_at = new Date(`${candidate.scheduledDate}T09:00:00`).toISOString();
+        // }
 
         await aiInterviewService.inviteCandidate(config.id, {
           candidate_name: candidate.name.trim(),
           candidate_email: candidate.email.trim(),
-          scheduled_at,
+          // scheduled_at,  // Commented out - schedule feature disabled for now
           custom_message: customMessage || undefined,
           expiry_days: expiryDays,
           base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
@@ -508,8 +509,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                           </button>
                         )}
                       </div>
-                      {/* Schedule row */}
-                      <div className="grid grid-cols-2 gap-3 mt-3">
+                      {/* Schedule row - commented out for now, uncomment when schedule feature is needed */}
+                      {/* <div className="grid grid-cols-2 gap-3 mt-3">
                         <div>
                           <label className="text-xs text-gray-600 mb-1 block">Schedule Date</label>
                           <input
@@ -528,7 +529,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500"
                           />
                         </div>
-                      </div>
+                      </div> */}
                     </div>
                   ))}
                 </div>
