@@ -75,6 +75,7 @@ export interface AIInterviewInviteRequest {
   scheduled_at?: string;
   expiry_days?: number;
   custom_message?: string;
+  base_url?: string;
 }
 
 export interface AIInterviewResponse {

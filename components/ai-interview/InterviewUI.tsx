@@ -223,7 +223,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   // VAD settings
   const silenceStartRef = useRef<number | null>(null);
   const speechDetectedRef = useRef(false);
-  const silenceThresholdRef = useRef(0.03);
+  const silenceThresholdRef = useRef(0.008);
   const silenceDurationMsRef = useRef(5000);
 
   // Save AI message

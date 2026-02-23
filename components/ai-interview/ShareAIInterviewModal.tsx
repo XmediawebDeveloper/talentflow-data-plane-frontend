@@ -240,6 +240,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           scheduled_at,
           custom_message: customMessage || undefined,
           expiry_days: expiryDays,
+          base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
         });
       }
 
