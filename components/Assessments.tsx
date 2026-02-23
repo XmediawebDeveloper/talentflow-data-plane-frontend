@@ -1981,7 +1981,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           className="fixed inset-0 z-10"
                           onClick={() => setOpenMenuId(null)}
                         />
-                        <div className="absolute right-4 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-20">
+                        <div className="absolute right-0 sm:right-4 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto">
                           {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
                             <button
                               onClick={() => {
@@ -1995,13 +1995,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               }}
                               disabled={!canUpdateAssessment}
                               title={!canUpdateAssessment ? 'You do not have permission to edit assessments' : ''}
-                              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                              className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
                                 !canUpdateAssessment
                                   ? 'text-gray-400 cursor-not-allowed opacity-60'
                                   : 'text-gray-700 hover:bg-gray-50'
                               }`}
                             >
-                              <Edit2 className="w-4 h-4 text-gray-600" />
+                              <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                               Edit
                             </button>
                           )}
@@ -2011,9 +2011,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               setShowPreviewModal(true);
                               setOpenMenuId(null);
                             }}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                            className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 sm:gap-2.5"
                           >
-                            <Eye className="w-4 h-4 text-gray-600" />
+                            <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                             Preview
                           </button>
                           <button
@@ -2053,22 +2053,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               setOpenMenuId(null);
                             }}
                             disabled={assessment.status === 'Draft'}
-                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                            className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
                               assessment.status === 'Draft'
                                 ? 'text-gray-400 cursor-not-allowed'
                                 : 'text-gray-700 hover:bg-gray-50'
                             }`}
                           >
-                            <Link2 className="w-4 h-4" />
+                            <Link2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                             Copy Link
                           </button>
                           <div className="border-t border-gray-100 my-1"></div>
                           {assessment.status !== 'Completed' && (
                             <button
                               onClick={() => handleCompleteAssessment(assessment.id)}
-                              className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                              className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 sm:gap-2.5"
                             >
-                              <CheckCircle className="w-4 h-4 text-gray-600" />
+                              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                               Completed
                             </button>
                           )}
@@ -2082,13 +2082,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             }}
                             disabled={!canDeleteAssessment}
                             title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
-                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                            className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
                               !canDeleteAssessment
                                 ? 'text-gray-400 cursor-not-allowed opacity-60'
                                 : 'text-gray-700 hover:bg-gray-50'
                             }`}
                           >
-                            <Archive className="w-4 h-4 text-gray-600" />
+                            <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                             Archive
                           </button>
                           {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (
@@ -2102,13 +2102,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               }}
                               disabled={!canDeleteAssessment}
                               title={!canDeleteAssessment ? 'You do not have permission to delete assessments' : ''}
-                              className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                              className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
                                 !canDeleteAssessment
                                   ? 'text-gray-400 cursor-not-allowed opacity-60'
                                   : 'text-red-600 hover:bg-red-50'
                               }`}
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                               Delete
                             </button>
                           )}
@@ -2292,7 +2292,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 className="fixed inset-0 z-10"
                                 onClick={() => setOpenMenuId(null)}
                               />
-                              <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-20">
+                              <div className="absolute right-0 top-full mt-2 w-44 sm:w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 sm:py-1.5 z-20 max-h-[70vh] overflow-y-auto">
                                 {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
                                   <button
                                     onClick={() => {
@@ -2306,13 +2306,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     }}
                                     disabled={!canUpdateAssessment}
                                     title={!canUpdateAssessment ? 'You do not have permission to edit assessments' : ''}
-                                    className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                                    className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
                                       !canUpdateAssessment
                                         ? 'text-gray-400 cursor-not-allowed opacity-60'
                                         : 'text-gray-700 hover:bg-gray-50'
                                     }`}
                                   >
-                                    <Edit2 className="w-4 h-4 text-gray-600" />
+                                    <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                     Edit Assessment
                                   </button>
                                 )}
@@ -2322,9 +2322,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     setShowPreviewModal(true);
                                     setOpenMenuId(null);
                                   }}
-                                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                  className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 sm:gap-2.5"
                                 >
-                                  <Eye className="w-4 h-4 text-gray-600" />
+                                  <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                   Preview
                                 </button>
                                 <button
@@ -2364,13 +2364,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     setOpenMenuId(null);
                                   }}
                                   disabled={assessment.status === 'Draft'}
-                                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                                  className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
                                     assessment.status === 'Draft'
                                       ? 'text-gray-400 cursor-not-allowed'
                                       : 'text-gray-700 hover:bg-gray-50'
                                   }`}
                                 >
-                                  <Link2 className="w-4 h-4" />
+                                  <Link2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                   Copy Link
                                 </button>
                                 <button
@@ -2387,27 +2387,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     }
                                     setOpenMenuId(null);
                                   }}
-                                  className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                  className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 sm:gap-2.5"
                                 >
-                                  <Copy className="w-4 h-4 text-gray-600" />
+                                  <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                   Duplicate
                                 </button>
                                 <div className="border-t border-gray-100 my-1"></div>
                                 {assessment.status !== 'Active' && (
                                   <button
                                     onClick={() => handleActivateAssessment(assessment.id)}
-                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                    className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 sm:gap-2.5"
                                   >
-                                    <Play className="w-4 h-4 text-gray-600" />
+                                    <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                     Activate
                                   </button>
                                 )}
                                 {assessment.status === 'Active' && (
                                   <button
                                     onClick={() => handleCompleteAssessment(assessment.id)}
-                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                    className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 sm:gap-2.5"
                                   >
-                                    <CheckCircle className="w-4 h-4 text-gray-600" />
+                                    <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                     Completed
                                   </button>
                                 )}
@@ -2421,13 +2421,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   }}
                                   disabled={!canDeleteAssessment}
                                   title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
-                                  className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                                  className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
                                     !canDeleteAssessment
                                       ? 'text-gray-400 cursor-not-allowed opacity-60'
                                       : 'text-gray-700 hover:bg-gray-50'
                                   }`}
                                 >
-                                  <Archive className="w-4 h-4 text-gray-600" />
+                                  <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                   Archive
                                 </button>
                                 <div className="border-t border-gray-100 my-1"></div>
@@ -2442,13 +2442,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     }}
                                     disabled={!canDeleteAssessment}
                                     title={!canDeleteAssessment ? 'You do not have permission to delete assessments' : ''}
-                                    className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2.5 ${
+                                    className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
                                       !canDeleteAssessment
                                         ? 'text-gray-400 cursor-not-allowed opacity-60'
                                         : 'text-red-600 hover:bg-red-50'
                                     }`}
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Delete
                                   </button>
                                 )}

@@ -532,23 +532,23 @@ export default function ResumeSelectionModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl max-h-[90vh] flex flex-col animate-in fade-in duration-200">
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-gray-200">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md">
-              <Target className="w-6 h-6 text-white" />
+        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+              <Target className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h2 className="text-2xl text-gray-900 mb-1">Select Resumes to Score</h2>
-              <p className="text-sm text-gray-600">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg sm:text-2xl font-semibold text-gray-900 mb-1">Select Resumes to Score</h2>
+              <p className="text-xs sm:text-sm text-gray-600 truncate">
                 Job: <span className="font-medium text-gray-900">{jobTitle}</span>
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
             aria-label="Close modal"
           >
             <X className="w-5 h-5 text-gray-500" />
@@ -556,18 +556,18 @@ export default function ResumeSelectionModal({
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 px-6 pt-4">
-          <div className="flex gap-2">
+        <div className="border-b border-gray-200 px-4 sm:px-6 pt-3 sm:pt-4 overflow-x-auto">
+          <div className="flex gap-1 sm:gap-2">
             <button
               onClick={() => handleTabChange('my-resumes')}
-              className={`px-5 py-3 text-sm font-medium rounded-t-lg transition-all ${
+              className={`px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${
                 activeTab === 'my-resumes'
                   ? 'bg-gray-50 text-gray-900 border-b-2 border-gray-800'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <FolderOpen className="w-4 h-4" />
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <FolderOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 My Resumes
                 <span className={`px-2 py-0.5 rounded-full text-xs ${
                   activeTab === 'my-resumes'
@@ -582,14 +582,14 @@ export default function ResumeSelectionModal({
             {hasInternalDBAccess && (
               <button
                 onClick={() => handleTabChange('database')}
-                className={`px-5 py-3 text-sm font-medium rounded-t-lg transition-all ${
+                className={`px-3 sm:px-5 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold rounded-t-lg transition-all whitespace-nowrap ${
                   activeTab === 'database'
                     ? 'bg-gray-50 text-gray-900 border-b-2 border-gray-800'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
               >
-                <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4" />
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Internal Database
                   <span className={`px-2 py-0.5 rounded-full text-xs ${
                     activeTab === 'database'
@@ -606,7 +606,7 @@ export default function ResumeSelectionModal({
 
         {/* Error Display */}
         {(error || uploadError) && (
-          <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
+          <div className="mx-4 sm:mx-6 mt-3 sm:mt-4 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-red-900 mb-1">
@@ -637,7 +637,7 @@ export default function ResumeSelectionModal({
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar - Folder Tree (Only for My Resumes) */}
           {activeTab === 'my-resumes' && (
-            <div className="w-64 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0">
+            <div className="hidden lg:block w-64 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0">
               <div className="p-4">
                 <h3 className="text-xs font-medium text-gray-500 uppercase mb-3 px-3">Folders</h3>
                 
@@ -672,8 +672,8 @@ export default function ResumeSelectionModal({
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Search and Bulk Actions */}
-            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-              <div className="flex items-center gap-4">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-b border-gray-200">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
                 <div className="flex-1 relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
@@ -681,7 +681,7 @@ export default function ResumeSelectionModal({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     placeholder="Search by name, email, title, or skills..."
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent text-sm"
                   />
                 </div>
 
@@ -693,52 +693,57 @@ export default function ResumeSelectionModal({
                   accept=".pdf,.doc,.docx,.rtf,.txt"
                   className="hidden"
                 />
-                <button
-                  onClick={handleUploadClick}
-                  disabled={isUploading}
-                  className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isUploading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="w-4 h-4" />
-                      Upload Resume
-                    </>
-                  )}
-                </button>
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                  <button
+                    onClick={handleUploadClick}
+                    disabled={isUploading}
+                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="hidden sm:inline">Uploading...</span>
+                        <span className="sm:hidden">...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        <span>Upload</span>
+                      </>
+                    )}
+                  </button>
 
-                <button
-                  onClick={handleSelectAll}
-                  className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm font-medium text-gray-700 flex items-center gap-2"
-                >
-                  {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
-                    <>
-                      <CheckSquare className="w-4 h-4 text-gray-800" />
-                      Deselect All
-                    </>
-                  ) : (
-                    <>
-                      <Square className="w-4 h-4" />
-                      Select All
-                    </>
-                  )}
-                </button>
-                <div className="text-sm text-gray-700 bg-white px-4 py-2.5 rounded-lg border border-gray-200 font-medium">
-                  <span className="text-gray-800">{selectedResumes.length}</span> selected
+                  <button
+                    onClick={handleSelectAll}
+                    className="flex-1 sm:flex-none px-3 sm:px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-white transition-colors text-sm font-medium text-gray-700 flex items-center justify-center gap-2 whitespace-nowrap"
+                  >
+                    {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
+                      <>
+                        <CheckSquare className="w-4 h-4 text-gray-800" />
+                        <span className="hidden sm:inline">Deselect All</span>
+                        <span className="sm:hidden">Deselect</span>
+                      </>
+                    ) : (
+                      <>
+                        <Square className="w-4 h-4" />
+                        <span className="hidden sm:inline">Select All</span>
+                        <span className="sm:hidden">Select</span>
+                      </>
+                    )}
+                  </button>
+                  <div className="text-sm text-gray-700 bg-white px-3 sm:px-4 py-2.5 rounded-lg border border-gray-200 font-medium whitespace-nowrap">
+                    <span className="font-semibold text-gray-900">{selectedResumes.length}</span> selected
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Resume List */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6">
               {filteredResumes.length > 0 ? (
                 <div className="space-y-2">
-                  {/* Table Header */}
-                  <div className="grid grid-cols-12 gap-4 px-4 py-3 bg-gray-100 rounded-lg text-xs font-medium text-gray-600 uppercase">
+                  {/* Table Header - Hidden on mobile */}
+                  <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-gray-100 rounded-lg text-xs font-semibold text-gray-700 uppercase tracking-wide">
                     <div className="col-span-1 flex items-center justify-center">
                       <button
                         onClick={handleSelectAll}
@@ -758,7 +763,7 @@ export default function ResumeSelectionModal({
                     <div className="col-span-2">Skills</div>
                   </div>
 
-                  {/* Table Rows */}
+                  {/* Table Rows - Card on mobile, grid on desktop */}
                   {filteredResumes.map((resume) => {
                     const isSelected = selectedResumes.includes(resume.id);
                     // Check if resume is archived OR if we're viewing the Archived folder
@@ -776,7 +781,7 @@ export default function ResumeSelectionModal({
                           }
                           handleToggleResume(resume.id);
                         }}
-                        className={`grid grid-cols-12 gap-4 p-4 border-2 rounded-lg transition-all items-center ${
+                        className={`border-2 rounded-lg transition-all ${
                           isArchived
                             ? 'border-amber-100 bg-amber-50 opacity-60 cursor-not-allowed'
                             : isSelected
@@ -784,102 +789,173 @@ export default function ResumeSelectionModal({
                               : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm cursor-pointer'
                         }`}
                       >
-                        {/* Checkbox */}
-                        <div className="col-span-1 flex items-center justify-center">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isArchived) {
-                                toast.error('Archived resumes cannot be scored. Please select an active resume.');
-                                return;
-                              }
-                              handleToggleResume(resume.id);
-                            }}
-                            disabled={isArchived}
-                            className="p-1 hover:bg-gray-100 rounded disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {isSelected ? (
-                              <CheckSquare className="w-5 h-5 text-gray-800" />
-                            ) : (
-                              <Square className="w-5 h-5 text-gray-400" />
+                        {/* Desktop layout */}
+                        <div className="hidden md:grid grid-cols-12 gap-4 p-4 items-center">
+                          {/* Checkbox */}
+                          <div className="col-span-1 flex items-center justify-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isArchived) {
+                                  toast.error('Archived resumes cannot be scored. Please select an active resume.');
+                                  return;
+                                }
+                                handleToggleResume(resume.id);
+                              }}
+                              disabled={isArchived}
+                              className="p-1 hover:bg-gray-100 rounded disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-5 h-5 text-gray-800" />
+                              ) : (
+                                <Square className="w-5 h-5 text-gray-400" />
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Name */}
+                          <div className="col-span-3">
+                            <div className="font-semibold text-gray-900">{resume.name}</div>
+                            {isArchived && (
+                              <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-0.5">
+                                Archived
+                              </span>
                             )}
-                          </button>
-                        </div>
-
-                        {/* Name */}
-                        <div className="col-span-3">
-                          <div className="font-medium text-gray-900">{resume.name}</div>
-                          {isArchived && (
-                            <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-0.5">
-                              Archived
-                            </span>
-                          )}
-                          {!isArchived && resume.source && (
-                            <div className="text-xs text-gray-500 mt-0.5">{resume.source}</div>
-                          )}
-                        </div>
-
-                        {/* Title */}
-                        <div className="col-span-2">
-                          <div className="flex items-start gap-1.5">
-                            <Briefcase className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
-                            <span className="text-sm text-gray-700">{resume.title || 'N/A'}</span>
+                            {!isArchived && resume.source && (
+                              <div className="text-xs text-gray-600 mt-0.5">{resume.source}</div>
+                            )}
                           </div>
-                        </div>
 
-                        {/* Contact */}
-                        <div className="col-span-2">
-                          <div className="flex items-start gap-1.5 mb-1">
-                            <Mail className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
-                            <span className="text-xs text-gray-600 truncate">{resume.email}</span>
-                          </div>
-                          {resume.phone && (
+                          {/* Title */}
+                          <div className="col-span-2">
                             <div className="flex items-start gap-1.5">
-                              <Phone className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
-                              <span className="text-xs text-gray-600">{resume.phone}</span>
+                              <Briefcase className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-sm text-gray-700">{resume.title || 'N/A'}</span>
                             </div>
-                          )}
-                        </div>
+                          </div>
 
-                        {/* Experience */}
-                        <div className="col-span-2">
-                          <div className="flex items-start gap-1.5">
-                            <Award className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
-                            <span className="text-sm text-gray-700">{resume.experience || 'N/A'}</span>
+                          {/* Contact */}
+                          <div className="col-span-2">
+                            <div className="flex items-start gap-1.5 mb-1">
+                              <Mail className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-xs text-gray-700 truncate">{resume.email}</span>
+                            </div>
+                            {resume.phone && (
+                              <div className="flex items-start gap-1.5">
+                                <Phone className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
+                                <span className="text-xs text-gray-700">{resume.phone}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Experience */}
+                          <div className="col-span-2">
+                            <div className="flex items-start gap-1.5">
+                              <Award className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
+                              <span className="text-sm text-gray-700">{resume.experience || 'N/A'}</span>
+                            </div>
+                          </div>
+
+                          {/* Skills */}
+                          <div className="col-span-2">
+                            {resume.skills && resume.skills.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {resume.skills.slice(0, 2).map((skill, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs"
+                                  >
+                                    {skill}
+                                  </span>
+                                ))}
+                                {resume.skills.length > 2 && (
+                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                                    +{resume.skills.length - 2}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-500">No skills listed</span>
+                            )}
                           </div>
                         </div>
 
-                        {/* Skills */}
-                        <div className="col-span-2">
-                          {resume.skills && resume.skills.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {resume.skills.slice(0, 2).map((skill, idx) => (
-                                <span
-                                  key={idx}
-                                  className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs"
-                                >
-                                  {skill}
-                                </span>
-                              ))}
-                              {resume.skills.length > 2 && (
-                                <span className="px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">
-                                  +{resume.skills.length - 2}
+                        {/* Mobile layout - Card style */}
+                        <div className="md:hidden p-3 sm:p-4">
+                          <div className="flex items-start gap-3">
+                            {/* Checkbox */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isArchived) {
+                                  toast.error('Archived resumes cannot be scored. Please select an active resume.');
+                                  return;
+                                }
+                                handleToggleResume(resume.id);
+                              }}
+                              disabled={isArchived}
+                              className="p-1 hover:bg-gray-100 rounded disabled:cursor-not-allowed disabled:opacity-50 flex-shrink-0 mt-0.5"
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-5 h-5 text-gray-800" />
+                              ) : (
+                                <Square className="w-5 h-5 text-gray-400" />
+                              )}
+                            </button>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-gray-900 text-sm">{resume.name}</div>
+                              {isArchived && (
+                                <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded mt-1">
+                                  Archived
                                 </span>
                               )}
+                              {!isArchived && resume.title && (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <Briefcase className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                                  <span className="text-xs text-gray-700">{resume.title}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <Mail className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                                <span className="text-xs text-gray-700 truncate">{resume.email}</span>
+                              </div>
+                              {resume.experience && (
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <Award className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                                  <span className="text-xs text-gray-700">{resume.experience}</span>
+                                </div>
+                              )}
+                              {resume.skills && resume.skills.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {resume.skills.slice(0, 3).map((skill, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded text-xs"
+                                    >
+                                      {skill}
+                                    </span>
+                                  ))}
+                                  {resume.skills.length > 3 && (
+                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                                      +{resume.skills.length - 3}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-xs text-gray-400">No skills listed</span>
-                          )}
+                          </div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <Database className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <h3 className="text-gray-900 mb-2">No Resumes Found</h3>
-                  <p className="text-sm text-gray-600">
+                <div className="text-center py-8 sm:py-12">
+                  <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300" />
+                  <h3 className="text-gray-900 font-semibold mb-2">No Resumes Found</h3>
+                  <p className="text-xs sm:text-sm text-gray-600">
                     {searchTerm
                       ? 'Try adjusting your search terms'
                       : activeTab === 'my-resumes'
@@ -895,13 +971,13 @@ export default function ResumeSelectionModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50">
           {/* Quota Warning */}
           {availableUnits !== null && availableUnits !== undefined && selectedResumes.length > 0 && selectedResumes.length > availableUnits && (
-            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
-              <div className="flex-1 text-sm">
-                <span className="font-medium text-amber-800">Insufficient Units!</span>
+            <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 text-xs sm:text-sm">
+                <span className="font-semibold text-amber-800">Insufficient Units!</span>
                 <span className="text-amber-700 ml-1">
                   You selected {selectedResumes.length} resumes but only have {availableUnits} RS units available.
                   Need {selectedResumes.length - availableUnits} more unit{selectedResumes.length - availableUnits > 1 ? 's' : ''}.
@@ -910,13 +986,13 @@ export default function ResumeSelectionModal({
             </div>
           )}
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="text-sm text-gray-600">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <div className="text-xs sm:text-sm text-gray-700">
                 {selectedResumes.length > 0 ? (
                   <span>
-                    <span className="font-medium text-gray-900">{selectedResumes.length}</span> resume{selectedResumes.length === 1 ? '' : 's'} selected from{' '}
-                    <span className="font-medium text-gray-900">
+                    <span className="font-semibold text-gray-900">{selectedResumes.length}</span> resume{selectedResumes.length === 1 ? '' : 's'} selected from{' '}
+                    <span className="font-semibold text-gray-900">
                       {activeTab === 'my-resumes'
                         ? selectedFolder === 'all'
                           ? 'All Folders'
@@ -926,13 +1002,13 @@ export default function ResumeSelectionModal({
                     </span>
                   </span>
                 ) : (
-                  <span>Select resumes to score against this job</span>
+                  <span className="text-gray-600">Select resumes to score against this job</span>
                 )}
               </div>
 
               {/* Available Units Display */}
               {availableUnits !== null && availableUnits !== undefined && (
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium ${
                   selectedResumes.length > availableUnits
                     ? 'bg-amber-100 text-amber-800'
                     : 'bg-green-100 text-green-800'
@@ -942,10 +1018,10 @@ export default function ResumeSelectionModal({
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <button
                 onClick={onClose}
-                className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors font-medium"
+                className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors font-medium text-sm"
               >
                 Cancel
               </button>
@@ -973,7 +1049,7 @@ export default function ResumeSelectionModal({
 
                   return hasArchivedResumes;
                 })()}
-                className={`px-6 py-2.5 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-2 ${
+                className={`flex-1 sm:flex-none px-4 sm:px-6 py-2.5 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center justify-center gap-2 text-sm ${
                   selectedResumes.length > 0 && availableUnits !== null && availableUnits !== undefined && selectedResumes.length > availableUnits
                     ? 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800'
                     : 'bg-gradient-to-r from-gray-800 to-gray-800 hover:from-gray-700 hover:to-gray-900'
