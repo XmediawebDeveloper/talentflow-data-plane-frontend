@@ -348,7 +348,7 @@ export default function DashboardLayout({
                 isMobileMenuOpen={isMobileMenuOpen}
               />
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto flex flex-col">
                 {children}
               </div>
             </div>

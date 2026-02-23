@@ -216,14 +216,19 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     statusCheckCalledRef.current = true;
 
     // Build quota payload from quotaData
+    // All numeric values must be finite integers for the backend Pydantic schema
+    const safeInt = (v: unknown): number => {
+      const n = typeof v === 'number' ? v : 0;
+      return Number.isFinite(n) ? Math.floor(n) : 0;
+    };
     const quotaPayload: Record<string, { total_remaining: number; total_limit: number; is_unlimited: boolean }> = {};
     if (quotaData.quotas) {
       for (const [key, quota] of Object.entries(quotaData.quotas)) {
         if (quota) {
           const isUnlimited = !!(quota as any).is_unlimited;
-          const totalRemaining = typeof quota.total_remaining === 'number' ? quota.total_remaining : 0;
-          const subLimit = typeof quota.subscription?.limit === 'number' ? quota.subscription.limit : 0;
-          const addonPurchased = quota.addon?.total_purchased || 0;
+          const totalRemaining = safeInt(quota.total_remaining);
+          const subLimit = safeInt(quota.subscription?.limit);
+          const addonPurchased = safeInt(quota.addon?.total_purchased);
           quotaPayload[key] = {
             total_remaining: totalRemaining,
             total_limit: subLimit + addonPurchased,
