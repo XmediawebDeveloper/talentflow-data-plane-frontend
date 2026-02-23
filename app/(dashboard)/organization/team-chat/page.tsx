@@ -434,7 +434,6 @@ export default function TeamChatPage() {
   }
 
   return (
-    <FeatureGate feature="teams">
     <div className="flex h-[calc(100vh-80px)] bg-gray-100">
       {/* Left Sidebar - Channels List */}
       <div className="hidden md:flex md:w-64 lg:w-72 bg-white border-r border-gray-200 flex-col">
@@ -1167,6 +1166,5 @@ export default function TeamChatPage() {
         </div>
       )}
     </div>
-    </FeatureGate>
   );
 }
