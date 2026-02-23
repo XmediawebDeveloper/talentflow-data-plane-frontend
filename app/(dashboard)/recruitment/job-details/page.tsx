@@ -36,7 +36,7 @@ function JobDetailsContent() {
   const { isTenantAdmin } = usePermissions();
 
   // ✅ PERMISSIONS: Get user and tenant for Quick Actions permission checking
-  const { user, tenant } = useAuth();
+  const { user, tenant, hasPermission } = useAuth();
 
   const [job, setJob] = useState<ExtendedJob | null>(null);
   const [loading, setLoading] = useState(true);
@@ -329,9 +329,9 @@ function JobDetailsContent() {
         job={job}
         onBack={handleBack}
         onEdit={handleEdit}
-        onDisable={handleDisable}
-        onEnable={handleEnable}  // JD15: Enable handler
-        onArchive={handleArchive}
+        onDisable={isTenantAdmin || hasPermission('canUpdateJD') ? handleDisable : undefined}
+        onEnable={isTenantAdmin || hasPermission('canUpdateJD') ? handleEnable : undefined}
+        onArchive={isTenantAdmin || hasPermission('canUpdateJD') ? handleArchive : undefined}
         onUnarchive={handleUnarchive}  // Unarchive handler for archived JDs
         onDelete={handleDelete}
         onNavigateToAITalentMatch={handleNavigateToAITalentMatch}

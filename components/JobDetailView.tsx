@@ -939,8 +939,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <span className="font-medium">Edit & Republish</span>
                   </button>
                 )}
-                {/* Archive button - COMMENTED OUT */}
-                {false && onArchive && (
+                {onArchive && (
                   <button
                     onClick={handleArchive}
                     className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
@@ -949,12 +948,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <span className="font-medium">Archive</span>
                   </button>
                 )}
-                {/* JD15: Disable button - COMMENTED OUT */}
-                {false && onDisable && isTenantAdmin && (
+                {onDisable && (
                   <button
                     onClick={handleDisable}
                     className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all flex items-center gap-2"
-                    title="Disable this JD (Owner only)"
+                    title="Disable this JD"
                   >
                     <Ban className="w-4 h-4" />
                     <span className="font-medium">Disable</span>
@@ -976,19 +974,17 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* JD15: Action Buttons - For Disabled jobs */}
             {job.status === 'Disabled' && (
               <div className="flex items-center gap-2">
-                {/* JD15: Enable button - COMMENTED OUT */}
-                {false && onEnable && isTenantAdmin && (
+                {onEnable && (
                   <button
                     onClick={() => onEnable(job)}
                     className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2"
-                    title="Re-enable this JD (Owner only)"
+                    title="Re-enable this JD"
                   >
                     <CheckCircle className="w-4 h-4" />
                     <span className="font-medium">Re-enable JD</span>
                   </button>
                 )}
-                {/* Archive button - COMMENTED OUT */}
-                {false && onArchive && (
+                {onArchive && (
                   <button
                     onClick={handleArchive}
                     className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
