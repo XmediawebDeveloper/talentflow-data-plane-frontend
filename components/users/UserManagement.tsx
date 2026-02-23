@@ -22,7 +22,6 @@ import { handleUnauthorized } from '@/lib/services/api';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
-import { tenantService } from '@/lib/services/tenantService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
 import { UserRole } from '@/lib/types/tenant';
 import FeaturePermissionManager from './FeaturePermissionManager';
@@ -694,9 +693,6 @@ export default function UserManagement() {
     available: true,
   });
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
-  const [emailUsername, setEmailUsername] = useState('');
-  const [showAtBlockedMessage, setShowAtBlockedMessage] = useState(false);
-  const [tenantEmailDomain, setTenantEmailDomain] = useState<string | null>(null);
   const emailCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Current user state (for hiding Edit/Delete buttons on self)
@@ -730,13 +726,6 @@ export default function UserManagement() {
 
     checkPermission();
   }, [router]);
-
-  // Load tenant email domain for the "Add User" email field
-  useEffect(() => {
-    tenantService.getTenantEmailDomain()
-      .then((domain) => setTenantEmailDomain(domain))
-      .catch((err) => console.error('Failed to load tenant email domain:', err));
-  }, []);
 
   // Load users, roles, and permissions
   // Auto-sync with Admin API first to ensure accurate counts
@@ -1365,8 +1354,6 @@ export default function UserManagement() {
     // Clear email validation state
     setEmailCheckResult({ error: null, available: true });
     setIsCheckingEmail(false);
-    setEmailUsername('');
-    setShowAtBlockedMessage(false);
     if (emailCheckTimeoutRef.current) {
       clearTimeout(emailCheckTimeoutRef.current);
     }
@@ -2125,58 +2112,17 @@ export default function UserManagement() {
                   Email <span className="text-red-500">*</span>
                 </label>
 
-                {/* Email input with locked domain */}
-                <div className="relative flex items-center border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-gray-600 overflow-hidden">
-                  {/* Username input */}
-                  <input
-                    type="text"
-                    value={emailUsername}
-                    onChange={(e) => {
-                      let value = e.target.value;
-                      const hadAtSymbol = value.includes('@');
-
-                      // Remove @ symbol if user tries to type it
-                      value = value.replace(/@/g, '');
-
-                      // Show brief message if @ was blocked
-                      if (hadAtSymbol && value !== e.target.value) {
-                        setShowAtBlockedMessage(true);
-                        setTimeout(() => setShowAtBlockedMessage(false), 2000);
-                      }
-
-                      setEmailUsername(value);
-                      if (tenantEmailDomain) {
-                        checkEmailAvailability(`${value}@${tenantEmailDomain}`);
-                      }
-                    }}
-                    placeholder="username"
-                    className="flex-1 px-4 py-2.5 border-0 focus:outline-none focus:ring-0"
-                  />
-
-                  {/* @ symbol and locked domain */}
-                  <div className="flex items-center px-4 py-2.5 bg-gray-100 text-gray-600 font-medium border-l border-gray-300">
-                    <span className="text-gray-900">@</span>
-                    <span className="ml-1">
-                      {tenantEmailDomain || 'loading...'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Preview of full email */}
-                {emailUsername && tenantEmailDomain && (
-                  <div className="mt-1 text-xs text-gray-500">
-                    Full email: <span className="font-medium">{emailUsername}@{tenantEmailDomain}</span>
-                  </div>
-                )}
-
-                {/* @ symbol blocked message */}
-                {showAtBlockedMessage && (
-                  <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                    <p className="text-xs text-blue-700">
-                      ℹ️ Just type the username. Domain is added automatically.
-                    </p>
-                  </div>
-                )}
+                <input
+                  type="email"
+                  value={newUser.email}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewUser({ ...newUser, email: value });
+                    checkEmailAvailability(value);
+                  }}
+                  placeholder="user@example.com"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                />
 
                 {/* Email validation feedback */}
                 {isCheckingEmail && (
