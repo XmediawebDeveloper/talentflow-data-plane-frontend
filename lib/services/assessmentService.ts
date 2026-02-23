@@ -162,6 +162,7 @@ export interface QuestionEvaluation {
   feedback?: string;
   strengths?: string[];
   areas_for_improvement?: string[];
+  question_status?: 'pending' | 'answered' | 'skipped' | 'scored';
 }
 
 export interface RoundScore {
@@ -180,6 +181,7 @@ export interface ProctoringStats {
   window_blur_count: number;
   video_violation_count: number;
   voice_violation_count: number;
+  multiple_faces_count: number;
   fullscreen_exit_count: number;
   other_violation_count?: number; // Uncategorized events
   total_violations: number;
@@ -205,6 +207,23 @@ export interface DetailedResultResponse {
   candidate_insights?: Record<string, any>;
   hiring_recommendation?: string;
   proctoring_stats?: ProctoringStats;
+  ai_generation_audit?: {
+    ai_model_version: string | null;
+    questions_generated_at: string | null;
+    generation_params: {
+      jd_id?: string;
+      jd_title?: string;
+      experience_level?: string;
+      duration_minutes?: number;
+      total_questions_generated?: number;
+      rounds_config?: Array<{
+        type: string;
+        weightage: number;
+        topics?: string[];
+      }>;
+      generation_timestamp?: string;
+    } | null;
+  };
 }
 
 // ==================== NEW API INTERFACES ====================

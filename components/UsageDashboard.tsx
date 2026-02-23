@@ -6,6 +6,8 @@ import QuotaDisplay from './QuotaDisplay';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { PlanFeatureKey } from '@/lib/types/planFeatures';
 
 // Addon interface
 interface Addon {
@@ -161,6 +163,15 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   // Get user from AuthContext (already fetched during login)
   const { user } = useAuth();
   const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
+  const { hasPlanFeature } = usePlanFeatures();
+
+  // Map quota types to plan features for gating
+  const quotaFeatureMap: Record<string, PlanFeatureKey> = {
+    'RU': 'resume_upload',
+    'RS': 'resume_scoring',
+    'AS': 'assessment',
+    'AIU': 'ai_interview',
+  };
 
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -838,7 +849,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     {/* Show each low quota with its own Add Credits button */}
                     <div className="flex flex-wrap gap-2 mt-4">
                       {quotaSummary.quotas
-                        ?.filter((q: QuotaInfo) => q.is_low || q.is_exhausted)
+                        ?.filter((q: QuotaInfo) => {
+                          if (!(q.is_low || q.is_exhausted)) return false;
+                          // Hide low quota warnings for features not in the plan
+                          const featureKey = quotaFeatureMap[q.quota_type];
+                          if (featureKey && !hasPlanFeature(featureKey)) return false;
+                          return true;
+                        })
                         .map((quota: QuotaInfo) => {
                           // Map quota_type to addon name pattern for matching
                           const quotaToAddonMap: Record<string, string> = {
@@ -897,7 +914,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
             {/* Quota Cards Grid - Dynamic */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mb-6">
-              {quotaSummary.quotas?.filter((quota: QuotaInfo) => quota.quota_type !== 'storage_gb').map((quota: QuotaInfo) => {
+              {quotaSummary.quotas?.filter((quota: QuotaInfo) => {
+                if (quota.quota_type === 'storage_gb') return false;
+                // Gate quota cards by plan feature
+                const featureKey = quotaFeatureMap[quota.quota_type];
+                if (featureKey && !hasPlanFeature(featureKey)) return false;
+                return true;
+              }).map((quota: QuotaInfo) => {
                 const isUnlimited = quota.limit === -1 || quota.remaining === -1;
 
                 // Icon mapping for quota types
@@ -1049,8 +1072,17 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
             {!addonsLoading && addons.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Reorder addons: Extra Max Jobs before Extra Max Seats */}
+                {/* Reorder addons: Extra Max Jobs before Extra Max Seats, filter by plan features */}
                 {[...addons]
+                  .filter((addon) => {
+                    // Hide addons for features not in the current plan
+                    const name = (addon.name || addon.addon_name || '').toLowerCase();
+                    if ((name.includes('resume') && name.includes('upload')) || name.includes('resume storage')) return hasPlanFeature('resume_upload');
+                    if ((name.includes('resume') && name.includes('scor')) || name.includes('resume scoring')) return hasPlanFeature('resume_scoring');
+                    if (name.includes('assessment')) return hasPlanFeature('assessment');
+                    if (name.includes('ai') || name.includes('interview')) return hasPlanFeature('ai_interview');
+                    return true; // Always show seats, jobs, and other generic addons
+                  })
                   .sort((a, b) => {
                     const nameA = (a.name || a.addon_name || '').toLowerCase();
                     const nameB = (b.name || b.addon_name || '').toLowerCase();

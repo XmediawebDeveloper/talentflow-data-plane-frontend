@@ -1,21 +1,26 @@
 'use client';
 
+/**
+ * useProctoringMonitor — Performance-optimized proctoring hook.
+ *
+ * Architecture:
+ *   Pipeline A (main thread): Interview UI — mic, TTS, WebSocket, avatar
+ *   Pipeline B (workers):     Proctoring — video analysis, voice detection
+ *
+ * Key design rules:
+ *   1. Workers post ONLY state changes, not per-frame results
+ *   2. UI warnings go through ProctoringEventBus (no React state in parent)
+ *   3. Backend logging is batched (every 5s) — every event is recorded
+ *   4. Only track-state (camera/mic active) uses React state (needed for overlays)
+ */
+
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { candidateService } from '@/lib/services/candidateService';
+import { ProctoringEventBus, ProctoringEventType } from '@/lib/ProctoringEventBus';
 
-export type ProctoringEventType =
-  | 'tab_switch'
-  | 'copy_attempt'
-  | 'paste_attempt'
-  | 'voice_detected'
-  | 'multiple_voices'
-  | 'camera_disabled'
-  | 'microphone_disabled'
-  | 'camera_obstructed'
-  | 'screenshot_attempt'
-  | 'screen_recording_attempt'
-  | 'window_blur';
+// Re-export for consumers that import from here
+export type { ProctoringEventType } from '@/lib/ProctoringEventBus';
 
+// Legacy type kept for compatibility with existing imports
 export interface ProctoringWarning {
   id: string;
   type: ProctoringEventType;
@@ -28,451 +33,421 @@ interface UseProctoringMonitorOptions {
   token: string;
   stream: MediaStream | null;
   enabled?: boolean;
-  onWarning?: (warning: ProctoringWarning) => void;
-  voiceDetectionSensitivity?: number; // 0-100, default 50
-  obstructionThreshold?: number; // 0-255, default 30
+  voiceDetectionSensitivity?: number;
+  obstructionThreshold?: number;
+  reportEvent?: (token: string, event: { event_type: string; timestamp: string; details: Record<string, any> }) => Promise<any>;
 }
 
 interface ProctoringState {
   isMonitoring: boolean;
-  violationCount: number;
-  lastVoiceDetected: Date | null;
   isCameraObstructed: boolean;
   isMicrophoneActive: boolean;
   isCameraActive: boolean;
 }
 
-// Backend logging cooldown - very short for critical violations, accurate tracking (in milliseconds)
-const BACKEND_COOLDOWNS: Record<ProctoringEventType, number> = {
-  tab_switch: 2000,
-  copy_attempt: 500,  // Reduced: log copy attempts more frequently
-  paste_attempt: 500, // Reduced: log paste attempts more frequently
-  voice_detected: 10000, // Increased: only log voice every 10 seconds
-  multiple_voices: 15000,
-  camera_disabled: 1000,     // Reduced: immediate detection
-  microphone_disabled: 1000, // Reduced: immediate detection
-  camera_obstructed: 3000,   // Reduced: faster detection
-  screenshot_attempt: 500,   // Reduced: immediate detection
-  screen_recording_attempt: 2000, // Reduced: faster detection
-  window_blur: 2000,
+// ==================== CONSTANTS ====================
+
+// UI warning cooldown per event TYPE (prevents toast spam while allowing different types)
+const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
+  tab_switch: 5000,
+  copy_attempt: 2000,
+  paste_attempt: 2000,
+  voice_detected: 10000,
+  multiple_voices: 10000,
+  camera_disabled: 5000,
+  microphone_disabled: 5000,
+  camera_obstructed: 10000,
+  screenshot_attempt: 2000,
+  screen_recording_attempt: 5000,
+  window_blur: 5000,
+  fullscreen_exit: 5000,
+  face_missing: 8000,
+  multiple_faces: 8000,
+  gaze_away: 8000,
 };
 
-// Frontend warning cooldown - reduced for immediate feedback on violations
-const FRONTEND_WARNING_COOLDOWN = 3000; // 3 seconds for all warning pop-ups (immediate but not spammy)
+// Backend batch flush interval
+const BACKEND_FLUSH_INTERVAL = 5000; // Flush every 5 seconds
 
-// Voice detection specific settings (Throttle + Batch optimization)
-const VOICE_CHECK_INTERVAL = 2000; // Check every 2 seconds instead of 100ms
-const VOICE_BATCH_INTERVAL = 10000; // Batch and send events every 10 seconds
-const VOICE_LOG_ONLY = true; // Log-only mode: don't trigger UI warnings for voice
+// Worker check intervals
+const VIDEO_CHECK_INTERVAL = 500;    // Sample video at 2 FPS (main thread capture)
+const VOICE_CHECK_INTERVAL = 3000;   // Check voice every 3 seconds
 
-// Warning messages for each event type
-const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
-  tab_switch: 'Tab switching detected. Please stay on the assessment page.',
-  copy_attempt: 'Copying is not allowed during the assessment.',
-  paste_attempt: 'Pasting is not allowed during the assessment.',
-  voice_detected: 'Voice activity detected. Please maintain silence during the assessment.',
-  multiple_voices: 'Multiple voices detected. Please ensure you are alone.',
-  camera_disabled: 'Camera has been disabled. Please enable your camera to continue.',
-  microphone_disabled: 'Microphone has been disabled. Please enable your microphone.',
-  camera_obstructed: 'Camera appears to be blocked. Please ensure your face is visible.',
-  screenshot_attempt: 'Screenshot attempt detected. Screenshots are not allowed.',
-  screen_recording_attempt: 'Screen recording detected. Recording is not allowed.',
-  window_blur: 'You navigated away from the assessment window.',
-};
+// ==================== WORKER CODE ====================
 
-// Severity levels for each event type
-const EVENT_SEVERITY: Record<ProctoringEventType, 'low' | 'medium' | 'high'> = {
-  tab_switch: 'low',
-  copy_attempt: 'medium',
-  paste_attempt: 'medium',
-  voice_detected: 'medium',
-  multiple_voices: 'high',
-  camera_disabled: 'high',
-  microphone_disabled: 'high',
-  camera_obstructed: 'high',
-  screenshot_attempt: 'high',
-  screen_recording_attempt: 'high',
-  window_blur: 'low',
-};
+const getVideoWorkerCode = () => `
+  // Camera obstruction analysis — runs in worker, posts only state changes
+  let isObstructed = false;
+  let consecutiveObstructed = 0;
+  let consecutiveClear = 0;
+  const OBSTRUCT_THRESHOLD = 15;  // frames to confirm obstruction
+  const CLEAR_THRESHOLD = 5;      // frames to confirm clear
+  let reducedFrequency = false;
+
+  function analyze(imageData, width, height, threshold) {
+    let totalBrightness = 0;
+    let minBrightness = 255;
+    let maxBrightness = 0;
+    const step = 16; // Sample every 16th pixel
+
+    for (let i = 0; i < imageData.length; i += step * 4) {
+      const r = imageData[i];
+      const g = imageData[i + 1];
+      const b = imageData[i + 2];
+      const brightness = (r + g + b) / 3;
+      totalBrightness += brightness;
+      minBrightness = Math.min(minBrightness, brightness);
+      maxBrightness = Math.max(maxBrightness, brightness);
+    }
+
+    const sampledPixels = Math.floor(imageData.length / (step * 4));
+    const avgBrightness = totalBrightness / sampledPixels;
+    const brightnessRange = maxBrightness - minBrightness;
+    const isDark = avgBrightness < threshold;
+    const isUniform = brightnessRange < 20;
+
+    return { isDark, isUniform, avgBrightness, brightnessRange };
+  }
+
+  self.onmessage = function(e) {
+    const { type, data } = e.data;
+
+    if (type === 'ANALYZE_FRAME') {
+      const result = analyze(
+        new Uint8ClampedArray(data.imageData),
+        data.width, data.height, data.threshold
+      );
+      const frameObstructed = result.isDark || result.isUniform;
+
+      if (frameObstructed) {
+        consecutiveObstructed++;
+        consecutiveClear = 0;
+        if (!isObstructed && consecutiveObstructed >= OBSTRUCT_THRESHOLD) {
+          isObstructed = true;
+          self.postMessage({
+            type: 'STATE_CHANGE',
+            data: { obstructed: true, reason: result.isDark ? 'too_dark' : 'too_uniform',
+                    avgBrightness: result.avgBrightness, brightnessRange: result.brightnessRange }
+          });
+        }
+      } else {
+        consecutiveClear++;
+        consecutiveObstructed = 0;
+        if (isObstructed && consecutiveClear >= CLEAR_THRESHOLD) {
+          isObstructed = false;
+          self.postMessage({
+            type: 'STATE_CHANGE',
+            data: { obstructed: false, avgBrightness: result.avgBrightness }
+          });
+        }
+      }
+    } else if (type === 'SET_FREQUENCY') {
+      reducedFrequency = data.reduced;
+    } else if (type === 'RESET') {
+      isObstructed = false;
+      consecutiveObstructed = 0;
+      consecutiveClear = 0;
+    }
+  };
+  self.postMessage({ type: 'READY' });
+`;
+
+const getAudioWorkerCode = () => `
+  // Voice detection — runs in worker, posts only state changes
+  let isVoiceActive = false;
+  let consecutiveVoice = 0;
+  let consecutiveSilent = 0;
+  const VOICE_THRESHOLD_FRAMES = 2;   // 2 consecutive checks to confirm voice
+  const SILENCE_THRESHOLD_FRAMES = 3; // 3 consecutive checks to confirm silence
+
+  function analyzeVoice(frequencyData, threshold, sampleRate) {
+    const bufferLength = frequencyData.length;
+    const binSize = sampleRate / (bufferLength * 2);
+    const speechStartBin = Math.floor(300 / binSize);
+    const speechEndBin = Math.min(Math.floor(3000 / binSize), bufferLength);
+
+    let sum = 0;
+    for (let i = speechStartBin; i < speechEndBin; i++) {
+      sum += frequencyData[i];
+    }
+    return sum / (speechEndBin - speechStartBin);
+  }
+
+  self.onmessage = function(e) {
+    const { type, data } = e.data;
+
+    if (type === 'ANALYZE_VOICE') {
+      const avg = analyzeVoice(
+        new Uint8Array(data.frequencyData),
+        data.threshold, data.sampleRate
+      );
+      const detected = avg > data.threshold;
+
+      if (detected) {
+        consecutiveVoice++;
+        consecutiveSilent = 0;
+        if (!isVoiceActive && consecutiveVoice >= VOICE_THRESHOLD_FRAMES) {
+          isVoiceActive = true;
+          self.postMessage({
+            type: 'STATE_CHANGE',
+            data: { voiceDetected: true, averageVolume: avg, threshold: data.threshold }
+          });
+        }
+      } else {
+        consecutiveSilent++;
+        consecutiveVoice = 0;
+        if (isVoiceActive && consecutiveSilent >= SILENCE_THRESHOLD_FRAMES) {
+          isVoiceActive = false;
+          // Don't post silence — we only care about voice presence
+        }
+      }
+    } else if (type === 'RESET') {
+      isVoiceActive = false;
+      consecutiveVoice = 0;
+      consecutiveSilent = 0;
+    }
+  };
+  self.postMessage({ type: 'READY' });
+`;
+
+// ==================== HOOK ====================
 
 export function useProctoringMonitor({
   token,
   stream,
   enabled = true,
-  onWarning,
   voiceDetectionSensitivity = 50,
   obstructionThreshold = 30,
+  reportEvent,
 }: UseProctoringMonitorOptions) {
+  // Minimal React state — only what InterviewUI overlays need
   const [state, setState] = useState<ProctoringState>({
     isMonitoring: false,
-    violationCount: 0,
-    lastVoiceDetected: null,
     isCameraObstructed: false,
     isMicrophoneActive: true,
     isCameraActive: true,
   });
 
-  // Refs for cleanup
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const lastBackendEventTimeRef = useRef<Record<string, number>>({});
-  const lastFrontendWarningTimeRef = useRef<number>(0); // Single timestamp for all frontend warnings
-  const isMonitoringRef = useRef(false);
-
-  // Web Worker ref for heavy processing
-  const workerRef = useRef<Worker | null>(null);
-  const voiceIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const cameraIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Throttle flags to prevent message flooding to worker
-  const isVoiceProcessingRef = useRef(false);
-  const isCameraProcessingRef = useRef(false);
-
-  // Voice batching: collect events and send periodically
-  const voiceBatchRef = useRef<Array<{ timestamp: string; details: Record<string, any> }>>([]);
-  const voiceBatchIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Use refs for all props to prevent infinite re-renders
-  const onWarningRef = useRef(onWarning);
+  // Refs for props (prevent re-render cascades)
   const tokenRef = useRef(token);
   const streamRef = useRef(stream);
   const enabledRef = useRef(enabled);
-
-  // Keep refs up to date without triggering re-renders
-  useEffect(() => {
-    onWarningRef.current = onWarning;
-  }, [onWarning]);
-
-  useEffect(() => {
-    tokenRef.current = token;
-  }, [token]);
-
-  useEffect(() => {
-    streamRef.current = stream;
-  }, [stream]);
-
-  useEffect(() => {
-    enabledRef.current = enabled;
-  }, [enabled]);
-
-  // Refs for worker processing params
+  const reportEventRef = useRef(reportEvent);
   const voiceSensitivityRef = useRef(voiceDetectionSensitivity);
   const obstructionThresholdRef = useRef(obstructionThreshold);
+  const isMonitoringRef = useRef(false);
 
-  useEffect(() => {
-    voiceSensitivityRef.current = voiceDetectionSensitivity;
-  }, [voiceDetectionSensitivity]);
+  useEffect(() => { tokenRef.current = token; }, [token]);
+  useEffect(() => { streamRef.current = stream; }, [stream]);
+  useEffect(() => { enabledRef.current = enabled; }, [enabled]);
+  useEffect(() => { reportEventRef.current = reportEvent; }, [reportEvent]);
+  useEffect(() => { voiceSensitivityRef.current = voiceDetectionSensitivity; }, [voiceDetectionSensitivity]);
+  useEffect(() => { obstructionThresholdRef.current = obstructionThreshold; }, [obstructionThreshold]);
 
-  useEffect(() => {
-    obstructionThresholdRef.current = obstructionThreshold;
-  }, [obstructionThreshold]);
+  // Worker refs
+  const videoWorkerRef = useRef<Worker | null>(null);
+  const audioWorkerRef = useRef<Worker | null>(null);
 
-  // Generate unique warning ID
-  const generateWarningId = () => `warning-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  // Intervals & cleanup refs
+  const videoIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const voiceIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const batchFlushIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
 
-  // Check if backend logging is within cooldown (shorter cooldowns for accurate tracking)
-  const isBackendInCooldown = useCallback((eventType: ProctoringEventType): boolean => {
-    const lastTime = lastBackendEventTimeRef.current[eventType] || 0;
-    const cooldown = BACKEND_COOLDOWNS[eventType];
-    return Date.now() - lastTime < cooldown;
-  }, []);
+  // ==================== BACKEND EVENT QUEUE ====================
+  // Every single event is queued here with full details. Flushed every 5 seconds.
+  interface QueuedEvent {
+    event_type: string;
+    timestamp: string;
+    severity: string;
+    details: Record<string, any>;
+  }
+  const backendQueueRef = useRef<QueuedEvent[]>([]);
 
-  // Check if frontend warning is within cooldown (60 seconds for all warnings)
-  const isFrontendWarningInCooldown = useCallback((): boolean => {
-    const lastTime = lastFrontendWarningTimeRef.current;
-    return Date.now() - lastTime < FRONTEND_WARNING_COOLDOWN;
-  }, []);
+  // UI warning cooldown per event type
+  const lastUiWarningTimeRef = useRef<Record<string, number>>({});
 
-  // Ref for violation count to avoid re-renders
-  const violationCountRef = useRef(0);
-
-  // Log event with frontend warning (two-cooldown system)
-  // - Backend: logs continuously with short cooldowns per event type
-  // - Frontend: shows warning pop-up only once per 60 seconds (all events combined)
-  // - Voice detection: uses log-only mode (no UI warnings) when VOICE_LOG_ONLY is true
-  const logEvent = useCallback(async (
+  // ==================== CORE: emitEvent ====================
+  // 1. Always queues event for backend (every event recorded)
+  // 2. Emits UI warning via EventBus (with per-type cooldown)
+  const emitEvent = useCallback((
     eventType: ProctoringEventType,
-    details?: Record<string, any>
+    details?: Record<string, any>,
   ) => {
     if (!enabledRef.current) return;
 
-    // Check backend cooldown - if in cooldown, skip entirely
-    if (isBackendInCooldown(eventType)) return;
+    const now = Date.now();
+    const timestamp = new Date().toISOString();
 
-    // Update backend cooldown timestamp
-    lastBackendEventTimeRef.current[eventType] = Date.now();
-    violationCountRef.current += 1;
+    // 1. ALWAYS queue for backend — no event is ever lost
+    backendQueueRef.current.push({
+      event_type: eventType,
+      timestamp,
+      severity: getSeverity(eventType),
+      details: details || {},
+    });
 
-    // Skip UI warning for voice detection in log-only mode
-    const isVoiceLogOnly = VOICE_LOG_ONLY && (eventType === 'voice_detected' || eventType === 'multiple_voices');
-
-    // Show frontend warning only if 60 seconds have passed since last warning
-    // AND it's not a voice event in log-only mode
-    const shouldShowWarning = !isFrontendWarningInCooldown() && !isVoiceLogOnly;
-    if (shouldShowWarning) {
-      lastFrontendWarningTimeRef.current = Date.now();
-
-      const warning: ProctoringWarning = {
-        id: generateWarningId(),
-        type: eventType,
-        message: WARNING_MESSAGES[eventType],
-        timestamp: new Date(),
-        severity: EVENT_SEVERITY[eventType],
-      };
-
-      // Notify via callback (use ref to avoid re-renders)
-      onWarningRef.current?.(warning);
-      console.log(`[PROCTORING] Frontend warning shown: ${eventType}`);
-    } else if (isVoiceLogOnly) {
-      console.log(`[PROCTORING] Voice warning skipped (log-only mode): ${eventType}`);
-    } else {
-      console.log(`[PROCTORING] Frontend warning skipped (cooldown): ${eventType}`);
-    }
-
-    // Always log to backend (use ref for token)
-    try {
-      await candidateService.reportProctorEvent(tokenRef.current, {
-        event_type: eventType,
-        timestamp: new Date().toISOString(),
-        details: details || {},
-      });
-      console.log(`[PROCTORING] Event logged to backend: ${eventType}`);
-    } catch (error) {
-      console.error(`[PROCTORING] Failed to log event: ${eventType}`, error);
-    }
-  }, [isBackendInCooldown, isFrontendWarningInCooldown]);
-
-  // Store logEvent in ref for worker message handler
-  const logEventRef = useRef(logEvent);
-  useEffect(() => {
-    logEventRef.current = logEvent;
-  }, [logEvent]);
-
-  // Flush voice batch to backend - sends aggregated voice events
-  const flushVoiceBatch = useCallback(async () => {
-    if (voiceBatchRef.current.length === 0) return;
-
-    const batch = [...voiceBatchRef.current];
-    voiceBatchRef.current = []; // Clear batch
-
-    console.log(`[PROCTORING] Flushing voice batch: ${batch.length} events`);
-
-    // Log as a single aggregated event to backend
-    try {
-      await candidateService.reportProctorEvent(tokenRef.current, {
-        event_type: 'voice_detected',
-        timestamp: new Date().toISOString(),
-        details: {
-          batch_count: batch.length,
-          batch_start: batch[0]?.timestamp,
-          batch_end: batch[batch.length - 1]?.timestamp,
-          events: batch
-        },
-      });
-      console.log(`[PROCTORING] Voice batch logged to backend: ${batch.length} events`);
-    } catch (error) {
-      console.error('[PROCTORING] Failed to log voice batch:', error);
+    // 2. UI warning with per-type cooldown
+    const lastShown = lastUiWarningTimeRef.current[eventType] || 0;
+    const cooldown = UI_COOLDOWN_PER_TYPE[eventType] || 5000;
+    if (now - lastShown >= cooldown) {
+      lastUiWarningTimeRef.current[eventType] = now;
+      ProctoringEventBus.emit(eventType, details);
     }
   }, []);
 
-  // ==================== WEB WORKER SETUP ====================
-  // Inline worker code for reliable loading (avoids Next.js file serving issues)
-  const getWorkerCode = () => `
-    // Voice detection state
-    let voiceConsecutiveFrames = 0;
-    const VOICE_FRAME_THRESHOLD = 10;
+  const emitEventRef = useRef(emitEvent);
+  useEffect(() => { emitEventRef.current = emitEvent; }, [emitEvent]);
 
-    // Camera obstruction state
-    let obstructionConsecutiveFrames = 0;
-    const OBSTRUCTION_FRAME_THRESHOLD = 30;
+  // ==================== BACKEND BATCH FLUSH ====================
+  const flushBackendQueue = useCallback(async () => {
+    if (backendQueueRef.current.length === 0) return;
 
-    function analyzeVoice(frequencyData, threshold, sampleRate) {
-      const bufferLength = frequencyData.length;
-      const binSize = sampleRate / (bufferLength * 2);
-      const speechStartBin = Math.floor(300 / binSize);
-      const speechEndBin = Math.min(Math.floor(3000 / binSize), bufferLength);
+    const batch = [...backendQueueRef.current];
+    backendQueueRef.current = [];
 
-      let sum = 0;
-      for (let i = speechStartBin; i < speechEndBin; i++) {
-        sum += frequencyData[i];
+    const reporter = reportEventRef.current;
+    if (!reporter) return;
+
+    // Send each event individually (backend API expects single events)
+    // But we're doing it in a batch cycle, not per-detection
+    for (const event of batch) {
+      try {
+        await reporter(tokenRef.current, {
+          event_type: event.event_type,
+          timestamp: event.timestamp,
+          details: {
+            ...event.details,
+            severity: event.severity,
+          },
+        });
+      } catch (err) {
+        console.error(`[PROCTORING] Failed to send event ${event.event_type}:`, err);
+        // Re-queue failed event for next flush
+        backendQueueRef.current.push(event);
       }
-      const average = sum / (speechEndBin - speechStartBin);
-
-      if (average > threshold) {
-        voiceConsecutiveFrames++;
-        if (voiceConsecutiveFrames >= VOICE_FRAME_THRESHOLD) {
-          voiceConsecutiveFrames = 0;
-          return { detected: true, averageVolume: average, threshold: threshold };
-        }
-      } else {
-        voiceConsecutiveFrames = Math.max(0, voiceConsecutiveFrames - 1);
-      }
-      return { detected: false };
     }
 
-    function analyzeCameraObstruction(imageData, width, height, obstructionThreshold) {
-      let totalBrightness = 0;
-      let minBrightness = 255;
-      let maxBrightness = 0;
-
-      for (let i = 0; i < imageData.length; i += 16) {
-        const r = imageData[i];
-        const g = imageData[i + 1];
-        const b = imageData[i + 2];
-        const brightness = (r + g + b) / 3;
-        totalBrightness += brightness;
-        minBrightness = Math.min(minBrightness, brightness);
-        maxBrightness = Math.max(maxBrightness, brightness);
-      }
-
-      const sampledPixels = Math.floor(imageData.length / 16);
-      const avgBrightness = totalBrightness / sampledPixels;
-      const brightnessRange = maxBrightness - minBrightness;
-
-      const isDark = avgBrightness < obstructionThreshold;
-      const isUniform = brightnessRange < 20;
-
-      if (isDark || isUniform) {
-        obstructionConsecutiveFrames++;
-        if (obstructionConsecutiveFrames >= OBSTRUCTION_FRAME_THRESHOLD) {
-          obstructionConsecutiveFrames = 0;
-          return {
-            obstructed: true,
-            avgBrightness: avgBrightness,
-            brightnessRange: brightnessRange,
-            reason: isDark ? 'too_dark' : 'too_uniform'
-          };
-        }
-      } else {
-        obstructionConsecutiveFrames = Math.max(0, obstructionConsecutiveFrames - 2);
-      }
-
-      return { obstructed: false, avgBrightness: avgBrightness, brightnessRange: brightnessRange };
-    }
-
-    self.onmessage = function(e) {
-      const { type, data } = e.data;
-
-      switch (type) {
-        case 'ANALYZE_VOICE': {
-          const result = analyzeVoice(
-            new Uint8Array(data.frequencyData),
-            data.threshold,
-            data.sampleRate
-          );
-          self.postMessage({ type: 'VOICE_RESULT', data: result });
-          break;
-        }
-        case 'ANALYZE_CAMERA': {
-          const result = analyzeCameraObstruction(
-            new Uint8ClampedArray(data.imageData),
-            data.width,
-            data.height,
-            data.obstructionThreshold
-          );
-          self.postMessage({ type: 'CAMERA_RESULT', data: result });
-          break;
-        }
-        case 'RESET': {
-          voiceConsecutiveFrames = 0;
-          obstructionConsecutiveFrames = 0;
-          self.postMessage({ type: 'RESET_COMPLETE' });
-          break;
-        }
-      }
-    };
-
-    self.postMessage({ type: 'WORKER_READY' });
-  `;
-
-  const setupWorker = useCallback(() => {
-    if (workerRef.current) return; // Already initialized
-
-    try {
-      // Create inline worker using Blob (more reliable than file-based worker in Next.js)
-      const blob = new Blob([getWorkerCode()], { type: 'application/javascript' });
-      const workerUrl = URL.createObjectURL(blob);
-      workerRef.current = new Worker(workerUrl);
-
-      workerRef.current.onmessage = (e) => {
-        const { type, data } = e.data;
-
-        switch (type) {
-          case 'WORKER_READY':
-            console.log('[PROCTORING] Web Worker ready');
-            break;
-
-          case 'VOICE_RESULT':
-            // Reset throttle flag - ready for next analysis
-            isVoiceProcessingRef.current = false;
-            if (data.detected) {
-              // Add to batch instead of logging immediately
-              voiceBatchRef.current.push({
-                timestamp: new Date().toISOString(),
-                details: {
-                  averageVolume: data.averageVolume,
-                  threshold: data.threshold
-                }
-              });
-              console.log(`[PROCTORING] Voice detected - batched (${voiceBatchRef.current.length} events pending)`);
-            }
-            break;
-
-          case 'CAMERA_RESULT':
-            // Reset throttle flag - ready for next analysis
-            isCameraProcessingRef.current = false;
-            if (data.obstructed) {
-              // Only update state if it actually changed
-              setState(prev => {
-                if (!prev.isCameraObstructed) {
-                  return { ...prev, isCameraObstructed: true };
-                }
-                return prev;
-              });
-              logEventRef.current('camera_obstructed', {
-                avgBrightness: data.avgBrightness,
-                brightnessRange: data.brightnessRange,
-                reason: data.reason
-              });
-            } else {
-              setState(prev => {
-                if (prev.isCameraObstructed) {
-                  return { ...prev, isCameraObstructed: false };
-                }
-                return prev; // No state change needed
-              });
-            }
-            break;
-
-          case 'RESET_COMPLETE':
-            console.log('[PROCTORING] Worker state reset');
-            break;
-        }
-      };
-
-      workerRef.current.onerror = (error) => {
-        console.error('[PROCTORING] Worker error:', error.message || error);
-      };
-
-      console.log('[PROCTORING] Web Worker initialized (inline)');
-    } catch (error) {
-      console.error('[PROCTORING] Failed to initialize Web Worker:', error);
+    if (batch.length > 0) {
+      console.log(`[PROCTORING] Flushed ${batch.length} events to backend`);
     }
   }, []);
 
-  // ==================== VOICE DETECTION (Web Worker) ====================
-  const setupVoiceDetection = useCallback(() => {
+  // ==================== VIDEO WORKER ====================
+  const setupVideoWorker = useCallback(() => {
     const currentStream = streamRef.current;
-    if (!currentStream || !workerRef.current) return;
+    if (!currentStream) return;
+
+    const videoTracks = currentStream.getVideoTracks();
+    if (videoTracks.length === 0) return;
+
+    try {
+      const blob = new Blob([getVideoWorkerCode()], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      videoWorkerRef.current = new Worker(url);
+
+      videoWorkerRef.current.onmessage = (e) => {
+        const { type, data } = e.data;
+        if (type === 'STATE_CHANGE') {
+          if (data.obstructed) {
+            setState(prev => prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: true });
+            emitEventRef.current('camera_obstructed', {
+              reason: data.reason,
+              avgBrightness: data.avgBrightness,
+              brightnessRange: data.brightnessRange,
+            });
+          } else {
+            setState(prev => !prev.isCameraObstructed ? prev : { ...prev, isCameraObstructed: false });
+          }
+        }
+      };
+
+      videoWorkerRef.current.onerror = (err) => {
+        console.error('[PROCTORING] Video worker error:', err);
+      };
+
+      // Create hidden video + canvas for frame capture
+      videoRef.current = document.createElement('video');
+      videoRef.current.srcObject = currentStream;
+      videoRef.current.muted = true;
+      videoRef.current.play();
+
+      canvasRef.current = document.createElement('canvas');
+      canvasRef.current.width = 160;
+      canvasRef.current.height = 120;
+      const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return;
+
+      // Send frames to worker at low frequency
+      videoRef.current.onloadedmetadata = () => {
+        videoIntervalRef.current = setInterval(() => {
+          if (!isMonitoringRef.current || !videoRef.current || !canvasRef.current || !videoWorkerRef.current) return;
+
+          ctx.drawImage(videoRef.current, 0, 0, 160, 120);
+          const imageData = ctx.getImageData(0, 0, 160, 120);
+          const dataToSend = new Uint8ClampedArray(imageData.data);
+
+          videoWorkerRef.current.postMessage({
+            type: 'ANALYZE_FRAME',
+            data: {
+              imageData: dataToSend.buffer,
+              width: 160,
+              height: 120,
+              threshold: obstructionThresholdRef.current,
+            },
+          }, [dataToSend.buffer]);
+        }, VIDEO_CHECK_INTERVAL);
+
+        console.log(`[PROCTORING] Video worker started (${VIDEO_CHECK_INTERVAL}ms interval)`);
+      };
+    } catch (err) {
+      console.error('[PROCTORING] Failed to setup video worker:', err);
+    }
+  }, []);
+
+  // ==================== AUDIO WORKER ====================
+  const setupAudioWorker = useCallback(() => {
+    const currentStream = streamRef.current;
+    if (!currentStream) return;
 
     const audioTracks = currentStream.getAudioTracks();
-    if (audioTracks.length === 0) return;
+    if (audioTracks.length === 0) {
+      console.log('[PROCTORING] No audio tracks — voice detection skipped');
+      return;
+    }
 
     try {
-      audioContextRef.current = new AudioContext();
+      const blob = new Blob([getAudioWorkerCode()], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      audioWorkerRef.current = new Worker(url);
+
+      audioWorkerRef.current.onmessage = (e) => {
+        const { type, data } = e.data;
+        if (type === 'STATE_CHANGE' && data.voiceDetected) {
+          emitEventRef.current('voice_detected', {
+            averageVolume: data.averageVolume,
+            threshold: data.threshold,
+          });
+        }
+      };
+
+      audioWorkerRef.current.onerror = (err) => {
+        console.error('[PROCTORING] Audio worker error:', err);
+      };
+
+      // Setup AudioContext + Analyser
+      try {
+        audioContextRef.current = new AudioContext();
+      } catch (ctxErr) {
+        console.error('[PROCTORING] AudioContext creation failed:', ctxErr);
+        return;
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
       const source = audioContextRef.current.createMediaStreamSource(currentStream);
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 256;
@@ -482,132 +457,58 @@ export function useProctoringMonitor({
       const dataArray = new Uint8Array(bufferLength);
       const sampleRate = audioContextRef.current.sampleRate;
 
-      // Use setInterval with VOICE_CHECK_INTERVAL (2 seconds) for throttled voice detection
-      // This dramatically reduces CPU usage while still detecting sustained voice activity
+      // Send frequency data to worker at low frequency
       voiceIntervalRef.current = setInterval(() => {
-        if (!isMonitoringRef.current || !analyserRef.current || !workerRef.current) return;
-
-        // Skip if previous analysis is still processing (prevents message flooding)
-        if (isVoiceProcessingRef.current) return;
-        isVoiceProcessingRef.current = true;
+        if (!isMonitoringRef.current || !analyserRef.current || !audioWorkerRef.current) return;
 
         analyserRef.current.getByteFrequencyData(dataArray);
-
-        // Calculate threshold based on sensitivity
         const threshold = 128 - (voiceSensitivityRef.current * 1.28);
-
-        // Send to worker for processing (transfer the buffer for performance)
         const dataToSend = new Uint8Array(dataArray);
-        workerRef.current.postMessage({
+
+        audioWorkerRef.current.postMessage({
           type: 'ANALYZE_VOICE',
           data: {
             frequencyData: dataToSend.buffer,
             threshold,
-            sampleRate
-          }
+            sampleRate,
+          },
         }, [dataToSend.buffer]);
       }, VOICE_CHECK_INTERVAL);
 
-      // Start batch flush interval - send batched voice events every VOICE_BATCH_INTERVAL
-      voiceBatchIntervalRef.current = setInterval(() => {
-        if (voiceBatchRef.current.length > 0) {
-          flushVoiceBatch();
-        }
-      }, VOICE_BATCH_INTERVAL);
-
-      console.log(`[PROCTORING] Voice detection started (Web Worker, check: ${VOICE_CHECK_INTERVAL}ms, batch: ${VOICE_BATCH_INTERVAL}ms, log-only: ${VOICE_LOG_ONLY})`);
-    } catch (error) {
-      console.error('[PROCTORING] Failed to setup voice detection:', error);
+      console.log(`[PROCTORING] Audio worker started (${VOICE_CHECK_INTERVAL}ms interval)`);
+    } catch (err) {
+      console.error('[PROCTORING] Failed to setup audio worker:', err);
     }
-  }, [flushVoiceBatch]); // flushVoiceBatch is stable (useCallback with no deps)
+  }, []);
 
-  // ==================== CAMERA OBSTRUCTION DETECTION (Web Worker) ====================
-  const setupCameraObstructionDetection = useCallback(() => {
-    const currentStream = streamRef.current;
-    if (!currentStream || !workerRef.current) return;
+  // ==================== EVENT-DRIVEN DETECTIONS (main thread, cheap) ====================
 
-    const videoTracks = currentStream.getVideoTracks();
-    if (videoTracks.length === 0) return;
-
-    // Create hidden video and canvas for analysis
-    videoRef.current = document.createElement('video');
-    videoRef.current.srcObject = currentStream;
-    videoRef.current.muted = true;
-    videoRef.current.play();
-
-    canvasRef.current = document.createElement('canvas');
-    canvasRef.current.width = 160; // Small resolution for performance
-    canvasRef.current.height = 120;
-    const ctx = canvasRef.current.getContext('2d');
-
-    if (!ctx) return;
-
-    // Use setInterval instead of setTimeout for better control
-    // 200ms interval = 5 checks per second (reduced from 100ms for better performance)
-    const startCameraCheck = () => {
-      cameraIntervalRef.current = setInterval(() => {
-        if (!isMonitoringRef.current || !videoRef.current || !canvasRef.current || !workerRef.current) return;
-
-        // Skip if previous analysis is still processing (prevents message flooding)
-        if (isCameraProcessingRef.current) return;
-        isCameraProcessingRef.current = true;
-
-        ctx.drawImage(videoRef.current, 0, 0, 160, 120);
-        const imageData = ctx.getImageData(0, 0, 160, 120);
-
-        // Send to worker for processing (transfer the buffer for performance)
-        const dataToSend = new Uint8ClampedArray(imageData.data);
-        workerRef.current.postMessage({
-          type: 'ANALYZE_CAMERA',
-          data: {
-            imageData: dataToSend.buffer,
-            width: 160,
-            height: 120,
-            obstructionThreshold: obstructionThresholdRef.current
-          }
-        }, [dataToSend.buffer]);
-      }, 200);
-
-      console.log('[PROCTORING] Camera obstruction detection started (Web Worker, 200ms interval, throttled)');
-    };
-
-    videoRef.current.onloadedmetadata = () => {
-      startCameraCheck();
-    };
-  }, []); // No dependencies - uses refs internally
-
-  // ==================== TRACK STATE MONITORING ====================
   const setupTrackMonitoring = useCallback(() => {
     const currentStream = streamRef.current;
     if (!currentStream) return;
 
-    const videoTracks = currentStream.getVideoTracks();
-    const audioTracks = currentStream.getAudioTracks();
-
-    // Monitor video track
-    videoTracks.forEach(track => {
+    currentStream.getVideoTracks().forEach(track => {
       track.onended = () => {
         setState(prev => ({ ...prev, isCameraActive: false }));
-        logEvent('camera_disabled', { reason: 'track_ended' });
+        emitEventRef.current('camera_disabled', { reason: 'track_ended' });
       };
       track.onmute = () => {
         setState(prev => ({ ...prev, isCameraActive: false }));
-        logEvent('camera_disabled', { reason: 'track_muted' });
+        emitEventRef.current('camera_disabled', { reason: 'track_muted' });
       };
       track.onunmute = () => {
         setState(prev => ({ ...prev, isCameraActive: true }));
       };
     });
 
-    // Monitor audio track
-    audioTracks.forEach(track => {
+    currentStream.getAudioTracks().forEach(track => {
       track.onended = () => {
         setState(prev => ({ ...prev, isMicrophoneActive: false }));
-        logEvent('microphone_disabled', { reason: 'track_ended' });
+        emitEventRef.current('microphone_disabled', { reason: 'track_ended' });
       };
       track.onmute = () => {
         setState(prev => ({ ...prev, isMicrophoneActive: false }));
-        logEvent('microphone_disabled', { reason: 'track_muted' });
+        emitEventRef.current('microphone_disabled', { reason: 'track_muted' });
       };
       track.onunmute = () => {
         setState(prev => ({ ...prev, isMicrophoneActive: true }));
@@ -615,309 +516,13 @@ export function useProctoringMonitor({
     });
 
     console.log('[PROCTORING] Track monitoring started');
-  }, [logEvent]); // Removed stream - using ref
+  }, []);
 
-  // ==================== SCREENSHOT DETECTION ====================
-  const setupScreenshotDetection = useCallback(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // PrintScreen
-      if (e.key === 'PrintScreen') {
-        e.preventDefault();
-        logEvent('screenshot_attempt', { key: 'PrintScreen' });
-        // Clear clipboard
-        navigator.clipboard?.writeText('').catch(() => {});
-      }
-
-      // Ctrl+PrintScreen or Alt+PrintScreen
-      if ((e.ctrlKey || e.altKey) && e.key === 'PrintScreen') {
-        e.preventDefault();
-        logEvent('screenshot_attempt', { key: 'Ctrl/Alt+PrintScreen' });
-        navigator.clipboard?.writeText('').catch(() => {});
-      }
-
-      // Windows Snipping Tool: Win+Shift+S
-      if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        logEvent('screenshot_attempt', { key: 'Win+Shift+S' });
-      }
-
-      // Mac screenshot: Cmd+Shift+3 or Cmd+Shift+4
-      if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4')) {
-        e.preventDefault();
-        logEvent('screenshot_attempt', { key: `Cmd+Shift+${e.key}` });
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown, true);
-    console.log('[PROCTORING] Screenshot detection started');
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, [logEvent]);
-
-  // ==================== SCREEN RECORDING DETECTION ====================
-  const setupScreenRecordingDetection = useCallback(() => {
-    // Override getDisplayMedia to detect screen sharing attempts
-    const originalGetDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
-
-    if (originalGetDisplayMedia) {
-      navigator.mediaDevices.getDisplayMedia = async function(constraints) {
-        logEvent('screen_recording_attempt', { constraints });
-        throw new Error('Screen recording is not allowed during the assessment');
-      };
-    }
-
-    console.log('[PROCTORING] Screen recording detection started');
-
-    return () => {
-      if (originalGetDisplayMedia) {
-        navigator.mediaDevices.getDisplayMedia = originalGetDisplayMedia;
-      }
-    };
-  }, [logEvent]);
-
-  // ==================== COPY/PASTE DETECTION ====================
-  const setupCopyPasteDetection = useCallback(() => {
-    const handleCopy = (e: ClipboardEvent) => {
-      // CRITICAL: Completely block copy - prevent default and stop all propagation
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-
-      // Clear clipboard data
-      if (e.clipboardData) {
-        e.clipboardData.clearData();
-      }
-
-      // Log the violation with selected text info
-      logEvent('copy_attempt', {
-        selectedText: window.getSelection()?.toString()?.substring(0, 100)
-      });
-
-      // Return false for extra safety (legacy support)
-      return false;
-    };
-
-    const handlePaste = (e: ClipboardEvent) => {
-      // CRITICAL: Completely block paste - prevent default and stop all propagation
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-
-      // Clear clipboard data to ensure nothing gets pasted
-      if (e.clipboardData) {
-        e.clipboardData.clearData();
-      }
-
-      // Log the violation
-      logEvent('paste_attempt', {
-        clipboardDataLength: e.clipboardData?.getData('text')?.length || 0
-      });
-
-      // Return false for extra safety (legacy support)
-      return false;
-    };
-
-    const handleCut = (e: ClipboardEvent) => {
-      // Block cut as well (same as copy)
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      logEvent('copy_attempt', { action: 'cut' });
-      return false;
-    };
-
-    // Block context menu (right-click) which can be used for copy/paste
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      e.stopImmediatePropagation();
-      console.log('[PROCTORING] Context menu blocked');
-      return false;
-    };
-
-    // Block keyboard shortcuts for copy/paste/cut AND Alt+Tab
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Alt+Tab (switch window/tab) - CRITICAL BLOCKING
-      if (e.altKey && e.key === 'Tab') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        logEvent('tab_switch', { method: 'alt_tab', blocked: true });
-        console.log('[PROCTORING] Alt+Tab blocked');
-        return false;
-      }
-
-      // Alt+F4 (close window)
-      if (e.altKey && e.key === 'F4') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        logEvent('window_blur', { method: 'alt_f4', blocked: true });
-        console.log('[PROCTORING] Alt+F4 blocked');
-        return false;
-      }
-
-      // Cmd+Tab (Mac - switch application)
-      if (e.metaKey && e.key === 'Tab') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        logEvent('tab_switch', { method: 'cmd_tab', blocked: true });
-        console.log('[PROCTORING] Cmd+Tab blocked');
-        return false;
-      }
-
-      // Ctrl+Tab (switch browser tab)
-      if (e.ctrlKey && e.key === 'Tab') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        logEvent('tab_switch', { method: 'ctrl_tab', blocked: true });
-        console.log('[PROCTORING] Ctrl+Tab blocked');
-        return false;
-      }
-
-      // Windows key (brings up start menu)
-      if (e.key === 'Meta' || e.key === 'OS') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        logEvent('window_blur', { method: 'windows_key', blocked: true });
-        console.log('[PROCTORING] Windows key blocked');
-        return false;
-      }
-
-      // Ctrl+C or Cmd+C (copy)
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        logEvent('copy_attempt', { method: 'keyboard_shortcut' });
-        return false;
-      }
-
-      // Ctrl+V or Cmd+V (paste)
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        logEvent('paste_attempt', { method: 'keyboard_shortcut' });
-        return false;
-      }
-
-      // Ctrl+X or Cmd+X (cut)
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        logEvent('copy_attempt', { method: 'keyboard_shortcut', action: 'cut' });
-        return false;
-      }
-
-      // Ctrl+A or Cmd+A (select all) - also block to prevent bulk copy
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        console.log('[PROCTORING] Select all blocked');
-        return false;
-      }
-    };
-
-    // Add all event listeners with capture phase (true) for maximum priority
-    document.addEventListener('copy', handleCopy, true);
-    document.addEventListener('paste', handlePaste, true);
-    document.addEventListener('cut', handleCut, true);
-    document.addEventListener('contextmenu', handleContextMenu, true);
-    document.addEventListener('keydown', handleKeyDown, true);
-
-    console.log('[PROCTORING] Copy/paste/cut detection started (comprehensive blocking)');
-
-    return () => {
-      document.removeEventListener('copy', handleCopy, true);
-      document.removeEventListener('paste', handlePaste, true);
-      document.removeEventListener('cut', handleCut, true);
-      document.removeEventListener('contextmenu', handleContextMenu, true);
-      document.removeEventListener('keydown', handleKeyDown, true);
-    };
-  }, [logEvent]);
-
-  // ==================== MOUSE MOVEMENT TRACKING ====================
-  const setupMouseTracking = useCallback(() => {
-    let lastMousePosition = { x: 0, y: 0 };
-    let mouseIdleTime = 0;
-    let mouseMoveCount = 0;
-    const IDLE_THRESHOLD = 120; // 2 minutes of no mouse movement
-    const SUSPICIOUS_MOVEMENT_THRESHOLD = 5000; // Very high movement count in short time
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const currentX = e.clientX;
-      const currentY = e.clientY;
-
-      // Calculate movement distance
-      const distance = Math.sqrt(
-        Math.pow(currentX - lastMousePosition.x, 2) +
-        Math.pow(currentY - lastMousePosition.y, 2)
-      );
-
-      // Only count significant movements (not micro jitters)
-      if (distance > 10) {
-        mouseMoveCount++;
-        mouseIdleTime = 0; // Reset idle time
-      }
-
-      lastMousePosition = { x: currentX, y: currentY };
-    };
-
-    const handleMouseLeave = () => {
-      console.log('[PROCTORING] Mouse left window - potential tab switch');
-      logEvent('window_blur', { reason: 'mouse_left_window' });
-    };
-
-    // Check for suspicious patterns every 10 seconds
-    const trackingInterval = setInterval(() => {
-      mouseIdleTime += 10;
-
-      // Detect prolonged idle (might indicate user left)
-      if (mouseIdleTime >= IDLE_THRESHOLD) {
-        console.log('[PROCTORING] Mouse idle for 2+ minutes');
-        // Don't log event - just track (too many false positives)
-        mouseIdleTime = 0; // Reset to avoid spam
-      }
-
-      // Detect bot-like behavior (too many movements)
-      if (mouseMoveCount > SUSPICIOUS_MOVEMENT_THRESHOLD) {
-        console.log('[PROCTORING] Suspicious mouse activity detected');
-        mouseMoveCount = 0; // Reset counter
-      } else {
-        mouseMoveCount = 0; // Reset every interval
-      }
-    }, 10000);
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseleave', handleMouseLeave);
-    console.log('[PROCTORING] Mouse movement tracking started');
-
-    return () => {
-      clearInterval(trackingInterval);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseleave', handleMouseLeave);
-    };
-  }, [logEvent]);
-
-  // ==================== TAB SWITCH / WINDOW BLUR DETECTION ====================
   const setupTabSwitchDetection = useCallback(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden) {
-        logEvent('tab_switch', { hidden: true });
-      }
+      if (document.hidden) emitEventRef.current('tab_switch', { hidden: true });
     };
-
-    const handleBlur = () => {
-      logEvent('window_blur', {});
-    };
+    const handleBlur = () => emitEventRef.current('window_blur', {});
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleBlur);
@@ -927,7 +532,137 @@ export function useProctoringMonitor({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [logEvent]);
+  }, []);
+
+  const setupCopyPasteDetection = useCallback(() => {
+    const block = (e: Event, type: ProctoringEventType, details?: Record<string, any>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      emitEventRef.current(type, details);
+      return false;
+    };
+
+    const handleCopy = (e: ClipboardEvent) => {
+      if ((e as any).clipboardData) (e as any).clipboardData.clearData();
+      return block(e, 'copy_attempt', { selectedText: window.getSelection()?.toString()?.substring(0, 100) });
+    };
+    const handlePaste = (e: ClipboardEvent) => {
+      if ((e as any).clipboardData) (e as any).clipboardData.clearData();
+      return block(e, 'paste_attempt', {});
+    };
+    const handleCut = (e: ClipboardEvent) => block(e, 'copy_attempt', { action: 'cut' });
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      return false;
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === 'Tab') return block(e, 'tab_switch', { method: 'alt_tab' });
+      if (e.altKey && e.key === 'F4') return block(e, 'window_blur', { method: 'alt_f4' });
+      if (e.metaKey && e.key === 'Tab') return block(e, 'tab_switch', { method: 'cmd_tab' });
+      if (e.ctrlKey && e.key === 'Tab') return block(e, 'tab_switch', { method: 'ctrl_tab' });
+      if (e.key === 'Meta' || e.key === 'OS') return block(e, 'window_blur', { method: 'windows_key' });
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') return block(e, 'copy_attempt', { method: 'keyboard' });
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') return block(e, 'paste_attempt', { method: 'keyboard' });
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') return block(e, 'copy_attempt', { method: 'keyboard', action: 'cut' });
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        return false;
+      }
+    };
+
+    document.addEventListener('copy', handleCopy, true);
+    document.addEventListener('paste', handlePaste, true);
+    document.addEventListener('cut', handleCut, true);
+    document.addEventListener('contextmenu', handleContextMenu, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    console.log('[PROCTORING] Copy/paste detection started');
+
+    return () => {
+      document.removeEventListener('copy', handleCopy, true);
+      document.removeEventListener('paste', handlePaste, true);
+      document.removeEventListener('cut', handleCut, true);
+      document.removeEventListener('contextmenu', handleContextMenu, true);
+      document.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, []);
+
+  const setupScreenshotDetection = useCallback(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'PrintScreen') {
+        e.preventDefault();
+        emitEventRef.current('screenshot_attempt', { key: 'PrintScreen' });
+        navigator.clipboard?.writeText('').catch(() => {});
+      }
+      if ((e.ctrlKey || e.altKey) && e.key === 'PrintScreen') {
+        e.preventDefault();
+        emitEventRef.current('screenshot_attempt', { key: 'Ctrl/Alt+PrintScreen' });
+        navigator.clipboard?.writeText('').catch(() => {});
+      }
+      if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        emitEventRef.current('screenshot_attempt', { key: 'Win+Shift+S' });
+      }
+      if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4')) {
+        e.preventDefault();
+        emitEventRef.current('screenshot_attempt', { key: `Cmd+Shift+${e.key}` });
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    console.log('[PROCTORING] Screenshot detection started');
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, []);
+
+  const setupScreenRecordingDetection = useCallback(() => {
+    const originalGetDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
+    if (originalGetDisplayMedia) {
+      navigator.mediaDevices.getDisplayMedia = async function () {
+        emitEventRef.current('screen_recording_attempt', {});
+        throw new Error('Screen recording is not allowed during the interview');
+      };
+    }
+    console.log('[PROCTORING] Screen recording detection started');
+    return () => {
+      if (originalGetDisplayMedia) navigator.mediaDevices.getDisplayMedia = originalGetDisplayMedia;
+    };
+  }, []);
+
+  const setupFullscreenDetection = useCallback(() => {
+    let eventName = 'fullscreenchange';
+    if ('onwebkitfullscreenchange' in document) eventName = 'webkitfullscreenchange';
+    else if ('onmozfullscreenchange' in document) eventName = 'mozfullscreenchange';
+
+    const handler = () => {
+      const isFs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      if (!isFs) emitEventRef.current('fullscreen_exit', {});
+    };
+
+    document.addEventListener(eventName, handler);
+    console.log('[PROCTORING] Fullscreen detection started');
+    return () => document.removeEventListener(eventName, handler);
+  }, []);
+
+  const setupMouseTracking = useCallback(() => {
+    const handleMouseLeave = () => {
+      emitEventRef.current('window_blur', { reason: 'mouse_left_window' });
+    };
+    document.addEventListener('mouseleave', handleMouseLeave);
+    console.log('[PROCTORING] Mouse tracking started');
+    return () => document.removeEventListener('mouseleave', handleMouseLeave);
+  }, []);
+
+  // ==================== LOAD SHEDDING ====================
+  const setReducedFrequency = useCallback((reduced: boolean) => {
+    videoWorkerRef.current?.postMessage({ type: 'SET_FREQUENCY', data: { reduced } });
+    console.log(`[PROCTORING] Load shedding: ${reduced ? 'ON' : 'OFF'}`);
+  }, []);
 
   // ==================== MAIN EFFECT ====================
   useEffect(() => {
@@ -936,111 +671,93 @@ export function useProctoringMonitor({
     isMonitoringRef.current = true;
     setState(prev => ({ ...prev, isMonitoring: true }));
 
-    // Initialize Web Worker first
-    setupWorker();
+    // Event-driven detections (lightweight, main thread)
+    const cleanups = [
+      setupTabSwitchDetection(),
+      setupCopyPasteDetection(),
+      setupScreenshotDetection(),
+      setupScreenRecordingDetection(),
+      setupFullscreenDetection(),
+      setupMouseTracking(),
+    ];
 
-    // Setup all detections (lightweight - stay on main thread)
-    const cleanupScreenshot = setupScreenshotDetection();
-    const cleanupScreenRecording = setupScreenRecordingDetection();
-    const cleanupCopyPaste = setupCopyPasteDetection();
-    const cleanupTabSwitch = setupTabSwitchDetection();
-    const cleanupMouseTracking = setupMouseTracking();
-
-    // Stream-dependent setups (heavy processing offloaded to Web Worker)
+    // Stream-dependent: workers + track monitoring
+    // (Face detection is handled by useFaceDetection hook, not here)
     if (streamRef.current) {
-      // Small delay to ensure worker is ready
       setTimeout(() => {
-        setupVoiceDetection();
-        setupCameraObstructionDetection();
+        setupVideoWorker();
+        setupAudioWorker();
         setupTrackMonitoring();
       }, 100);
     }
 
-    console.log('[PROCTORING] All monitoring systems active (Web Worker enabled)');
+    // Backend batch flush timer
+    batchFlushIntervalRef.current = setInterval(() => {
+      flushBackendQueue();
+    }, BACKEND_FLUSH_INTERVAL);
+
+    console.log('[PROCTORING] All monitoring active (2-worker architecture)');
 
     return () => {
       isMonitoringRef.current = false;
       setState(prev => ({ ...prev, isMonitoring: false }));
 
-      // Reset throttle flags
-      isVoiceProcessingRef.current = false;
-      isCameraProcessingRef.current = false;
+      // Cleanup event listeners
+      cleanups.forEach(fn => fn());
 
-      // Cleanup voice detection interval
-      if (voiceIntervalRef.current) {
-        clearInterval(voiceIntervalRef.current);
-        voiceIntervalRef.current = null;
+      // Cleanup intervals
+      if (videoIntervalRef.current) { clearInterval(videoIntervalRef.current); videoIntervalRef.current = null; }
+      if (voiceIntervalRef.current) { clearInterval(voiceIntervalRef.current); voiceIntervalRef.current = null; }
+      if (batchFlushIntervalRef.current) { clearInterval(batchFlushIntervalRef.current); batchFlushIntervalRef.current = null; }
+
+      // Final flush — send remaining events to backend
+      if (backendQueueRef.current.length > 0) {
+        console.log(`[PROCTORING] Final flush: ${backendQueueRef.current.length} events`);
+        flushBackendQueue();
       }
 
-      // Cleanup voice batch interval and flush remaining events
-      if (voiceBatchIntervalRef.current) {
-        clearInterval(voiceBatchIntervalRef.current);
-        voiceBatchIntervalRef.current = null;
-      }
-      // Flush any remaining batched voice events
-      if (voiceBatchRef.current.length > 0) {
-        console.log(`[PROCTORING] Flushing remaining ${voiceBatchRef.current.length} voice events on cleanup`);
-        // Fire and forget - don't await since we're cleaning up
-        candidateService.reportProctorEvent(tokenRef.current, {
-          event_type: 'voice_detected',
-          timestamp: new Date().toISOString(),
-          details: {
-            batch_count: voiceBatchRef.current.length,
-            cleanup_flush: true,
-            events: voiceBatchRef.current
-          },
-        }).catch(err => console.error('[PROCTORING] Failed to flush voice batch on cleanup:', err));
-        voiceBatchRef.current = [];
-      }
+      // Cleanup audio
+      if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
 
-      // Cleanup camera detection interval
-      if (cameraIntervalRef.current) {
-        clearInterval(cameraIntervalRef.current);
-        cameraIntervalRef.current = null;
-      }
-
-      // Cleanup audio context
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-
-      // Cleanup animation frame (legacy, kept for safety)
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
-      }
-
-      // Cleanup video element
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-        videoRef.current = null;
-      }
-
-      // Cleanup canvas
+      // Cleanup video elements
+      if (videoRef.current) { videoRef.current.srcObject = null; videoRef.current = null; }
       canvasRef.current = null;
 
-      // Terminate Web Worker
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-        console.log('[PROCTORING] Web Worker terminated');
-      }
+      // Terminate workers
+      if (videoWorkerRef.current) { videoWorkerRef.current.terminate(); videoWorkerRef.current = null; }
+      if (audioWorkerRef.current) { audioWorkerRef.current.terminate(); audioWorkerRef.current = null; }
 
-      // Cleanup event listeners
-      cleanupScreenshot();
-      cleanupScreenRecording();
-      cleanupCopyPaste();
-      cleanupTabSwitch();
-      cleanupMouseTracking();
-
-      console.log('[PROCTORING] All monitoring systems stopped');
+      console.log('[PROCTORING] All monitoring stopped');
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, stream]); // Only re-run when enabled/stream actually change - setup functions use refs internally
+  }, [enabled, stream]);
 
   return {
     state,
-    logEvent, // Expose for manual event logging if needed
+    emitEvent, // For external callers (face detection, etc.)
+    setReducedFrequency, // For load shedding from InterviewUI
   };
+}
+
+// ==================== HELPERS ====================
+
+function getSeverity(type: ProctoringEventType): string {
+  const map: Record<ProctoringEventType, string> = {
+    tab_switch: 'low',
+    copy_attempt: 'medium',
+    paste_attempt: 'medium',
+    voice_detected: 'medium',
+    multiple_voices: 'high',
+    camera_disabled: 'high',
+    microphone_disabled: 'high',
+    camera_obstructed: 'high',
+    screenshot_attempt: 'high',
+    screen_recording_attempt: 'high',
+    window_blur: 'low',
+    fullscreen_exit: 'high',
+    face_missing: 'high',
+    multiple_faces: 'high',
+    gaze_away: 'medium',
+  };
+  return map[type] || 'low';
 }

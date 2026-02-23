@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AssessmentResults from '@/components/AssessmentResults';
 import { assessmentService } from '@/lib/services';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 export default function AssessmentResultsPage() {
   const params = useParams();
@@ -66,11 +67,13 @@ export default function AssessmentResultsPage() {
   }
 
   return (
-    <AssessmentResults
-      onBack={handleBack}
-      assessmentId={assessmentId}
-      assessmentTitle={assessmentTitle}
-      jdTitle={jdTitle}
-    />
+    <FeatureGate feature="assessment">
+      <AssessmentResults
+        onBack={handleBack}
+        assessmentId={assessmentId}
+        assessmentTitle={assessmentTitle}
+        jdTitle={jdTitle}
+      />
+    </FeatureGate>
   );
 }

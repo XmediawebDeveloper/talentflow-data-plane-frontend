@@ -54,8 +54,8 @@ interface PlanQuotas {
   ai_interviews?: number;
   ai_interview?: number;
   // Other quotas
-  max_jobs?: number;
-  max_seats?: number;
+  max_jobs?: number | string;
+  max_seats?: number | string;
   storage_gb?: number;
   support_level?: number;
   api_rate_limit?: number;
@@ -680,6 +680,17 @@ export default function PricingPage() {
                                   )}
                                 </div>
                               )}
+                              {/* Unavailable billing period message */}
+                              {!isTrialPlan && isYearly && !(!!plan.annualPlanId || !!plan.yearlyPrice) && (
+                                <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                                  Yearly plan not available
+                                </p>
+                              )}
+                              {!isTrialPlan && !isYearly && !(!!plan.monthlyPlanId || !!plan.monthlyPrice) && (
+                                <p className="text-sm text-amber-600 dark:text-amber-400 mt-2">
+                                  Monthly plan not available
+                                </p>
+                              )}
                             </>
                           ) : (
                             <div className="text-2xl font-bold text-gray-900 dark:text-white">Contact Sales</div>
@@ -708,19 +719,19 @@ export default function PricingPage() {
                           return (
                             <div className="mb-6 py-4 border-t border-b border-gray-100 dark:border-gray-800">
                               <div className="space-y-2 text-sm">
-                                {normalizedQuotas.max_seats !== undefined && normalizedQuotas.max_seats >= 1 && (
+                                {normalizedQuotas.max_seats !== undefined && (String(normalizedQuotas.max_seats).toLowerCase() === 'unlimited' || Number(normalizedQuotas.max_seats) >= 1) && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">Max Users</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {normalizedQuotas.max_seats.toLocaleString()}
+                                      {String(normalizedQuotas.max_seats).toLowerCase() === 'unlimited' ? 'Unlimited' : Number(normalizedQuotas.max_seats).toLocaleString()}
                                     </span>
                                   </div>
                                 )}
-                                {normalizedQuotas.max_jobs !== undefined && normalizedQuotas.max_jobs >= 1 && (
+                                {normalizedQuotas.max_jobs !== undefined && (String(normalizedQuotas.max_jobs).toLowerCase() === 'unlimited' || Number(normalizedQuotas.max_jobs) >= 1) && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">Max Jobs</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {isTrialPlan ? normalizedQuotas.max_jobs.toLocaleString() : 'Unlimited'}
+                                      {String(normalizedQuotas.max_jobs).toLowerCase() === 'unlimited' ? 'Unlimited' : (isTrialPlan ? Number(normalizedQuotas.max_jobs).toLocaleString() : 'Unlimited')}
                                     </span>
                                   </div>
                                 )}

@@ -9,7 +9,6 @@ import {
   Monitor,
   Copy,
   BarChart3,
-  Timer,
   FileText,
   Shield,
   Wifi,
@@ -79,7 +78,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
   ];
 
   const importantInstructions = [
-    { icon: Timer, text: 'Once started, the timer cannot be paused or stopped.' },
+    { icon: Clock, text: 'Once started, the timer cannot be paused or stopped.' },
     { icon: RefreshCcw, text: 'You cannot return to previous sections once submitted.' },
     { icon: Wifi, text: 'Ensure you have a stable internet connection throughout the test.' },
     { icon: AlertCircle, text: 'Do not refresh the page or navigate away during the assessment.' },
@@ -90,7 +89,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
     { icon: Monitor, label: 'Tab switching detection', description: 'Navigating away from the test tab will be recorded.' },
     { icon: Copy, label: 'Copy-paste monitoring', description: 'Attempts to copy questions or paste answers will be flagged.' },
     { icon: BarChart3, label: 'Pattern analysis', description: 'AI will analyze answer patterns for irregularities.' },
-    { icon: Timer, label: 'Time tracking', description: 'Time spent on each question will be monitored.' }
+    { icon: Clock, label: 'Time tracking', description: 'Time spent on each question will be monitored.' }
   ];
 
   // Progress steps
@@ -102,7 +101,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex flex-col" lang="en">
       {/* Sticky Header Container */}
       <div className="sticky top-0 z-50">
         {/* Header - Full Width */}
@@ -266,7 +265,12 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
               </div>
               <h3 className="font-semibold text-gray-900 text-lg">Terms & Conditions</h3>
             </div>
-            <div className="bg-white rounded-xl p-6 max-h-60 overflow-y-auto border border-gray-200">
+            <div
+              className="bg-white rounded-xl p-6 max-h-52 sm:max-h-60 overflow-y-auto border border-gray-200"
+              role="region"
+              aria-label="Terms and Conditions"
+              tabIndex={0}
+            >
               <div className="space-y-5">
                 {termsAndConditions.map((term, index) => (
                   <div key={index}>
@@ -282,11 +286,11 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
         {/* Consent Checkboxes Section */}
         <div className="w-full bg-white border-b border-gray-200 py-8">
           <div className="w-full px-6 lg:px-12">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-6">Your Consent</h3>
-            <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-6" id="consent-heading">Your Consent</h3>
+            <div className="space-y-4" role="group" aria-labelledby="consent-heading">
               {/* Terms Checkbox */}
               <label
-                className={`flex items-start gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all ${
+                className={`flex items-start gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2 ${
                   agreedTerms
                     ? 'border-green-500 bg-green-50'
                     : 'border-gray-200 bg-gray-50 hover:border-gray-300'
@@ -294,7 +298,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
               >
                 <div className={`w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
                   agreedTerms ? 'bg-green-500 border-green-500' : 'border-gray-400'
-                }`}>
+                }`} aria-hidden="true">
                   {agreedTerms && <Check className="w-4 h-4 text-white" />}
                 </div>
                 <input
@@ -302,8 +306,10 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   checked={agreedTerms}
                   onChange={(e) => setAgreedTerms(e.target.checked)}
                   className="sr-only"
+                  aria-required="true"
+                  aria-label="I have read and agree to the Terms and Conditions"
                 />
-                <span>
+                <span id="terms-desc">
                   <strong className="text-gray-900">I have read and agree to the Terms & Conditions</strong>
                   <br />
                   <span className="text-gray-500 text-sm">I understand that violation of these terms may result in disqualification.</span>
@@ -312,7 +318,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
 
               {/* Proctoring Checkbox */}
               <label
-                className={`flex items-start gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all ${
+                className={`flex items-start gap-4 p-5 rounded-xl border-2 cursor-pointer transition-all focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2 ${
                   agreedProctoring
                     ? 'border-green-500 bg-green-50'
                     : 'border-gray-200 bg-gray-50 hover:border-gray-300'
@@ -320,7 +326,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
               >
                 <div className={`w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
                   agreedProctoring ? 'bg-green-500 border-green-500' : 'border-gray-400'
-                }`}>
+                }`} aria-hidden="true">
                   {agreedProctoring && <Check className="w-4 h-4 text-white" />}
                 </div>
                 <input
@@ -328,8 +334,10 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   checked={agreedProctoring}
                   onChange={(e) => setAgreedProctoring(e.target.checked)}
                   className="sr-only"
+                  aria-required="true"
+                  aria-label="I consent to AI proctoring and monitoring"
                 />
-                <span>
+                <span id="proctoring-desc">
                   <strong className="text-gray-900">I consent to AI proctoring and monitoring</strong>
                   <br />
                   <span className="text-gray-500 text-sm">I understand that my activity will be tracked to ensure test integrity.</span>
@@ -337,6 +345,14 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
               </label>
             </div>
           </div>
+        </div>
+
+        {/* Screen reader status announcement */}
+        <div className="sr-only" aria-live="polite" role="status">
+          {canAccept
+            ? 'Both consent checkboxes accepted. You may now continue.'
+            : `${!agreedTerms && !agreedProctoring ? 'Please accept both checkboxes' : !agreedTerms ? 'Please accept the Terms and Conditions' : 'Please accept AI proctoring consent'} to continue.`
+          }
         </div>
 
         {/* Action Footer */}
@@ -353,16 +369,18 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
               <Button
                 onClick={handleAccept}
                 disabled={!canAccept || isSubmitting}
+                aria-disabled={!canAccept || isSubmitting}
+                aria-label={!canAccept ? 'Accept both consent checkboxes to continue' : 'I Agree - Continue to assessment'}
                 size="lg"
                 className={`px-10 py-6 text-lg font-semibold rounded-xl ${
                   canAccept
-                    ? 'bg-blue-600 hover:bg-blue-700'
+                    ? 'bg-blue-600 hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2'
                     : 'bg-gray-300 cursor-not-allowed'
                 } text-white`}
               >
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
@@ -371,7 +389,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                 ) : (
                   <span className="flex items-center gap-2">
                     I Agree - Continue
-                    <ArrowRight className="w-5 h-5" />
+                    <ArrowRight className="w-5 h-5" aria-hidden="true" />
                   </span>
                 )}
               </Button>

@@ -4,6 +4,7 @@ import { Users, Plus, Info, Loader2, BarChart3, Search, ChevronLeft, ChevronRigh
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import FeatureGate from '@/components/shared/FeatureGate';
 import teamService, { Team, TeamStats } from '@/lib/services/teamService';
 import authService, { User } from '@/lib/services/authService';
 import userService, { ApiUser } from '@/lib/services/userService';
@@ -334,6 +335,7 @@ export default function TeamManagementPage() {
   }
 
   return (
+    <FeatureGate feature="teams">
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
@@ -669,5 +671,6 @@ export default function TeamManagementPage() {
         </div>
       )}
     </main>
+    </FeatureGate>
   );
 }

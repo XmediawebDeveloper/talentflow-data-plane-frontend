@@ -401,11 +401,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
     setIsDeleting(resultId);
     try {
+      const deletedCandidate = candidateResults.find(c => c.id === resultId);
       await assessmentService.deleteResult(assessmentId, resultId);
       // Remove from local state
       setCandidateResults(prev => prev.filter(c => c.id !== resultId));
       // Update stats
-      const deletedCandidate = candidateResults.find(c => c.id === resultId);
       if (deletedCandidate) {
         setApiStats(prev => ({
           ...prev,
@@ -414,9 +414,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           pending_count: Math.max(0, prev.pending_count - (deletedCandidate.status === 'Pending' ? 1 : 0)),
         }));
       }
-    } catch (error) {
+      toast.success(`Result for ${candidateName} deleted successfully.`);
+    } catch (error: any) {
       console.error('Failed to delete result:', error);
-      toast.error('Failed to delete result. Please try again.');
+      const msg = error?.message || 'Failed to delete result. Please try again.';
+      toast.error(msg);
     } finally {
       setIsDeleting(null);
     }

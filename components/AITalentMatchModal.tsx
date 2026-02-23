@@ -1,5 +1,9 @@
+'use client';
+
 import { X, Loader2, CheckCircle2, Database, Sparkles, ArrowRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { toast } from 'sonner';
 
 interface AITalentMatchModalProps {
   job: any;
@@ -10,12 +14,18 @@ interface AITalentMatchModalProps {
 type ProcessStep = 'embedding' | 'matching' | 'complete';
 
 export default function AITalentMatchModal({ job, onClose, onComplete }: AITalentMatchModalProps) {
+  const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const [currentStep, setCurrentStep] = useState<ProcessStep>('embedding');
   const [jdEmbeddingExists, setJdEmbeddingExists] = useState(false);
   const [progress, setProgress] = useState(0);
   const [processDetails, setProcessDetails] = useState<string>('');
 
   useEffect(() => {
+    if (!aiTalentMatchAvailable) {
+      toast.error('AI Talent Match is not available in your plan');
+      onClose();
+      return;
+    }
     runMatchingProcess();
   }, []);
 

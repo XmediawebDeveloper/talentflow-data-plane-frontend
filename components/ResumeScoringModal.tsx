@@ -1,7 +1,10 @@
+'use client';
+
 import { X, Target, TrendingUp, CheckCircle, AlertCircle, FileText, Briefcase, FolderOpen, Database } from 'lucide-react';
 import { Resume, Job } from '@/lib/types/types';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
+import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 
 interface ResumeScoringModalProps {
   resumes: Resume[];
@@ -16,10 +19,25 @@ export default function ResumeScoringModal({
   onClose,
   onScore,
 }: ResumeScoringModalProps) {
+  const { available: scoringAvailable } = usePlanFeature('resume_scoring');
   const [selectedJob, setSelectedJob] = useState<string | null>(null);
   const [resumeSource, setResumeSource] = useState<'my-resumes' | 'database' | null>(null);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [isScoring, setIsScoring] = useState(false);
+
+  useEffect(() => {
+    if (!scoringAvailable) {
+      toast.error({
+        title: 'Feature Not Available',
+        description: 'Resume scoring is not available on your current plan. Please upgrade to access this feature.',
+      });
+      onClose();
+    }
+  }, [scoringAvailable, onClose]);
+
+  if (!scoringAvailable) {
+    return null;
+  }
 
   // For this demo, we'll split resumes based on folderId
   // In production, you'd have a proper source field or different data sources
