@@ -657,7 +657,7 @@ export default function AIInterview() {
                               )}
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
-                                {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at {new Date(config.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                               </span>
                               {config.created_by_name && (
                                 <span className="text-xs text-gray-400">
