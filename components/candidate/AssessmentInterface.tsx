@@ -129,6 +129,9 @@ export function AssessmentInterface({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [questionStartTime] = useState(Date.now());
+  // Wall-clock anchor for the current question's timer — updated when the question changes.
+  // Using a ref (not state) so it doesn't trigger re-renders.
+  const questionWallStartRef = useRef<number>(Date.now());
   const [timeRemaining, setTimeRemaining] = useState<number | null>(
     currentQuestion.time_limit_seconds
   );
@@ -717,6 +720,39 @@ export function AssessmentInterface({
     };
   }, [isGlobalTimeExpired, onComplete, isInitialized]);
 
+  // Immediately resync both timers from wall-clock when the page becomes visible again.
+  // This covers two scenarios:
+  //   1. Browser "Cancel or Reload" dialog dismissed — JS was paused, timers froze.
+  //   2. User switched tabs and came back.
+  // Without this, the display stays frozen until the next 1-second setInterval tick.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      // Resync global timer
+      if (assessmentStartTimeRef.current && !isGlobalTimeExpired) {
+        const elapsed = Math.floor((Date.now() - assessmentStartTimeRef.current) / 1000);
+        const remaining = Math.max(0, totalDurationSecsRef.current - elapsed);
+        setGlobalTimeRemaining(remaining);
+        if (remaining <= 0) {
+          setIsGlobalTimeExpired(true);
+          exitFullscreen();
+          onComplete();
+        }
+      }
+
+      // Resync question timer
+      const limit = currentQuestion.time_limit_seconds;
+      if (limit && limit > 0 && questionWallStartRef.current) {
+        const elapsed = Math.floor((Date.now() - questionWallStartRef.current) / 1000);
+        setTimeRemaining(Math.max(0, limit - elapsed));
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isGlobalTimeExpired, onComplete, currentQuestion.time_limit_seconds]);
+
   // Automatic time-based unit deduction check (every 60 seconds)
   useEffect(() => {
     if (!isInitialized) {
@@ -805,26 +841,32 @@ export function AssessmentInterface({
       });
     }
 
+    // Record wall-clock time when this question was loaded.
+    // Used by the wall-clock timer below to compute accurate remaining time
+    // even after a page refresh or a browser cancel/reload dialog pause.
+    questionWallStartRef.current = Date.now();
     setTimeRemaining(currentQuestion.time_limit_seconds);
   }, [token, currentQuestion.question_id, currentQuestion.question_number]);
 
-  // Timer for timed questions
+  // Timer for timed questions — wall-clock based.
+  // Recomputes remaining time from Date.now() on every tick so it stays
+  // accurate even when JS was paused by a browser dialog or tab switch.
   useEffect(() => {
-    if (timeRemaining === null || timeRemaining <= 0) return;
+    const limit = currentQuestion.time_limit_seconds;
+    if (limit === null || limit === undefined || limit <= 0) return;
 
     const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev === null || prev <= 1) {
-          // Auto-submit when time runs out
-          handleSubmit(true);
-          return 0;
-        }
-        return prev - 1;
-      });
+      const elapsed = Math.floor((Date.now() - questionWallStartRef.current) / 1000);
+      const remaining = Math.max(0, limit - elapsed);
+      setTimeRemaining(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        handleSubmit(true);
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeRemaining, currentQuestion.question_id]);
+  }, [currentQuestion.question_id, currentQuestion.time_limit_seconds]);
 
   // Save answer as draft (auto-save) - editable
   const handleSaveDraft = async () => {

@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
@@ -107,6 +107,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Pass/Fail filter
   const [passFailFilter, setPassFailFilter] = useState<'all' | 'pass' | 'fail'>('all');
+
+  // Date range filter (submitted/completed date)
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   // AS-24: Column customization
   const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
@@ -256,6 +260,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         } else if (passFailFilter === 'fail') {
           params.passed = false;
         }
+
+        // Date range filter
+        if (dateFrom) params.date_from = dateFrom;
+        if (dateTo) params.date_to = dateTo;
 
         const response = await assessmentService.listResults(assessmentId, params);
         if (response?.items) {
@@ -454,7 +462,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       const link = document.createElement('a');
       link.href = url;
       const safeName = candidateName?.replace(/[^a-zA-Z0-9]/g, '_') || candidateId;
-      link.download = `Assessment_Report_${safeName}.pdf`;
+      const safeJdTitle = jdTitle?.replace(/[^a-zA-Z0-9]/g, '_') || 'Assessment';
+      const pdfTimestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      link.download = `${safeName}_${safeJdTitle}_${pdfTimestamp}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -480,7 +490,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       const link = document.createElement('a');
       link.href = url;
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      link.download = `${assessmentTitle.replace(/\s+/g, '_')}_Reports_${timestamp}.zip`;
+      const safeJd = jdTitle?.replace(/[^a-zA-Z0-9]/g, '_') || assessmentTitle.replace(/\s+/g, '_');
+      link.download = `${safeJd}_Reports_${timestamp}.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -607,6 +618,51 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   };
 
+  // Export only the selected candidates
+  const handleExportSelected = async () => {
+    try {
+      const enabledColumnIds = columns
+        .filter(col => col.enabled)
+        .map(col => col.id);
+
+      const filters: any = {
+        result_ids: selectedRows,
+      };
+
+      const sorting = {
+        sort_by: sortField,
+        sort_order: sortDirection,
+      };
+
+      const blob = await assessmentService.exportResults(
+        assessmentId,
+        selectedFormat,
+        false,
+        enabledColumnIds,
+        filters,
+        sorting
+      );
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
+      link.download = `${assessmentTitle.replace(/\s+/g, '_')}_Selected_${new Date().toISOString().slice(0, 10)}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
+      toast.success(`${selectedRows.length} selected candidate${selectedRows.length > 1 ? 's' : ''} exported to ${formatName} successfully!`);
+      setShowExportModal(false);
+      setExportStep('format');
+    } catch (error) {
+      console.error('Failed to export selected candidates:', error);
+      toast.error('Failed to export results. Please try again.');
+    }
+  };
+
   const getScoreColor = (percentage: number) => {
     if (percentage >= 80) return 'text-green-600';
     if (percentage >= 60) return 'text-gray-800';
@@ -617,7 +673,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Reset to page 1 when filters change (MUST be before any early returns)
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, passFailFilter, roundFilters]);
+  }, [searchQuery, statusFilter, passFailFilter, roundFilters, dateFrom, dateTo]);
 
   // Use API results only (no mock data)
   const displayResults = candidateResults;
@@ -929,14 +985,38 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </div>
               )}
 
+              {/* Date Range Filter */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
+                <input
+                  type="date"
+                  value={dateFrom}
+                  max={dateTo || undefined}
+                  onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  title="From date"
+                />
+                <span className="text-xs text-gray-400">–</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom || undefined}
+                  onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  title="To date"
+                />
+              </div>
+
               {/* Clear Filters Button */}
-              {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all' || passFailFilter !== 'all') && (
+              {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all' || passFailFilter !== 'all' || dateFrom || dateTo) && (
                 <button
                   onClick={() => {
                     setRoundFilters({});
                     setSearchQuery('');
                     setStatusFilter('all');
                     setPassFailFilter('all');
+                    setDateFrom('');
+                    setDateTo('');
                     setCurrentPage(1);
                   }}
                   className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm"
@@ -1504,6 +1584,24 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </p>
 
                   <div className="space-y-2.5 sm:space-y-3">
+                    {/* Show "Selected Candidates" option when rows are selected */}
+                    {selectedRows.length > 0 && (
+                      <button
+                        onClick={handleExportSelected}
+                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-green-500 rounded-lg hover:bg-green-50 transition-all group"
+                      >
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors flex-shrink-0">
+                          <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
+                        </div>
+                        <div className="text-left flex-1 min-w-0">
+                          <div className="text-sm sm:text-base font-medium text-gray-900">Selected Candidates</div>
+                          <div className="text-xs sm:text-sm text-gray-500">
+                            Export only the {selectedRows.length} selected candidate{selectedRows.length > 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      </button>
+                    )}
+
                     {/* Show "All Filtered Results" if columns are customized */}
                     {areColumnsCustomized() ? (
                       <button

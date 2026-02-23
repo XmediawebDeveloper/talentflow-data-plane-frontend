@@ -63,14 +63,39 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     };
   }, [user]);
 
-  // Get JWT token for WebSocket
-  const [wsToken, setWsToken] = useState<string | null>(null);
+  // Get JWT token for WebSocket.
+  // IMPORTANT: wsToken must only change when the user's IDENTITY changes (login / logout).
+  // If it changed on every user-object update (e.g. after refreshUser() or a permission
+  // refresh), the WebSocket hook would see a new token prop, tear down the live connection,
+  // and attempt to reconnect — which can exhaust the 5-attempt limit and leave the socket
+  // permanently dead.
+  const wsUserIdRef = useRef<string | null | undefined>(undefined); // undefined = uninitialized
+  const [wsToken, setWsToken] = useState<string | null>(() => {
+    // Initialise once from localStorage so the WS can connect immediately on mount.
+    if (typeof window === 'undefined') return null;
+    const token = localStorage.getItem('accessToken');
+    console.log('[Header] wsToken initialised from localStorage:', token ? `✅ present (${token.substring(0, 20)}...)` : '❌ null/missing');
+    return token;
+  });
 
   useEffect(() => {
-    // Get token from localStorage (same as auth service uses)
-    const token = localStorage.getItem('accessToken');
-    console.log('[Header] wsToken fetched from localStorage:', token ? `✅ present (${token.substring(0, 20)}...)` : '❌ null/missing');
-    setWsToken(token);
+    const currentUserId = user?.id ?? null;
+
+    if (wsUserIdRef.current === undefined) {
+      // First render — wsToken already initialised in useState above; just record the id.
+      wsUserIdRef.current = currentUserId;
+      return;
+    }
+
+    if (wsUserIdRef.current !== currentUserId) {
+      // User identity actually changed (logged in / logged out / switched account).
+      wsUserIdRef.current = currentUserId;
+      const token = currentUserId ? localStorage.getItem('accessToken') : null;
+      console.log('[Header] wsToken updated (identity change):', token ? `✅ present (${token.substring(0, 20)}...)` : '❌ null/missing');
+      setWsToken(token);
+    }
+    // Same user → do NOT touch wsToken. A permission refresh (or any other user-object
+    // update) must not disconnect a healthy WebSocket.
   }, [user]);
 
   // Fetch notifications

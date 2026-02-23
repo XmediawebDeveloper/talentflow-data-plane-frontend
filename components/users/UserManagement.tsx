@@ -195,7 +195,7 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
         actions: [
           { code: 'internal_db:upload', label: 'Resume Upload' },
           { code: 'internal_db:export', label: 'Export' },
-          { code: 'internal_db:delete', label: 'Delete' },
+          // internal_db:delete intentionally omitted — Delete from Internal Database is Tenant Admin only
           { code: 'internal_db:archive', label: 'Archive' },
         ],
       },
