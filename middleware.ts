@@ -27,7 +27,7 @@ const protectedRoutes = [
   '/analytics',
 ];
 
-const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 export async function middleware(request: NextRequest) {
@@ -40,7 +40,7 @@ export async function middleware(request: NextRequest) {
   let tenantSubdomain: string | null = null;
   let isRealSubdomain = false; // true = from actual hostname (not ?org= dev param)
 
-  // Real subdomain: acme.0sms.com → ['acme', '0sms', 'com']
+  // Real subdomain: acme.talentflow.data.mo.vc → ['acme', '0sms', 'com']
   if (hostParts.length >= 3 && !['www', 'app'].includes(hostParts[0])) {
     tenantSubdomain = hostParts[0];
     isRealSubdomain = true;
@@ -52,7 +52,7 @@ export async function middleware(request: NextRequest) {
   // --- End subdomain extraction ---
 
   // --- Validate real subdomain against DB ---
-  // Only for real hostnames (acme.0sms.com), not the ?org= dev shortcut
+  // Only for real hostnames (acme.talentflow.data.mo.vc), not the ?org= dev shortcut
   if (tenantSubdomain && isRealSubdomain) {
     const cachedValid = request.cookies.get('tf-subdomain-valid')?.value;
 
@@ -83,8 +83,8 @@ export async function middleware(request: NextRequest) {
   // --- End subdomain validation ---
 
   // Routing rules for auth pages:
-  //   • Root domain  (0sms.com / localhost without ?org=): /login  → /signup
-  //   • Subdomain    (acme.0sms.com / ?org=acme):         /signup → /login
+  //   • Root domain  (talentflow.data.mo.vc / localhost without ?org=): /login  → /signup
+  //   • Subdomain    (acme.talentflow.data.mo.vc / ?org=acme):         /signup → /login
   //   Signup is root-domain-only. Login is subdomain-only.
 
   // Root domain /login handling:
@@ -106,7 +106,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Subdomain (acme.0sms.com) is LOGIN-ONLY — block /signup, redirect to /login
+  // Subdomain (acme.talentflow.data.mo.vc) is LOGIN-ONLY — block /signup, redirect to /login
   if (tenantSubdomain && pathname === '/signup') {
     const url = request.nextUrl.clone();
     url.pathname = '/login';

@@ -170,7 +170,7 @@ export const handleUnauthorized = () => {
   if (typeof window !== 'undefined') {
     // Import getLoginUrl inline to avoid circular dependency
     // (api.ts is imported by authService.ts which defines getLoginUrl)
-    const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+    const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
     const hostname = window.location.hostname;
     const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
 
@@ -188,7 +188,7 @@ export const handleUnauthorized = () => {
           if (sub) loginUrl = `/login?org=${sub}`;
         }
       } else if (hostname.endsWith(`.${BASE_DOMAIN}`)) {
-        // Production subdomain: myorg.0sms.com → https://myorg.0sms.com/login
+        // Production subdomain: myorg.talentflow.data.mo.vc → https://myorg.talentflow.data.mo.vc/login
         const subdomain = hostname.slice(0, -(BASE_DOMAIN.length + 1));
         if (subdomain) loginUrl = `https://${subdomain}.${BASE_DOMAIN}/login`;
       }

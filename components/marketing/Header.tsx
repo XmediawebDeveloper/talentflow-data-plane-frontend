@@ -27,7 +27,7 @@ export function Header() {
   useEffect(() => {
     const host = window.location.hostname;
     const parts = host.split('.');
-    // Subdomain if 3+ parts and not www/app (e.g. acme.0sms.com or acme.localhost)
+    // Subdomain if 3+ parts and not www/app (e.g. acme.talentflow.data.mo.vc or acme.localhost)
     setIsSubdomain(
       (parts.length >= 3 && !['www', 'app'].includes(parts[0])) ||
       host.endsWith('.localhost')
