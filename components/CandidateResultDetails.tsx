@@ -12,6 +12,8 @@ interface CandidateResultDetailsProps {
   candidateId: string;
   assessmentTitle: string;
   jdTitle?: string;
+  jdId?: string;
+  assessmentVersion?: number | null;
 }
 
 interface CandidateBasicInfo {
@@ -35,7 +37,9 @@ export default function CandidateResultDetails({
   assessmentId,
   candidateId,
   assessmentTitle,
-  jdTitle
+  jdTitle,
+  jdId,
+  assessmentVersion,
 }: CandidateResultDetailsProps) {
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -321,6 +325,7 @@ export default function CandidateResultDetails({
               <div className="min-w-0">
                 <h1 className="text-sm sm:text-base md:text-lg text-gray-900 mb-0.5 sm:mb-1 truncate">{candidateData?.name || 'Unknown'}</h1>
                 <p className="text-xs sm:text-sm text-gray-600 truncate">{candidateData?.email}</p>
+                <p className="text-xs text-gray-400 mt-0.5 truncate">CID-{candidateId}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 self-start sm:self-auto">
@@ -383,7 +388,9 @@ export default function CandidateResultDetails({
               </div>
               <div className="min-w-0">
                 <div className="text-xs sm:text-sm text-gray-600">JD ID</div>
-                <div className="text-sm sm:text-base text-gray-900 truncate">{detailedResult?.ai_generation_audit?.generation_params?.jd_id || 'N/A'}</div>
+                <div className="text-sm sm:text-base text-gray-900 truncate">
+                  {jdId ? `JD-${jdId}` : 'N/A'}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -392,7 +399,18 @@ export default function CandidateResultDetails({
               </div>
               <div className="min-w-0">
                 <div className="text-xs sm:text-sm text-gray-600">Assessment ID</div>
-                <div className="text-sm sm:text-base text-gray-900 truncate">{assessmentId}</div>
+                <div className="text-sm sm:text-base text-gray-900 truncate">AS-{assessmentId}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Info className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs sm:text-sm text-gray-600">Version</div>
+                <div className="text-sm sm:text-base text-gray-900">
+                  {assessmentVersion != null ? `v${assessmentVersion}` : 'N/A'}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-3">
