@@ -119,20 +119,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const fetchNotificationCount = useCallback(async () => {
     if (!user) return;
 
-    // Skip if subscription is explicitly expired (no notifications needed for renewal flow)
-    // NOTE: Do NOT skip when quotaData is null/loading — that blocks initial fetch for new signups
-    if (quotaData && quotaData.subscription_status === 'expired') {
-      console.log('[Header] Skipping notification count - subscription expired');
-      return;
-    }
-
     try {
       const response = await notificationService.getNotificationCounts();
       setUnreadCount(response.unread);
     } catch (error) {
       console.error('Error fetching notification count:', error);
     }
-  }, [user, quotaData]);
+  }, [user]);
 
   // Use ref to track showNotifications for WebSocket callback without causing re-renders
   const showNotificationsRef = useRef(showNotifications);
