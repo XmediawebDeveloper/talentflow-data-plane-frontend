@@ -97,34 +97,34 @@ export default function ApplyToJobModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gray-800 flex items-center justify-center">
-              <Briefcase className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0">
+              <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h2 className="text-xl text-gray-900">{modalTitle}</h2>
-              <p className="text-sm text-gray-600">{modalDescription}</p>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-xl font-semibold text-gray-900">{modalTitle}</h2>
+              <p className="text-xs sm:text-sm text-gray-600">{modalDescription}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Selected Candidates Summary */}
-          <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-            <div className="flex items-start gap-3">
-              <Users className="w-5 h-5 text-gray-800 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="text-sm text-gray-800 mb-2">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="flex items-start gap-2 sm:gap-3">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-800 mb-2">
                   {resumes.length} Candidate{resumes.length > 1 ? 's' : ''} Selected
                 </h3>
                 <div className="space-y-2">
@@ -135,12 +135,12 @@ export default function ApplyToJobModal({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-gray-900 truncate">{resume.name}</div>
-                        <div className="text-xs text-gray-500 truncate">{resume.title}</div>
+                        <div className="text-xs text-gray-600 truncate">{resume.title}</div>
                       </div>
                     </div>
                   ))}
                   {resumes.length > 3 && (
-                    <div className="text-xs text-gray-900 pl-2">
+                    <div className="text-xs font-medium text-gray-900 pl-2">
                       +{resumes.length - 3} more candidate{resumes.length - 3 > 1 ? 's' : ''}
                     </div>
                   )}
@@ -151,7 +151,7 @@ export default function ApplyToJobModal({
 
           {/* Job Search */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-700 mb-2">Search Active Jobs</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Search Active Jobs</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -159,7 +159,7 @@ export default function ApplyToJobModal({
                 placeholder="Search by job title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 sm:py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
               />
             </div>
           </div>
@@ -167,21 +167,21 @@ export default function ApplyToJobModal({
           {/* Job Selection */}
           <div className="mb-4">
             <div className="flex items-center justify-between mb-3">
-              <label className="text-sm text-gray-700">
+              <label className="text-xs sm:text-sm font-medium text-gray-700">
                 Select Job Opening{selectedJobs.length > 0 ? ` (${selectedJobs.length} selected)` : 's'}
               </label>
               {selectedJobs.length > 0 && (
                 <button
                   onClick={() => setSelectedJobs([])}
-                  className="text-xs text-gray-800 hover:text-gray-900"
+                  className="text-xs text-gray-800 hover:text-gray-900 font-medium"
                 >
                   Clear Selection
                 </button>
               )}
             </div>
-            
+
             {filteredJobs.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              <div className="space-y-2 sm:space-y-3 max-h-96 overflow-y-auto pr-1">
                 {filteredJobs.map(job => {
                   const isSelected = selectedJobs.includes(job.id);
                   const workMode = workModeConfig[(job as any).workMode?.toLowerCase() || (job as any).remote_type?.toLowerCase()] || null;
@@ -228,31 +228,31 @@ export default function ApplyToJobModal({
                   return (
                     <label
                       key={job.id}
-                      className={`block bg-white rounded-xl border-2 p-5 cursor-pointer transition-all hover:shadow-md ${
+                      className={`block bg-white rounded-xl border-2 p-3 sm:p-5 cursor-pointer transition-all hover:shadow-md ${
                         isSelected
                           ? 'border-gray-800 ring-1 ring-gray-800 bg-gray-50'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      <div className="flex items-start gap-4">
+                      <div className="flex items-start gap-2 sm:gap-4">
                         {/* Checkbox */}
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleJob(job.id)}
-                          className="w-4 h-4 mt-1 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
+                          className="w-4 h-4 mt-1 text-gray-800 border-gray-300 rounded focus:ring-gray-500 flex-shrink-0"
                         />
                         <div className="flex-1 min-w-0">
                           {/* Row 1: Job ID, Title, Status, Creation Method */}
-                          <div className="flex items-center gap-3 mb-2 flex-wrap">
+                          <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
                             {/* Job ID Badge */}
                             {(job as any).job_id && (
-                              <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-medium border border-blue-200">
+                              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 bg-blue-100 text-blue-700 rounded-md text-xs sm:text-sm font-medium border border-blue-200">
                                 {(job as any).job_id}
                               </span>
                             )}
                             {/* Title */}
-                            <h3 className="text-base font-semibold text-gray-900">{job.title}</h3>
+                            <h3 className="text-sm sm:text-base font-semibold text-gray-900">{job.title}</h3>
                             {/* Status Badge */}
                             {getStatusBadge(job.status)}
                             {/* Creation Method Badge */}
@@ -264,7 +264,7 @@ export default function ApplyToJobModal({
                           </div>
 
                           {/* Row 2: Industry, Location, Employment Type, Work Mode */}
-                          <div className="flex items-center gap-4 text-sm text-gray-500 mb-2 flex-wrap">
+                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600 mb-2 flex-wrap">
                             {/* Industry/Department */}
                             {((job as any).industry_type || (job as any).department) && (
                               <span className="flex items-center gap-1">
@@ -296,7 +296,7 @@ export default function ApplyToJobModal({
                           </div>
 
                           {/* Row 3: Posted Date, Posted By, Last Updated */}
-                          <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
+                          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3 flex-wrap">
                             {/* Posted Date */}
                             {((job as any).postedDate || (job as any).published_at) && (
                               <span className="flex items-center gap-1">
@@ -321,9 +321,9 @@ export default function ApplyToJobModal({
                           </div>
 
                           {/* Row 4: Applicants */}
-                          <div className="flex items-center gap-2 text-sm">
-                            <Users className="w-4 h-4 text-gray-400" />
-                            <span className="text-gray-600">{job.applicants || (job as any).applicants_count || 0} applicants</span>
+                          <div className="flex items-center gap-2 text-xs sm:text-sm">
+                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400" />
+                            <span className="text-gray-700">{job.applicants || (job as any).applicants_count || 0} applicants</span>
                           </div>
                         </div>
                       </div>
@@ -332,9 +332,9 @@ export default function ApplyToJobModal({
                 })}
               </div>
             ) : (
-              <div className="text-center py-12 text-gray-500">
-                <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                <p className="text-sm">
+              <div className="text-center py-8 sm:py-12 text-gray-500">
+                <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400" />
+                <p className="text-xs sm:text-sm">
                   {searchQuery ? 'No jobs found matching your search' : 'No active jobs available'}
                 </p>
               </div>
@@ -343,11 +343,11 @@ export default function ApplyToJobModal({
 
           {/* Info Box */}
           {selectedJobs.length > 0 && (
-            <div className="mt-4 p-4 bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg">
-              <div className="flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-gray-800 mt-0.5" />
+            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="text-sm text-gray-900 mb-1">Next Steps</h4>
+                  <h4 className="text-xs sm:text-sm font-semibold text-gray-900 mb-1">Next Steps</h4>
                   <ul className="text-xs text-gray-700 space-y-1">
                     {selectedJobs.length === 1 ? (
                       <>
@@ -370,34 +370,34 @@ export default function ApplyToJobModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200 bg-gray-50">
-          <div className="text-sm text-gray-600">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
+          <div className="text-xs sm:text-sm text-gray-700">
             {selectedJobs.length === 0 && 'Select at least one job to continue'}
             {selectedJobs.length === 1 && (
               <span className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-gray-800" />
+                <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
                 Ready to apply to job
               </span>
             )}
             {selectedJobs.length > 1 && (
               <span className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-gray-800" />
+                <CheckCircle className="w-4 h-4 text-gray-800 flex-shrink-0" />
                 Ready to apply to {selectedJobs.length} jobs
               </span>
             )}
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
             <button
               onClick={onClose}
               disabled={isApplying}
-              className="px-6 py-2.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               onClick={handleApply}
               disabled={selectedJobs.length === 0 || isApplying}
-              className="px-6 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isApplying ? (
                 <>

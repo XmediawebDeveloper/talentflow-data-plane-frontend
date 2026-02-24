@@ -12,6 +12,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { QuotaProvider } from '@/contexts/QuotaContext';
 import { PlanFeaturesProvider } from '@/components/providers/PlanFeaturesProvider';
 import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail } from '@/lib/services/api';
+import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 
 // Admin-only routes that require tenant_admin role
 const adminRoutes = [
@@ -67,6 +68,9 @@ export default function DashboardLayout({
   // Initialize as undefined to show locked state until we know for sure
   const [subscriptionExpired, setSubscriptionExpired] = useState<boolean | undefined>(undefined);
   const [accountSuspended, setAccountSuspended] = useState<boolean>(false);
+  const [suspensionReason, setSuspensionReason] = useState<string | undefined>(undefined);
+  const [suspendedAt, setSuspendedAt] = useState<string | undefined>(undefined);
+  const [supportEmail, setSupportEmail] = useState<string>('support@talentflow.com');
 
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -88,7 +92,10 @@ export default function DashboardLayout({
         // CRITICAL: Suspend accounts immediately - blocks all access except sign out
         console.log('[DASHBOARD] Account SUSPENDED - blocking all access');
         setAccountSuspended(true);
-        setSubscriptionExpired(false); // Suspended is different from expired
+        setSubscriptionExpired(false);
+        // Capture suspension details from user data (set at login from admin API)
+        if (user?.suspensionReason) setSuspensionReason(user.suspensionReason);
+        if (user?.suspendedAt) setSuspendedAt(user.suspendedAt);
       } else if (isExpired) {
         // Immediately lock if tenant data says expired
         console.log('[DASHBOARD] Locking menus - subscription expired');
@@ -101,14 +108,26 @@ export default function DashboardLayout({
         setAccountSuspended(false);
       }
     }
-  }, [isLoading, tenant]);
+  }, [isLoading, tenant, user]);
 
   // Listen for subscription-inactive events from API interceptor
-  // If API reports expired (even if tenant data said active), lock the menus
+  // If API reports suspended or expired, update state accordingly
   useEffect(() => {
     const handleSubscriptionInactive = (event: CustomEvent<SubscriptionInactiveDetail>) => {
-      console.log('[DASHBOARD] API reported subscription expired - locking menus:', event.detail?.status);
-      setSubscriptionExpired(true);
+      const detail = event.detail;
+      console.log('[DASHBOARD] API reported subscription inactive - status:', detail?.status);
+
+      if (detail?.status === 'SUSPENDED') {
+        // API confirmed account is suspended - block everything
+        setAccountSuspended(true);
+        setSubscriptionExpired(false);
+        if (detail.reason) setSuspensionReason(detail.reason);
+        if (detail.suspended_at) setSuspendedAt(detail.suspended_at);
+        if (detail.support_email) setSupportEmail(detail.support_email);
+      } else {
+        // Expired or other inactive status
+        setSubscriptionExpired(true);
+      }
     };
 
     window.addEventListener(
@@ -123,17 +142,6 @@ export default function DashboardLayout({
       );
     };
   }, []);
-
-  // CRITICAL: Redirect suspended accounts to current-plan (blocking page)
-  // Suspended accounts can ONLY access current-plan page (which shows blocking UI)
-  useEffect(() => {
-    if (accountSuspended && pathname) {
-      if (pathname !== '/subscription/current-plan') {
-        console.log('[DASHBOARD] Account SUSPENDED, redirecting to current-plan from:', pathname);
-        router.push('/subscription/current-plan');
-      }
-    }
-  }, [accountSuspended, pathname, router]);
 
   // Redirect to current-plan page when subscription is expired and user is on a non-allowed page
   useEffect(() => {
@@ -353,8 +361,19 @@ export default function DashboardLayout({
               </div>
             </div>
 
-            {/* Global subscription inactive modal - shown on all dashboard pages */}
+            {/* Global subscription inactive modal - shown on all dashboard pages (not for suspended) */}
             <SubscriptionInactiveModal />
+
+            {/* CRITICAL: Full-screen suspension overlay - blocks ALL interaction */}
+            {accountSuspended && (
+              <div className="fixed inset-0 z-[100]">
+                <SuspendedAccountBlock
+                  suspensionReason={suspensionReason}
+                  suspendedAt={suspendedAt}
+                  contactEmail={supportEmail}
+                />
+              </div>
+            )}
           </div>
         </SessionTimeoutProvider>
       </PlanFeaturesProvider>

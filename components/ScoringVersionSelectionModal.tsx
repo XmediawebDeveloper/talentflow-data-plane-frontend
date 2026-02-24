@@ -146,47 +146,47 @@ export default function ScoringVersionSelectionModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col animate-in fade-in duration-200">
         {/* Header */}
-        <div className="flex items-start justify-between p-6 border-b border-gray-200">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md">
-              <Target className="w-6 h-6 text-white" />
+        <div className="flex items-start justify-between p-4 sm:p-6 border-b border-gray-200">
+          <div className="flex items-start gap-3 sm:gap-4 min-w-0 flex-1">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-md flex-shrink-0">
+              <Target className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-1">Select Resume Versions</h2>
-              <p className="text-sm text-gray-600">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base sm:text-xl font-semibold text-gray-900 mb-1">Select Resume Versions</h2>
+              <p className="text-xs sm:text-sm text-gray-700">
                 Choose which version to score for candidates with multiple resume versions
               </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Job: <span className="font-medium text-gray-700">{jobTitle}</span>
+              <p className="text-xs text-gray-600 mt-1 truncate">
+                Job: <span className="font-semibold text-gray-900">{jobTitle}</span>
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12">
+            <div className="flex flex-col items-center justify-center py-8 sm:py-12">
               <Loader2 className="w-8 h-8 text-gray-400 animate-spin mb-4" />
-              <p className="text-gray-600">Loading resume versions...</p>
+              <p className="text-sm sm:text-base text-gray-700 font-medium">Loading resume versions...</p>
             </div>
           ) : (
             <>
               {/* Info Banner */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="text-blue-900 font-medium mb-1">Latest versions auto-selected</p>
-                    <p className="text-blue-700">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs sm:text-sm">
+                    <p className="text-blue-900 font-semibold mb-1">Latest versions auto-selected</p>
+                    <p className="text-blue-800">
                       {multiVersionResumes.length > 0
                         ? `${multiVersionResumes.length} candidate${multiVersionResumes.length > 1 ? 's have' : ' has'} multiple versions. Latest version is selected by default.`
                         : 'All candidates have only one version.'}
@@ -197,12 +197,12 @@ export default function ScoringVersionSelectionModal({
 
               {/* Resumes with Multiple Versions */}
               {multiVersionResumes.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                <div className="mb-4 sm:mb-6">
+                  <h3 className="text-xs sm:text-sm font-semibold text-gray-800 mb-2 sm:mb-3 flex items-center gap-2">
                     <FileText className="w-4 h-4" />
                     Candidates with Multiple Versions ({multiVersionResumes.length})
                   </h3>
-                  <div className="space-y-3">
+                  <div className="space-y-2 sm:space-y-3">
                     {multiVersionResumes.map(resume => {
                       const isExpanded = expandedResumes.has(resume.id);
                       const versions = resume.loadedVersions || [];
@@ -213,26 +213,26 @@ export default function ScoringVersionSelectionModal({
                           {/* Resume Header */}
                           <button
                             onClick={() => toggleExpand(resume.id)}
-                            className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
+                            className="w-full flex items-center justify-between p-3 sm:p-4 bg-gray-50 hover:bg-gray-100 transition-colors gap-2"
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                               {isExpanded ? (
-                                <ChevronDown className="w-5 h-5 text-gray-500" />
+                                <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
                               ) : (
-                                <ChevronRight className="w-5 h-5 text-gray-500" />
+                                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
                               )}
-                              <div className="text-left">
-                                <p className="font-medium text-gray-900">{resume.name}</p>
-                                <p className="text-xs text-gray-500">{resume.email}</p>
+                              <div className="text-left min-w-0">
+                                <p className="font-semibold text-gray-900 text-sm truncate">{resume.name}</p>
+                                <p className="text-xs text-gray-600 truncate">{resume.email}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <span className="px-2.5 py-1 bg-amber-100 text-amber-800 text-xs font-medium rounded-full">
+                            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                              <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 bg-amber-100 text-amber-800 text-[10px] sm:text-xs font-semibold rounded-full whitespace-nowrap">
                                 {versions.length} versions
                               </span>
                               {selectedVersion && (
-                                <span className="text-sm text-gray-600">
-                                  Selected: <span className="font-medium">v{versions.length - versions.indexOf(selectedVersion)}</span>
+                                <span className="hidden sm:inline text-sm text-gray-700">
+                                  Selected: <span className="font-semibold">v{versions.length - versions.indexOf(selectedVersion)}</span>
                                 </span>
                               )}
                             </div>
@@ -240,7 +240,7 @@ export default function ScoringVersionSelectionModal({
 
                           {/* Versions List */}
                           {isExpanded && (
-                            <div className="p-4 space-y-2 bg-white">
+                            <div className="p-3 sm:p-4 space-y-2 bg-white">
                               {versions.map((version, index) => {
                                 const isLatest = index === 0;
                                 const isSelected = version.id === resume.selectedVersionId;
@@ -251,46 +251,46 @@ export default function ScoringVersionSelectionModal({
                                   <button
                                     key={version.id}
                                     onClick={() => selectVersion(resume.id, version.id)}
-                                    className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                                    className={`w-full text-left p-2.5 sm:p-3 rounded-lg border-2 transition-all ${
                                       isSelected
                                         ? 'border-gray-800 bg-gray-50'
                                         : 'border-gray-200 hover:border-gray-300'
                                     }`}
                                   >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                          isSelected ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                          isSelected ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
                                         }`}>
-                                          <span className="text-xs font-bold">v{versionNumber}</span>
+                                          <span className="text-[10px] sm:text-xs font-bold">v{versionNumber}</span>
                                         </div>
-                                        <div>
-                                          <div className="flex items-center gap-2">
-                                            <span className="text-sm font-medium text-gray-900">
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-xs sm:text-sm font-semibold text-gray-900">
                                               Version {versionNumber}
                                             </span>
                                             {isLatest && (
-                                              <span className="px-1.5 py-0.5 bg-green-600 text-white text-[10px] font-medium rounded">
+                                              <span className="px-1.5 py-0.5 bg-green-600 text-white text-[10px] font-semibold rounded">
                                                 Latest
                                               </span>
                                             )}
                                           </div>
-                                          <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                                          <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-gray-600 mt-0.5 flex-wrap">
                                             <span className="flex items-center gap-1">
-                                              <Calendar className="w-3 h-3" />
+                                              <Calendar className="w-3 h-3 flex-shrink-0" />
                                               {new Date(version.uploadDate).toLocaleDateString()}
                                             </span>
                                             <span className="flex items-center gap-1">
-                                              <User className="w-3 h-3" />
-                                              {version.uploadedBy}
+                                              <User className="w-3 h-3 flex-shrink-0" />
+                                              <span className="truncate max-w-[100px] sm:max-w-none">{version.uploadedBy}</span>
                                             </span>
                                           </div>
                                         </div>
                                       </div>
-                                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                                      <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
                                         isSelected ? 'bg-gray-800' : 'bg-gray-200'
                                       }`}>
-                                        <CheckCircle2 className={`w-4 h-4 ${
+                                        <CheckCircle2 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
                                           isSelected ? 'text-white' : 'text-gray-400'
                                         }`} />
                                       </div>
@@ -310,15 +310,15 @@ export default function ScoringVersionSelectionModal({
               {/* Resumes with Single Version */}
               {singleVersionResumes.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                  <h3 className="text-xs sm:text-sm font-semibold text-gray-800 mb-2 sm:mb-3 flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4 text-green-600" />
                     Candidates with Single Version ({singleVersionResumes.length})
                   </h3>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {singleVersionResumes.map(resume => (
-                      <div key={resume.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="font-medium text-gray-900 text-sm truncate">{resume.name}</p>
-                        <p className="text-xs text-gray-500 truncate">{resume.email}</p>
+                      <div key={resume.id} className="p-2.5 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="font-semibold text-gray-900 text-sm truncate">{resume.name}</p>
+                        <p className="text-xs text-gray-600 truncate">{resume.email}</p>
                       </div>
                     ))}
                   </div>
@@ -329,22 +329,22 @@ export default function ScoringVersionSelectionModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              {resumesWithVersions.length} resume{resumesWithVersions.length !== 1 ? 's' : ''} selected for scoring
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <p className="text-xs sm:text-sm text-gray-700 font-medium">
+              <span className="font-semibold text-gray-900">{resumesWithVersions.length}</span> resume{resumesWithVersions.length !== 1 ? 's' : ''} selected for scoring
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               <button
                 onClick={onClose}
-                className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors font-medium"
+                className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors font-medium text-sm"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={loading}
-                className="px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+                className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center justify-center gap-2 text-sm"
               >
                 <Target className="w-4 h-4" />
                 Start Scoring

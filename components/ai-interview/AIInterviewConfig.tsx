@@ -404,44 +404,44 @@ export default function AIInterviewConfig() {
   if (!selectedJd) return null;
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
       <div className="w-full">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
           <button
             onClick={handleBackClick}
             disabled={savingDraft}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
           </button>
-          <div>
-            <h1 className="text-gray-900 text-xl font-semibold">AI Interview Configuration</h1>
-            <p className="text-sm text-gray-500">Step 2: Configure interview rounds</p>
+          <div className="min-w-0">
+            <h1 className="text-gray-900 text-lg sm:text-xl font-semibold">AI Interview Configuration</h1>
+            <p className="text-xs sm:text-sm text-gray-500">Step 2: Configure interview rounds</p>
           </div>
         </div>
 
         {/* Step indicators */}
-        <div className="flex items-center gap-2 mb-8">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-green-100 text-green-700">
-              <CheckCircle2 className="w-4 h-4" />
+        <div className="flex items-center gap-1.5 sm:gap-2 mb-5 sm:mb-8">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium bg-green-100 text-green-700 flex-shrink-0">
+              <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
-            <span className="text-sm text-gray-400">Select JD</span>
-            <div className="w-12 h-px bg-gray-200 mx-1" />
+            <span className="text-xs sm:text-sm text-gray-400">Select JD</span>
+            <div className="w-6 sm:w-12 h-px bg-gray-200 mx-0.5 sm:mx-1" />
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium bg-gray-900 text-white">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium bg-gray-900 text-white flex-shrink-0">
               2
             </div>
-            <span className="text-sm text-gray-900 font-medium">Configure & Publish</span>
+            <span className="text-xs sm:text-sm text-gray-900 font-medium">Configure & Publish</span>
           </div>
         </div>
 
         {/* Configure Rounds */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
           {/* Left column: Round configuration */}
-          <div className="col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-4">
             {/* Selected JD info */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between">
@@ -489,10 +489,10 @@ export default function AIInterviewConfig() {
                     <div key={round.type} className={`border rounded-lg transition-all ${
                       round.enabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50 opacity-60'
                     }`}>
-                      <div className="p-4">
+                      <div className="p-3 sm:p-4">
                         {/* Round header */}
                         <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                             <label className="relative inline-flex items-center cursor-pointer">
                               <input
                                 type="checkbox"
@@ -502,10 +502,10 @@ export default function AIInterviewConfig() {
                               />
                               <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-gray-800 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all" />
                             </label>
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${info?.color || 'bg-gray-100 text-gray-700'}`}>
-                              <Icon className="w-4 h-4" />
+                            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${info?.color || 'bg-gray-100 text-gray-700'}`}>
+                              <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </div>
-                            <span className="font-medium text-gray-900">{info?.label || round.type}</span>
+                            <span className="font-medium text-gray-900 text-sm sm:text-base">{info?.label || round.type}</span>
                             <span className="text-xs text-gray-400">Round {round.order}</span>
                           </div>
                           {rounds.length > 1 && (
@@ -730,8 +730,8 @@ export default function AIInterviewConfig() {
             </div>
 
             {/* Summary */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4 sticky top-8">
-              <h3 className="font-medium text-gray-900 mb-3">Interview Summary</h3>
+            <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 lg:sticky lg:top-8">
+              <h3 className="font-medium text-gray-900 mb-3 text-sm sm:text-base">Interview Summary</h3>
 
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">

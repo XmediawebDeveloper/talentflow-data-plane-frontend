@@ -840,7 +840,7 @@ export default function ResumeDatabasePage() {
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleBulkApplyToJob : undefined}
-            onDelete={hasPermission('canDeleteInternalDB') || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onDelete={isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
             onResumeScoring={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleBulkResumeScoring : undefined}
             onAssessment={hasPlanFeature('assessment') && (hasPermission('canCreateAssessments') || isTenantAdmin) ? handleBulkAssessment : undefined}
             onAITalentMatch={hasPlanFeature('ai_talent_match') && (hasPermission('canRunAiMatch') || isTenantAdmin) ? handleBulkAITalentMatch : undefined}
@@ -900,7 +900,7 @@ export default function ResumeDatabasePage() {
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}
           onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleApplyToJob : undefined}
-          onDelete={hasPermission('canDeleteInternalDB') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
+          onDelete={isTenantAdmin ? (id) => handleDelete(id) : undefined}
           onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
           onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}
@@ -972,7 +972,7 @@ export default function ResumeDatabasePage() {
         <ResumeDetailView
           resume={viewingResume}
           onClose={() => setViewingResume(null)}
-          onDelete={hasPermission('canDeleteInternalDB') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
+          onDelete={isTenantAdmin ? (id) => handleDelete(id) : undefined}
         />
       )}
 
