@@ -417,9 +417,9 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
   };
 
   return (
-    <aside className="w-64 sm:w-72 lg:w-64 bg-gray-200 border-r border-gray-300 flex flex-col shadow-lg lg:shadow-sm h-screen">
+    <aside className="w-64 sm:w-72 lg:w-64 bg-gray-50 border-r border-gray-200 flex flex-col shadow-lg lg:shadow-sm h-screen">
       {/* Logo + Close Button */}
-      <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
+      <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
         <Link href="/dashboard" prefetch={false} className="flex items-center justify-center flex-1">
          <img
               src="/logos/talent_flow_logo.png"
@@ -442,7 +442,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-2">
+      <nav className="flex-1 overflow-y-auto py-2 min-h-0">
         {visibleSections.map((section) => (
           <div key={section.id} className="mb-2">
             {/* Section Header */}
@@ -522,7 +522,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                     className={`w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm sm:text-base lg:text-sm transition-colors ${
                       isActive(item.href)
                         ? 'bg-gray-800 text-white font-medium shadow-sm'
-                        : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                     }`}
                     style={{ width: 'calc(100% - 16px)' }}
                   >
@@ -537,7 +537,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50">
+      <div className="p-4 border-t border-gray-200 bg-white shrink-0">
         <p className="text-xs text-gray-500 text-center">
           {tenant?.name || 'TalentFlow'} v1.0
         </p>
