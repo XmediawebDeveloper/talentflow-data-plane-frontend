@@ -57,26 +57,26 @@ export function Header() {
 
   return (
     <header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50 transition-colors duration-300">
-      <div className="container mx-auto max-w-[1440px] px-6">
-        <div className="flex items-center justify-between h-16">
+      <div className="container mx-auto max-w-[1440px] px-4 sm:px-6">
+        <div className="flex items-center justify-between h-14 sm:h-16">
           <Link
             href="/"
-            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+            className="flex items-center gap-3 hover:opacity-80 transition-opacity flex-shrink-0"
           >
               <img
               src="/logos/talent_flow_logo.png"
               alt="TalentFlow"
-              className="h-10 w-auto"
+              className="h-8 sm:h-10 w-auto"
             />
           </Link>
 
           {!isLoggedIn && !isOrgLogin && (
-            <nav className="hidden md:flex items-center gap-8">
+            <nav className="hidden lg:flex items-center gap-4 xl:gap-8">
               {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`transition-colors font-medium ${
+                  className={`transition-colors font-medium text-sm xl:text-base whitespace-nowrap ${
                     pathname === item.href
                       ? "text-gray-900 dark:text-white"
                       : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
@@ -88,7 +88,7 @@ export function Header() {
             </nav>
           )}
 
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-2 xl:gap-3 flex-shrink-0">
             <button
               onClick={toggleDarkMode}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -107,18 +107,18 @@ export function Header() {
 
             {/* Only show auth buttons when not logged in */}
             {!isLoggedIn && !isOrgLogin && (
-              <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800" asChild>
+              <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 text-sm xl:text-base" asChild>
                 <Link href="/signup">Sign Up</Link>
               </Button>
             )}
             {!isLoggedIn && !isOrgLogin && (
-              <Button className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
+              <Button className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200 text-sm xl:text-base whitespace-nowrap" asChild>
                 <Link href="/signup">Start Free Trial</Link>
               </Button>
             )}
           </div>
 
-          <div className="flex md:hidden items-center gap-2">
+          <div className="flex lg:hidden items-center gap-2">
             <button
               onClick={toggleDarkMode}
               className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
@@ -151,7 +151,7 @@ export function Header() {
         </div>
 
         {mobileMenuOpen && !isLoggedIn && !isOrgLogin && (
-          <div className="md:hidden py-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="lg:hidden py-4 border-t border-gray-200 dark:border-gray-700">
             <nav className="flex flex-col gap-4">
               {navItems.map((item) => (
                 <Link

@@ -24,15 +24,20 @@ interface FeaturesPageProps {
 
 export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+    const checkScreen = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 640);
+      setIsTablet(w >= 640 && w < 1024);
+    };
+    checkScreen();
+    window.addEventListener('resize', checkScreen);
     setIsDark(document.documentElement.classList.contains('dark'));
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkScreen);
   }, []);
 
   // Fetch trial days from API
@@ -62,12 +67,12 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
   const containerStyle: React.CSSProperties = {
     maxWidth: '1400px',
     margin: '0 auto',
-    padding: '80px 24px',
+    padding: isMobile ? '40px 16px' : isTablet ? '60px 20px' : '80px 24px',
   };
 
   const headerStyle: React.CSSProperties = {
     textAlign: 'center',
-    marginBottom: '80px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const badgeStyle: React.CSSProperties = {
@@ -84,7 +89,7 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
   };
 
   const titleStyle: React.CSSProperties = {
-    fontSize: isMobile ? '36px' : '56px',
+    fontSize: isMobile ? '28px' : isTablet ? '40px' : '56px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
     marginBottom: '16px',
@@ -92,7 +97,7 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
   };
 
   const subtitleStyle: React.CSSProperties = {
-    fontSize: '20px',
+    fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
     color: isDark ? '#94A3B8' : '#6B7280',
     maxWidth: '672px',
     margin: '0 auto',
@@ -101,13 +106,13 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
 
   const gridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-    gap: '32px',
-    marginBottom: '80px',
+    gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+    gap: isMobile ? '16px' : '32px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const cardStyle: React.CSSProperties = {
-    padding: '32px',
+    padding: isMobile ? '20px' : '32px',
     borderRadius: '16px',
     border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
     backgroundColor: isDark ? '#1E293B' : '#ffffff',
@@ -127,7 +132,7 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
   });
 
   const cardTitleStyle: React.CSSProperties = {
-    fontSize: '24px',
+    fontSize: isMobile ? '20px' : '24px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
     marginBottom: '12px',
@@ -156,20 +161,20 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
 
   const ctaSectionStyle: React.CSSProperties = {
     textAlign: 'center',
-    padding: '80px 0',
-    borderRadius: '24px',
+    padding: isMobile ? '40px 20px' : isTablet ? '60px 20px' : '80px 0',
+    borderRadius: isMobile ? '16px' : '24px',
     background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
   };
 
   const ctaTitleStyle: React.CSSProperties = {
-    fontSize: isMobile ? '32px' : '48px',
+    fontSize: isMobile ? '24px' : isTablet ? '36px' : '48px',
     fontWeight: 700,
     color: '#ffffff',
     marginBottom: '16px',
   };
 
   const ctaSubtitleStyle: React.CSSProperties = {
-    fontSize: '20px',
+    fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
     color: 'rgba(255,255,255,0.9)',
     marginBottom: '32px',
   };
@@ -178,8 +183,8 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
-    padding: '16px 32px',
-    fontSize: '18px',
+    padding: isMobile ? '12px 24px' : '16px 32px',
+    fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
     borderRadius: '12px',
     backgroundColor: '#ffffff',

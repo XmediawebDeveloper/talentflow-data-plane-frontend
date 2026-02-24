@@ -31,19 +31,26 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const [demoModalOpen, setDemoModalOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isSmallMobile, setIsSmallMobile] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+    const checkScreen = () => {
+      const w = window.innerWidth;
+      setIsSmallMobile(w < 400);
+      setIsMobile(w < 640);
+      setIsTablet(w >= 640 && w < 1024);
+    };
+    checkScreen();
+    window.addEventListener('resize', checkScreen);
 
     // Check dark mode
     setIsDark(document.documentElement.classList.contains('dark'));
 
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkScreen);
   }, []);
 
   // Fetch trial days from API
@@ -74,7 +81,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
   const heroSectionStyle: React.CSSProperties = {
     position: 'relative',
-    minHeight: '90vh',
+    minHeight: isMobile ? '80vh' : '90vh',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -91,7 +98,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const containerStyle: React.CSSProperties = {
     maxWidth: '1400px',
     margin: '0 auto',
-    padding: '0 24px',
+    padding: isMobile ? '0 16px' : isTablet ? '0 20px' : '0 24px',
     position: 'relative',
     zIndex: 10,
   };
@@ -119,11 +126,11 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   };
 
   const h1Style: React.CSSProperties = {
-    fontSize: isMobile ? '48px' : '80px',
+    fontSize: isMobile ? '32px' : isTablet ? '52px' : '80px',
     fontWeight: 700,
     lineHeight: 1.1,
     letterSpacing: '-0.02em',
-    marginBottom: '32px',
+    marginBottom: isMobile ? '20px' : '32px',
   };
 
   const gradientTextStyle: React.CSSProperties = {
@@ -134,10 +141,10 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   };
 
   const subHeadlineStyle: React.CSSProperties = {
-    fontSize: isMobile ? '18px' : '24px',
+    fontSize: isMobile ? '15px' : isTablet ? '18px' : '24px',
     color: isDark ? '#CBD5E1' : '#4B5563',
     maxWidth: '768px',
-    margin: '0 auto 48px',
+    margin: isMobile ? '0 auto 32px' : '0 auto 48px',
     lineHeight: 1.6,
   };
 
@@ -155,17 +162,18 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    height: '64px',
-    padding: '0 40px',
-    fontSize: '18px',
+    height: isMobile ? '52px' : '64px',
+    padding: isMobile ? '0 24px' : '0 40px',
+    fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
-    borderRadius: '16px',
+    borderRadius: isMobile ? '12px' : '16px',
     cursor: 'pointer',
     border: 'none',
     background: 'linear-gradient(to right, #667EEA, #764BA2)',
     color: '#ffffff',
     boxShadow: '0 10px 40px rgba(102, 126, 234, 0.3)',
     transition: 'all 0.2s',
+    width: isMobile ? '100%' : 'auto',
   };
 
   const outlineButtonStyle: React.CSSProperties = {
@@ -173,16 +181,17 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    height: '64px',
-    padding: '0 40px',
-    fontSize: '18px',
+    height: isMobile ? '52px' : '64px',
+    padding: isMobile ? '0 24px' : '0 40px',
+    fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
-    borderRadius: '16px',
+    borderRadius: isMobile ? '12px' : '16px',
     cursor: 'pointer',
     backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)',
     color: isDark ? '#ffffff' : '#374151',
     border: `2px solid ${isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB'}`,
     transition: 'all 0.2s',
+    width: isMobile ? '100%' : 'auto',
   };
 
   const trustIndicatorsStyle: React.CSSProperties = {
@@ -203,55 +212,61 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
   // Stats section styles
   const statsSectionStyle: React.CSSProperties = {
-    padding: '80px 0',
+    padding: isMobile ? '40px 0' : isTablet ? '60px 0' : '80px 0',
     backgroundColor: isDark ? '#0F172A' : '#ffffff',
   };
 
   const statsGridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-    gap: '24px',
+    gridTemplateColumns: isSmallMobile ? '1fr' : isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+    gap: isSmallMobile ? '10px' : isMobile ? '12px' : '24px',
   };
 
   const statCardStyle: React.CSSProperties = {
-    padding: '32px',
+    padding: isSmallMobile ? '16px 12px' : isMobile ? '20px' : '32px',
     textAlign: 'center',
-    borderRadius: '12px',
+    borderRadius: isSmallMobile ? '10px' : '12px',
     border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
     backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    display: isSmallMobile ? 'flex' : 'block',
+    flexDirection: isSmallMobile ? 'row' : undefined,
+    alignItems: isSmallMobile ? 'center' : undefined,
+    gap: isSmallMobile ? '12px' : undefined,
   };
 
   const statIconBoxStyle = (gradient: string): React.CSSProperties => ({
-    width: '56px',
-    height: '56px',
-    borderRadius: '16px',
+    width: isSmallMobile ? '40px' : '56px',
+    height: isSmallMobile ? '40px' : '56px',
+    minWidth: isSmallMobile ? '40px' : '56px',
+    borderRadius: isSmallMobile ? '10px' : '16px',
     background: gradient,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: '0 auto 16px',
+    margin: isSmallMobile ? '0' : '0 auto 16px',
   });
 
   const statNumberStyle: React.CSSProperties = {
-    fontSize: '36px',
+    fontSize: isSmallMobile ? '20px' : isMobile ? '24px' : isTablet ? '30px' : '36px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
-    marginBottom: '8px',
+    marginBottom: isSmallMobile ? '2px' : '8px',
   };
 
   const statLabelStyle: React.CSSProperties = {
     color: isDark ? '#94A3B8' : '#6B7280',
+    fontSize: isSmallMobile ? '12px' : '14px',
   };
 
   // Features section styles
   const featuresSectionStyle: React.CSSProperties = {
-    padding: '96px 0',
+    padding: isMobile ? '48px 0' : isTablet ? '72px 0' : '96px 0',
     backgroundColor: isDark ? 'rgba(30, 41, 59, 0.5)' : '#F9FAFB',
   };
 
   const sectionHeadingStyle: React.CSSProperties = {
     textAlign: 'center',
-    marginBottom: '64px',
+    marginBottom: isMobile ? '32px' : isTablet ? '48px' : '64px',
   };
 
   const featureBadgeStyle: React.CSSProperties = {
@@ -268,14 +283,14 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   };
 
   const sectionTitleStyle: React.CSSProperties = {
-    fontSize: isMobile ? '32px' : '48px',
+    fontSize: isMobile ? '24px' : isTablet ? '36px' : '48px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
     marginBottom: '16px',
   };
 
   const sectionSubtitleStyle: React.CSSProperties = {
-    fontSize: '20px',
+    fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
     color: isDark ? '#94A3B8' : '#6B7280',
     maxWidth: '672px',
     margin: '0 auto',
@@ -283,12 +298,12 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
   const featuresGridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-    gap: '32px',
+    gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+    gap: isMobile ? '16px' : '32px',
   };
 
   const featureCardStyle: React.CSSProperties = {
-    padding: '32px',
+    padding: isMobile ? '20px' : '32px',
     borderRadius: '12px',
     border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
     backgroundColor: isDark ? '#1E293B' : '#ffffff',
@@ -307,7 +322,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   });
 
   const featureTitleStyle: React.CSSProperties = {
-    fontSize: '24px',
+    fontSize: isMobile ? '20px' : '24px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
     marginBottom: '12px',
@@ -320,7 +335,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
   // How it works section
   const howItWorksSectionStyle: React.CSSProperties = {
-    padding: '96px 0',
+    padding: isMobile ? '48px 0' : isTablet ? '72px 0' : '96px 0',
     backgroundColor: isDark ? '#0F172A' : '#ffffff',
   };
 
@@ -339,8 +354,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
   const stepsGridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-    gap: '48px',
+    gridTemplateColumns: isMobile ? '1fr' : isTablet ? '1fr' : 'repeat(3, 1fr)',
+    gap: isMobile ? '32px' : '48px',
     maxWidth: '1024px',
     margin: '0 auto',
   };
@@ -350,17 +365,17 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   };
 
   const stepNumberStyle = (gradient: string): React.CSSProperties => ({
-    fontSize: '96px',
+    fontSize: isMobile ? '64px' : isTablet ? '80px' : '96px',
     fontWeight: 700,
     background: gradient,
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     backgroundClip: 'text',
-    marginBottom: '24px',
+    marginBottom: isMobile ? '16px' : '24px',
   });
 
   const stepTitleStyle: React.CSSProperties = {
-    fontSize: '24px',
+    fontSize: isMobile ? '20px' : '24px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
     marginBottom: '16px',
@@ -374,7 +389,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   // CTA section
   const ctaSectionStyle: React.CSSProperties = {
     position: 'relative',
-    padding: '96px 0',
+    padding: isMobile ? '48px 0' : isTablet ? '72px 0' : '96px 0',
     overflow: 'hidden',
   };
 
@@ -394,7 +409,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   };
 
   const ctaHeadingStyle: React.CSSProperties = {
-    fontSize: isMobile ? '32px' : '60px',
+    fontSize: isMobile ? '26px' : isTablet ? '40px' : '60px',
     fontWeight: 700,
     color: '#ffffff',
     lineHeight: 1.2,
@@ -402,10 +417,10 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   };
 
   const ctaSubtextStyle: React.CSSProperties = {
-    fontSize: '20px',
+    fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
     color: 'rgba(255,255,255,0.9)',
     maxWidth: '672px',
-    margin: '0 auto 48px',
+    margin: isMobile ? '0 auto 32px' : '0 auto 48px',
     lineHeight: 1.6,
   };
 
@@ -414,33 +429,35 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    height: '64px',
-    padding: '0 48px',
-    fontSize: '18px',
+    height: isMobile ? '52px' : '64px',
+    padding: isMobile ? '0 24px' : '0 48px',
+    fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
-    borderRadius: '16px',
+    borderRadius: isMobile ? '12px' : '16px',
     cursor: 'pointer',
     border: 'none',
     backgroundColor: '#ffffff',
     color: '#7C3AED',
     boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
     transition: 'all 0.2s',
+    width: isMobile ? '100%' : 'auto',
   };
 
   const ctaButtonSecondaryStyle: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    height: '64px',
-    padding: '0 48px',
-    fontSize: '18px',
+    height: isMobile ? '52px' : '64px',
+    padding: isMobile ? '0 24px' : '0 48px',
+    fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
-    borderRadius: '16px',
+    borderRadius: isMobile ? '12px' : '16px',
     cursor: 'pointer',
     backgroundColor: 'transparent',
     color: '#ffffff',
     border: '2px solid #ffffff',
     transition: 'all 0.2s',
+    width: isMobile ? '100%' : 'auto',
   };
 
   const ctaTrustStyle: React.CSSProperties = {
@@ -630,10 +647,19 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               return (
                 <div key={index} style={statCardStyle}>
                   <div style={statIconBoxStyle(stat.gradient)}>
-                    <Icon style={{ width: 28, height: 28, color: '#fff' }} />
+                    <Icon style={{ width: isSmallMobile ? 20 : 28, height: isSmallMobile ? 20 : 28, color: '#fff' }} />
                   </div>
-                  <div style={statNumberStyle}>{stat.number}</div>
-                  <div style={statLabelStyle}>{stat.label}</div>
+                  {isSmallMobile ? (
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={statNumberStyle}>{stat.number}</div>
+                      <div style={statLabelStyle}>{stat.label}</div>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={statNumberStyle}>{stat.number}</div>
+                      <div style={statLabelStyle}>{stat.label}</div>
+                    </>
+                  )}
                 </div>
               );
             })}

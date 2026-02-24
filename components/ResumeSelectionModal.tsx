@@ -341,7 +341,7 @@ export default function ResumeSelectionModal({
 
       // Fetch full resume details to add to the list
       try {
-        const fullResume = await resumeService.getById(resumeId);
+        const fullResume = await resumeService.get(resumeId);
 
         const resumeToAdd: Resume = {
           id: fullResume.id,
@@ -556,7 +556,7 @@ export default function ResumeSelectionModal({
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 px-4 sm:px-6 pt-3 sm:pt-4 overflow-x-auto">
+        <div className="border-b border-gray-200 px-4 sm:px-6 pt-3 sm:pt-4">
           <div className="flex gap-1 sm:gap-2">
             <button
               onClick={() => handleTabChange('my-resumes')}
@@ -633,9 +633,60 @@ export default function ResumeSelectionModal({
           </div>
         )}
 
+        {/* Mobile/Tablet Folder Selector (Only for My Resumes) */}
+        {activeTab === 'my-resumes' && (
+          <div className="lg:hidden border-b border-gray-200 bg-gray-50 px-3 sm:px-4 py-2 sm:py-3 flex-shrink-0 overflow-x-auto">
+            <div className="flex items-center gap-2 min-w-max">
+              <button
+                onClick={() => setSelectedFolder('all')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
+                  selectedFolder === 'all'
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                }`}
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                All Resumes
+                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                  selectedFolder === 'all'
+                    ? 'bg-white/20 text-white'
+                    : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {allMyResumes.length}
+                </span>
+              </button>
+              {folders.filter(f => !f.parentId).map(folder => {
+                const isSelected = selectedFolder === folder.id;
+                const count = getResumeCount(folder.id);
+                return (
+                  <button
+                    key={folder.id}
+                    onClick={() => setSelectedFolder(folder.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap transition-all ${
+                      isSelected
+                        ? 'bg-gray-800 text-white'
+                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Folder className="w-3.5 h-3.5" />
+                    {folder.name}
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      isSelected
+                        ? 'bg-white/20 text-white'
+                        : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Content Area */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left Sidebar - Folder Tree (Only for My Resumes) */}
+          {/* Left Sidebar - Folder Tree (Only for My Resumes - Desktop) */}
           {activeTab === 'my-resumes' && (
             <div className="hidden lg:block w-64 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0">
               <div className="p-4">
