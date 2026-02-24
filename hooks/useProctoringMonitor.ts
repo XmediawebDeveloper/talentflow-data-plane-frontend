@@ -20,6 +20,40 @@ import { ProctoringEventBus, ProctoringEventType } from '@/lib/ProctoringEventBu
 // Re-export for consumers that import from here
 export type { ProctoringEventType } from '@/lib/ProctoringEventBus';
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+/**
+ * Returns true on mobile browsers (iOS + Android).
+ * getDisplayMedia and keyboard-based screenshot detection are both
+ * OS-level on mobile and completely invisible to the browser.
+ */
+const isMobileDevice = (): boolean => {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod|Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i
+    .test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && !/Macintosh/.test(navigator.userAgent));
+};
+
+// ── Constants ────────────────────────────────────────────────────────────────
+const BACKEND_FLUSH_INTERVAL = 5000; // ms — batch-flush proctoring events to backend
+
+const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
+  tab_switch:                5000,
+  copy_attempt:              2000,
+  paste_attempt:             2000,
+  voice_detected:           10000,
+  multiple_voices:          10000,
+  camera_disabled:           5000,
+  microphone_disabled:       5000,
+  camera_obstructed:        10000,
+  screenshot_attempt:        2000,
+  screen_recording_attempt:  5000,
+  window_blur:               5000,
+  fullscreen_exit:           5000,
+  face_missing:              8000,
+  multiple_faces:            8000,
+  gaze_away:                 8000,
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Legacy type kept for compatibility with existing imports
 export interface ProctoringWarning {
   id: string;
@@ -511,6 +545,17 @@ export function useProctoringMonitor({
   }, []);
 
   const setupScreenshotDetection = useCallback(() => {
+    // Mobile browsers never receive keyboard events for hardware screenshot
+    // shortcuts (power+volume / side buttons) — these are handled entirely
+    // by the OS.  Nothing the browser can do to intercept them.
+    if (isMobileDevice()) {
+      console.warn(
+        '[PROCTORING] Screenshot detection is NOT available on mobile. ' +
+        'Hardware button screenshots (power+volume) are OS-level and invisible to the browser.'
+      );
+      return () => {};
+    }
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'PrintScreen') {
         e.preventDefault();
@@ -538,12 +583,30 @@ export function useProctoringMonitor({
   }, []);
 
   const setupScreenRecordingDetection = useCallback(() => {
+    // Mobile browsers (iOS/Android) do not support getDisplayMedia — screen
+    // recording is handled at OS level (Control Centre / Quick Settings) and
+    // is completely invisible to any browser API.  Log the limitation and
+    // report it to the backend once so the proctor is aware.
+    if (isMobileDevice()) {
+      console.warn(
+        '[PROCTORING] Screen recording detection is NOT available on mobile. ' +
+        'iOS and Android handle screen recording at OS level — no browser API can intercept it.'
+      );
+      emitEventRef.current('screen_recording_attempt', {
+        reason: 'mobile_unsupported',
+        message: 'Screen recording detection unavailable on this device',
+      });
+      return () => {};
+    }
+
     const originalGetDisplayMedia = navigator.mediaDevices?.getDisplayMedia;
     if (originalGetDisplayMedia) {
       navigator.mediaDevices.getDisplayMedia = async function () {
         emitEventRef.current('screen_recording_attempt', {});
         throw new Error('Screen recording is not allowed during the interview');
       };
+    } else {
+      console.warn('[PROCTORING] getDisplayMedia not available in this browser — screen recording detection skipped.');
     }
     console.log('[PROCTORING] Screen recording detection started');
     return () => {
