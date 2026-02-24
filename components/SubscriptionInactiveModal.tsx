@@ -26,6 +26,11 @@ export default function SubscriptionInactiveModal() {
 
   useEffect(() => {
     const handleSubscriptionInactive = (event: CustomEvent<SubscriptionInactiveDetail>) => {
+      // SUSPENDED accounts are handled by the full-screen overlay in dashboard layout
+      // Don't show modal for suspended - only for expired/inactive
+      if (event.detail?.status === 'SUSPENDED') {
+        return;
+      }
       setErrorDetails(event.detail);
       // Only show modal if NOT on an allowed path
       if (!ALLOWED_PATHS.some(path => window.location.pathname.includes(path))) {

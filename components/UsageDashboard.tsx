@@ -495,6 +495,21 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     window.location.href = '/subscription/current-plan';
   };
 
+  // Check if addon purchases should be blocked (trial or expired subscription)
+  const isAddonPurchaseBlocked = !subscriptionSummary ||
+    subscriptionSummary.is_trial ||
+    subscriptionSummary.status?.toLowerCase() === 'expired' ||
+    subscriptionSummary.status?.toLowerCase() === 'suspended' ||
+    subscriptionSummary.status?.toLowerCase() === 'inactive';
+
+  const addonBlockedMessage = subscriptionSummary?.is_trial
+    ? 'Upgrade to a paid plan to purchase addons'
+    : subscriptionSummary?.status?.toLowerCase() === 'expired'
+      ? 'Renew your subscription to purchase addons'
+      : subscriptionSummary?.status?.toLowerCase() === 'suspended'
+        ? 'Account suspended - contact support'
+        : 'Upgrade to a paid plan to purchase addons';
+
   // Handle addon buy click
   const handleBuyAddon = (addon: Addon) => {
     setSelectedAddon(addon);
@@ -876,8 +891,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                             <button
                               key={quota.quota_type}
                               onClick={() => {
-                                if (subscriptionSummary?.is_trial) {
-                                  setAddonPurchaseError('Addon purchases are only available for paid plans. Please upgrade from your free trial.');
+                                if (isAddonPurchaseBlocked) {
+                                  setAddonPurchaseError(
+                                    subscriptionSummary?.is_trial
+                                      ? 'Addon purchases are only available for paid plans. Please upgrade from your free trial.'
+                                      : 'Addon purchases are not available. Please renew your subscription first.'
+                                  );
                                   return;
                                 }
                                 if (matchingAddon) {
@@ -889,9 +908,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                                   }
                                 }
                               }}
-                              title={subscriptionSummary?.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
+                              title={isAddonPurchaseBlocked ? addonBlockedMessage : ""}
                               className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
-                                subscriptionSummary?.is_trial
+                                isAddonPurchaseBlocked
                                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                   : quota.is_exhausted
                                     ? 'bg-gray-900 text-white hover:bg-gray-800'
@@ -900,7 +919,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                             >
                               <Plus className="w-4 h-4" />
                               Add {quota.name}
-                              {quota.is_exhausted && !subscriptionSummary?.is_trial && (
+                              {quota.is_exhausted && !isAddonPurchaseBlocked && (
                                 <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Exhausted</span>
                               )}
                             </button>
@@ -1142,17 +1161,19 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       <div className="mt-4 pt-4 border-t border-gray-200">
                         <button
                           onClick={() => handleBuyAddon(addon)}
-                          disabled={!subscriptionSummary || subscriptionSummary.is_trial}
-                          title={subscriptionSummary?.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
+                          disabled={isAddonPurchaseBlocked}
+                          title={isAddonPurchaseBlocked ? addonBlockedMessage : ""}
                           className={`w-full px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                            !subscriptionSummary || subscriptionSummary.is_trial
+                            isAddonPurchaseBlocked
                               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                               : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-700 hover:to-gray-800 shadow-lg shadow-gray-300/30 hover:shadow-xl hover:shadow-gray-300/40'
                           }`}
                         >
                           <ShoppingCart className="w-5 h-5" />
-                          {!subscriptionSummary || subscriptionSummary.is_trial ? 'Upgrade Plan to Purchase' : 'Purchase Now'}
-                          {(!subscriptionSummary || !subscriptionSummary.is_trial) && <ChevronRight className="w-4 h-4" />}
+                          {isAddonPurchaseBlocked
+                            ? (subscriptionSummary?.status?.toLowerCase() === 'expired' ? 'Renew Plan to Purchase' : 'Upgrade Plan to Purchase')
+                            : 'Purchase Now'}
+                          {!isAddonPurchaseBlocked && <ChevronRight className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
