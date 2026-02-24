@@ -319,30 +319,30 @@ export default function RoleManagement() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-4 mb-6 border-b border-gray-200">
+      <div className="flex gap-2 sm:gap-4 mb-4 sm:mb-6 border-b border-gray-200">
         <button
           onClick={() => setActiveTab('roles')}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'roles'
               ? 'border-gray-800 text-gray-800'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
             Roles
           </div>
         </button>
         <button
           onClick={() => setActiveTab('audit')}
-          className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors ${
             activeTab === 'audit'
               ? 'border-gray-800 text-gray-800'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          <div className="flex items-center gap-2">
-            <History className="w-4 h-4" />
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <History className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
             Activity Log
           </div>
         </button>
@@ -351,40 +351,40 @@ export default function RoleManagement() {
       {activeTab === 'roles' && (
         <>
           {/* Search */}
-          <div className="mb-6">
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <div className="mb-4 sm:mb-6">
+            <div className="relative max-w-full sm:max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search roles..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                className="w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-2.5 text-xs sm:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
               />
             </div>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <p className="text-sm text-gray-600">Total Roles</p>
-              <p className="text-3xl font-semibold text-gray-900 mt-1">{roles.length}</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-8">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <p className="text-xs sm:text-sm text-gray-600">Total Roles</p>
+              <p className="text-xl sm:text-3xl font-semibold text-gray-900 mt-1">{roles.length}</p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <p className="text-sm text-gray-600">System Roles</p>
-              <p className="text-3xl font-semibold text-gray-800 mt-1">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <p className="text-xs sm:text-sm text-gray-600">System Roles</p>
+              <p className="text-xl sm:text-3xl font-semibold text-gray-800 mt-1">
                 {roles.filter(r => r.is_system).length}
               </p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <p className="text-sm text-gray-600">Custom Roles</p>
-              <p className="text-3xl font-semibold text-gray-800 mt-1">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <p className="text-xs sm:text-sm text-gray-600">Custom Roles</p>
+              <p className="text-xl sm:text-3xl font-semibold text-gray-800 mt-1">
                 {roles.filter(r => !r.is_system).length}
               </p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <p className="text-sm text-gray-600">Total Permissions</p>
-              <p className="text-3xl font-semibold text-green-600 mt-1">{permissions.length}</p>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <p className="text-xs sm:text-sm text-gray-600">Total Permissions</p>
+              <p className="text-xl sm:text-3xl font-semibold text-green-600 mt-1">{permissions.length}</p>
             </div>
           </div>
 
@@ -395,148 +395,202 @@ export default function RoleManagement() {
                 <Loader2 className="w-8 h-8 text-gray-800 animate-spin" />
               </div>
             ) : (
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Role
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Inherits From
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Permissions
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Users
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Priority
-                    </th>
-                    <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {filteredRoles.map((role) => (
-                    <tr key={role.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            role.is_system
-                              ? 'bg-gradient-to-br from-gray-800 to-gray-900'
-                              : 'bg-gradient-to-br from-gray-800 to-gray-900'
-                          }`}>
-                            <Shield className="w-5 h-5 text-white" />
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                              {role.name}
+              <>
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Role
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Type
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Inherits From
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Permissions
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Users
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Priority
+                        </th>
+                        <th className="px-4 lg:px-6 py-3 lg:py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {filteredRoles.map((role) => (
+                        <tr key={role.id} className="hover:bg-gray-50">
+                          <td className="px-4 lg:px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 lg:w-10 lg:h-10 rounded-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 flex-shrink-0">
+                                <Shield className="w-4 h-4 lg:w-5 lg:h-5 text-white" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-gray-900">{role.name}</div>
+                                <div className="text-xs text-gray-500 truncate max-w-[200px]">{role.description}</div>
+                              </div>
                             </div>
-                            <div className="text-xs text-gray-500">{role.description}</div>
+                          </td>
+                          <td className="px-4 lg:px-6 py-4">
+                            <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-900">
+                              {role.is_system ? 'System' : 'Custom'}
+                            </span>
+                          </td>
+                          <td className="px-4 lg:px-6 py-4">
+                            {role.parent_role_name ? (
+                              <span className="text-sm text-gray-600">{role.parent_role_name}</span>
+                            ) : (
+                              <span className="text-sm text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 lg:px-6 py-4">
+                            <span className="text-sm font-medium text-gray-900">{role.permission_count}</span>
+                          </td>
+                          <td className="px-4 lg:px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <Users className="w-4 h-4 text-gray-400" />
+                              <span className="text-sm text-gray-600">{role.user_count}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 lg:px-6 py-4">
+                            <span className="text-sm text-gray-600">{role.priority}</span>
+                          </td>
+                          <td className="px-4 lg:px-6 py-4">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleViewPermissions(role)}
+                                className="p-1.5 lg:p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="View permissions"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                              {!['admin', 'recruiter', 'billing_manager', 'viewer'].includes(role.code) && (
+                                <button
+                                  onClick={() => {
+                                    console.log('[ROLE EDIT] Attempting to edit role:', { id: role.id, name: role.name, code: role.code });
+                                    if (!role.id || role.id <= 0) {
+                                      console.error('[ROLE EDIT] Invalid role ID:', role.id, 'Full role object:', role);
+                                      toast.error(`Invalid role ID: ${role.id}`);
+                                      return;
+                                    }
+                                    console.log('[ROLE EDIT] Navigating to edit page with ID:', role.id);
+                                    router.push(`/organization/role-management/edit/${role.id}`);
+                                  }}
+                                  className="p-1.5 lg:p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
+                                  title="Edit role"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                              )}
+                              {!role.is_system && (
+                                <button
+                                  onClick={() => handleDeleteRole(role.id)}
+                                  className="p-1.5 lg:p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Deactivate role"
+                                >
+                                  <Ban className="w-4 h-4" />
+                                </button>
+                              )}
+                              {role.is_system && (
+                                <div className="p-1.5 lg:p-2 text-gray-300">
+                                  <Lock className="w-4 h-4" />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Card Layout */}
+                <div className="md:hidden divide-y divide-gray-200">
+                  {filteredRoles.map((role) => (
+                    <div key={role.id} className="p-3 sm:p-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 flex-shrink-0">
+                            <Shield className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-gray-900 truncate">{role.name}</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 truncate">{role.description}</div>
                           </div>
                         </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                          role.is_system
-                            ? 'bg-gray-100 text-gray-900'
-                            : 'bg-gray-100 text-gray-900'
-                        }`}>
+                        <span className="px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full bg-gray-100 text-gray-900 flex-shrink-0">
                           {role.is_system ? 'System' : 'Custom'}
                         </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {role.parent_role_name ? (
-                          <span className="text-sm text-gray-600">{role.parent_role_name}</span>
-                        ) : (
-                          <span className="text-sm text-gray-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm font-medium text-gray-900">
-                          {role.permission_count}
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-500 mb-2 pl-10 flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Shield className="w-3 h-3 flex-shrink-0" />
+                          {role.permission_count} perms
                         </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <Users className="w-4 h-4 text-gray-400" />
-                          <span className="text-sm text-gray-600">{role.user_count}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm text-gray-600">{role.priority}</span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {/* 3-slot grid: [Edit | Eye | Ban/Lock] — Edit left, Eye center, Ban/Lock right */}
-                        <div className="grid grid-cols-3 items-center w-24 mx-auto">
-                          {/* Left: Edit (spacer for protected roles) */}
-                          <div className="flex justify-center">
-                            {!['admin', 'recruiter', 'billing_manager', 'viewer'].includes(role.code) ? (
-                              <button
-                                onClick={() => {
-                                  console.log('[ROLE EDIT] Attempting to edit role:', { id: role.id, name: role.name, code: role.code });
-                                  if (!role.id || role.id <= 0) {
-                                    console.error('[ROLE EDIT] Invalid role ID:', role.id, 'Full role object:', role);
-                                    toast.error(`Invalid role ID: ${role.id}`);
-                                    return;
-                                  }
-                                  console.log('[ROLE EDIT] Navigating to edit page with ID:', role.id);
-                                  router.push(`/organization/role-management/edit/${role.id}`);
-                                }}
-                                className="p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
-                                title="Edit role"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <div className="w-8" />
-                            )}
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3 flex-shrink-0" />
+                          {role.user_count} users
+                        </span>
+                        <span>Priority: {role.priority}</span>
+                        {role.parent_role_name && (
+                          <span>Inherits: {role.parent_role_name}</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 pl-10">
+                        <button
+                          onClick={() => handleViewPermissions(role)}
+                          className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="View permissions"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        {!['admin', 'recruiter', 'billing_manager', 'viewer'].includes(role.code) && (
+                          <button
+                            onClick={() => {
+                              if (!role.id || role.id <= 0) {
+                                toast.error(`Invalid role ID: ${role.id}`);
+                                return;
+                              }
+                              router.push(`/organization/role-management/edit/${role.id}`);
+                            }}
+                            className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
+                            title="Edit role"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {!role.is_system && (
+                          <button
+                            onClick={() => handleDeleteRole(role.id)}
+                            className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Deactivate role"
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {role.is_system && (
+                          <div className="p-1.5 text-gray-300">
+                            <Lock className="w-3.5 h-3.5" />
                           </div>
-
-                          {/* Center: Eye — always visible */}
-                          <div className="flex justify-center">
-                            <button
-                              onClick={() => handleViewPermissions(role)}
-                              className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="View permissions"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                          </div>
-
-                          {/* Right: Ban (custom roles) or Lock (system roles) */}
-                          <div className="flex justify-center">
-                            {!role.is_system ? (
-                              <button
-                                onClick={() => handleDeleteRole(role.id)}
-                                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Deactivate role"
-                              >
-                                <Ban className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <div className="p-2 text-gray-300">
-                                <Lock className="w-4 h-4" />
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
+                        )}
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </>
             )}
 
             {!isLoading && filteredRoles.length === 0 && (
-              <div className="text-center py-12">
-                <Shield className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">No roles found</p>
+              <div className="text-center py-10 sm:py-12">
+                <Shield className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-3 sm:mb-4" />
+                <p className="text-gray-500 text-sm">No roles found</p>
               </div>
             )}
           </div>
@@ -545,64 +599,99 @@ export default function RoleManagement() {
 
       {activeTab === 'audit' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Action
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Entity
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Performed By
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Changes
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {auditLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
-                      log.action.includes('created')
-                        ? 'bg-green-100 text-green-700'
-                        : log.action.includes('deleted')
-                        ? 'bg-red-100 text-red-700'
-                        : 'bg-gray-100 text-gray-900'
-                    }`}>
-                      {getAuditActionLabel(log.action)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">{log.entity_name || log.entity_id}</div>
-                    <div className="text-xs text-gray-500">{log.entity_type}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">
-                      {log.performed_by_name || log.performed_by}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-600">{formatDate(log.performed_at)}</div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {formatAuditChanges(log.action, log.changes)}
-                  </td>
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Action
+                  </th>
+                  <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Entity
+                  </th>
+                  <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Performed By
+                  </th>
+                  <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Changes
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {auditLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-gray-50">
+                    <td className="px-4 lg:px-6 py-4">
+                      <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
+                        log.action.includes('created')
+                          ? 'bg-green-100 text-green-700'
+                          : log.action.includes('deleted')
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-gray-100 text-gray-900'
+                      }`}>
+                        {getAuditActionLabel(log.action)}
+                      </span>
+                    </td>
+                    <td className="px-4 lg:px-6 py-4">
+                      <div className="text-sm text-gray-900">{log.entity_name || log.entity_id}</div>
+                      <div className="text-xs text-gray-500">{log.entity_type}</div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-4">
+                      <div className="text-sm text-gray-600">
+                        {log.performed_by_name || log.performed_by}
+                      </div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-4">
+                      <div className="text-sm text-gray-600">{formatDate(log.performed_at)}</div>
+                    </td>
+                    <td className="px-4 lg:px-6 py-4">
+                      {formatAuditChanges(log.action, log.changes)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Card Layout */}
+          <div className="md:hidden divide-y divide-gray-200">
+            {auditLogs.map((log) => (
+              <div key={log.id} className="p-3 sm:p-4 space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className={`px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full ${
+                    log.action.includes('created')
+                      ? 'bg-green-100 text-green-700'
+                      : log.action.includes('deleted')
+                      ? 'bg-red-100 text-red-700'
+                      : 'bg-gray-100 text-gray-900'
+                  }`}>
+                    {getAuditActionLabel(log.action)}
+                  </span>
+                  <span className="text-[10px] sm:text-xs text-gray-400">{formatDate(log.performed_at)}</span>
+                </div>
+                <div>
+                  <div className="text-xs sm:text-sm font-medium text-gray-900">{log.entity_name || log.entity_id}</div>
+                  <div className="text-[10px] sm:text-xs text-gray-500">{log.entity_type}</div>
+                </div>
+                <div className="text-xs text-gray-600">
+                  By: {log.performed_by_name || log.performed_by}
+                </div>
+                {log.changes && (
+                  <div className="text-xs">
+                    {formatAuditChanges(log.action, log.changes)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
 
           {auditLogs.length === 0 && (
-            <div className="text-center py-12">
-              <History className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No audit logs found</p>
+            <div className="text-center py-10 sm:py-12">
+              <History className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-3 sm:mb-4" />
+              <p className="text-gray-500 text-sm">No audit logs found</p>
             </div>
           )}
         </div>
@@ -611,16 +700,16 @@ export default function RoleManagement() {
       {/* View Permissions Modal (Read-Only) */}
       {viewingRole && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                  <Eye className="w-5 h-5 text-white" />
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-white">{viewingRole.name}</h2>
-                  <p className="text-blue-100 text-sm">{viewingRole.description}</p>
+                <div className="min-w-0">
+                  <h2 className="text-base sm:text-xl font-bold text-white truncate">{viewingRole.name}</h2>
+                  <p className="text-blue-100 text-xs sm:text-sm truncate">{viewingRole.description}</p>
                 </div>
               </div>
               <button
@@ -628,43 +717,43 @@ export default function RoleManagement() {
                   setViewingRole(null);
                   setViewingRolePermissions([]);
                 }}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
               >
-                <X className="w-5 h-5 text-white" />
+                <X className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+            <div className="p-3 sm:p-6 overflow-y-auto flex-1">
               {/* Role Info */}
-              <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
                 <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Role Code</div>
-                  <div className="font-medium text-gray-900">{viewingRole.code}</div>
+                  <div className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
+                  <div className="font-medium text-gray-900 text-xs sm:text-base truncate">{viewingRole.code}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Users</div>
-                  <div className="font-medium text-gray-900">{viewingRole.user_count}</div>
+                  <div className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
+                  <div className="font-medium text-gray-900 text-xs sm:text-base">{viewingRole.user_count}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Permissions</div>
-                  <div className="font-medium text-gray-900">{viewingRolePermissions.length}</div>
+                  <div className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                  <div className="font-medium text-gray-900 text-xs sm:text-base">{viewingRolePermissions.length}</div>
                 </div>
               </div>
 
               {/* Permissions List */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
+                <h3 className="text-xs sm:text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3 sm:mb-4">
                   Allocated Permissions ({viewingRolePermissions.length})
                 </h3>
 
                 {viewingRolePermissions.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500">No permissions allocated</p>
+                  <div className="text-center py-10 sm:py-12">
+                    <Shield className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">No permissions allocated</p>
                   </div>
                 ) : (
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     {/* Group permissions by module */}
                     {Object.entries(
                       viewingRolePermissions.reduce((acc, perm) => {
@@ -676,31 +765,31 @@ export default function RoleManagement() {
                     ).map(([module, perms]) => (
                       <div key={module} className="border border-gray-200 rounded-lg overflow-hidden">
                         {/* Module Header */}
-                        <div className="bg-gray-100 px-4 py-2 border-b border-gray-200">
-                          <h4 className="font-semibold text-gray-900 capitalize">
+                        <div className="bg-gray-100 px-3 sm:px-4 py-2 border-b border-gray-200">
+                          <h4 className="font-semibold text-gray-900 capitalize text-xs sm:text-sm">
                             {module.replace(/_/g, ' ')} ({perms.length})
                           </h4>
                         </div>
 
                         {/* Permissions Grid */}
-                        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
                           {perms.map((perm) => (
                             <div
                               key={perm.id}
-                              className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200"
+                              className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg border border-gray-200"
                             >
-                              <div className={`w-8 h-8 rounded flex items-center justify-center flex-shrink-0 ${
+                              <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${
                                 perm.action === 'read' ? 'bg-blue-100 text-blue-600' :
                                 perm.action === 'create' ? 'bg-green-100 text-green-600' :
                                 perm.action === 'update' ? 'bg-yellow-100 text-yellow-600' :
                                 perm.action === 'delete' ? 'bg-red-100 text-red-600' :
                                 'bg-purple-100 text-purple-600'
                               }`}>
-                                <span className="text-xs font-bold uppercase">{perm.action[0]}</span>
+                                <span className="text-[10px] sm:text-xs font-bold uppercase">{perm.action[0]}</span>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm text-gray-900">{perm.name}</div>
-                                <div className="text-xs text-gray-500 font-mono">{perm.code}</div>
+                                <div className="font-medium text-xs sm:text-sm text-gray-900">{perm.name}</div>
+                                <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{perm.code}</div>
                               </div>
                             </div>
                           ))}
@@ -713,10 +802,10 @@ export default function RoleManagement() {
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
+            <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 border-t border-gray-200">
               <div className="text-sm text-gray-500">
                 {viewingRole.is_system && (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-200 text-gray-700 rounded-full text-xs font-medium">
+                  <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-gray-200 text-gray-700 rounded-full text-[10px] sm:text-xs font-medium">
                     <Lock className="w-3 h-3" />
                     System Role (Read-Only)
                   </span>
@@ -727,7 +816,7 @@ export default function RoleManagement() {
                   setViewingRole(null);
                   setViewingRolePermissions([]);
                 }}
-                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                className="w-full sm:w-auto px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-xs sm:text-sm"
               >
                 Close
               </button>

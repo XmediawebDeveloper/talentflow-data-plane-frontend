@@ -279,53 +279,53 @@ export default function SecurityPage() {
   }
 
   return (
-    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
+    <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-4 sm:mb-6 lg:mb-8">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center shadow-lg">
-              <Lock className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
+            <div className="w-9 h-9 sm:w-12 sm:h-12 bg-gradient-to-br from-red-600 to-red-700 rounded-lg sm:rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+              <Lock className="w-4 h-4 sm:w-7 sm:h-7 text-white" />
             </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Security Settings</h1>
-              <p className="text-sm text-gray-600">Manage your account security and authentication</p>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">Security Settings</h1>
+              <p className="text-xs sm:text-sm text-gray-600">Manage your account security</p>
             </div>
           </div>
         </div>
 
         {/* Password Section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Password</h2>
-          <div className="space-y-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
+          <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 md:mb-4">Password</h2>
+          <div className="space-y-3 sm:space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Current Password</label>
               <div className="relative">
                 <input
                   type={showCurrentPassword ? 'text' : 'password'}
                   value={passwordForm.currentPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
                   placeholder="Enter current password"
-                  className="w-full px-3 sm:px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none text-black text-sm sm:text-base"
+                  className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none text-black text-xs sm:text-sm md:text-base"
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 </button>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">New Password</label>
               <div className="relative">
                 <input
                   type={showNewPassword ? 'text' : 'password'}
                   value={passwordForm.newPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                   placeholder="Enter new password"
-                  className={`w-full px-3 sm:px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none transition-colors text-black text-sm sm:text-base ${
+                  className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none transition-colors text-black text-xs sm:text-sm md:text-base ${
                     passwordForm.newPassword
                       ? passwordStrength === 5
                         ? 'border-green-500'
@@ -338,21 +338,21 @@ export default function SecurityPage() {
                 <button
                   type="button"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showNewPassword ? <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 </button>
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
               <div className="relative">
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={passwordForm.confirmPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                   placeholder="Confirm new password"
-                  className={`w-full px-3 sm:px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none transition-colors text-black text-sm sm:text-base ${
+                  className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none transition-colors text-black text-xs sm:text-sm md:text-base ${
                     passwordForm.confirmPassword
                       ? passwordsMatch
                         ? 'border-green-500'
@@ -363,18 +363,18 @@ export default function SecurityPage() {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
-                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 </button>
               </div>
             </div>
 
             {/* Password Requirements - Live Validation */}
             {(passwordForm.newPassword || passwordForm.confirmPassword) && (
-              <div className="p-3 sm:p-4 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="p-2.5 sm:p-3 md:p-4 bg-gray-50 border border-gray-200 rounded-lg">
                 <p className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Password Requirements:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
                   {[
                     { label: 'At least 8 characters', check: passwordChecks.length },
                     { label: 'One uppercase letter', check: passwordChecks.uppercase },
@@ -383,9 +383,9 @@ export default function SecurityPage() {
                     { label: 'One special character', check: passwordChecks.special },
                     { label: 'Passwords match', check: passwordsMatch },
                   ].map((req, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <CheckCircle className={`w-4 h-4 transition-colors ${req.check ? 'text-green-500' : 'text-gray-300'}`} />
-                      <span className={`text-sm transition-colors ${req.check ? 'text-green-600' : 'text-gray-500'}`}>
+                    <div key={i} className="flex items-center gap-1.5 sm:gap-2">
+                      <CheckCircle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 transition-colors ${req.check ? 'text-green-500' : 'text-gray-300'}`} />
+                      <span className={`text-xs sm:text-sm transition-colors ${req.check ? 'text-green-600' : 'text-gray-500'}`}>
                         {req.label}
                       </span>
                     </div>
@@ -416,7 +416,7 @@ export default function SecurityPage() {
             <button
               onClick={handleChangePassword}
               disabled={isChangingPassword || (passwordForm.newPassword && passwordStrength < 3)}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base w-full sm:w-auto justify-center sm:justify-start"
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
             >
               {isChangingPassword ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -431,15 +431,15 @@ export default function SecurityPage() {
         </div>
 
         {/* Two-Factor Authentication */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-0 mb-3 sm:mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-green-600" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Two-Factor Authentication</h2>
-                <p className="text-xs sm:text-sm text-gray-500">Add an extra layer of security to your account</p>
+                <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">Two-Factor Authentication</h2>
+                <p className="text-[10px] sm:text-xs md:text-sm text-gray-500">Add an extra layer of security</p>
               </div>
             </div>
             {!show2FASetup && (
@@ -460,8 +460,8 @@ export default function SecurityPage() {
           </div>
 
           {settings.two_factor_enabled && !show2FASetup && (
-            <div className="mt-4 p-4 bg-green-50 rounded-lg">
-              <p className="text-sm text-green-700">
+            <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-green-50 rounded-lg">
+              <p className="text-xs sm:text-sm text-green-700">
                 Two-factor authentication is enabled. You'll need to enter a code from your authenticator app when signing in.
               </p>
             </div>
@@ -469,9 +469,9 @@ export default function SecurityPage() {
 
           {/* 2FA Setup Modal */}
           {show2FASetup && (
-            <div className="mt-3 sm:mt-4 p-4 sm:p-6 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium text-gray-900">Setup Two-Factor Authentication</h3>
+            <div className="mt-2 sm:mt-3 md:mt-4 p-3 sm:p-4 md:p-6 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <h3 className="font-medium text-xs sm:text-sm md:text-base text-gray-900">Setup Two-Factor Authentication</h3>
                 <button
                   onClick={() => setShow2FASetup(false)}
                   className="p-1 hover:bg-gray-200 rounded"
@@ -480,33 +480,33 @@ export default function SecurityPage() {
                 </button>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 <div>
-                  <p className="text-sm text-gray-600 mb-3">
+                  <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">
                     1. Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
                   </p>
                   {twoFAQRCode && (
-                    <div className="flex justify-center p-4 bg-white rounded-lg border">
+                    <div className="flex justify-center p-3 sm:p-4 bg-white rounded-lg border">
                       <img
                         src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(twoFAQRCode)}`}
                         alt="2FA QR Code"
-                        className="w-48 h-48"
+                        className="w-36 h-36 sm:w-48 sm:h-48"
                       />
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <p className="text-sm text-gray-600 mb-2">
+                  <p className="text-xs sm:text-sm text-gray-600 mb-2">
                     Or manually enter this secret key:
                   </p>
-                  <code className="block p-3 bg-gray-800 text-green-400 rounded-lg font-mono text-sm break-all">
+                  <code className="block p-2 sm:p-3 bg-gray-800 text-green-400 rounded-lg font-mono text-[10px] sm:text-xs md:text-sm break-all">
                     {twoFASecret}
                   </code>
                 </div>
 
                 <div>
-                  <p className="text-sm text-gray-600 mb-2">
+                  <p className="text-xs sm:text-sm text-gray-600 mb-2">
                     2. Enter the 6-digit code from your authenticator app:
                   </p>
                   <input
@@ -514,7 +514,7 @@ export default function SecurityPage() {
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="000000"
-                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none text-center text-xl sm:text-2xl tracking-widest text-black"
+                    className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
                     maxLength={6}
                   />
                 </div>
@@ -522,7 +522,7 @@ export default function SecurityPage() {
                 <button
                   onClick={handleVerify2FA}
                   disabled={is2FALoading || verificationCode.length !== 6}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
                 >
                   {is2FALoading ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -537,9 +537,9 @@ export default function SecurityPage() {
 
           {/* Disable 2FA Confirmation Dialog */}
           {showDisable2FADialog && (
-            <div className="mt-3 sm:mt-4 p-4 sm:p-6 bg-red-50 rounded-lg border border-red-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-medium text-gray-900">Disable Two-Factor Authentication</h3>
+            <div className="mt-2 sm:mt-3 md:mt-4 p-3 sm:p-4 md:p-6 bg-red-50 rounded-lg border border-red-200">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <h3 className="font-medium text-xs sm:text-sm md:text-base text-gray-900">Disable Two-Factor Authentication</h3>
                 <button
                   onClick={() => {
                     setShowDisable2FADialog(false);
@@ -551,16 +551,16 @@ export default function SecurityPage() {
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-yellow-800">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex items-start gap-2 p-2.5 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs sm:text-sm text-yellow-800">
                     Disabling 2FA will make your account less secure. You'll only need your password to sign in.
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-sm text-gray-600 mb-2">
+                  <p className="text-xs sm:text-sm text-gray-600 mb-2">
                     Enter the 6-digit code from your authenticator app to confirm:
                   </p>
                   <input
@@ -568,7 +568,7 @@ export default function SecurityPage() {
                     value={disable2FACode}
                     onChange={(e) => setDisable2FACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="000000"
-                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none text-center text-xl sm:text-2xl tracking-widest text-black"
+                    className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
                     maxLength={6}
                   />
                 </div>
@@ -602,14 +602,14 @@ export default function SecurityPage() {
         </div>
 
         {/* Session Timeout */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-          <div className="flex items-center gap-3 mb-3 sm:mb-4">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800" />
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
+          <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900">Session Timeout</h2>
-              <p className="text-xs sm:text-sm text-gray-500">Automatically log out after inactivity</p>
+              <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">Session Timeout</h2>
+              <p className="text-[10px] sm:text-xs md:text-sm text-gray-500">Auto log out after inactivity</p>
             </div>
           </div>
           <div className="relative">
@@ -617,7 +617,7 @@ export default function SecurityPage() {
               value={settings.session_timeout_minutes?.toString() || '30'}
               onChange={(e) => handleSessionTimeoutChange(e.target.value)}
               disabled={isSavingTimeout}
-              className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none bg-white disabled:opacity-50 text-black text-sm sm:text-base"
+              className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none bg-white disabled:opacity-50 text-black text-xs sm:text-sm md:text-base"
             >
               <option value="15">15 minutes</option>
               <option value="30">30 minutes</option>
@@ -635,28 +635,28 @@ export default function SecurityPage() {
 
         {/* SSO (Single Sign-On) */}
         <FeatureGate feature="sso" mode="section">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <KeyRound className="w-5 h-5 text-blue-600" />
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 mb-4 sm:mb-6 overflow-hidden">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3 md:mb-4">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <KeyRound className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-blue-600" />
               </div>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Single Sign-On (SSO)</h2>
-                <p className="text-sm text-gray-500">Configure SSO integration for your organization</p>
+              <div className="min-w-0">
+                <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">Single Sign-On (SSO)</h2>
+                <p className="text-[10px] sm:text-xs md:text-sm text-gray-500">Configure SSO for your organization</p>
               </div>
             </div>
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm text-blue-700">
-                SSO is available for your plan. Contact your administrator to configure SAML or OIDC integration for your organization.
+            <div className="p-2.5 sm:p-3 md:p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-xs sm:text-sm text-blue-700">
+                SSO is available for your plan. Contact your administrator to configure SAML or OIDC integration.
               </p>
             </div>
           </div>
         </FeatureGate>
 
         {/* Active Sessions */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0 mb-3 sm:mb-4">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900">Active Sessions</h2>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 mb-2 sm:mb-3 md:mb-4">
+            <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">Active Sessions</h2>
             {sessions.filter(s => !s.is_current).length > 0 && (
               <button
                 onClick={handleRevokeAllOtherSessions}
@@ -668,40 +668,40 @@ export default function SecurityPage() {
           </div>
 
           {sessions.length === 0 ? (
-            <p className="text-gray-500 text-center py-6 sm:py-8 text-sm sm:text-base">No active sessions found</p>
+            <p className="text-gray-500 text-center py-6 sm:py-8 text-xs sm:text-sm md:text-base">No active sessions found</p>
           ) : (
-            <div className="space-y-3 sm:space-y-4">
+            <div className="space-y-2 sm:space-y-3 md:space-y-4">
               {sessions.map((session) => (
                 <div
                   key={session.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg gap-3 sm:gap-4"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 md:p-4 bg-gray-50 rounded-lg gap-2 sm:gap-3 md:gap-4 overflow-hidden"
                 >
-                  <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                  <div className="flex items-start sm:items-center gap-2 sm:gap-3 md:gap-4 min-w-0">
+                    <div className="w-7 h-7 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-200 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-600" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 text-sm sm:text-base truncate">{session.device_info || 'Unknown Device'}</p>
-                      <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs sm:text-sm text-gray-500">
-                        <MapPin className="w-3 h-3 flex-shrink-0" />
-                        <span className="truncate">{session.location || 'Unknown Location'}</span>
+                      <p className="font-medium text-gray-900 text-xs sm:text-sm md:text-base truncate">{session.device_info || 'Unknown Device'}</p>
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 md:gap-2 text-[10px] sm:text-xs md:text-sm text-gray-500">
+                        <MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                        <span className="truncate max-w-[100px] sm:max-w-none">{session.location || 'Unknown Location'}</span>
                         {session.ip_address && (
                           <span className="text-gray-400 truncate">({session.ip_address})</span>
                         )}
                         <span className="hidden sm:inline">•</span>
-                        <span className="text-xs sm:text-sm">{session.is_current ? 'Current session' : formatLastActive(session.last_active_at)}</span>
+                        <span className="text-[10px] sm:text-xs md:text-sm">{session.is_current ? 'Current session' : formatLastActive(session.last_active_at)}</span>
                       </div>
                     </div>
                   </div>
                   <div className="flex-shrink-0 self-end sm:self-auto">
                     {session.is_current ? (
-                      <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-green-100 text-green-700 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap">
+                      <span className="px-1.5 sm:px-2 md:px-3 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] sm:text-xs md:text-sm font-medium whitespace-nowrap">
                         Current
                       </span>
                     ) : (
                       <button
                         onClick={() => handleRevokeSession(session.id)}
-                        className="text-xs sm:text-sm text-red-600 hover:text-red-700 whitespace-nowrap"
+                        className="text-[10px] sm:text-xs md:text-sm text-red-600 hover:text-red-700 whitespace-nowrap"
                       >
                         Revoke
                       </button>
@@ -716,7 +716,7 @@ export default function SecurityPage() {
 
         {/* Revoke All Other Sessions Popup Modal */}
         {showRevokeAllDialog && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
             {/* Backdrop */}
             <div
               className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -724,21 +724,21 @@ export default function SecurityPage() {
             />
 
             {/* Modal */}
-            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-4 sm:p-6 animate-in fade-in zoom-in duration-200">
-              <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Revoke All Other Sessions</h3>
+            <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md p-3 sm:p-4 md:p-6 animate-in fade-in zoom-in duration-200">
+              <div className="flex items-center justify-between mb-2 sm:mb-3 md:mb-4">
+                <h3 className="text-xs sm:text-sm md:text-lg font-semibold text-gray-900">Revoke All Other Sessions</h3>
                 <button
                   onClick={() => setShowRevokeAllDialog(false)}
-                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors flex-shrink-0"
                 >
-                  <X className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500" />
+                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-500" />
                 </button>
               </div>
 
-              <div className="space-y-3 sm:space-y-4">
-                <div className="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs sm:text-sm text-yellow-800">
+              <div className="space-y-2.5 sm:space-y-3 md:space-y-4">
+                <div className="flex items-start gap-2 p-2.5 sm:p-3 md:p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <AlertTriangle className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-[10px] sm:text-xs md:text-sm text-yellow-800">
                     This will sign you out from all other devices and browsers. Only your current session will remain active.
                   </p>
                 </div>
@@ -746,19 +746,19 @@ export default function SecurityPage() {
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-1 sm:pt-2">
                   <button
                     onClick={() => setShowRevokeAllDialog(false)}
-                    className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm sm:text-base"
+                    className="flex-1 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium text-xs sm:text-sm md:text-base"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={confirmRevokeAllOtherSessions}
                     disabled={isRevokingSession}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 font-medium text-sm sm:text-base"
+                    className="flex-1 flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 font-medium text-xs sm:text-sm md:text-base"
                   >
                     {isRevokingSession ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
                     ) : (
-                      <Shield className="w-4 h-4" />
+                      <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     )}
                     Revoke All
                   </button>

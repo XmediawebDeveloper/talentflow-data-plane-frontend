@@ -431,17 +431,17 @@ export default function AIInterview() {
   }
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
       <div className="w-full">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div>
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">AI Interview Platform</h1>
-            <p className="text-sm text-gray-600">
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-1 sm:mb-2">AI Interview Platform</h1>
+            <p className="text-xs sm:text-sm text-gray-600">
               Configure and manage AI-powered interview sessions
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {/* AI Interview Quota Badge */}
             {totalUnits > 0 && (
               <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 shadow-sm ${
@@ -487,23 +487,24 @@ export default function AIInterview() {
             )}
             <button
               onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-              className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-lg hover:bg-gray-900 transition-colors"
+              className="flex items-center gap-2 bg-gray-800 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg hover:bg-gray-900 transition-colors text-xs sm:text-sm"
             >
-              <Settings className="w-5 h-5" />
-              AI Interview Configuration
+              <Settings className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+              <span className="hidden sm:inline">AI Interview Configuration</span>
+              <span className="sm:hidden">Configure</span>
             </button>
           </div>
         </div>
 
         {/* AI-Powered Interviews Banner */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0">
-              <Zap className="w-5 h-5 text-gray-700" />
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+          <div className="flex items-start gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-200 flex items-center justify-center flex-shrink-0">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
             </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">AI-Powered Interviews</h3>
-              <p className="text-sm text-gray-600">
+            <div className="min-w-0">
+              <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-1">AI-Powered Interviews</h3>
+              <p className="text-xs sm:text-sm text-gray-600">
                 Create multi-round AI interview configurations linked to job descriptions. AI conducts HR, Technical, and Behavioral rounds with auto-suggested topics. Track candidate performance, round-wise scores, and weighted evaluations.
               </p>
             </div>
@@ -511,53 +512,53 @@ export default function AIInterview() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-6">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                <FileText className="w-5 h-5 text-gray-800" />
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 lg:gap-6 mb-4 sm:mb-6">
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-6">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800" />
               </div>
-              <span className="text-sm text-gray-500">Total Configs</span>
+              <span className="text-xs sm:text-sm text-gray-500">Total Configs</span>
             </div>
-            <div className="text-3xl text-gray-900">{stats?.total_configs ?? 0}</div>
+            <div className="text-xl sm:text-3xl text-gray-900">{stats?.total_configs ?? 0}</div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                <Globe className="w-5 h-5 text-green-600" />
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-6">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
               </div>
-              <span className="text-sm text-gray-500">Published</span>
+              <span className="text-xs sm:text-sm text-gray-500">Published</span>
             </div>
-            <div className="text-3xl text-gray-900">{stats?.published_configs ?? 0}</div>
+            <div className="text-xl sm:text-3xl text-gray-900">{stats?.published_configs ?? 0}</div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Users className="w-5 h-5 text-blue-600" />
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-6">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
               </div>
-              <span className="text-sm text-gray-500">Candidates Invited</span>
+              <span className="text-xs sm:text-sm text-gray-500">Invited</span>
             </div>
-            <div className="text-3xl text-gray-900">{stats?.candidates_invited ?? 0}</div>
+            <div className="text-xl sm:text-3xl text-gray-900">{stats?.candidates_invited ?? 0}</div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-yellow-600" />
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-6">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0">
+                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600" />
               </div>
-              <span className="text-sm text-gray-500">Avg. Score</span>
+              <span className="text-xs sm:text-sm text-gray-500">Avg. Score</span>
             </div>
-            <div className="text-3xl text-gray-900">{stats?.average_score != null ? `${stats.average_score}%` : '-'}</div>
+            <div className="text-xl sm:text-3xl text-gray-900">{stats?.average_score != null ? `${stats.average_score}%` : '-'}</div>
           </div>
         </div>
 
         {/* Main Content */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
           {/* Tabs */}
-          <div className="border-b border-gray-200 px-6">
-            <div className="flex gap-4 overflow-x-auto">
+          <div className="border-b border-gray-200 px-3 sm:px-6">
+            <div className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-hide">
               {[
                 { key: 'all', label: 'All Configurations' },
                 { key: 'published', label: 'Published' },
@@ -572,7 +573,7 @@ export default function AIInterview() {
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key as TabKey)}
-                  className={`py-4 text-sm border-b-2 transition-colors whitespace-nowrap ${
+                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === tab.key
                       ? 'border-gray-800 text-gray-800 font-medium'
                       : 'border-transparent text-gray-600 hover:text-gray-900'
@@ -586,7 +587,7 @@ export default function AIInterview() {
 
           {/* Config List (for config-listing tabs) */}
           {isConfigListTab && (
-            <div className="p-6">
+            <div className="p-3 sm:p-6">
               {filteredConfigs.length === 0 ? (
                 <div className="text-center py-16">
                   <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -617,11 +618,11 @@ export default function AIInterview() {
                       <div
                         key={config.id}
                         onClick={() => router.push(`/recruitment/ai-interviews/${config.id}`)}
-                        className="flex items-center justify-between p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all cursor-pointer"
+                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all cursor-pointer gap-3"
                       >
-                        <div className="flex items-start gap-4 flex-1">
-                          <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                            <Video className="w-6 h-6 text-gray-600" />
+                        <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                            <Video className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -642,15 +643,15 @@ export default function AIInterview() {
                                 {getStatusLabel(config.status)}
                               </span>
                             </div>
-                            <div className="flex items-center gap-4 text-sm text-gray-500">
+                            <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 flex-wrap">
                               <span className="flex items-center gap-1">
-                                <Clock className="w-3.5 h-3.5" />
+                                <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                                 {config.duration_minutes} min
                               </span>
                               {enabledRounds.length > 0 && (
                                 <>
                                   <span>{enabledRounds.length} rounds</span>
-                                  <span className="text-xs text-gray-400">
+                                  <span className="text-[10px] sm:text-xs text-gray-400 hidden sm:inline">
                                     {enabledRounds.map((r: any) => ROUND_LABELS[r.type] || r.type).join(', ')}
                                   </span>
                                 </>
@@ -680,15 +681,16 @@ export default function AIInterview() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap" onClick={(e) => e.stopPropagation()}>
                           {/* Share Link button for published configs */}
                           {config.status === 'published' && (
                             <button
                               onClick={() => setShareConfig(config)}
-                              className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
                             >
-                              <Mail className="w-4 h-4" />
-                              Send via Email
+                              <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                              <span className="hidden sm:inline">Send via Email</span>
+                              <span className="sm:hidden">Email</span>
                             </button>
                           )}
 
@@ -696,9 +698,9 @@ export default function AIInterview() {
                           {config.status === 'draft' && (
                             <button
                               onClick={() => handlePublishConfig(config)}
-                              className="flex items-center gap-2 px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
                             >
-                              <Globe className="w-4 h-4" />
+                              <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                               Publish
                             </button>
                           )}
@@ -707,10 +709,11 @@ export default function AIInterview() {
                           {config.status === 'published' && (
                             <button
                               onClick={() => handleViewInvitations(config)}
-                              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                             >
-                              <Eye className="w-4 h-4" />
-                              View Results
+                              <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                              <span className="hidden sm:inline">View Results</span>
+                              <span className="sm:hidden">Results</span>
                             </button>
                           )}
 
@@ -723,80 +726,80 @@ export default function AIInterview() {
                               <MoreVertical className="w-5 h-5" />
                             </button>
                             {openMenuId === config.id && (
-                              <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                              <div className="absolute right-0 top-full mt-1 w-44 sm:w-52 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-[70vh] overflow-y-auto">
                                 <button
                                   onClick={() => { router.push(`/recruitment/ai-interviews/${config.id}`); setOpenMenuId(null); }}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                  className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                 >
-                                  <Eye className="w-4 h-4" />
+                                  <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                   View Details
                                 </button>
                                 {config.status === 'published' && (
                                   <button
                                     onClick={() => handleCopyLink(config)}
-                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                   >
-                                    <Copy className="w-4 h-4" />
+                                    <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Copy Link
                                   </button>
                                 )}
                                 {config.status === 'published' && (
                                   <button
                                     onClick={() => { setShareConfig(config); setOpenMenuId(null); }}
-                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                   >
-                                    <Send className="w-4 h-4" />
+                                    <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Share / Invite
                                   </button>
                                 )}
                                 {config.status === 'published' && (
                                   <button
                                     onClick={() => handleViewInvitations(config)}
-                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                   >
-                                    <Users className="w-4 h-4" />
+                                    <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     View Invitations
                                   </button>
                                 )}
                                 {config.status === 'draft' && (
                                   <button
                                     onClick={() => handlePublishConfig(config)}
-                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                   >
-                                    <Globe className="w-4 h-4" />
+                                    <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Publish
                                   </button>
                                 )}
                                 <button
                                   onClick={() => handleCloneConfig(config)}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                  className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                 >
-                                  <GitBranch className="w-4 h-4" />
+                                  <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                   Duplicate
                                 </button>
                                 {config.status !== 'archived' && (
                                   <button
                                     onClick={() => handleArchiveConfig(config)}
-                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                   >
-                                    <Archive className="w-4 h-4" />
+                                    <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Archive
                                   </button>
                                 )}
                                 {config.status === 'archived' && (
                                   <button
                                     onClick={() => handleUnarchiveConfig(config)}
-                                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                   >
-                                    <ArchiveRestore className="w-4 h-4" />
+                                    <ArchiveRestore className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Unarchive
                                   </button>
                                 )}
                                 <button
                                   onClick={() => handleDeleteConfig(config)}
-                                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                  className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-red-600 hover:bg-red-50 transition-colors"
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                   Delete
                                 </button>
                               </div>
@@ -813,7 +816,7 @@ export default function AIInterview() {
 
           {/* Processing Tab */}
           {activeTab === 'processing' && (
-            <div className="p-6">
+            <div className="p-3 sm:p-6">
               {processingLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -821,29 +824,29 @@ export default function AIInterview() {
               ) : processingSessions.length === 0 ? (
                 <div className="text-center py-12">
                   <Play className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-                  <p className="text-gray-500">No interviews currently in progress</p>
+                  <p className="text-gray-500 text-sm">No interviews currently in progress</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {processingSessions.map((session) => (
-                    <div key={session.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
-                          <Play className="w-5 h-5 text-yellow-600" />
+                    <div key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-200 rounded-lg gap-2 sm:gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
+                          <Play className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600" />
                         </div>
-                        <div>
-                          <div className="font-medium text-gray-900">{session.candidate_name || 'Unknown'}</div>
-                          <div className="text-sm text-gray-500">{session.jd_title || session.position}</div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-900 text-sm sm:text-base truncate">{session.candidate_name || 'Unknown'}</div>
+                          <div className="text-xs sm:text-sm text-gray-500 truncate">{session.jd_title || session.position}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm text-gray-500">{session.duration_minutes} min</span>
+                      <div className="flex items-center gap-2 sm:gap-4 flex-wrap text-xs sm:text-sm pl-10 sm:pl-0">
+                        <span className="text-gray-500">{session.duration_minutes} min</span>
                         {session.started_at && (
                           <span className="text-xs text-gray-400">
                             Started {new Date(session.started_at).toLocaleString()}
                           </span>
                         )}
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
+                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-yellow-100 text-yellow-700">
                           In Progress
                         </span>
                       </div>
@@ -856,10 +859,10 @@ export default function AIInterview() {
 
           {/* Audit Log Tab */}
           {activeTab === 'audit' && (
-            <div className="p-6">
+            <div className="p-3 sm:p-6 overflow-hidden">
               {/* Category filter */}
-              <div className="flex items-center gap-3 mb-4">
-                <span className="text-sm text-gray-600">Filter:</span>
+              <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 flex-wrap">
+                <span className="text-xs sm:text-sm text-gray-600">Filter:</span>
                 {[
                   { key: 'all', label: 'All' },
                   { key: 'config_lifecycle', label: 'Config Lifecycle' },
@@ -868,7 +871,7 @@ export default function AIInterview() {
                   <button
                     key={cat.key}
                     onClick={() => { setAuditCategory(cat.key); setAuditPage(1); }}
-                    className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                    className={`px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full border transition-colors ${
                       auditCategory === cat.key
                         ? 'bg-gray-800 text-white border-gray-800'
                         : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
@@ -889,35 +892,35 @@ export default function AIInterview() {
                   <p className="text-gray-500">No audit activity found</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {auditActivities.map((activity) => {
                     const isLifecycle = activity.category === 'config_lifecycle';
                     return (
-                      <div key={activity.id} className="flex items-start gap-3 p-4 border border-gray-200 rounded-lg">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      <div key={activity.id} className="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 border border-gray-200 rounded-lg overflow-hidden">
+                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                           isLifecycle ? 'bg-blue-100' : 'bg-green-100'
                         }`}>
                           {isLifecycle ? (
-                            <Settings className="w-4 h-4 text-blue-600" />
+                            <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
                           ) : (
-                            <Users className="w-4 h-4 text-green-600" />
+                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
                           )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-900 text-sm">{activity.title}</span>
-                            <span className={`px-2 py-0.5 rounded-full text-xs ${
+                        <div className="flex-1 min-w-0 overflow-hidden">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-gray-900 text-xs sm:text-sm truncate">{activity.title}</span>
+                            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs flex-shrink-0 ${
                               isLifecycle ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'
                             }`}>
                               {isLifecycle ? 'Lifecycle' : 'Candidate'}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-500 mt-0.5">{activity.description}</p>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
-                            {activity.actor_name && <span>by {activity.actor_name}</span>}
-                            {activity.candidate_name && <span>{activity.candidate_name}</span>}
+                          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 break-words">{activity.description}</p>
+                          <div className="flex items-center gap-2 sm:gap-3 mt-1 text-[10px] sm:text-xs text-gray-400 flex-wrap">
+                            {activity.actor_name && <span className="truncate">by {activity.actor_name}</span>}
+                            {activity.candidate_name && <span className="truncate">{activity.candidate_name}</span>}
                             {activity.score != null && <span>Score: {activity.score}%</span>}
-                            <span>{new Date(activity.timestamp).toLocaleString()}</span>
+                            <span className="flex-shrink-0">{new Date(activity.timestamp).toLocaleString()}</span>
                           </div>
                         </div>
                       </div>
@@ -926,22 +929,22 @@ export default function AIInterview() {
 
                   {/* Pagination */}
                   {auditTotal > 50 && (
-                    <div className="flex items-center justify-between pt-4">
-                      <span className="text-sm text-gray-500">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-3 sm:pt-4 gap-2">
+                      <span className="text-xs sm:text-sm text-gray-500">
                         Showing {((auditPage - 1) * 50) + 1}-{Math.min(auditPage * 50, auditTotal)} of {auditTotal}
                       </span>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setAuditPage(Math.max(1, auditPage - 1))}
                           disabled={auditPage === 1}
-                          className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                          className="px-2.5 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
                         >
                           Previous
                         </button>
                         <button
                           onClick={() => setAuditPage(auditPage + 1)}
                           disabled={auditPage * 50 >= auditTotal}
-                          className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                          className="px-2.5 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
                         >
                           Next
                         </button>
@@ -955,16 +958,16 @@ export default function AIInterview() {
 
           {/* Consent Logs Tab */}
           {activeTab === 'consent' && (
-            <div className="p-6">
+            <div className="p-3 sm:p-6">
               <ConsentLogsWrapper />
             </div>
           )}
 
           {/* Settings Tab */}
           {activeTab === 'settings' && (
-            <div className="p-6">
+            <div className="p-3 sm:p-6">
               {/* Settings Sub-tabs */}
-              <div className="flex gap-4 mb-6 border-b border-gray-200">
+              <div className="flex gap-3 sm:gap-4 mb-4 sm:mb-6 border-b border-gray-200">
                 {[
                   { key: 'general', label: 'General' },
                   { key: 'proctoring', label: 'Proctoring' },
@@ -972,7 +975,7 @@ export default function AIInterview() {
                   <button
                     key={sub.key}
                     onClick={() => setSettingsSubTab(sub.key as 'general' | 'proctoring')}
-                    className={`pb-3 text-sm border-b-2 transition-colors ${
+                    className={`pb-2 sm:pb-3 text-xs sm:text-sm border-b-2 transition-colors ${
                       settingsSubTab === sub.key
                         ? 'border-gray-800 text-gray-800 font-medium'
                         : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -997,7 +1000,7 @@ export default function AIInterview() {
                         <select
                           value={settingsDuration}
                           onChange={(e) => setSettingsDuration(parseInt(e.target.value))}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
                         >
                           <option value="30">30 minutes</option>
                           <option value="45">45 minutes</option>
@@ -1012,7 +1015,7 @@ export default function AIInterview() {
                         <select
                           value={settingsLanguage}
                           onChange={(e) => setSettingsLanguage(e.target.value)}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
                         >
                           <option>English (US)</option>
                           <option>English (UK)</option>
@@ -1117,12 +1120,12 @@ export default function AIInterview() {
                               { key: 'browser_lockdown', label: 'Browser Lockdown', icon: Shield, desc: 'Lock browser to interview window only' },
                               { key: 'ai_cheating_prevention', label: 'AI Cheating Prevention', icon: Brain, desc: 'Detect AI-generated responses' },
                             ].map(({ key, label, icon: Icon, desc }) => (
-                              <div key={key} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                  <Icon className="w-5 h-5 text-gray-500" />
-                                  <div>
-                                    <div className="text-sm font-medium text-gray-700">{label}</div>
-                                    <div className="text-xs text-gray-500">{desc}</div>
+                              <div key={key} className="flex items-center justify-between p-2.5 sm:p-3 border border-gray-200 rounded-lg gap-2">
+                                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                  <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
+                                  <div className="min-w-0">
+                                    <div className="text-xs sm:text-sm font-medium text-gray-700">{label}</div>
+                                    <div className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">{desc}</div>
                                   </div>
                                 </div>
                                 <input
@@ -1134,15 +1137,15 @@ export default function AIInterview() {
                               </div>
                             ))}
 
-                            <h4 className="text-sm font-medium text-gray-700 mt-6">Thresholds</h4>
-                            <div className="grid grid-cols-3 gap-4">
+                            <h4 className="text-xs sm:text-sm font-medium text-gray-700 mt-4 sm:mt-6">Thresholds</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                               <div>
                                 <label className="block text-xs text-gray-600 mb-1">Max Tab Switches</label>
                                 <input
                                   type="number"
                                   value={proctoringSettings.max_tab_switches}
                                   onChange={(e) => setProctoringSettings(prev => ({ ...prev, max_tab_switches: parseInt(e.target.value) || 3 }))}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
                                   min={1}
                                   max={20}
                                 />
@@ -1153,7 +1156,7 @@ export default function AIInterview() {
                                   type="number"
                                   value={proctoringSettings.max_violations}
                                   onChange={(e) => setProctoringSettings(prev => ({ ...prev, max_violations: parseInt(e.target.value) || 5 }))}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
                                   min={1}
                                   max={50}
                                 />
@@ -1164,7 +1167,7 @@ export default function AIInterview() {
                                   type="number"
                                   value={proctoringSettings.retention_days}
                                   onChange={(e) => setProctoringSettings(prev => ({ ...prev, retention_days: parseInt(e.target.value) || 90 }))}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-black"
                                   min={7}
                                   max={365}
                                 />
@@ -1205,24 +1208,24 @@ export default function AIInterview() {
 
       {/* View Invitations Modal */}
       {viewInvitationsConfig && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="bg-gray-900 px-6 py-5 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-gray-700 flex items-center justify-center">
-                  <Users className="w-5 h-5 text-white" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-gray-900 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-700 flex items-center justify-center flex-shrink-0">
+                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <div>
-                  <h2 className="text-white font-semibold">Candidate Invitations</h2>
-                  <p className="text-gray-300 text-sm">{viewInvitationsConfig.jd_title || viewInvitationsConfig.position}</p>
+                <div className="min-w-0">
+                  <h2 className="text-white font-semibold text-sm sm:text-base">Candidate Invitations</h2>
+                  <p className="text-gray-300 text-xs sm:text-sm truncate">{viewInvitationsConfig.jd_title || viewInvitationsConfig.position}</p>
                 </div>
               </div>
-              <button onClick={() => setViewInvitationsConfig(null)} className="text-gray-400 hover:text-white transition-colors">
+              <button onClick={() => setViewInvitationsConfig(null)} className="text-gray-400 hover:text-white transition-colors flex-shrink-0">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-6">
               {loadingInvitations ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -1230,32 +1233,32 @@ export default function AIInterview() {
               ) : invitations.length === 0 ? (
                 <div className="text-center py-12">
                   <Users className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-                  <p className="text-gray-500 mb-2">No candidates invited yet</p>
-                  <p className="text-sm text-gray-400">Use the &quot;Send via Email&quot; button to invite candidates</p>
+                  <p className="text-gray-500 mb-2 text-sm">No candidates invited yet</p>
+                  <p className="text-xs sm:text-sm text-gray-400">Use the &quot;Send via Email&quot; button to invite candidates</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 sm:space-y-3">
                   {invitations.map((inv) => (
-                    <div key={inv.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-                          <span className="text-sm text-gray-700">
+                    <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-200 rounded-lg gap-2 sm:gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs sm:text-sm text-gray-700">
                             {(inv.candidate_name || '?').split(' ').map(n => n[0]).join('')}
                           </span>
                         </div>
-                        <div>
-                          <div className="font-medium text-gray-900">{inv.candidate_name || 'Unknown'}</div>
-                          <div className="text-sm text-gray-500">{inv.candidate_email}</div>
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-900 text-sm sm:text-base truncate">{inv.candidate_name || 'Unknown'}</div>
+                          <div className="text-xs sm:text-sm text-gray-500 truncate">{inv.candidate_email}</div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2 sm:gap-4 flex-wrap pl-10 sm:pl-0">
                         {inv.score != null && (
                           <div className="text-right">
-                            <div className="text-xs text-gray-500">Score</div>
-                            <div className="text-lg font-medium text-green-600">{Number(inv.score)}%</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500">Score</div>
+                            <div className="text-sm sm:text-lg font-medium text-green-600">{Number(inv.score)}%</div>
                           </div>
                         )}
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(inv.status)}`}>
+                        <span className={`px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium ${getStatusBadge(inv.status)}`}>
                           {inv.status === 'invited' ? 'Invited' :
                            inv.status === 'in_progress' ? 'In Progress' :
                            inv.status === 'completed' ? 'Completed' :
@@ -1263,7 +1266,7 @@ export default function AIInterview() {
                            inv.status}
                         </span>
                         {inv.scheduled_at && (
-                          <span className="text-xs text-gray-400">
+                          <span className="text-[10px] sm:text-xs text-gray-400">
                             {new Date(inv.scheduled_at).toLocaleString()}
                           </span>
                         )}
@@ -1274,24 +1277,24 @@ export default function AIInterview() {
               )}
             </div>
 
-            <div className="border-t border-gray-200 px-6 py-4 flex items-center justify-between">
-              <span className="text-sm text-gray-500">
+            <div className="border-t border-gray-200 px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+              <span className="text-xs sm:text-sm text-gray-500">
                 {invitations.length} candidate{invitations.length !== 1 ? 's' : ''} invited
               </span>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                 <button
                   onClick={() => {
                     setViewInvitationsConfig(null);
                     setShareConfig(viewInvitationsConfig);
                   }}
-                  className="flex items-center gap-2 px-4 py-2 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
                 >
-                  <Send className="w-4 h-4" />
+                  <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                   Invite More
                 </button>
                 <button
                   onClick={() => setViewInvitationsConfig(null)}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                  className="flex-1 sm:flex-none px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                 >
                   Close
                 </button>
@@ -1303,20 +1306,20 @@ export default function AIInterview() {
 
       {/* Confirmation Dialog */}
       {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">{confirmAction.title}</h3>
-            <p className="text-sm text-gray-600 mb-6">{confirmAction.message}</p>
-            <div className="flex items-center justify-end gap-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">{confirmAction.title}</h3>
+            <p className="text-xs sm:text-sm text-gray-600 mb-4 sm:mb-6">{confirmAction.message}</p>
+            <div className="flex items-center justify-end gap-2 sm:gap-3">
               <button
                 onClick={() => setConfirmAction(null)}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={confirmAction.onConfirm}
-                className={`px-4 py-2 text-sm text-white rounded-md transition-colors ${
+                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm text-white rounded-md transition-colors ${
                   confirmAction.destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-800 hover:bg-gray-900'
                 }`}
               >

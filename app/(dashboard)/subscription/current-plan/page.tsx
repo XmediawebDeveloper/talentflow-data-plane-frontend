@@ -12,7 +12,6 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
-import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 
 // Use backend API - no direct Admin API calls
@@ -1675,22 +1674,8 @@ function CurrentPlanContent() {
     );
   }
 
-  // CRITICAL: Block suspended accounts completely (different from expired)
-  // Suspended accounts can only sign out or contact support
-  if (isSuspended || tenantStatus?.status === 'SUSPENDED') {
-    const suspensionReason = tenantStatus?.message ||
-      companySettings?.suspension_reason ||
-      'Your account has been suspended by the administrator. Please contact support for assistance.';
-    const suspendedAt = companySettings?.suspended_at || companySettings?.updated_at;
-
-    return (
-      <SuspendedAccountBlock
-        suspensionReason={suspensionReason}
-        suspendedAt={suspendedAt}
-        contactEmail="support@talentflow.com"
-      />
-    );
-  }
+  // NOTE: Suspended accounts are now fully blocked by the dashboard layout overlay
+  // No need to render SuspendedAccountBlock here - the layout handles it globally
 
   // Show pending account status (non-blocking banners)
   if (tenantStatus && tenantStatus.status !== 'SUSPENDED') {

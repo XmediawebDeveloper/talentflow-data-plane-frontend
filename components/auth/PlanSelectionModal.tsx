@@ -288,30 +288,20 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
   return (
     <div
       onClick={handleOverlayClick}
+      className="fixed inset-0 flex items-center justify-center p-2 sm:p-4"
       style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
         zIndex: 9999,
-        padding: '16px',
         backdropFilter: 'blur(4px)',
         cursor: 'pointer',
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[95vw] sm:max-w-[90vw] lg:max-w-[1400px] rounded-xl sm:rounded-2xl md:rounded-3xl"
         style={{
           backgroundColor: '#ffffff',
-          borderRadius: '24px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-          width: '100%',
-          maxWidth: '1400px',
           maxHeight: '90vh',
           overflow: 'hidden',
           display: 'flex',
@@ -321,8 +311,8 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
       >
         {/* Header */}
         <div
+          className="px-4 py-4 sm:px-6 sm:py-5 md:px-8 md:py-6"
           style={{
-            padding: '24px 32px',
             borderBottom: '1px solid #E5E7EB',
             background: 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%)',
             position: 'relative',
@@ -331,12 +321,11 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
           {/* Close Button */}
           <button
             onClick={handleClose}
+            className="w-8 h-8 sm:w-9 sm:h-9"
             style={{
               position: 'absolute',
-              top: '16px',
-              right: '16px',
-              width: '36px',
-              height: '36px',
+              top: '12px',
+              right: '12px',
               borderRadius: '50%',
               border: 'none',
               backgroundColor: '#F3F4F6',
@@ -350,26 +339,25 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
             onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#F3F4F6')}
             title="Close and go to pricing page"
           >
-            <X style={{ width: '20px', height: '20px', color: '#6B7280' }} />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: '#6B7280' }} />
           </button>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: '40px' }}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pr-10 sm:pr-12">
             <div>
-              <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#111827', marginBottom: '8px' }}>
+              <h2 className="text-lg sm:text-xl md:text-2xl" style={{ fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
                 Choose Your Plan
               </h2>
-              <p style={{ fontSize: '14px', color: '#6B7280' }}>
-                Please select a plan to continue with your signup. You can upgrade or change your plan anytime.
+              <p className="text-xs sm:text-sm" style={{ color: '#6B7280' }}>
+                Select a plan to continue. You can upgrade or change anytime.
               </p>
             </div>
             <button
               onClick={handleViewPricing}
+              className="text-xs sm:text-sm px-3 py-1.5 sm:px-4 sm:py-2 flex-shrink-0 self-start sm:self-auto"
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                padding: '8px 16px',
-                fontSize: '14px',
                 color: '#2563EB',
                 background: 'transparent',
                 border: '1px solid #2563EB',
@@ -377,35 +365,37 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                 cursor: 'pointer',
               }}
             >
-              View Full Pricing
+              <span className="hidden sm:inline">View Full Pricing</span>
+              <span className="sm:hidden">Pricing</span>
             </button>
           </div>
 
           {/* Billing Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '16px' }}>
-            <span style={{ fontSize: '14px', fontWeight: !isYearly ? 600 : 400, color: !isYearly ? '#111827' : '#6B7280' }}>
+          <div className="flex items-center gap-2 sm:gap-3 mt-3 sm:mt-4 flex-wrap">
+            <span className="text-xs sm:text-sm" style={{ fontWeight: !isYearly ? 600 : 400, color: !isYearly ? '#111827' : '#6B7280' }}>
               Monthly
             </span>
             <button
               onClick={() => setIsYearly(!isYearly)}
               style={{
                 position: 'relative',
-                width: '48px',
-                height: '26px',
-                borderRadius: '13px',
+                width: '44px',
+                height: '24px',
+                borderRadius: '12px',
                 border: 'none',
                 cursor: 'pointer',
                 backgroundColor: isYearly ? '#2563EB' : '#D1D5DB',
                 transition: 'background-color 0.2s',
+                flexShrink: 0,
               }}
             >
               <span
                 style={{
                   position: 'absolute',
                   top: '3px',
-                  left: isYearly ? '25px' : '3px',
-                  width: '20px',
-                  height: '20px',
+                  left: isYearly ? '23px' : '3px',
+                  width: '18px',
+                  height: '18px',
                   borderRadius: '50%',
                   backgroundColor: '#ffffff',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
@@ -413,11 +403,10 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                 }}
               />
             </button>
-            <span style={{ fontSize: '14px', fontWeight: isYearly ? 600 : 400, color: isYearly ? '#111827' : '#6B7280' }}>
+            <span className="text-xs sm:text-sm" style={{ fontWeight: isYearly ? 600 : 400, color: isYearly ? '#111827' : '#6B7280' }}>
               Yearly
             </span>
-            <span style={{
-              fontSize: '12px',
+            <span className="text-[10px] sm:text-xs" style={{
               fontWeight: 500,
               color: '#059669',
               backgroundColor: '#D1FAE5',
@@ -431,26 +420,21 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
 
         {/* Content */}
         <div
-          style={{
-            flex: 1,
-            overflow: 'auto',
-            padding: '24px 32px',
-          }}
+          className="flex-1 overflow-auto px-3 py-4 sm:px-4 sm:py-5 md:px-6 md:py-6 lg:px-8"
         >
           {isLoading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0' }}>
-              <Loader2 style={{ width: '40px', height: '40px', color: '#2563EB', animation: 'spin 1s linear infinite' }} />
-              <p style={{ marginTop: '16px', color: '#6B7280' }}>Loading plans...</p>
+            <div className="flex flex-col items-center justify-center py-10 sm:py-16">
+              <Loader2 className="w-8 h-8 sm:w-10 sm:h-10" style={{ color: '#2563EB', animation: 'spin 1s linear infinite' }} />
+              <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: '#6B7280' }}>Loading plans...</p>
             </div>
           ) : error ? (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 0' }}>
-              <AlertCircle style={{ width: '48px', height: '48px', color: '#DC2626' }} />
-              <p style={{ marginTop: '16px', color: '#DC2626', fontWeight: 500 }}>{error}</p>
+            <div className="flex flex-col items-center justify-center py-10 sm:py-16">
+              <AlertCircle className="w-10 h-10 sm:w-12 sm:h-12" style={{ color: '#DC2626' }} />
+              <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: '#DC2626', fontWeight: 500 }}>{error}</p>
               <button
                 onClick={() => window.location.reload()}
+                className="mt-3 sm:mt-4 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm"
                 style={{
-                  marginTop: '16px',
-                  padding: '8px 16px',
                   backgroundColor: '#2563EB',
                   color: '#fff',
                   border: 'none',
@@ -463,11 +447,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
             </div>
           ) : (
             <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${Math.min(allPlans.length, 4)}, 1fr)`,
-                gap: '20px',
-              }}
+              className={`grid grid-cols-1 sm:grid-cols-2 ${allPlans.length >= 3 ? 'lg:grid-cols-3' : ''} ${allPlans.length >= 4 ? 'xl:grid-cols-4' : ''} gap-3 sm:gap-4 md:gap-5`}
             >
               {allPlans.map((plan) => {
                 const isSelected = selectedPlanId === plan.id;
@@ -482,10 +462,9 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                   <div
                     key={plan.id}
                     onClick={() => handleSelectPlan(plan.id)}
+                    className="p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl"
                     style={{
                       position: 'relative',
-                      padding: '20px',
-                      borderRadius: '16px',
                       border: isSelected ? '2px solid #2563EB' : '2px solid #E5E7EB',
                       backgroundColor: isSelected ? '#EFF6FF' : '#ffffff',
                       cursor: 'pointer',
@@ -495,12 +474,11 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                   >
                     {/* Selection indicator */}
                     <div
+                      className="w-5 h-5 sm:w-6 sm:h-6"
                       style={{
                         position: 'absolute',
-                        top: '12px',
-                        right: '12px',
-                        width: '24px',
-                        height: '24px',
+                        top: '10px',
+                        right: '10px',
                         borderRadius: '50%',
                         border: isSelected ? 'none' : '2px solid #D1D5DB',
                         backgroundColor: isSelected ? '#2563EB' : 'transparent',
@@ -509,61 +487,55 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                         justifyContent: 'center',
                       }}
                     >
-                      {isSelected && <Check style={{ width: '14px', height: '14px', color: '#ffffff' }} />}
+                      {isSelected && <Check className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: '#ffffff' }} />}
                     </div>
 
                     {/* Plan badge */}
                     <div
+                      className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-md mb-2 sm:mb-3"
                       style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '4px 10px',
-                        borderRadius: '8px',
                         backgroundColor: isFreeTrial ? '#D1FAE5' : '#F3F4F6',
-                        marginBottom: '12px',
                       }}
                     >
-                      <IconComponent style={{ width: '14px', height: '14px', color: isFreeTrial ? '#059669' : '#4B5563' }} />
-                      <span style={{ fontSize: '12px', fontWeight: 600, color: isFreeTrial ? '#059669' : '#4B5563' }}>
+                      <IconComponent className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: isFreeTrial ? '#059669' : '#4B5563' }} />
+                      <span className="text-[10px] sm:text-xs" style={{ fontWeight: 600, color: isFreeTrial ? '#059669' : '#4B5563' }}>
                         {String(plan.planTier || plan.name || '')}
                       </span>
                     </div>
 
                     {/* Plan name */}
-                    <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#111827', marginBottom: '4px' }}>
+                    <h3 className="text-sm sm:text-base md:text-lg" style={{ fontWeight: 600, color: '#111827', marginBottom: '4px' }}>
                       {String(plan.name || '')}
                     </h3>
 
                     {/* Description */}
-                    <p style={{ fontSize: '13px', color: '#6B7280', marginBottom: '12px', minHeight: '36px' }}>
+                    <p className="text-[11px] sm:text-xs md:text-[13px] mb-2 sm:mb-3" style={{ color: '#6B7280', minHeight: '28px' }}>
                       {String(plan.description || '')}
                     </p>
 
                     {/* Price */}
-                    <div style={{ marginBottom: '16px' }}>
+                    <div className="mb-3 sm:mb-4">
                       {isFreeTrial ? (
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                          <span style={{ fontSize: '28px', fontWeight: 700, color: '#059669' }}>Free</span>
-                          <span style={{ fontSize: '14px', color: '#6B7280' }}>for {plan.trialDays} days</span>
+                          <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: '#059669' }}>Free</span>
+                          <span className="text-xs sm:text-sm" style={{ color: '#6B7280' }}>for {plan.trialDays} days</span>
                         </div>
                       ) : displayPrice !== null ? (
                         <div>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                            <span style={{ fontSize: '28px', fontWeight: 700, color: '#111827' }}>
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', flexWrap: 'wrap' }}>
+                            <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: '#111827' }}>
                               {formatCurrency(displayPrice, plan.currency)}
                             </span>
-                            <span style={{ fontSize: '14px', color: '#6B7280' }}>
+                            <span className="text-[11px] sm:text-sm" style={{ color: '#6B7280' }}>
                               /{isYearly ? 'year' : 'month'}
                             </span>
                           </div>
                           {isYearly && plan.monthlyPrice && plan.yearlyPrice && (plan.monthlyPrice * 12) > plan.yearlyPrice && plan.discountPercentage && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                              <span style={{ fontSize: '13px', color: '#9CA3AF', textDecoration: 'line-through' }}>
+                            <div className="flex items-center gap-1.5 sm:gap-2 mt-1 flex-wrap">
+                              <span className="text-[11px] sm:text-[13px]" style={{ color: '#9CA3AF', textDecoration: 'line-through' }}>
                                 {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
                               </span>
-                              <span style={{
-                                fontSize: '11px',
+                              <span className="text-[10px] sm:text-[11px]" style={{
                                 fontWeight: 600,
                                 color: '#059669',
                                 backgroundColor: '#D1FAE5',
@@ -576,7 +548,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                           )}
                         </div>
                       ) : (
-                        <span style={{ fontSize: '18px', fontWeight: 600, color: '#111827' }}>Contact Sales</span>
+                        <span className="text-sm sm:text-base md:text-lg" style={{ fontWeight: 600, color: '#111827' }}>Contact Sales</span>
                       )}
                     </div>
 

@@ -40,7 +40,7 @@ export default function AIInterviewJDSelection() {
   };
 
   return (
-    <div className="flex-1 p-8 overflow-y-auto">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
       <div className="w-full">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -78,20 +78,20 @@ export default function AIInterviewJDSelection() {
 
         {/* JD List */}
         {loadingJds ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-            <span className="ml-2 text-sm text-gray-500">Loading job descriptions...</span>
+          <div className="flex items-center justify-center py-10 sm:py-16">
+            <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin text-gray-400" />
+            <span className="ml-2 text-xs sm:text-sm text-gray-500">Loading job descriptions...</span>
           </div>
         ) : filteredJds.length === 0 ? (
-          <div className="text-center py-16 bg-white border border-gray-200 rounded-lg">
-            <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p className="text-gray-500 mb-2">No published job descriptions found</p>
-            <p className="text-sm text-gray-400 mb-4">Create and publish a JD first to configure an AI interview</p>
+          <div className="text-center py-10 sm:py-16 bg-white border border-gray-200 rounded-lg px-4">
+            <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-gray-500 mb-2 text-sm">No published job descriptions found</p>
+            <p className="text-xs sm:text-sm text-gray-400 mb-4">Create and publish a JD first to configure an AI interview</p>
             <button
               onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+              className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
               Create Job Description
             </button>
           </div>
