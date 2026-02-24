@@ -11,9 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 interface RoundConfig {
   type: string;
   percentage: number;
-  mustHavePercentage?: number;
-  niceToHavePercentage?: number;
   topics: string[];
+  topicWeights: Record<string, number>;
   suggestedTopics: string[];
   enabled: boolean;
   order: number;
@@ -21,7 +20,8 @@ interface RoundConfig {
 
 const ROUND_TYPES = [
   { value: 'hr', label: 'HR', icon: Users, color: 'bg-blue-100 text-blue-700' },
-  { value: 'technical', label: 'Technical', icon: Brain, color: 'bg-purple-100 text-purple-700' },
+  { value: 'must_have_skills', label: 'Must-Have Skills', icon: Brain, color: 'bg-purple-100 text-purple-700' },
+  { value: 'nice_to_have_skills', label: 'Nice-to-Have Skills', icon: Lightbulb, color: 'bg-indigo-100 text-indigo-700' },
   { value: 'behavioral', label: 'Behavioral', icon: MessageSquare, color: 'bg-green-100 text-green-700' },
   { value: 'culture_fit', label: 'Culture Fit', icon: Shield, color: 'bg-yellow-100 text-yellow-700' },
   { value: 'leadership', label: 'Leadership', icon: TrendingUp, color: 'bg-red-100 text-red-700' },
@@ -29,9 +29,9 @@ const ROUND_TYPES = [
 ];
 
 const DEFAULT_ROUNDS: RoundConfig[] = [
-  { type: 'hr', percentage: 20, topics: [], suggestedTopics: [], enabled: true, order: 1 },
-  { type: 'technical', percentage: 50, mustHavePercentage: 35, niceToHavePercentage: 15, topics: [], suggestedTopics: [], enabled: true, order: 2 },
-  { type: 'behavioral', percentage: 30, topics: [], suggestedTopics: [], enabled: true, order: 3 },
+  { type: 'hr', percentage: 30, topics: [], topicWeights: {}, suggestedTopics: [], enabled: true, order: 1 },
+  { type: 'must_have_skills', percentage: 35, topics: [], topicWeights: {}, suggestedTopics: [], enabled: true, order: 2 },
+  { type: 'nice_to_have_skills', percentage: 35, topics: [], topicWeights: {}, suggestedTopics: [], enabled: true, order: 3 },
 ];
 
 export default function AIInterviewConfig() {
@@ -45,7 +45,6 @@ export default function AIInterviewConfig() {
   // Round config state
   const [rounds, setRounds] = useState<RoundConfig[]>(DEFAULT_ROUNDS);
   const [totalDuration, setTotalDuration] = useState(30);
-  const [specialInstructions, setSpecialInstructions] = useState('');
   const [recordingEnabled, setRecordingEnabled] = useState(true);
 
   const [publishing, setPublishing] = useState(false);
@@ -87,6 +86,22 @@ export default function AIInterviewConfig() {
 
     loadJD();
   }, [jdId, router]);
+
+  // Auto-populate topics from JD skills
+  useEffect(() => {
+    if (!selectedJd) return;
+    setRounds(prev => prev.map(r => {
+      if (r.type === 'must_have_skills' && r.topics.length === 0 && selectedJd.must_have_skills.length > 0) {
+        const topics = [...selectedJd.must_have_skills];
+        return { ...r, topics, topicWeights: distributeWeights(topics, {}) };
+      }
+      if (r.type === 'nice_to_have_skills' && r.topics.length === 0 && selectedJd.nice_to_have_skills.length > 0) {
+        const topics = [...selectedJd.nice_to_have_skills];
+        return { ...r, topics, topicWeights: distributeWeights(topics, {}) };
+      }
+      return r;
+    }));
+  }, [selectedJd]);
 
   // Warn before closing browser tab/window if JD is selected
   useEffect(() => {
@@ -166,54 +181,92 @@ export default function AIInterviewConfig() {
   const totalPercentage = enabledRounds.reduce((sum, r) => sum + r.percentage, 0);
   const percentageValid = totalPercentage === 100;
   const roundDurationsValid = enabledRounds.every(r => Math.round(r.percentage * totalDuration / 100) >= 5);
-  const technicalSubValid = enabledRounds.every(r => {
-    if (r.type !== 'technical') return true;
-    const mh = r.mustHavePercentage ?? 0;
-    const nth = r.niceToHavePercentage ?? 0;
-    if (mh === 0 && nth === 0) return false;
-    const mhMin = Math.round(mh * totalDuration / 100);
-    const nthMin = Math.round(nth * totalDuration / 100);
-    if (mh > 0 && mhMin < 2) return false;
-    if (nth > 0 && nthMin < 2) return false;
-    return true;
-  });
-
   const getRoundDuration = (percentage: number) => Math.round(percentage * totalDuration / 100);
 
   const handleToggleRound = (index: number) => {
-    setRounds(prev => prev.map((r, i) => i === index ? { ...r, enabled: !r.enabled } : r));
+    setRounds(prev => {
+      const round = prev[index];
+      const newEnabled = !round.enabled;
+
+      // Block disabling the last enabled round
+      const currentlyEnabled = prev.filter(r => r.enabled);
+      if (!newEnabled && currentlyEnabled.length <= 1) {
+        toast.error('At least one round should be enabled');
+        return prev;
+      }
+
+      const updated = prev.map((r, i) => i === index ? { ...r, enabled: newEnabled } : r);
+
+      // Auto-redistribute percentages
+      const skillTypes = ['must_have_skills', 'nice_to_have_skills'];
+      if (round.type === 'hr') {
+        if (!newEnabled) {
+          // HR disabled: split its % equally to skill rounds
+          const hrPct = round.percentage;
+          const enabledSkillRounds = updated.filter(r => r.enabled && skillTypes.includes(r.type));
+          if (enabledSkillRounds.length > 0) {
+            const splitPct = Math.round(hrPct / enabledSkillRounds.length);
+            return updated.map(r => {
+              if (r.enabled && skillTypes.includes(r.type)) {
+                return { ...r, percentage: r.percentage + splitPct };
+              }
+              return r;
+            });
+          }
+        } else {
+          // HR re-enabled: set to 30%, take equally from skill rounds
+          const enabledSkillRounds = updated.filter(r => r.enabled && skillTypes.includes(r.type));
+          const takeEach = enabledSkillRounds.length > 0 ? Math.round(30 / enabledSkillRounds.length) : 0;
+          return updated.map(r => {
+            if (r.type === 'hr') return { ...r, percentage: 30 };
+            if (r.enabled && skillTypes.includes(r.type)) {
+              return { ...r, percentage: Math.max(0, r.percentage - takeEach) };
+            }
+            return r;
+          });
+        }
+      }
+
+      return updated;
+    });
   };
 
   const handleRoundPercentage = (index: number, value: number) => {
     setRounds(prev => prev.map((r, i) => i === index ? { ...r, percentage: value } : r));
   };
 
-  const handleMustHavePercentage = (index: number, value: number) => {
-    setRounds(prev => prev.map((r, i) =>
-      i === index ? { ...r, mustHavePercentage: value, percentage: value + (r.niceToHavePercentage || 0) } : r
-    ));
-  };
-
-  const handleNiceToHavePercentage = (index: number, value: number) => {
-    setRounds(prev => prev.map((r, i) =>
-      i === index ? { ...r, niceToHavePercentage: value, percentage: (r.mustHavePercentage || 0) + value } : r
-    ));
+  const distributeWeights = (topics: string[], currentWeights: Record<string, number>): Record<string, number> => {
+    if (topics.length === 0) return {};
+    const equal = Math.floor(100 / topics.length);
+    const remainder = 100 - equal * topics.length;
+    const weights: Record<string, number> = {};
+    topics.forEach((t, i) => {
+      weights[t] = equal + (i < remainder ? 1 : 0);
+    });
+    return weights;
   };
 
   const handleAddTopic = (roundIndex: number, topic: string) => {
     if (!topic.trim()) return;
-    setRounds(prev => prev.map((r, i) =>
-      i === roundIndex && !r.topics.includes(topic.trim())
-        ? { ...r, topics: [...r.topics, topic.trim()] }
-        : r
-    ));
+    setRounds(prev => prev.map((r, i) => {
+      if (i !== roundIndex || r.topics.includes(topic.trim())) return r;
+      const newTopics = [...r.topics, topic.trim()];
+      return { ...r, topics: newTopics, topicWeights: distributeWeights(newTopics, r.topicWeights) };
+    }));
   };
 
   const handleRemoveTopic = (roundIndex: number, topic: string) => {
+    setRounds(prev => prev.map((r, i) => {
+      if (i !== roundIndex) return r;
+      const newTopics = r.topics.filter(t => t !== topic);
+      const { [topic]: _, ...rest } = r.topicWeights;
+      return { ...r, topics: newTopics, topicWeights: distributeWeights(newTopics, rest) };
+    }));
+  };
+
+  const handleTopicWeight = (roundIndex: number, topic: string, value: number) => {
     setRounds(prev => prev.map((r, i) =>
-      i === roundIndex
-        ? { ...r, topics: r.topics.filter(t => t !== topic) }
-        : r
+      i === roundIndex ? { ...r, topicWeights: { ...r.topicWeights, [topic]: value } } : r
     ));
   };
 
@@ -243,6 +296,7 @@ export default function AIInterviewConfig() {
       type,
       percentage: 0,
       topics: [],
+      topicWeights: {},
       suggestedTopics: [],
       enabled: true,
       order: prev.length + 1,
@@ -257,40 +311,28 @@ export default function AIInterviewConfig() {
   const availableRoundTypes = ROUND_TYPES.filter(rt => !rounds.some(r => r.type === rt.value));
 
   const buildRoundsConfig = (): AIInterviewRoundConfig[] => {
-    return enabledRounds.map(r => {
-      const base: AIInterviewRoundConfig = {
-        type: r.type,
-        percentage: r.percentage,
-        duration_minutes: getRoundDuration(r.percentage),
-        topics: r.topics,
-        enabled: true,
-        order: r.order,
-      };
-      if (r.type === 'technical' && r.mustHavePercentage != null && r.niceToHavePercentage != null) {
-        base.must_have_percentage = r.mustHavePercentage;
-        base.nice_to_have_percentage = r.niceToHavePercentage;
-      }
-      return base;
-    });
+    return enabledRounds.map(r => ({
+      type: r.type,
+      percentage: r.percentage,
+      duration_minutes: getRoundDuration(r.percentage),
+      topics: r.topics,
+      topic_weights: r.topics.length > 0 ? r.topicWeights : undefined,
+      enabled: true,
+      order: r.order,
+    }));
   };
 
   // Build rounds config for draft (no strict validation)
   const buildDraftRoundsConfig = (): AIInterviewRoundConfig[] => {
-    return enabledRounds.map(r => {
-      const base: AIInterviewRoundConfig = {
-        type: r.type,
-        percentage: r.percentage,
-        duration_minutes: Math.max(0, getRoundDuration(r.percentage)),
-        topics: r.topics,
-        enabled: true,
-        order: r.order,
-      };
-      if (r.type === 'technical' && r.mustHavePercentage != null && r.niceToHavePercentage != null) {
-        base.must_have_percentage = r.mustHavePercentage;
-        base.nice_to_have_percentage = r.niceToHavePercentage;
-      }
-      return base;
-    });
+    return enabledRounds.map(r => ({
+      type: r.type,
+      percentage: r.percentage,
+      duration_minutes: Math.max(0, getRoundDuration(r.percentage)),
+      topics: r.topics,
+      topic_weights: r.topics.length > 0 ? r.topicWeights : undefined,
+      enabled: true,
+      order: r.order,
+    }));
   };
 
   // Core draft save function (used by button, auto-save, and dialog)
@@ -304,7 +346,6 @@ export default function AIInterviewConfig() {
         duration_minutes: totalDuration,
         rounds_config: buildDraftRoundsConfig(),
         recording_enabled: recordingEnabled,
-        special_instructions: specialInstructions || undefined,
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
       });
@@ -326,7 +367,7 @@ export default function AIInterviewConfig() {
   };
 
   const handlePublish = async () => {
-    if (!selectedJd || !percentageValid || !roundDurationsValid || !technicalSubValid) return;
+    if (!selectedJd || !percentageValid || !roundDurationsValid) return;
     setPublishing(true);
     try {
       const interview = await aiInterviewService.create({
@@ -335,7 +376,6 @@ export default function AIInterviewConfig() {
         duration_minutes: totalDuration,
         rounds_config: buildRoundsConfig(),
         recording_enabled: recordingEnabled,
-        special_instructions: specialInstructions || undefined,
         title: `${selectedJd.title} - AI Interview`,
       });
       await aiInterviewService.publishConfig(interview.id);
@@ -405,27 +445,33 @@ export default function AIInterviewConfig() {
             {/* Selected JD info */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex-1 min-w-0">
                   <div className="text-xs text-gray-500 mb-1">Selected Job Description</div>
                   <div className="font-medium text-gray-900">{selectedJd.title}</div>
-                  {selectedJd.must_have_skills.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {selectedJd.must_have_skills.slice(0, 5).map(s => (
-                        <span key={s} className="px-2 py-0.5 bg-white text-gray-600 text-xs rounded-full border border-gray-200">{s}</span>
-                      ))}
-                    </div>
-                  )}
-                  {selectedJd.nice_to_have_skills.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {selectedJd.nice_to_have_skills.slice(0, 5).map(s => (
-                        <span key={s} className="px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded-full">{s}</span>
-                      ))}
-                    </div>
-                  )}
+                  {/* JD metadata row */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-gray-500">
+                    {(selectedJd.experience_min != null || selectedJd.experience_max != null) && (
+                      <span>
+                        Experience: {selectedJd.experience_min ?? 0}–{selectedJd.experience_max ?? selectedJd.experience_min ?? 0} yrs
+                      </span>
+                    )}
+                    {selectedJd.education_requirements && (selectedJd.education_requirements as any).degree && (
+                      <span>
+                        Education: {((selectedJd.education_requirements as any).degree || '').replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                        {(selectedJd.education_requirements as any).field ? ` in ${(selectedJd.education_requirements as any).field}` : ''}
+                      </span>
+                    )}
+                    {selectedJd.current_version && (
+                      <span>Version: v{selectedJd.current_version}</span>
+                    )}
+                    {selectedJd.job_id && (
+                      <span className="font-mono">ID: {selectedJd.job_id}</span>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                  className="text-sm text-gray-500 hover:text-gray-700"
+                  className="text-sm text-gray-500 hover:text-gray-700 ml-3 shrink-0"
                 >
                   Change
                 </button>
@@ -475,72 +521,56 @@ export default function AIInterviewConfig() {
                         {round.enabled && (
                           <>
                             {/* Percentage Weight */}
-                            {round.type === 'technical' ? (
-                              <div className="mb-3">
-                                <div className="flex items-center justify-between mb-1">
-                                  <label className="text-xs text-gray-500">Skill-Category Weightage</label>
-                                  <span className="text-xs font-medium text-gray-900">Total: {round.percentage}% ({getRoundDuration(round.percentage)} min)</span>
-                                </div>
-                                {/* Must-Have Skills sub-slider */}
-                                <div className="mb-2">
-                                  <div className="flex items-center justify-between mb-0.5">
-                                    <label className="text-xs text-gray-600">Must-Have Skills</label>
-                                    <span className="text-xs text-gray-400">{getRoundDuration(round.mustHavePercentage || 0)} min</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="range"
-                                      min={0}
-                                      max={100}
-                                      step={5}
-                                      value={round.mustHavePercentage || 0}
-                                      onChange={e => handleMustHavePercentage(index, parseInt(e.target.value))}
-                                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-700"
-                                    />
-                                    <span className="text-sm font-medium text-gray-900 w-10 text-right">{round.mustHavePercentage || 0}%</span>
-                                  </div>
-                                </div>
-                                {/* Nice-to-Have Skills sub-slider */}
-                                <div className="mb-2">
-                                  <div className="flex items-center justify-between mb-0.5">
-                                    <label className="text-xs text-gray-600">Nice-to-Have Skills</label>
-                                    <span className="text-xs text-gray-400">{getRoundDuration(round.niceToHavePercentage || 0)} min</span>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="range"
-                                      min={0}
-                                      max={100}
-                                      step={5}
-                                      value={round.niceToHavePercentage || 0}
-                                      onChange={e => handleNiceToHavePercentage(index, parseInt(e.target.value))}
-                                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                                    />
-                                    <span className="text-sm font-medium text-gray-900 w-10 text-right">{round.niceToHavePercentage || 0}%</span>
-                                  </div>
-                                </div>
-                                {/* Sub-breakdown summary */}
-                                <div className="text-xs text-gray-500 bg-purple-50 rounded-md px-2 py-1">
-                                  Must-Have: {round.mustHavePercentage || 0}% ({getRoundDuration(round.mustHavePercentage || 0)} min) | Nice-to-Have: {round.niceToHavePercentage || 0}% ({getRoundDuration(round.niceToHavePercentage || 0)} min)
-                                </div>
+                            <div className="mb-3">
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-xs text-gray-500">Percentage Weight</label>
+                                <span className="text-xs text-gray-400">{getRoundDuration(round.percentage)} min</span>
                               </div>
-                            ) : (
-                              <div className="mb-3">
-                                <div className="flex items-center justify-between mb-1">
-                                  <label className="text-xs text-gray-500">Percentage Weight</label>
-                                  <span className="text-xs text-gray-400">{getRoundDuration(round.percentage)} min</span>
-                                </div>
-                                <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={100}
+                                  step={1}
+                                  value={round.percentage}
+                                  onChange={e => handleRoundPercentage(index, parseInt(e.target.value))}
+                                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
+                                />
+                                <div className="flex items-center">
                                   <input
-                                    type="range"
+                                    type="number"
                                     min={0}
                                     max={100}
-                                    step={5}
                                     value={round.percentage}
-                                    onChange={e => handleRoundPercentage(index, parseInt(e.target.value))}
-                                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
+                                    onChange={e => {
+                                      const v = parseInt(e.target.value);
+                                      if (!isNaN(v) && v >= 0 && v <= 100) handleRoundPercentage(index, v);
+                                    }}
+                                    className="w-12 px-1 py-0.5 border border-gray-300 rounded text-center text-sm font-medium text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
                                   />
-                                  <span className="text-sm font-medium text-gray-900 w-10 text-right">{round.percentage}%</span>
+                                  <span className="text-sm text-gray-500 ml-0.5">%</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* JD Skills display for must-have / nice-to-have rounds */}
+                            {round.type === 'must_have_skills' && selectedJd && selectedJd.must_have_skills.length > 0 && (
+                              <div className="mb-3">
+                                <label className="text-xs text-gray-500 mb-1.5 block">Skills from JD</label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {selectedJd.must_have_skills.map(skill => (
+                                    <span key={skill} className="px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-full border border-purple-200">{skill}</span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {round.type === 'nice_to_have_skills' && selectedJd && selectedJd.nice_to_have_skills.length > 0 && (
+                              <div className="mb-3">
+                                <label className="text-xs text-gray-500 mb-1.5 block">Skills from JD</label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {selectedJd.nice_to_have_skills.map(skill => (
+                                    <span key={skill} className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-200">{skill}</span>
+                                  ))}
                                 </div>
                               </div>
                             )}
@@ -563,17 +593,41 @@ export default function AIInterviewConfig() {
                                 </button>
                               </div>
 
-                              {/* Topic chips */}
-                              <div className="flex flex-wrap gap-1.5 mb-2">
-                                {round.topics.map(topic => (
-                                  <span key={topic} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
-                                    {topic}
-                                    <button onClick={() => handleRemoveTopic(index, topic)} className="hover:text-red-500">
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                  </span>
-                                ))}
-                              </div>
+                              {/* Topic chips with weights */}
+                              {round.topics.length > 0 && (
+                                <div className="space-y-1.5 mb-2">
+                                  {round.topics.map(topic => (
+                                    <div key={topic} className="flex items-center gap-2">
+                                      <span className="flex-1 inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full truncate">
+                                        {topic}
+                                      </span>
+                                      <div className="flex items-center shrink-0">
+                                        <input
+                                          type="number"
+                                          min={0}
+                                          max={100}
+                                          value={round.topicWeights[topic] ?? 0}
+                                          onChange={e => {
+                                            const v = parseInt(e.target.value);
+                                            if (!isNaN(v) && v >= 0 && v <= 100) handleTopicWeight(index, topic, v);
+                                          }}
+                                          className="w-10 px-1 py-0.5 border border-gray-300 rounded text-center text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                        />
+                                        <span className="text-xs text-gray-400 ml-0.5">%</span>
+                                      </div>
+                                      <button onClick={() => handleRemoveTopic(index, topic)} className="text-gray-400 hover:text-red-500 shrink-0">
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  {(() => {
+                                    const total = round.topics.reduce((sum, t) => sum + (round.topicWeights[t] ?? 0), 0);
+                                    return total !== 100 && round.topics.length > 0 ? (
+                                      <div className="text-xs text-red-500 mt-1">Topic weights total {total}% (should be 100%)</div>
+                                    ) : null;
+                                  })()}
+                                </div>
+                              )}
 
                               {/* Suggested topics */}
                               {round.suggestedTopics.filter(st => !round.topics.includes(st)).length > 0 && (
@@ -651,18 +705,6 @@ export default function AIInterviewConfig() {
               )}
             </div>
 
-            {/* Special Instructions */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">Special Instructions</label>
-              <textarea
-                rows={3}
-                placeholder="e.g., Focus on system design skills. Candidate has 5 years of experience in microservices."
-                value={specialInstructions}
-                onChange={e => setSpecialInstructions(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none"
-              />
-            </div>
-
             {/* Options */}
             <label className="flex items-center gap-3 cursor-pointer">
               <input
@@ -677,37 +719,12 @@ export default function AIInterviewConfig() {
 
           {/* Right column: Summary sidebar */}
           <div className="space-y-4">
-            {/* Interview Duration - Slider */}
+            {/* Interview Duration - Fixed */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-700" />
                 <h3 className="font-medium text-gray-900">Interview Duration</h3>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min="15"
-                  max="90"
-                  step="5"
-                  value={totalDuration}
-                  onChange={e => setTotalDuration(parseInt(e.target.value))}
-                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
-                />
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min={15}
-                    max={90}
-                    step={5}
-                    value={totalDuration}
-                    onChange={e => {
-                      const v = parseInt(e.target.value);
-                      if (v >= 15 && v <= 90) setTotalDuration(v);
-                    }}
-                    className="w-14 px-2 py-1.5 border border-gray-300 rounded-lg text-center text-sm text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
-                  />
-                  <span className="text-sm text-gray-500">min</span>
-                </div>
+                <span className="ml-auto text-sm font-medium text-gray-900">{totalDuration} min</span>
               </div>
               <p className="text-xs text-gray-400 mt-2">Time is split across rounds based on percentage</p>
             </div>
@@ -746,11 +763,6 @@ export default function AIInterviewConfig() {
                     Each round must be at least 5 minutes. Increase total duration or adjust percentages.
                   </div>
                 )}
-                {percentageValid && roundDurationsValid && !technicalSubValid && (
-                  <div className="bg-red-50 border border-red-200 rounded-md p-2 text-xs text-red-600">
-                    Technical round: each skill category with weight &gt; 0 must have at least 2 minutes, and at least one category must be &gt; 0%.
-                  </div>
-                )}
 
                 <div className="border-t border-gray-100 pt-3">
                   <div className="text-xs text-gray-500 mb-2">Rounds breakdown:</div>
@@ -762,18 +774,6 @@ export default function AIInterviewConfig() {
                           <span className="text-xs text-gray-600">{info?.label || r.type}</span>
                           <span className="text-xs text-gray-900">{r.percentage}% / {getRoundDuration(r.percentage)} min</span>
                         </div>
-                        {r.type === 'technical' && r.mustHavePercentage != null && r.niceToHavePercentage != null && (
-                          <div className="ml-2 mt-0.5 space-y-0.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-purple-600">Must-Have</span>
-                              <span className="text-[10px] text-gray-500">{r.mustHavePercentage}% / {getRoundDuration(r.mustHavePercentage)} min</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] text-blue-500">Nice-to-Have</span>
-                              <span className="text-[10px] text-gray-500">{r.niceToHavePercentage}% / {getRoundDuration(r.niceToHavePercentage)} min</span>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -784,9 +784,9 @@ export default function AIInterviewConfig() {
               <div className="mt-4 space-y-2">
                 <button
                   onClick={handlePublish}
-                  disabled={!percentageValid || !roundDurationsValid || !technicalSubValid || enabledRounds.length === 0 || publishing}
+                  disabled={!percentageValid || !roundDurationsValid || enabledRounds.length === 0 || publishing}
                   className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
-                    percentageValid && roundDurationsValid && technicalSubValid && enabledRounds.length > 0 && !publishing
+                    percentageValid && roundDurationsValid && enabledRounds.length > 0 && !publishing
                       ? 'bg-gray-800 text-white hover:bg-gray-900'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}

@@ -9,8 +9,10 @@ export interface AIInterviewRoundConfig {
   percentage: number;
   duration_minutes: number;
   topics: string[];
+  topic_weights?: Record<string, number>;
   enabled: boolean;
   order: number;
+  // Deprecated: kept for backward compat with old "technical" round configs only
   must_have_percentage?: number;
   nice_to_have_percentage?: number;
 }
@@ -71,6 +73,7 @@ export interface PublishedJD {
   nice_to_have_skills: string[];
   experience_min?: number;
   experience_max?: number;
+  education_requirements?: Record<string, any>;
   coding_required?: boolean;
   created_at?: string;
   published_at?: string;
