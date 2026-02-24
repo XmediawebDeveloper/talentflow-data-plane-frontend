@@ -18,6 +18,8 @@ const ROUND_LABELS: Record<string, string> = {
   culture_fit: 'Culture Fit',
   leadership: 'Leadership',
   problem_solving: 'Problem Solving',
+  must_have_skills: 'Must-Have Skills',
+  nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
 type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'processing' | 'audit' | 'consent' | 'settings';
@@ -658,7 +660,7 @@ export default function AIInterview() {
                               )}
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
-                                {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at {new Date(config.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                               </span>
                               {config.created_by_name && (
                                 <span className="text-xs text-gray-400">

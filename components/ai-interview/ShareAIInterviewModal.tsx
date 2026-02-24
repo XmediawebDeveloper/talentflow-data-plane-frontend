@@ -48,6 +48,8 @@ const ROUND_LABELS: Record<string, string> = {
   culture_fit: 'Culture Fit',
   leadership: 'Leadership',
   problem_solving: 'Problem Solving',
+  must_have_skills: 'Must-Have Skills',
+  nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
 export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent }: ShareAIInterviewModalProps) {
