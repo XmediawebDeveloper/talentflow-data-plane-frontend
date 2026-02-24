@@ -371,6 +371,7 @@ export const resumeService = {
   async delete(id: string): Promise<void> {
     try {
       await api.delete(`/resumes/${id}`);
+      dispatchUnitsConsumed();
     } catch (error) {
       throw new Error(handleApiError(error));
     }

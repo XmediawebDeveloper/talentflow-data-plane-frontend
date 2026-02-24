@@ -6,6 +6,8 @@ import QuotaDisplay from './QuotaDisplay';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { PlanFeatureKey } from '@/lib/types/planFeatures';
 
 // Addon interface
 interface Addon {
@@ -161,6 +163,15 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   // Get user from AuthContext (already fetched during login)
   const { user } = useAuth();
   const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
+  const { hasPlanFeature } = usePlanFeatures();
+
+  // Map quota types to plan features for gating
+  const quotaFeatureMap: Record<string, PlanFeatureKey> = {
+    'RU': 'resume_upload',
+    'RS': 'resume_scoring',
+    'AS': 'assessment',
+    'AIU': 'ai_interview',
+  };
 
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month' | 'all'>('month');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -484,6 +495,21 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
     window.location.href = '/subscription/current-plan';
   };
 
+  // Check if addon purchases should be blocked (trial or expired subscription)
+  const isAddonPurchaseBlocked = !subscriptionSummary ||
+    subscriptionSummary.is_trial ||
+    subscriptionSummary.status?.toLowerCase() === 'expired' ||
+    subscriptionSummary.status?.toLowerCase() === 'suspended' ||
+    subscriptionSummary.status?.toLowerCase() === 'inactive';
+
+  const addonBlockedMessage = subscriptionSummary?.is_trial
+    ? 'Upgrade to a paid plan to purchase addons'
+    : subscriptionSummary?.status?.toLowerCase() === 'expired'
+      ? 'Renew your subscription to purchase addons'
+      : subscriptionSummary?.status?.toLowerCase() === 'suspended'
+        ? 'Account suspended - contact support'
+        : 'Upgrade to a paid plan to purchase addons';
+
   // Handle addon buy click
   const handleBuyAddon = (addon: Addon) => {
     setSelectedAddon(addon);
@@ -635,8 +661,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     <Clock className="w-3.5 h-3.5" />
                     Real-time tracking
                   </span>
-                  <span className="text-gray-300">•</span>
-                  <span>Resume Storage, Scoring, Assessments & AI Interviews</span>
+                  <span className="hidden sm:inline text-gray-300">•</span>
+                  <span className="hidden sm:inline">Resume Storage, Scoring, Assessments & AI Interviews</span>
                 </p>
               </div>
             </div>
@@ -669,27 +695,27 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 md:py-8">
         {/* Subscription Summary Card */}
         {subscriptionSummary && (
-          <div className="mb-8 bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
+          <div className="mb-6 sm:mb-8 bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
             {/* Card Header with gradient */}
-            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 px-6 py-4 border-b border-gray-100">
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <CreditCard className="w-4 h-4" />
                 <span>Current Subscription</span>
               </div>
             </div>
 
-            <div className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-5">
-                  <div className="w-14 h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300/50">
-                    <Zap className="w-7 h-7 text-white" />
+            <div className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
+                <div className="flex items-start gap-3 sm:gap-5">
+                  <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shadow-gray-300/50 flex-shrink-0">
+                    <Zap className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-3 mb-2">
-                      <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+                    <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
+                      <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
                         {subscriptionSummary.plan?.name || 'No Plan'}
                       </h2>
                       {subscriptionSummary.is_trial && (
@@ -730,7 +756,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   </div>
                 </div>
 
-                <div className="text-right bg-gray-50 rounded-xl p-4 min-w-[200px]">
+                <div className="text-left sm:text-right bg-gray-50 rounded-xl p-3 sm:p-4 sm:min-w-[200px] w-full sm:w-auto">
                   {subscriptionSummary.is_trial ? (
                     /* Free Trial - show expiry with proper time calculation */
                     (() => {
@@ -765,13 +791,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                             </span>
                           </div>
                           {!remaining.isExpired && (
-                            <p className="text-xs text-gray-500 mt-2 flex items-center justify-end gap-1">
+                            <p className="text-xs text-gray-500 mt-2 flex items-center sm:justify-end gap-1">
                               <Calendar className="w-3 h-3" />
                               Renews in {remaining.displayText}
                             </p>
                           )}
                           {remaining.isExpired && (
-                            <p className="text-xs text-red-500 mt-2 flex items-center justify-end gap-1">
+                            <p className="text-xs text-red-500 mt-2 flex items-center sm:justify-end gap-1">
                               <AlertTriangle className="w-3 h-3" />
                               Plan Expired
                             </p>
@@ -807,38 +833,44 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         {quotaSummary && (
           <div className="mb-8">
             {/* Section Header */}
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-gray-600" />
+                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Quota Overview</h2>
-                  <p className="text-sm text-gray-500">Monitor your resource consumption</p>
+                  <h2 className="text-base sm:text-lg font-semibold text-gray-900">Quota Overview</h2>
+                  <p className="text-xs sm:text-sm text-gray-500">Monitor your resource consumption</p>
                 </div>
               </div>
               {quotaSummary.billing_period && (
-                <div className="flex items-center gap-2 text-sm text-gray-500 bg-gray-50 px-4 py-2 rounded-lg border border-gray-200">
-                  <Calendar className="w-4 h-4" />
-                  <span>Billing Period: {new Date(quotaSummary.billing_period.start).toLocaleDateString()} - {new Date(quotaSummary.billing_period.end).toLocaleDateString()}</span>
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 bg-gray-50 px-3 sm:px-4 py-2 rounded-lg border border-gray-200 self-start sm:self-auto">
+                  <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                  <span className="truncate">{new Date(quotaSummary.billing_period.start).toLocaleDateString()} - {new Date(quotaSummary.billing_period.end).toLocaleDateString()}</span>
                 </div>
               )}
             </div>
 
             {/* Low Quota Warning */}
             {quotaSummary.has_low_quotas && (
-              <div className="bg-gradient-to-r from-gray-100 to-gray-50 border-2 border-gray-300 rounded-2xl p-5 mb-6 shadow-sm">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 bg-gray-200 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <AlertTriangle className="w-6 h-6 text-gray-600" />
+              <div className="bg-gradient-to-r from-gray-100 to-gray-50 border-2 border-gray-300 rounded-xl sm:rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6 shadow-sm">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600" />
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-gray-900 text-lg">Quota Running Low!</h3>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-gray-900 text-base sm:text-lg">Quota Running Low!</h3>
                     <p className="text-sm text-gray-600 mt-1">Some quotas are below 20%. Purchase add-on units to continue using these features without interruption.</p>
                     {/* Show each low quota with its own Add Credits button */}
                     <div className="flex flex-wrap gap-2 mt-4">
                       {quotaSummary.quotas
-                        ?.filter((q: QuotaInfo) => q.is_low || q.is_exhausted)
+                        ?.filter((q: QuotaInfo) => {
+                          if (!(q.is_low || q.is_exhausted)) return false;
+                          // Hide low quota warnings for features not in the plan
+                          const featureKey = quotaFeatureMap[q.quota_type];
+                          if (featureKey && !hasPlanFeature(featureKey)) return false;
+                          return true;
+                        })
                         .map((quota: QuotaInfo) => {
                           // Map quota_type to addon name pattern for matching
                           const quotaToAddonMap: Record<string, string> = {
@@ -859,8 +891,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                             <button
                               key={quota.quota_type}
                               onClick={() => {
-                                if (subscriptionSummary?.is_trial) {
-                                  setAddonPurchaseError('Addon purchases are only available for paid plans. Please upgrade from your free trial.');
+                                if (isAddonPurchaseBlocked) {
+                                  setAddonPurchaseError(
+                                    subscriptionSummary?.is_trial
+                                      ? 'Addon purchases are only available for paid plans. Please upgrade from your free trial.'
+                                      : 'Addon purchases are not available. Please renew your subscription first.'
+                                  );
                                   return;
                                 }
                                 if (matchingAddon) {
@@ -872,9 +908,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                                   }
                                 }
                               }}
-                              title={subscriptionSummary?.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
+                              title={isAddonPurchaseBlocked ? addonBlockedMessage : ""}
                               className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
-                                subscriptionSummary?.is_trial
+                                isAddonPurchaseBlocked
                                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                   : quota.is_exhausted
                                     ? 'bg-gray-900 text-white hover:bg-gray-800'
@@ -883,7 +919,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                             >
                               <Plus className="w-4 h-4" />
                               Add {quota.name}
-                              {quota.is_exhausted && !subscriptionSummary?.is_trial && (
+                              {quota.is_exhausted && !isAddonPurchaseBlocked && (
                                 <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Exhausted</span>
                               )}
                             </button>
@@ -897,7 +933,13 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
             {/* Quota Cards Grid - Dynamic */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mb-6">
-              {quotaSummary.quotas?.filter((quota: QuotaInfo) => quota.quota_type !== 'storage_gb').map((quota: QuotaInfo) => {
+              {quotaSummary.quotas?.filter((quota: QuotaInfo) => {
+                if (quota.quota_type === 'storage_gb') return false;
+                // Gate quota cards by plan feature
+                const featureKey = quotaFeatureMap[quota.quota_type];
+                if (featureKey && !hasPlanFeature(featureKey)) return false;
+                return true;
+              }).map((quota: QuotaInfo) => {
                 const isUnlimited = quota.limit === -1 || quota.remaining === -1;
 
                 // Icon mapping for quota types
@@ -954,10 +996,10 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     {/* Usage Numbers */}
                     <div className="mb-4">
                       <div className="flex items-baseline gap-1">
-                        <span className="text-4xl font-bold text-gray-900 tracking-tight">
+                        <span className="text-2xl sm:text-4xl font-bold text-gray-900 tracking-tight">
                           {isUnlimited ? '∞' : quota.used}
                         </span>
-                        <span className="text-lg text-gray-400 font-medium">
+                        <span className="text-sm sm:text-lg text-gray-400 font-medium">
                           / {isUnlimited ? '∞' : quota.limit}
                         </span>
                       </div>
@@ -1006,28 +1048,28 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       </div>
 
       {/* Add-ons Section */}
-      <div className="max-w-7xl mx-auto px-6 pb-12" data-section="addons">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 pb-8 sm:pb-12" data-section="addons">
         <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
           {/* Section Header */}
-          <div className="px-6 py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl flex items-center justify-center shadow-lg shadow-gray-300/30">
-                  <Sparkles className="w-6 h-6 text-white" />
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl flex items-center justify-center shadow-lg shadow-gray-300/30 flex-shrink-0">
+                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">Add-on Units</h2>
-                  <p className="text-sm text-gray-500 mt-0.5">Purchase additional units to extend your quota limits instantly</p>
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-900">Add-on Units</h2>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Purchase additional units to extend your quota limits</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
+              <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full flex-shrink-0">
                 <Info className="w-3.5 h-3.5" />
                 <span>Valid until plan expiry</span>
               </div>
             </div>
           </div>
 
-          <div className="p-6">
+          <div className="p-3 sm:p-4 md:p-6">
             {addonsLoading && (
               <div className="flex flex-col items-center justify-center py-12">
                 <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4">
@@ -1049,8 +1091,17 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
             {!addonsLoading && addons.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Reorder addons: Extra Max Jobs before Extra Max Seats */}
+                {/* Reorder addons: Extra Max Jobs before Extra Max Seats, filter by plan features */}
                 {[...addons]
+                  .filter((addon) => {
+                    // Hide addons for features not in the current plan
+                    const name = (addon.name || addon.addon_name || '').toLowerCase();
+                    if ((name.includes('resume') && name.includes('upload')) || name.includes('resume storage')) return hasPlanFeature('resume_upload');
+                    if ((name.includes('resume') && name.includes('scor')) || name.includes('resume scoring')) return hasPlanFeature('resume_scoring');
+                    if (name.includes('assessment')) return hasPlanFeature('assessment');
+                    if (name.includes('ai') || name.includes('interview')) return hasPlanFeature('ai_interview');
+                    return true; // Always show seats, jobs, and other generic addons
+                  })
                   .sort((a, b) => {
                     const nameA = (a.name || a.addon_name || '').toLowerCase();
                     const nameB = (b.name || b.addon_name || '').toLowerCase();
@@ -1078,29 +1129,29 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   return (
                     <div
                       key={addon.id}
-                      className="group bg-gradient-to-br from-gray-50 to-white rounded-2xl border-2 border-gray-200 p-5 transition-all hover:border-gray-300 hover:shadow-lg hover:-translate-y-1"
+                      className="group bg-gradient-to-br from-gray-50 to-white rounded-xl sm:rounded-2xl border-2 border-gray-200 p-4 sm:p-5 transition-all hover:border-gray-300 hover:shadow-lg hover:-translate-y-1"
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-4">
-                          <div className="w-14 h-14 bg-gray-100 rounded-xl flex items-center justify-center text-gray-600 group-hover:bg-gray-200 transition-colors">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 sm:gap-4">
+                          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gray-100 rounded-xl flex items-center justify-center text-gray-600 group-hover:bg-gray-200 transition-colors flex-shrink-0">
                             {getAddonIcon(displayName)}
                           </div>
                           <div>
-                            <h3 className="font-bold text-gray-900 text-lg">
+                            <h3 className="font-bold text-gray-900 text-base sm:text-lg">
                               {displayName}
                             </h3>
                             <div className="flex items-center gap-3 mt-2">
-                              <div className="flex items-center gap-1.5 bg-gray-100 px-3 py-1.5 rounded-lg">
-                                <Zap className="w-4 h-4 text-gray-600" />
-                                <span className="text-lg font-bold text-gray-900">{addon.credit_amount || addon.min_quantity || 0}</span>
+                              <div className="flex items-center gap-1.5 bg-gray-100 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg">
+                                <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600" />
+                                <span className="text-base sm:text-lg font-bold text-gray-900">{addon.credit_amount || addon.min_quantity || 0}</span>
                                 <span className="text-xs text-gray-500">units</span>
                               </div>
                             </div>
                           </div>
                         </div>
 
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-gray-900">
+                        <div className="text-left sm:text-right">
+                          <div className="text-xl sm:text-2xl font-bold text-gray-900">
                             ₹{(addon.price || addon.unit_price || 0).toLocaleString()}
                           </div>
                           <p className="text-xs text-gray-500 mt-1">one-time purchase</p>
@@ -1110,17 +1161,19 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       <div className="mt-4 pt-4 border-t border-gray-200">
                         <button
                           onClick={() => handleBuyAddon(addon)}
-                          disabled={!subscriptionSummary || subscriptionSummary.is_trial}
-                          title={subscriptionSummary?.is_trial ? "Upgrade to a paid plan to purchase addons" : ""}
+                          disabled={isAddonPurchaseBlocked}
+                          title={isAddonPurchaseBlocked ? addonBlockedMessage : ""}
                           className={`w-full px-4 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 ${
-                            !subscriptionSummary || subscriptionSummary.is_trial
+                            isAddonPurchaseBlocked
                               ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                               : 'bg-gradient-to-r from-gray-800 to-gray-900 text-white hover:from-gray-700 hover:to-gray-800 shadow-lg shadow-gray-300/30 hover:shadow-xl hover:shadow-gray-300/40'
                           }`}
                         >
                           <ShoppingCart className="w-5 h-5" />
-                          {!subscriptionSummary || subscriptionSummary.is_trial ? 'Upgrade Plan to Purchase' : 'Purchase Now'}
-                          {(!subscriptionSummary || !subscriptionSummary.is_trial) && <ChevronRight className="w-4 h-4" />}
+                          {isAddonPurchaseBlocked
+                            ? (subscriptionSummary?.status?.toLowerCase() === 'expired' ? 'Renew Plan to Purchase' : 'Upgrade Plan to Purchase')
+                            : 'Purchase Now'}
+                          {!isAddonPurchaseBlocked && <ChevronRight className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
@@ -1132,8 +1185,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
           {/* Footer Info */}
           {!addonsLoading && addons.length > 0 && (
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100">
-              <div className="flex items-center justify-center gap-6 text-xs text-gray-500">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100">
+              <div className="flex items-center justify-center gap-4 sm:gap-6 text-xs text-gray-500">
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-gray-400" />
                   Instant activation
@@ -1299,17 +1352,17 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
       {/* Addon Purchase Modal */}
       {showAddonModal && selectedAddon && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4">
+          <div className="bg-white rounded-t-2xl sm:rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="relative px-6 py-5 bg-gradient-to-r from-gray-800 to-gray-900">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/10 backdrop-blur rounded-xl flex items-center justify-center">
-                  <ShoppingCart className="w-6 h-6 text-white" />
+            <div className="relative px-4 sm:px-6 py-4 sm:py-5 bg-gradient-to-r from-gray-800 to-gray-900">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/10 backdrop-blur rounded-xl flex items-center justify-center flex-shrink-0">
+                  <ShoppingCart className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-white">Purchase Add-on</h2>
-                  <p className="text-sm text-gray-300">Add units to your quota instantly</p>
+                  <h2 className="text-lg sm:text-xl font-bold text-white">Purchase Add-on</h2>
+                  <p className="text-xs sm:text-sm text-gray-300">Add units to your quota instantly</p>
                 </div>
               </div>
               <button
@@ -1318,50 +1371,50 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   setAddonPurchaseError(null);
                   setAddonPurchaseSuccess(null);
                 }}
-                className="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="absolute top-3 sm:top-4 right-3 sm:right-4 p-2 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-white" />
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
               {/* Success Message */}
               {addonPurchaseSuccess && (
-                <div className="p-4 bg-gray-100 border-2 border-gray-300 rounded-xl flex items-start gap-3 animate-in slide-in-from-top duration-200">
-                  <div className="w-8 h-8 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
-                    <CheckCircle2 className="w-5 h-5 text-white" />
+                <div className="p-3 sm:p-4 bg-gray-100 border-2 border-gray-300 rounded-xl flex items-start gap-2.5 sm:gap-3 animate-in slide-in-from-top duration-200">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
+                    <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">Purchase Successful!</p>
-                    <p className="text-sm text-gray-600 mt-0.5">{addonPurchaseSuccess}</p>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm sm:text-base">Purchase Successful!</p>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-0.5">{addonPurchaseSuccess}</p>
                   </div>
                 </div>
               )}
 
               {/* Error Message */}
               {addonPurchaseError && (
-                <div className="p-4 bg-gray-100 border-2 border-gray-300 rounded-xl flex items-start gap-3">
-                  <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
-                    <AlertCircle className="w-5 h-5 text-white" />
+                <div className="p-3 sm:p-4 bg-gray-100 border-2 border-gray-300 rounded-xl flex items-start gap-2.5 sm:gap-3">
+                  <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
-                  <div>
-                    <p className="font-semibold text-gray-900">Purchase Failed</p>
-                    <p className="text-sm text-gray-600 mt-0.5">{addonPurchaseError}</p>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm sm:text-base">Purchase Failed</p>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-0.5">{addonPurchaseError}</p>
                   </div>
                 </div>
               )}
 
               {/* Addon Details Card */}
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200 rounded-2xl p-5">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-200">
-                    <Zap className="w-7 h-7 text-gray-700" />
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-200 rounded-2xl p-3.5 sm:p-5">
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <div className="w-11 h-11 sm:w-14 sm:h-14 bg-white rounded-xl flex items-center justify-center shadow-sm border border-gray-200 flex-shrink-0">
+                    <Zap className="w-5 h-5 sm:w-7 sm:h-7 text-gray-700" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-lg">
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-gray-900 text-base sm:text-lg truncate">
                       {(selectedAddon.name || selectedAddon.addon_name || 'Credit Pack').replace(/\s*-?\s*Pro$/i, '').trim()}
                     </h3>
-                    <p className="text-sm text-gray-500 mt-0.5">
+                    <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
                       {selectedAddon.credit_amount || 0} units per pack
                     </p>
                   </div>
@@ -1373,10 +1426,10 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
                   Select Quantity
                 </label>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-4">
                   <button
                     onClick={() => setAddonQuantity(Math.max(1, addonQuantity - 1))}
-                    className="w-12 h-12 border-2 border-gray-300 rounded-xl flex items-center justify-center hover:bg-gray-100 hover:border-gray-400 transition-all font-bold text-xl text-gray-600"
+                    className="w-10 h-10 sm:w-12 sm:h-12 border-2 border-gray-300 rounded-xl flex items-center justify-center hover:bg-gray-100 hover:border-gray-400 transition-all font-bold text-xl text-gray-600 flex-shrink-0"
                   >
                     −
                   </button>
@@ -1386,15 +1439,15 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     max={100}
                     value={addonQuantity}
                     onChange={(e) => setAddonQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-24 text-center px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 font-bold text-2xl"
+                    className="w-16 sm:w-24 text-center px-2 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500 font-bold text-xl sm:text-2xl text-black"
                   />
                   <button
                     onClick={() => setAddonQuantity(Math.min(100, addonQuantity + 1))}
-                    className="w-12 h-12 border-2 border-gray-300 rounded-xl flex items-center justify-center hover:bg-gray-100 hover:border-gray-400 transition-all font-bold text-xl text-gray-600"
+                    className="w-10 h-10 sm:w-12 sm:h-12 border-2 border-gray-300 rounded-xl flex items-center justify-center hover:bg-gray-100 hover:border-gray-400 transition-all font-bold text-xl text-gray-600 flex-shrink-0"
                   >
                     +
                   </button>
-                  <div className="flex-1 text-right">
+                  <div className="flex-1 text-right min-w-0">
                     <span className="text-xs text-gray-500">Price per pack</span>
                     <p className="font-bold text-gray-900">₹{selectedAddon.price || selectedAddon.unit_price || 0}</p>
                   </div>
@@ -1403,10 +1456,10 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
               {/* Order Summary */}
               <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-200 bg-gray-100">
-                  <h4 className="font-semibold text-gray-700 text-sm">Order Summary</h4>
+                <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-gray-200 bg-gray-100">
+                  <h4 className="font-semibold text-gray-700 text-xs sm:text-sm">Order Summary</h4>
                 </div>
-                <div className="p-5 space-y-3">
+                <div className="p-3.5 sm:p-5 space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Pack size</span>
                     <span className="font-medium text-gray-900">{selectedAddon.credit_amount || 0} units</span>
@@ -1416,17 +1469,17 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     <span className="font-medium text-gray-900">×{addonQuantity}</span>
                   </div>
                   <div className="h-px bg-gray-200 my-3"></div>
-                  <div className="flex justify-between items-center bg-gray-800 text-white p-4 rounded-xl -mx-1">
+                  <div className="flex justify-between items-center bg-gray-800 text-white p-3 sm:p-4 rounded-xl -mx-1">
                     <div>
-                      <span className="text-sm text-gray-300">Units to be added</span>
-                      <p className="text-3xl font-bold">+{(selectedAddon.credit_amount || 0) * addonQuantity}</p>
+                      <span className="text-xs sm:text-sm text-gray-300">Units to be added</span>
+                      <p className="text-2xl sm:text-3xl font-bold">+{(selectedAddon.credit_amount || 0) * addonQuantity}</p>
                     </div>
-                    <Zap className="w-10 h-10 text-gray-400" />
+                    <Zap className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400" />
                   </div>
                   <div className="h-px bg-gray-200 my-3"></div>
                   <div className="flex justify-between items-center">
                     <span className="font-semibold text-gray-900">Total Amount</span>
-                    <span className="text-3xl font-bold text-gray-900">
+                    <span className="text-2xl sm:text-3xl font-bold text-gray-900">
                       ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity).toLocaleString()}
                     </span>
                   </div>
@@ -1435,32 +1488,32 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-6 border-t border-gray-200 bg-gray-50">
-              <div className="flex gap-3">
+            <div className="p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex gap-2.5 sm:gap-3">
                 <button
                   onClick={() => {
                     setShowAddonModal(false);
                     setAddonPurchaseError(null);
                     setAddonPurchaseSuccess(null);
                   }}
-                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold hover:bg-gray-100 hover:border-gray-400 transition-all"
+                  className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-semibold text-sm sm:text-base hover:bg-gray-100 hover:border-gray-400 transition-all"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handlePurchaseAddon}
                   disabled={purchasingAddon || razorpayProcessing || !!addonPurchaseSuccess}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl font-semibold hover:from-gray-700 hover:to-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-gray-300/30"
+                  className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl font-semibold text-sm sm:text-base hover:from-gray-700 hover:to-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 sm:gap-2 shadow-lg shadow-gray-300/30"
                 >
                   {purchasingAddon || razorpayProcessing ? (
                     <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Processing...
+                      <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                      <span className="truncate">Processing...</span>
                     </>
                   ) : (
                     <>
-                      <CreditCard className="w-5 h-5" />
-                      Pay & Purchase
+                      <CreditCard className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                      <span className="truncate">Pay & Purchase</span>
                     </>
                   )}
                 </button>

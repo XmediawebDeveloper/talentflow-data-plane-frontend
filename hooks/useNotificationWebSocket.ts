@@ -33,9 +33,9 @@ const getWebSocketBaseUrl = () => {
   // Auto-detect: use wss:// for https://, ws:// for http://
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//localhost:8001`;
+    return `${protocol}//localhost:8000`;
   }
-  return 'ws://localhost:8001';
+  return 'ws://localhost:8000';
 };
 
 const WS_BASE_URL = getWebSocketBaseUrl();
@@ -114,12 +114,25 @@ export function useNotificationWebSocket({
         return;
       }
 
+      // Always read the freshest token from localStorage at connection time.
+      // The token prop (wsToken state) only changes on identity change (login/logout),
+      // but the underlying JWT may have been silently refreshed by the API interceptor
+      // between disconnect and reconnect.  Using the live localStorage value ensures
+      // reconnections never fail due to a stale token.
+      const liveToken =
+        (typeof window !== 'undefined' && localStorage.getItem('accessToken')) || token;
+
+      if (!liveToken) {
+        console.log('[WebSocket] No token available for connection, skipping');
+        return;
+      }
+
       // Mark as connecting to prevent duplicate attempts
       isConnectingRef.current = true;
 
       try {
-        const wsUrl = `${WS_BASE_URL}/api/v1/ws/notifications?token=${encodeURIComponent(token)}`;
-        console.log('[WebSocket] Attempting connection to:', wsUrl.replace(token, '***TOKEN***'));
+        const wsUrl = `${WS_BASE_URL}/api/v1/ws/notifications?token=${encodeURIComponent(liveToken)}`;
+        console.log('[WebSocket] Attempting connection to:', wsUrl.replace(liveToken, '***TOKEN***'));
         console.log('[WebSocket] WS_BASE_URL:', WS_BASE_URL);
 
         const ws = new WebSocket(wsUrl);

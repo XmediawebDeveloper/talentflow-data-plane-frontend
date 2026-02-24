@@ -31,6 +31,7 @@ import {
 import { useAuth } from '@/lib/hooks/useAuth';
 import { assessmentService } from '@/lib/services';
 import { toast } from 'sonner';
+import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { formatDateTimeIST, formatDateOnlyIST } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
@@ -43,6 +44,7 @@ interface AssessmentsForJDProps {
 export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProps) {
   const router = useRouter();
   const { user, hasPermission } = useAuth();
+  const { available: assessmentAvailable } = usePlanFeature('assessment');
   const [isLoading, setIsLoading] = useState(true);
   const [assessments, setAssessments] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
@@ -225,7 +227,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           </div>
 
           {/* Create Assessment Button */}
-          {canCreateAssessments && (
+          {canCreateAssessments && assessmentAvailable && (
             <button
               onClick={handleCreateAssessment}
               className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm font-medium"
@@ -274,7 +276,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
               ? 'Create an assessment to start testing candidates for this job'
               : 'Assessments will appear here once created'}
           </p>
-          {canCreateAssessments && activeTab !== 'archived' && (
+          {canCreateAssessments && assessmentAvailable && activeTab !== 'archived' && (
             <button
               onClick={handleCreateAssessment}
               className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
@@ -397,15 +399,15 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                   className="fixed inset-0 z-10"
                                   onClick={() => setOpenMenuId(null)}
                                 />
-                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                                <div className="absolute right-0 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 max-h-[70vh] overflow-y-auto">
                                   <button
                                     onClick={() => {
                                       handleViewDetails(assessment);
                                       setOpenMenuId(null);
                                     }}
-                                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
                                   >
-                                    <Eye className="w-4 h-4" />
+                                    <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     View Details
                                   </button>
                                   {assessment.status === 'draft' && (
@@ -414,9 +416,9 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                         handlePublish(assessment);
                                         setOpenMenuId(null);
                                       }}
-                                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                      className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
                                     >
-                                      <CheckCircle className="w-4 h-4" />
+                                      <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                       Publish
                                     </button>
                                   )}
@@ -425,9 +427,9 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                       handleEdit(assessment);
                                       setOpenMenuId(null);
                                     }}
-                                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
                                   >
-                                    <Edit2 className="w-4 h-4" />
+                                    <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Edit
                                   </button>
                                   {assessment.status !== 'archived' && (
@@ -436,9 +438,9 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                         handleArchive(assessment);
                                         setOpenMenuId(null);
                                       }}
-                                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                      className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-50"
                                     >
-                                      <Archive className="w-4 h-4" />
+                                      <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                       Archive
                                     </button>
                                   )}
@@ -447,9 +449,9 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                       handleDelete(assessment);
                                       setOpenMenuId(null);
                                     }}
-                                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-red-600 hover:bg-red-50"
                                   >
-                                    <Trash2 className="w-4 h-4" />
+                                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Delete
                                   </button>
                                 </div>

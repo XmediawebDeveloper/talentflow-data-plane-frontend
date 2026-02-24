@@ -7,6 +7,7 @@ import { Loader2, ArrowLeft, Target, Award, CheckCircle, XCircle, TrendingUp, Ma
 import { toast } from 'sonner';
 import ResumePreviewModal from '@/components/ResumePreviewModal';
 import { handleUnauthorized } from '@/lib/services/api';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 function ScoredResumeDetailContent() {
   const router = useRouter();
@@ -498,13 +499,15 @@ function ScoredResumeDetailContent() {
 
 export default function ScoredResumeDetailPage() {
   return (
-    <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-        <span className="ml-3 text-gray-600">Loading...</span>
-      </div>
-    }>
-      <ScoredResumeDetailContent />
-    </Suspense>
+    <FeatureGate feature="resume_scoring">
+      <Suspense fallback={
+        <div className="flex-1 flex items-center justify-center bg-gray-50">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
+          <span className="ml-3 text-gray-600">Loading...</span>
+        </div>
+      }>
+        <ScoredResumeDetailContent />
+      </Suspense>
+    </FeatureGate>
   );
 }

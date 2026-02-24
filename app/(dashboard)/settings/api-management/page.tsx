@@ -4,6 +4,7 @@ import { Key, Plus, Copy, Eye, EyeOff, Trash2, RefreshCw, Clock, Loader2, X } fr
 import { useState, useEffect } from 'react';
 import { apiKeysApi, ApiKey, ApiKeyCreateResponse } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 export default function ApiManagementPage() {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
@@ -138,6 +139,7 @@ export default function ApiManagementPage() {
   }
 
   return (
+    <FeatureGate feature="api_access">
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
@@ -359,5 +361,6 @@ export default function ApiManagementPage() {
         </div>
       )}
     </main>
+    </FeatureGate>
   );
 }

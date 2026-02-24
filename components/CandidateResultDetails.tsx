@@ -1,8 +1,9 @@
 'use client';
 
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
+import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
 import { toast } from 'sonner';
 
 interface CandidateResultDetailsProps {
@@ -42,6 +43,31 @@ export default function CandidateResultDetails({
   const [activeTab, setActiveTab] = useState<string>('technical-knowledge');
   const [candidateData, setCandidateData] = useState<CandidateBasicInfo | null>(null);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+  const [proctoringEvents, setProctoringEvents] = useState<ProctoringEvent[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [eventsPage, setEventsPage] = useState(1);
+  const EVENTS_PER_PAGE = 10;
+
+  // Group events by minute + event_type so each row shows: event, timestamp (HH:MM), count
+  const groupedEvents = Object.values(
+    proctoringEvents.reduce((acc, event) => {
+      const minuteKey = event.timestamp
+        ? new Date(event.timestamp).toISOString().slice(0, 16) // "YYYY-MM-DDTHH:MM"
+        : 'unknown';
+      const key = `${minuteKey}__${event.event_type}`;
+      if (!acc[key]) {
+        acc[key] = { event_type: event.event_type, minuteKey, timestamp: event.timestamp ?? '', count: 0 };
+      }
+      acc[key].count++;
+      return acc;
+    }, {} as Record<string, { event_type: string; minuteKey: string; timestamp: string; count: number }>)
+  ).sort((a, b) => (a.minuteKey < b.minuteKey ? -1 : a.minuteKey > b.minuteKey ? 1 : 0));
+
+  const eventsTotalPages = Math.ceil(groupedEvents.length / EVENTS_PER_PAGE);
+  const eventsPageItems = groupedEvents.slice(
+    (eventsPage - 1) * EVENTS_PER_PAGE,
+    eventsPage * EVENTS_PER_PAGE
+  );
 
   // Fetch detailed results
   useEffect(() => {
@@ -135,6 +161,24 @@ export default function CandidateResultDetails({
     fetchDetailedResults();
   }, [assessmentId, candidateId]);
 
+  // Fetch proctoring events when violations tab is opened
+  useEffect(() => {
+    if (activeTab !== 'violations' || !candidateId) return;
+    if (proctoringEvents.length > 0) return; // already loaded
+    const fetchEvents = async () => {
+      setIsLoadingEvents(true);
+      try {
+        const response = await proctoringService.getEvents({ attempt_id: candidateId, page_size: 100 });
+        setProctoringEvents(response.items);
+      } catch (err) {
+        console.error('[CandidateResultDetails] Failed to fetch proctoring events:', err);
+      } finally {
+        setIsLoadingEvents(false);
+      }
+    };
+    fetchEvents();
+  }, [activeTab, candidateId]);
+
   // Helper functions
   const getScoreColor = (score: number) => {
     if (score >= 80) return 'text-green-600';
@@ -216,19 +260,19 @@ export default function CandidateResultDetails({
     <div className="flex-1 bg-gray-50 overflow-y-auto">
       {/* Sticky Header - Assessment & JD Title */}
       <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-gray-600 sticky top-0 z-20 shadow-lg">
-        <div className="px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-                <FileText className="w-6 h-6 text-white" />
+        <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <div>
-                <div className="text-white/80 text-xs mb-1">Assessment</div>
-                <h1 className="text-white text-xl">{assessmentTitle}</h1>
+              <div className="min-w-0">
+                <div className="text-white/80 text-xs mb-0.5 sm:mb-1">Assessment</div>
+                <h1 className="text-white text-base sm:text-xl truncate">{assessmentTitle}</h1>
                 {jdTitle && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <Briefcase className="w-3.5 h-3.5 text-gray-200" />
-                    <span className="text-gray-100 text-sm">Linked to: {jdTitle}</span>
+                  <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
+                    <Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-200 flex-shrink-0" />
+                    <span className="text-gray-100 text-xs sm:text-sm truncate">Linked to: {jdTitle}</span>
                   </div>
                 )}
               </div>
@@ -250,9 +294,9 @@ export default function CandidateResultDetails({
                   toast.error('Failed to export results. Please try again.');
                 }
               }}
-              className="px-6 py-2.5 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg transition-colors flex items-center gap-2 border border-white/30"
+              className="px-3 sm:px-6 py-2 sm:py-2.5 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 border border-white/30 text-xs sm:text-sm self-start sm:self-auto whitespace-nowrap"
             >
-              <FileText className="w-5 h-5" />
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
               Export Results
             </button>
           </div>
@@ -260,26 +304,26 @@ export default function CandidateResultDetails({
       </div>
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-[88px] z-10">
-        <div className="px-8 py-6">
+      <div className="bg-white border-b border-gray-200 sticky top-[72px] sm:top-[88px] z-10">
+        <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
           <button
             onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 transition-colors text-sm sm:text-base"
           >
-            <ArrowLeft className="w-5 h-5" />
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             Back to Results Overview
           </button>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0">
                 {(candidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
-              <div>
-                <h1 className="text-gray-900 mb-1">{candidateData?.name || 'Unknown'}</h1>
-                <p className="text-sm text-gray-600">{candidateData?.email}</p>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-base md:text-lg text-gray-900 mb-0.5 sm:mb-1 truncate">{candidateData?.name || 'Unknown'}</h1>
+                <p className="text-xs sm:text-sm text-gray-600 truncate">{candidateData?.email}</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 self-start sm:self-auto">
               {/* Status Badge */}
               {(() => {
                 let displayStatus = candidateData?.status || 'In Progress';
@@ -302,35 +346,35 @@ export default function CandidateResultDetails({
       </div>
 
       {/* Content */}
-      <div className="px-8 py-6">
+      <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
         {/* Assessment Info */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <div className="grid grid-cols-3 gap-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-gray-800" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800" />
               </div>
-              <div>
-                <div className="text-sm text-gray-600">Assessment</div>
-                <div className="text-gray-900">{assessmentTitle}</div>
+              <div className="min-w-0">
+                <div className="text-xs sm:text-sm text-gray-600">Assessment</div>
+                <div className="text-sm sm:text-base text-gray-900 truncate">{assessmentTitle}</div>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-green-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
               <div>
-                <div className="text-sm text-gray-600">Completed</div>
-                <div className="text-gray-900">{candidateData?.completedDate}</div>
+                <div className="text-xs sm:text-sm text-gray-600">Completed</div>
+                <div className="text-sm sm:text-base text-gray-900">{candidateData?.completedDate}</div>
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-6 h-6 text-gray-800" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-gray-800" />
               </div>
               <div>
-                <div className="text-sm text-gray-600">Time Taken</div>
-                <div className="text-gray-900">{candidateData?.duration}</div>
+                <div className="text-xs sm:text-sm text-gray-600">Time Taken</div>
+                <div className="text-sm sm:text-base text-gray-900">{candidateData?.duration}</div>
               </div>
             </div>
           </div>
@@ -375,53 +419,124 @@ export default function CandidateResultDetails({
         })()}
 
         {/* Section Scores */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <h2 className="text-gray-900 mb-4">Section-wise Performance</h2>
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
+          <h2 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Section-wise Performance</h2>
           <div className="space-y-4">
-            {candidateData?.sections.filter(section => !section.name.toLowerCase().includes('hr')).map((section, idx) => (
-              <div key={idx} className={`border rounded-lg p-4 ${
-                section.name.toLowerCase().includes('hr')
-                  ? 'border-gray-200 bg-gray-50/30'
-                  : 'border-green-200 bg-green-50/30'
-              }`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-900">{section.name}</span>
-                      {section.name.toLowerCase().includes('hr') ? (
-                        <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
-                          Not Scored
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
-                          Scored (0-10)
-                        </span>
-                      )}
+            {candidateData?.sections.map((section, idx) => {
+              const isHR = section.name.toLowerCase().includes('hr');
+
+              // Question attendance stats for this section (3 buckets)
+              const roundType = section.name.replace(' Section', '').toLowerCase();
+              const questionsForRound = detailedResult?.question_evaluations.filter(
+                q => q.round_type === roundType
+              ) ?? [];
+              const totalQ = questionsForRound.length;
+              const submittedQ = questionsForRound.filter(q =>
+                q.question_status === 'answered' || q.question_status === 'scored'
+              ).length;
+              const skippedQ = questionsForRound.filter(q =>
+                q.question_status === 'skipped'
+              ).length;
+              const unansweredQ = totalQ - submittedQ - skippedQ;
+              const submittedPct = totalQ > 0 ? (submittedQ / totalQ) * 100 : 0;
+              const skippedPct  = totalQ > 0 ? (skippedQ  / totalQ) * 100 : 0;
+              const unansweredPct = totalQ > 0 ? (unansweredQ / totalQ) * 100 : 0;
+
+              return (
+                <div key={idx} className={`border rounded-lg p-4 ${
+                  isHR
+                    ? 'border-gray-200 bg-gray-50/30'
+                    : 'border-green-200 bg-green-50/30'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-900">{section.name}</span>
+                        {isHR ? (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
+                            Not Scored
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                            Scored (0-10)
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {section.score}/{section.totalScore} points
+                        {!isHR && (
+                          <span className="text-gray-800 ml-2">• Pass: ≥7/10</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      {section.score}/{section.totalScore} points
-                      {!section.name.toLowerCase().includes('hr') && (
-                        <span className="text-gray-800 ml-2">• Pass: ≥7/10</span>
-                      )}
+                    <div className={`text-2xl ${isHR ? 'text-gray-400' : getScoreColor(section.percentage)}`}>
+                      {isHR ? '—' : `${section.percentage}%`}
                     </div>
                   </div>
-                  <div className={`text-2xl ${getScoreColor(section.percentage)}`}>
-                    {section.percentage}%
-                  </div>
+
+                  {/* Score progress bar (non-HR only) */}
+                  {!isHR && (
+                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-3">
+                      <div
+                        className={`h-3 rounded-full ${section.percentage >= 80 ? 'bg-green-600' : section.percentage >= 60 ? 'bg-gray-800' : section.percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'}`}
+                        style={{ width: `${Math.min(section.percentage, 100)}%` }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Question Attendance Bar */}
+                  {totalQ > 0 && (
+                    <div className={isHR ? '' : 'mt-1 pt-3 border-t border-gray-200'}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-medium text-gray-600">Question Attendance</span>
+                        <span className="text-xs text-gray-400">{totalQ} Total</span>
+                      </div>
+                      {/* Stacked bar */}
+                      <div className="w-full h-2.5 rounded-full overflow-hidden flex bg-gray-100 mb-2">
+                        {submittedQ > 0 && (
+                          <div
+                            className="h-full bg-green-500 transition-all"
+                            style={{ width: `${submittedPct}%` }}
+                          />
+                        )}
+                        {skippedQ > 0 && (
+                          <div
+                            className="h-full bg-amber-400 transition-all"
+                            style={{ width: `${skippedPct}%` }}
+                          />
+                        )}
+                        {unansweredQ > 0 && (
+                          <div
+                            className="h-full bg-red-400 transition-all"
+                            style={{ width: `${unansweredPct}%` }}
+                          />
+                        )}
+                      </div>
+                      {/* Legend */}
+                      <div className="flex items-center gap-4 text-xs">
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block flex-shrink-0" />
+                          <span className="text-green-700 font-medium">{submittedQ} Submitted</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block flex-shrink-0" />
+                          <span className="text-amber-600 font-medium">{skippedQ} Skipped</span>
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block flex-shrink-0" />
+                          <span className="text-red-600 font-medium">{unansweredQ} Unanswered</span>
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                  <div
-                    className={`h-3 rounded-full ${section.percentage >= 80 ? 'bg-green-600' : section.percentage >= 60 ? 'bg-gray-800' : section.percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'}`}
-                    style={{ width: `${Math.min(section.percentage, 100)}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
-        {/* Scoring Rules & Pass/Fail Criteria */}
-        <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-6 mb-6">
+        {/* Scoring Rules & Pass/Fail Criteria — hidden */}
+        {false && <div className="bg-gradient-to-br from-gray-50 to-gray-50 border-2 border-gray-300 rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
           <div className="flex items-start gap-3 mb-4">
             <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
               <Info className="w-6 h-6 text-white" />
@@ -432,9 +547,9 @@ export default function CandidateResultDetails({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {/* HR Section Rules */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
                   <FileText className="w-4 h-4 text-gray-600" />
@@ -530,18 +645,18 @@ export default function CandidateResultDetails({
               <span>Remember: HR section is excluded from final PASS/FAIL calculation</span>
             </div>
           </div>
-        </div>
+        </div>}
 
         {/* Candidate Insights - AI Generated Analysis */}
         {detailedResult && detailedResult.scoring_status === 'completed' && (
           <div className="bg-white rounded-lg border-2 border-blue-200 overflow-hidden shadow-lg mb-6">
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h2 className="text-white flex items-center gap-2">
-                  <Award className="w-5 h-5" />
+                <h2 className="text-white flex items-center gap-2 text-sm sm:text-base">
+                  <Award className="w-4 h-4 sm:w-5 sm:h-5" />
                   AI-Generated Candidate Insights
                 </h2>
-                <p className="text-blue-100 text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
+                <p className="text-blue-100 text-xs sm:text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
               </div>
               {(!detailedResult.candidate_insights?.interview_strength) && (
                 <button
@@ -563,9 +678,9 @@ export default function CandidateResultDetails({
                 </button>
               )}
             </div>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {detailedResult.candidate_insights?.interview_strength ? (
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Interview Strength */}
                 {detailedResult.candidate_insights.interview_strength && (
                   <div className="bg-green-50 rounded-lg p-4 border border-green-200">
@@ -650,11 +765,11 @@ export default function CandidateResultDetails({
 
         {/* Detailed Answers */}
         <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden shadow-lg">
-          <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5">
-            <div className="flex items-center justify-between">
+          <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-4 sm:px-6 py-4 sm:py-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div>
-                <h2 className="text-white">Detailed Question Analysis</h2>
-                <p className="text-gray-100 text-sm mt-1">Review questions and answers for each section</p>
+                <h2 className="text-white text-sm sm:text-base">Detailed Question Analysis</h2>
+                <p className="text-gray-100 text-xs sm:text-sm mt-1">Review questions and answers for each section</p>
               </div>
               {/* Agent Status Badge */}
               {detailedResult && (
@@ -714,7 +829,7 @@ export default function CandidateResultDetails({
             <>
               {/* Tab Navigation */}
               <div className="border-b border-gray-200 bg-gray-50">
-                <div className="flex gap-2 px-6 py-3">
+                <div className="flex gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 overflow-x-auto">
                   {detailedResult.round_scores.map((round, idx) => {
                     const isActive = activeTab === round.round_type;
                     const questionsForRound = detailedResult.question_evaluations.filter(
@@ -725,13 +840,13 @@ export default function CandidateResultDetails({
                       <button
                         key={idx}
                         onClick={() => setActiveTab(round.round_type)}
-                        className={`px-6 py-3 rounded-t-lg transition-all flex items-center gap-2 ${
+                        className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                           isActive
                             ? 'bg-white text-gray-800 border-t-2 border-x border-gray-800 shadow-sm'
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
                       >
-                        <span className="font-medium capitalize">{round.round_type} Round</span>
+                        <span className="font-medium capitalize text-xs sm:text-sm">{round.round_type} Round</span>
                         <span className={`px-2 py-0.5 rounded-full text-xs ${
                           isActive ? 'bg-gray-100 text-gray-900' : 'bg-gray-200 text-gray-600'
                         }`}>
@@ -744,7 +859,7 @@ export default function CandidateResultDetails({
                   {/* Violations Tab */}
                   <button
                     onClick={() => setActiveTab('violations')}
-                    className={`px-6 py-3 rounded-t-lg transition-all flex items-center gap-2 ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                       activeTab === 'violations'
                         ? 'bg-white text-red-700 border-t-2 border-x border-red-500 shadow-sm'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -767,7 +882,7 @@ export default function CandidateResultDetails({
               </div>
 
               {/* Tab Content */}
-              <div className="p-6">
+              <div className="p-3 sm:p-4 md:p-6">
                 {detailedResult.round_scores.map((round, roundIdx) => {
                   const isActiveTab = activeTab === round.round_type;
                   if (!isActiveTab) return null;
@@ -779,9 +894,9 @@ export default function CandidateResultDetails({
                   return (
                     <div key={roundIdx} className="space-y-6">
                       {/* Section Header */}
-                      <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-200">
                         <div>
-                          <h3 className="text-xl text-gray-900 capitalize">{round.round_type} Round</h3>
+                          <h3 className="text-base sm:text-xl text-gray-900 capitalize">{round.round_type} Round</h3>
                           <p className="text-sm text-gray-600 mt-1">
                             {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''} •
                             <span className="ml-1">
@@ -790,9 +905,9 @@ export default function CandidateResultDetails({
                             </span>
                           </p>
                         </div>
-                        <div className="text-right">
-                          <div className="text-sm text-gray-600 mb-1">Section Score</div>
-                          <div className={`text-3xl ${getScoreColor(Math.round(round.raw_score ?? 0))}`}>
+                        <div className="text-left sm:text-right">
+                          <div className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Section Score</div>
+                          <div className={`text-xl sm:text-3xl ${getScoreColor(Math.round(round.raw_score ?? 0))}`}>
                             {Math.round(round.raw_score ?? 0)}%
                           </div>
                         </div>
@@ -804,12 +919,12 @@ export default function CandidateResultDetails({
                           {questionsForRound.map((q, qIdx) => (
                             <div key={qIdx} className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
                               {/* Question Header */}
-                              <div className={`px-6 py-4 border-b border-gray-200 ${
+                              <div className={`px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 ${
                                 q.is_correct ? 'bg-green-50' : 'bg-red-50'
                               }`}>
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2">
+                                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
                                       <span className="px-3 py-1 bg-gray-800 text-white rounded-full text-xs font-medium">
                                         Q{qIdx + 1}
                                       </span>
@@ -833,8 +948,8 @@ export default function CandidateResultDetails({
                                     </div>
                                     <div className="text-gray-900 leading-relaxed">{q.question_text}</div>
                                   </div>
-                                  <div className="ml-6 text-right flex-shrink-0">
-                                    <div className="text-xs text-gray-600 mb-1">Score</div>
+                                  <div className="sm:ml-6 text-left sm:text-right flex-shrink-0">
+                                    <div className="text-xs text-gray-600 mb-0.5 sm:mb-1">Score</div>
                                     <div className="flex items-center gap-2">
                                       {(() => {
                                         // Normalize scores to be out of 10
@@ -844,11 +959,11 @@ export default function CandidateResultDetails({
 
                                         return (
                                           <>
-                                            <div className={`text-2xl font-bold ${getScoreColor(percentage)}`}>
+                                            <div className={`text-lg sm:text-2xl font-bold ${getScoreColor(percentage)}`}>
                                               {Math.round(normalizedEarned * 10) / 10}
                                             </div>
                                             <div className="text-gray-400">/</div>
-                                            <div className="text-xl text-gray-600">{normalizedPossible}</div>
+                                            <div className="text-base sm:text-xl text-gray-600">{normalizedPossible}</div>
                                           </>
                                         );
                                       })()}
@@ -858,7 +973,7 @@ export default function CandidateResultDetails({
                               </div>
 
                               {/* Question Content */}
-                              <div className="p-6 space-y-4">
+                              <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
                                 {/* Candidate's Answer */}
                                 <div>
                                   <div className="flex items-center gap-2 mb-3">
@@ -992,11 +1107,11 @@ export default function CandidateResultDetails({
 
                 {/* Violations Tab Content */}
                 {activeTab === 'violations' && detailedResult.proctoring_stats && (
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     {/* Violations Header */}
-                    <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-200">
                       <div>
-                        <h3 className="text-xl text-gray-900">Proctoring Violations</h3>
+                        <h3 className="text-base sm:text-xl text-gray-900">Proctoring Violations</h3>
                         <p className="text-sm text-gray-600 mt-1">
                           {detailedResult.proctoring_stats.total_violations} total violation{detailedResult.proctoring_stats.total_violations !== 1 ? 's' : ''} detected during the assessment
                         </p>
@@ -1019,9 +1134,9 @@ export default function CandidateResultDetails({
                     </div>
 
                     {/* Violations Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                       {/* Mouse Movement */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         detailedResult.proctoring_stats.window_blur_count > 0
                           ? 'bg-red-50 border-red-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1049,7 +1164,7 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Tab Switch */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         detailedResult.proctoring_stats.tab_switch_count > 0
                           ? 'bg-orange-50 border-orange-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1077,7 +1192,7 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Copy Count */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         (detailedResult.proctoring_stats.copy_count || 0) > 0
                           ? 'bg-yellow-50 border-yellow-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1105,7 +1220,7 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Paste Count */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         (detailedResult.proctoring_stats.paste_count || 0) > 0
                           ? 'bg-yellow-50 border-yellow-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1134,7 +1249,7 @@ export default function CandidateResultDetails({
 
                       {/* Video Violations - HIDDEN as per user request */}
                       {false && (
-                        <div className={`rounded-xl p-5 border-2 ${
+                        <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                           detailedResult.proctoring_stats.video_violation_count > 0
                             ? 'bg-purple-50 border-purple-200'
                             : 'bg-gray-50 border-gray-200'
@@ -1163,7 +1278,7 @@ export default function CandidateResultDetails({
                       )}
 
                       {/* Voice Violations */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         detailedResult.proctoring_stats.voice_violation_count > 0
                           ? 'bg-pink-50 border-pink-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1190,9 +1305,36 @@ export default function CandidateResultDetails({
                         <div className="text-xs text-gray-500 mt-1">occurrences</div>
                       </div>
 
+                      {/* Multiple Faces */}
+                      <div className={`rounded-xl p-5 border-2 ${
+                        (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
+                          ? 'bg-violet-50 border-violet-200'
+                          : 'bg-gray-50 border-gray-200'
+                      }`}>
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                          (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
+                            ? 'bg-violet-100'
+                            : 'bg-gray-100'
+                        }`}>
+                          <User className={`w-6 h-6 ${
+                            (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
+                              ? 'text-violet-600'
+                              : 'text-gray-400'
+                          }`} />
+                        </div>
+                        <div className="text-sm text-gray-600 mb-1">Multiple Faces</div>
+                        <div className={`text-3xl font-bold ${
+                          (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
+                            ? 'text-violet-600'
+                            : 'text-gray-400'
+                        }`}>
+                          {detailedResult.proctoring_stats.multiple_faces_count || 0}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">detections</div>
+                      </div>
+
                       {/* Fullscreen Exit */}
-                      {/* Fullscreen Exit - Commented out for now */}
-                      {/* <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
                           ? 'bg-blue-50 border-blue-200'
                           : 'bg-gray-50 border-gray-200'
@@ -1217,11 +1359,11 @@ export default function CandidateResultDetails({
                           {detailedResult.proctoring_stats.fullscreen_exit_count || 0}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">times</div>
-                      </div> */}
+                      </div>
 
                       {/* Other Violations (uncategorized) - Commented out for now */}
                       {/* {(detailedResult.proctoring_stats.other_violation_count || 0) > 0 && (
-                        <div className="rounded-xl p-5 border-2 bg-gray-50 border-gray-300">
+                        <div className="rounded-xl p-3 sm:p-5 border-2 bg-gray-50 border-gray-300">
                           <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-3 bg-gray-200">
                             <AlertCircle className="w-6 h-6 text-gray-600" />
                           </div>
@@ -1234,7 +1376,7 @@ export default function CandidateResultDetails({
                       )} */}
 
                       {/* Total Violations */}
-                      <div className={`rounded-xl p-5 border-2 ${
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
                         detailedResult.proctoring_stats.total_violations > 0
                           ? 'bg-red-50 border-red-300'
                           : 'bg-green-50 border-green-200'
@@ -1260,6 +1402,164 @@ export default function CandidateResultDetails({
                         </div>
                         <div className="text-xs text-gray-500 mt-1">total</div>
                       </div>
+                    </div>
+
+                    {/* Event Log / Timeline */}
+                    <div className="mt-2">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Activity className="w-5 h-5 text-gray-500" />
+                        <h4 className="text-base font-semibold text-gray-800">Event Log</h4>
+                        {!isLoadingEvents && proctoringEvents.length > 0 && (
+                          <span className="ml-auto text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                            {proctoringEvents.length} event{proctoringEvents.length !== 1 ? 's' : ''} · {groupedEvents.length} row{groupedEvents.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+
+                      {isLoadingEvents ? (
+                        <div className="flex items-center justify-center py-10 text-gray-400">
+                          <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                          <span className="text-sm">Loading events…</span>
+                        </div>
+                      ) : proctoringEvents.length === 0 ? (
+                        <div className="text-center py-8 text-gray-400 border border-dashed border-gray-200 rounded-lg">
+                          <ShieldAlert className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                          <p className="text-sm">No individual events recorded</p>
+                        </div>
+                      ) : (
+                        <div className="border border-gray-200 rounded-xl overflow-hidden">
+                          {/* Table header */}
+                          <div className="grid grid-cols-[40px_2fr_1fr_1fr_80px] bg-gray-50 border-b border-gray-200 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                            <span>S.No</span>
+                            <span>Event</span>
+                            <span>Timestamp</span>
+                            <span>Severity</span>
+                            <span className="text-center">Count</span>
+                          </div>
+
+                          {/* Rows — current page only */}
+                          <div className="divide-y divide-gray-100">
+                            {eventsPageItems.map((row, idx) => {
+                              const globalIdx = (eventsPage - 1) * EVENTS_PER_PAGE + idx + 1;
+
+                              const cfg = (() => {
+                                switch (row.event_type) {
+                                  case 'tab_switch':               return { label: 'Tab Switch',               icon: <Monitor className="w-4 h-4" />,      color: 'text-orange-600', bg: 'bg-orange-50',  severity: 'medium' };
+                                  case 'window_blur':              return { label: 'Window Blur / Focus Lost', icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',    bg: 'bg-red-50',     severity: 'high'   };
+                                  case 'copy_attempt':             return { label: 'Copy Attempt',             icon: <Clipboard className="w-4 h-4" />,    color: 'text-yellow-600', bg: 'bg-yellow-50',  severity: 'medium' };
+                                  case 'paste_attempt':            return { label: 'Paste Attempt',            icon: <MousePointer className="w-4 h-4" />, color: 'text-yellow-600', bg: 'bg-yellow-50',  severity: 'medium' };
+                                  case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-gray-600',   bg: 'bg-gray-50',    severity: 'low'    };
+                                  case 'camera_obstructed':        return { label: 'Camera Obstructed',        icon: <Eye className="w-4 h-4" />,          color: 'text-purple-600', bg: 'bg-purple-50',  severity: 'high'   };
+                                  case 'microphone_disabled':      return { label: 'Microphone Disabled',      icon: <Volume2 className="w-4 h-4" />,      color: 'text-gray-600',   bg: 'bg-gray-50',    severity: 'low'    };
+                                  case 'voice_detected':           return { label: 'Voice Detected',           icon: <Volume2 className="w-4 h-4" />,      color: 'text-pink-600',   bg: 'bg-pink-50',    severity: 'medium' };
+                                  case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-pink-600',   bg: 'bg-pink-50',    severity: 'high'   };
+                                  case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-violet-600', bg: 'bg-violet-50',  severity: 'critical' };
+                                  case 'screenshot_attempt':       return { label: 'Screenshot Attempt',       icon: <Maximize className="w-4 h-4" />,     color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'high'   };
+                                  case 'screen_recording_attempt': return { label: 'Screen Recording',         icon: <Monitor className="w-4 h-4" />,      color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'critical' };
+                                  case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'medium'   };
+                                  default:                         return { label: row.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), icon: <AlertCircle className="w-4 h-4" />, color: 'text-gray-600', bg: 'bg-gray-50', severity: 'low' };
+                                }
+                              })();
+
+                              const severityBadge = (() => {
+                                switch (cfg.severity) {
+                                  case 'critical': return 'bg-red-100 text-red-700 border border-red-200';
+                                  case 'high':     return 'bg-orange-100 text-orange-700 border border-orange-200';
+                                  case 'medium':   return 'bg-yellow-100 text-yellow-700 border border-yellow-200';
+                                  case 'low':      return 'bg-green-100 text-green-700 border border-green-200';
+                                  default:         return 'bg-gray-100 text-gray-600 border border-gray-200';
+                                }
+                              })();
+
+                              const timeStr = row.timestamp
+                                ? new Date(row.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                                : '—';
+
+                              return (
+                                <div
+                                  key={`${row.minuteKey}__${row.event_type}`}
+                                  className={`grid grid-cols-[40px_2fr_1fr_1fr_80px] items-center px-4 py-3 text-sm ${cfg.bg}`}
+                                >
+                                  {/* S.No */}
+                                  <span className="text-gray-400 text-xs font-medium">{globalIdx}</span>
+
+                                  {/* Event */}
+                                  <div className="flex items-center gap-2">
+                                    <span className={`flex-shrink-0 ${cfg.color}`}>{cfg.icon}</span>
+                                    <span className={`font-medium ${cfg.color}`}>{cfg.label}</span>
+                                  </div>
+
+                                  {/* Timestamp — minute only */}
+                                  <span className="text-gray-600 text-xs font-mono">{timeStr}</span>
+
+                                  {/* Severity */}
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold w-fit ${severityBadge}`}>
+                                    {cfg.severity.charAt(0).toUpperCase() + cfg.severity.slice(1)}
+                                  </span>
+
+                                  {/* Count */}
+                                  <div className="flex justify-center">
+                                    <span className={`inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs font-bold ${
+                                      row.count >= 5 ? 'bg-red-100 text-red-700' :
+                                      row.count >= 3 ? 'bg-orange-100 text-orange-700' :
+                                      'bg-gray-100 text-gray-700'
+                                    }`}>
+                                      {row.count}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Pagination footer */}
+                          {eventsTotalPages > 1 && (
+                            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+                              <span className="text-xs text-gray-500">
+                                Showing {(eventsPage - 1) * EVENTS_PER_PAGE + 1}–{Math.min(eventsPage * EVENTS_PER_PAGE, groupedEvents.length)} of {groupedEvents.length} rows ({proctoringEvents.length} total events)
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => setEventsPage(p => Math.max(1, p - 1))}
+                                  disabled={eventsPage === 1}
+                                  className="px-2.5 py-1 rounded text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  ‹ Prev
+                                </button>
+                                {Array.from({ length: eventsTotalPages }, (_, i) => i + 1).map(page => {
+                                  const show = page === 1 || page === eventsTotalPages || Math.abs(page - eventsPage) <= 1;
+                                  const showEllipsisBefore = page === eventsPage - 2 && eventsPage - 2 > 1;
+                                  const showEllipsisAfter  = page === eventsPage + 2 && eventsPage + 2 < eventsTotalPages;
+                                  if (!show && !showEllipsisBefore && !showEllipsisAfter) return null;
+                                  if (showEllipsisBefore || showEllipsisAfter) {
+                                    return <span key={`ellipsis-${page}`} className="px-1 text-gray-400 text-xs">…</span>;
+                                  }
+                                  return (
+                                    <button
+                                      key={page}
+                                      onClick={() => setEventsPage(page)}
+                                      className={`min-w-[28px] px-2 py-1 rounded text-xs font-medium border transition-colors ${
+                                        page === eventsPage
+                                          ? 'bg-gray-800 text-white border-gray-800'
+                                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
+                                      }`}
+                                    >
+                                      {page}
+                                    </button>
+                                  );
+                                })}
+                                <button
+                                  onClick={() => setEventsPage(p => Math.min(eventsTotalPages, p + 1))}
+                                  disabled={eventsPage === eventsTotalPages}
+                                  className="px-2.5 py-1 rounded text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  Next ›
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Summary Note */}

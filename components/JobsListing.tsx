@@ -603,7 +603,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search jobs..."
-                  className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                  className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 text-sm sm:text-base text-black border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
                 />
               </div>
 
@@ -731,11 +731,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   {/* Location */}
                   {uniqueLocations.length > 1 && (
                     <div>
-                      <label className="block text-base text-gray-700 mb-2 font-medium">Location</label>
+                      <label className="block text-sm sm:text-base text-gray-700 mb-1.5 sm:mb-2 font-medium">Location</label>
                       <select
                         value={locationFilter}
                         onChange={(e) => setLocationFilter(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
                       >
                         <option value="all">All Locations</option>
                         {uniqueLocations.map(loc => (
@@ -748,11 +748,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   {/* Department */}
                   {uniqueDepartments.length > 0 && (
                     <div>
-                      <label className="block text-base text-gray-700 mb-2 font-medium">Department</label>
+                      <label className="block text-sm sm:text-base text-gray-700 mb-1.5 sm:mb-2 font-medium">Department</label>
                       <select
                         value={departmentFilter}
                         onChange={(e) => setDepartmentFilter(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
                       >
                         <option value="all">All Departments</option>
                         {uniqueDepartments.map(dept => (
@@ -765,11 +765,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   {/* Employment Type */}
                   {uniqueEmploymentTypes.length > 0 && (
                     <div>
-                      <label className="block text-base text-gray-700 mb-2 font-medium">Job Type</label>
+                      <label className="block text-sm sm:text-base text-gray-700 mb-1.5 sm:mb-2 font-medium">Job Type</label>
                       <select
                         value={employmentTypeFilter}
                         onChange={(e) => setEmploymentTypeFilter(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
                       >
                         <option value="all">All Types</option>
                         {uniqueEmploymentTypes.map(type => (
@@ -782,11 +782,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   {/* Industry */}
                   {uniqueIndustries.length > 0 && (
                     <div>
-                      <label className="block text-base text-gray-700 mb-2 font-medium">Industry</label>
+                      <label className="block text-sm sm:text-base text-gray-700 mb-1.5 sm:mb-2 font-medium">Industry</label>
                       <select
                         value={industryFilter}
                         onChange={(e) => setIndustryFilter(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                        className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
                       >
                         <option value="all">All Industries</option>
                         {uniqueIndustries.map(industry => (
@@ -798,11 +798,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
                   {/* Experience */}
                   <div>
-                    <label className="block text-base text-gray-700 mb-2 font-medium">Experience</label>
+                    <label className="block text-sm sm:text-base text-gray-700 mb-1.5 sm:mb-2 font-medium">Experience</label>
                     <select
                       value={experienceFilter}
                       onChange={(e) => setExperienceFilter(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
                     >
                       <option value="all">All Levels</option>
                       <option value="entry">Entry Level (0-2 years)</option>
@@ -816,23 +816,23 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
                   {/* Posted From Date */}
                   <div>
-                    <label className="block text-base text-gray-700 mb-2 font-medium">Posted From</label>
+                    <label className="block text-sm sm:text-base text-gray-700 mb-1.5 sm:mb-2 font-medium">Posted From</label>
                     <input
                       type="date"
                       value={datePostedFromFilter}
                       onChange={(e) => setDatePostedFromFilter(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
                     />
                   </div>
 
                   {/* Posted To Date */}
                   <div>
-                    <label className="block text-base text-gray-700 mb-2 font-medium">Posted To</label>
+                    <label className="block text-sm sm:text-base text-gray-700 mb-1.5 sm:mb-2 font-medium">Posted To</label>
                     <input
                       type="date"
                       value={datePostedToFilter}
                       onChange={(e) => setDatePostedToFilter(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-base"
+                      className="w-full px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-sm sm:text-base text-black"
                     />
                   </div>
                 </div>
@@ -1550,7 +1550,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                   <select
                     value={itemsPerPage}
                     onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
-                    className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                    className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base text-black"
                   >
                     <option value={6}>6</option>
                     <option value={12}>12</option>
@@ -1638,19 +1638,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
       {/* Quota Exceeded Modal */}
       {showQuotaModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+          <div className="bg-white rounded-xl p-4 sm:p-6 max-w-md w-full mx-4 shadow-2xl">
             <div className="text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Briefcase className="w-8 h-8 text-red-600" />
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <Briefcase className="w-6 h-6 sm:w-8 sm:h-8 text-red-600" />
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Insufficient Units</h3>
-              <p className="text-gray-600 mb-6">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">Insufficient Units</h3>
+              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">
                 You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
               </p>
-              <div className="flex gap-3 justify-center">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 justify-center">
                 <button
                   onClick={() => setShowQuotaModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm sm:text-base text-gray-700 hover:bg-gray-50 font-medium"
                 >
                   Cancel
                 </button>
@@ -1659,7 +1659,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                     setShowQuotaModal(false);
                     window.location.href = '/subscription/current-plan';
                   }}
-                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium"
+                  className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm sm:text-base font-medium"
                 >
                   Upgrade Plan
                 </button>

@@ -46,6 +46,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import FeatureGate from '@/components/shared/FeatureGate';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 
 // Helper function to format date in IST (UTC+5:30)
 const formatDateIST = (dateString: string | null | undefined): string => {
@@ -340,6 +342,7 @@ export default function MyResumesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isTenantAdmin, hasPermission, isLoading: authLoading } = useAuth();
+  const { hasPlanFeature } = usePlanFeatures();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -1850,6 +1853,14 @@ export default function MyResumesPage() {
 
     // For multiple files, use bulk upload with async processing
     try {
+      // Auto-clear previous completed batches before starting a new upload
+      try {
+        await resumeService.deleteCompletedBatches();
+        setUploadHistory(prev => prev.filter(r => r.pending > 0 || r.status === 'processing'));
+      } catch (e) {
+        // Non-critical — proceed even if cleanup fails
+      }
+
       // Start bulk upload - returns immediately with batch info
       const batch = await resumeService.uploadBulk(files, targetFolderId);
 
@@ -2110,6 +2121,7 @@ export default function MyResumesPage() {
   }
 
   return (
+    <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
     <main className="flex-1 p-4 sm:p-6 md:p-8 bg-gray-50">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
@@ -2163,13 +2175,13 @@ export default function MyResumesPage() {
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
-            onApplyToJob={hasPermission('canRunScoring') || isTenantAdmin ? handleApplyToJob : undefined}
+            onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleApplyToJob : undefined}
             onDownload={handleBulkDownload}
             onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-            onAssessment={hasPermission('canCreateAssessments') || isTenantAdmin ? handleAssessment : undefined}
+            onAssessment={hasPlanFeature('assessment') && (hasPermission('canCreateAssessments') || isTenantAdmin) ? handleAssessment : undefined}
             onArchive={() => handleArchiveResumes(selectedResumes)}
-            onAITalentMatch={hasPermission('canRunAiMatch') || isTenantAdmin ? handleAITalentMatch : undefined}
+            onAITalentMatch={hasPlanFeature('ai_talent_match') && (hasPermission('canRunAiMatch') || isTenantAdmin) ? handleAITalentMatch : undefined}
           />
         )}
 
@@ -2300,7 +2312,7 @@ export default function MyResumesPage() {
                   onSelectResume={handleSelectResume}
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
-                  onApplyToJob={hasPermission('canRunScoring') || isTenantAdmin ? handleSingleResumeApplyToJob : undefined}
+                  onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleSingleResumeApplyToJob : undefined}
                   onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
                   onMoveToFolder={handleMoveToFolder}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
@@ -4232,5 +4244,6 @@ export default function MyResumesPage() {
       </AlertDialog>
     </main>
     </DndProvider>
+    </FeatureGate>
   );
 }

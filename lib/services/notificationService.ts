@@ -144,8 +144,8 @@ class NotificationService {
     try {
       const response = await api.post('/notifications/check-status', params);
       return response.data;
-    } catch (error) {
-      console.error('Error checking status notifications:', error);
+    } catch (error: any) {
+      console.error('Error checking status notifications:', error?.response?.status, error?.response?.data?.detail || error?.response?.data, 'payload:', JSON.stringify(params));
       return { status: 'error', created: [], count: 0 };
     }
   }

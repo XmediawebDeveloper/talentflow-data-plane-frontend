@@ -4,6 +4,8 @@ import { X, Upload, FileText, CheckCircle2, AlertCircle, AlertTriangle, Loader2,
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
+import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
 import type { DuplicateFile, ExistingResume } from './DuplicateResumeModal';
 
@@ -28,6 +30,14 @@ interface ResumeUploadModalProps {
 }
 
 export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: ResumeUploadModalProps) {
+  const { available: resumeUploadAvailable } = usePlanFeature('resume_upload');
+
+  if (!resumeUploadAvailable) {
+    toast.error('Resume Storage is not available in your plan');
+    onClose?.();
+    return null;
+  }
+
   const [filesWithStatus, setFilesWithStatus] = useState<FileWithStatus[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);

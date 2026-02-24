@@ -147,34 +147,34 @@ export default function NotificationsPage() {
   ];
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
-            <Bell className="w-5 h-5 text-white" />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
+            <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Notifications</h1>
-            <p className="text-sm text-gray-500">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-gray-900">Notifications</h1>
+            <p className="text-xs sm:text-sm text-gray-500">
               {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'} · {total} total
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           <button
             onClick={() => fetchNotifications(true)}
             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             title="Refresh"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllAsRead}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-2"
+              className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2"
             >
-              <Check className="w-4 h-4" />
+              <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Mark All Read
             </button>
           )}
@@ -182,11 +182,11 @@ export default function NotificationsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
         <div className="flex bg-gray-100 rounded-lg p-1">
           <button
             onClick={() => setFilter('all')}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               filter === 'all'
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
@@ -196,7 +196,7 @@ export default function NotificationsPage() {
           </button>
           <button
             onClick={() => setFilter('unread')}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+            className={`flex-1 sm:flex-none px-4 py-2 text-sm font-medium rounded-md transition-colors ${
               filter === 'unread'
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-600 hover:text-gray-900'
@@ -207,11 +207,11 @@ export default function NotificationsPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-gray-500" />
+          <Filter className="w-4 h-4 text-gray-500 flex-shrink-0" />
           <select
             value={categoryFilter || ''}
             onChange={(e) => setCategoryFilter(e.target.value || undefined)}
-            className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500"
+            className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-500 w-full sm:w-auto text-black"
           >
             {categories.map(cat => (
               <option key={cat.value || 'all'} value={cat.value || ''}>
@@ -245,31 +245,31 @@ export default function NotificationsPage() {
               return (
                 <div
                   key={notification.id}
-                  className={`p-4 hover:bg-gray-50 transition-colors ${
+                  className={`p-3 sm:p-4 hover:bg-gray-50 transition-colors ${
                     !notification.is_read ? 'bg-blue-50/30' : ''
                   }`}
                 >
-                  <div className="flex gap-4">
-                    <div className={`w-10 h-10 ${style.bgColor} rounded-full flex items-center justify-center flex-shrink-0`}>
-                      <IconComponent className={`w-5 h-5 ${style.iconColor}`} />
+                  <div className="flex gap-2.5 sm:gap-4">
+                    <div className={`w-8 h-8 sm:w-10 sm:h-10 ${style.bgColor} rounded-full flex items-center justify-center flex-shrink-0`}>
+                      <IconComponent className={`w-4 h-4 sm:w-5 sm:h-5 ${style.iconColor}`} />
                     </div>
 
                     <div
                       className="flex-1 min-w-0 cursor-pointer"
                       onClick={() => handleNotificationClick(notification)}
                     >
-                      <div className="flex items-start justify-between gap-4 mb-1">
-                        <div className="flex items-center gap-2">
-                          <p className={`text-sm ${notification.is_read ? 'text-gray-700' : 'text-gray-900 font-semibold'}`}>
+                      <div className="flex items-start justify-between gap-2 sm:gap-4 mb-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p className={`text-xs sm:text-sm truncate ${notification.is_read ? 'text-gray-700' : 'text-gray-900 font-semibold'}`}>
                             {notification.title}
                           </p>
                           {!notification.is_read && (
-                            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                            <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></span>
                           )}
                         </div>
-                        <span className="text-xs text-gray-500 whitespace-nowrap">{notification.time_ago}</span>
+                        <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{notification.time_ago}</span>
                       </div>
-                      <p className="text-sm text-gray-600 mb-2">{notification.message}</p>
+                      <p className="text-xs sm:text-sm text-gray-600 mb-2 line-clamp-2">{notification.message}</p>
                       <div className="flex items-center gap-3">
                         {notification.action_label && (
                           <span className="text-xs text-gray-800 font-medium hover:underline">
@@ -280,17 +280,17 @@ export default function NotificationsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-start gap-1">
+                    <div className="flex flex-col sm:flex-row items-start gap-1 flex-shrink-0">
                       {!notification.is_read && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleMarkAsRead(notification.id);
                           }}
-                          className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                          className="p-1 sm:p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
                           title="Mark as read"
                         >
-                          <Check className="w-4 h-4" />
+                          <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </button>
                       )}
                       <button
@@ -298,10 +298,10 @@ export default function NotificationsPage() {
                           e.stopPropagation();
                           handleDelete(notification.id);
                         }}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        className="p-1 sm:p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                         title="Delete"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </button>
                     </div>
                   </div>

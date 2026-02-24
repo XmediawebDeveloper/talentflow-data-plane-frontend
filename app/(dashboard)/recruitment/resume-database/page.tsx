@@ -34,6 +34,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import FeatureGate from '@/components/shared/FeatureGate';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 
 interface SearchFilters {
   skills?: string[];
@@ -50,6 +52,7 @@ interface SearchFilters {
 export default function ResumeDatabasePage() {
   const router = useRouter();
   const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { hasPlanFeature } = usePlanFeatures();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
@@ -814,6 +817,7 @@ export default function ResumeDatabasePage() {
   }
 
   return (
+    <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
     <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-gray-50">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
@@ -835,11 +839,11 @@ export default function ResumeDatabasePage() {
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
-            onApplyToJob={hasPermission('canRunScoring') || isTenantAdmin ? handleBulkApplyToJob : undefined}
-            onDelete={hasPermission('canDeleteInternalDB') || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
-            onResumeScoring={hasPermission('canRunScoring') || isTenantAdmin ? handleBulkResumeScoring : undefined}
-            onAssessment={hasPermission('canCreateAssessments') || isTenantAdmin ? handleBulkAssessment : undefined}
-            onAITalentMatch={hasPermission('canRunAiMatch') || isTenantAdmin ? handleBulkAITalentMatch : undefined}
+            onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleBulkApplyToJob : undefined}
+            onDelete={isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onResumeScoring={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleBulkResumeScoring : undefined}
+            onAssessment={hasPlanFeature('assessment') && (hasPermission('canCreateAssessments') || isTenantAdmin) ? handleBulkAssessment : undefined}
+            onAITalentMatch={hasPlanFeature('ai_talent_match') && (hasPermission('canRunAiMatch') || isTenantAdmin) ? handleBulkAITalentMatch : undefined}
           />
         </div>
       )}
@@ -895,8 +899,8 @@ export default function ResumeDatabasePage() {
           onSelectResume={handleSelectResume}
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}
-          onApplyToJob={hasPermission('canRunScoring') || isTenantAdmin ? handleApplyToJob : undefined}
-          onDelete={hasPermission('canDeleteInternalDB') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
+          onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleApplyToJob : undefined}
+          onDelete={isTenantAdmin ? (id) => handleDelete(id) : undefined}
           onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
           onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}
@@ -968,7 +972,7 @@ export default function ResumeDatabasePage() {
         <ResumeDetailView
           resume={viewingResume}
           onClose={() => setViewingResume(null)}
-          onDelete={hasPermission('canDeleteInternalDB') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
+          onDelete={isTenantAdmin ? (id) => handleDelete(id) : undefined}
         />
       )}
 
@@ -1098,5 +1102,6 @@ export default function ResumeDatabasePage() {
       </AlertDialog>
     </main>
     </DndProvider>
+    </FeatureGate>
   );
 }

@@ -12,7 +12,6 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
-import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 
 // Use backend API - no direct Admin API calls
@@ -440,6 +439,7 @@ const formatQuotaValue = (value: number | string | undefined | null | Record<str
   if (value === 'unlimited' || value === 'Unlimited') return 'Unlimited';
   if (typeof value === 'string' && value.toLowerCase() === 'unlimited') return 'Unlimited';
   if (typeof value === 'number') {
+    if (value <= 0) return '-';
     if (value >= 999999) return 'Unlimited';
     return value.toLocaleString();
   }
@@ -1674,22 +1674,8 @@ function CurrentPlanContent() {
     );
   }
 
-  // CRITICAL: Block suspended accounts completely (different from expired)
-  // Suspended accounts can only sign out or contact support
-  if (isSuspended || tenantStatus?.status === 'SUSPENDED') {
-    const suspensionReason = tenantStatus?.message ||
-      companySettings?.suspension_reason ||
-      'Your account has been suspended by the administrator. Please contact support for assistance.';
-    const suspendedAt = companySettings?.suspended_at || companySettings?.updated_at;
-
-    return (
-      <SuspendedAccountBlock
-        suspensionReason={suspensionReason}
-        suspendedAt={suspendedAt}
-        contactEmail="support@talentflow.com"
-      />
-    );
-  }
+  // NOTE: Suspended accounts are now fully blocked by the dashboard layout overlay
+  // No need to render SuspendedAccountBlock here - the layout handles it globally
 
   // Show pending account status (non-blocking banners)
   if (tenantStatus && tenantStatus.status !== 'SUSPENDED') {
@@ -2497,40 +2483,40 @@ function CurrentPlanContent() {
                       return (
                         <div className="mb-6 py-4 border-t border-b border-gray-100">
                           <div className="space-y-2 text-sm">
-                            {displayQuotas.max_seats !== undefined && displayQuotas.max_seats >= 1 && (
+                            {displayQuotas.max_seats != null && formatQuotaValue(displayQuotas.max_seats) !== '-' && (
                               <div className="flex justify-between items-center">
                                 <span className="text-gray-500">Max Users</span>
-                                <span className="font-semibold text-gray-900">{displayQuotas.max_seats.toLocaleString()}</span>
+                                <span className="font-semibold text-gray-900">{formatQuotaValue(displayQuotas.max_seats)}</span>
                               </div>
                             )}
-                            {displayQuotas.max_jobs !== undefined && displayQuotas.max_jobs >= 1 && (
+                            {displayQuotas.max_jobs != null && formatQuotaValue(displayQuotas.max_jobs) !== '-' && (
                               <div className="flex justify-between items-center">
                                 <span className="text-gray-500">Max Jobs</span>
-                                <span className="font-semibold text-gray-900">Unlimited</span>
+                                <span className="font-semibold text-gray-900">{formatQuotaValue(displayQuotas.max_jobs)}</span>
                               </div>
                             )}
-                            {displayQuotas.RU !== undefined && displayQuotas.RU >= 1 && (
+                            {displayQuotas.RU != null && formatQuotaValue(displayQuotas.RU) !== '-' && (
                               <div className="flex justify-between items-center">
                                 <span className="text-gray-500">Resume Storage</span>
-                                <span className="font-semibold text-gray-900">{displayQuotas.RU.toLocaleString()}</span>
+                                <span className="font-semibold text-gray-900">{formatQuotaValue(displayQuotas.RU)}</span>
                               </div>
                             )}
-                            {displayQuotas.RS !== undefined && displayQuotas.RS >= 1 && (
+                            {displayQuotas.RS != null && formatQuotaValue(displayQuotas.RS) !== '-' && (
                               <div className="flex justify-between items-center">
                                 <span className="text-gray-500">Resume Scores</span>
-                                <span className="font-semibold text-gray-900">{displayQuotas.RS.toLocaleString()}</span>
+                                <span className="font-semibold text-gray-900">{formatQuotaValue(displayQuotas.RS)}</span>
                               </div>
                             )}
-                            {displayQuotas.AS !== undefined && displayQuotas.AS >= 1 && (
+                            {displayQuotas.AS != null && formatQuotaValue(displayQuotas.AS) !== '-' && (
                               <div className="flex justify-between items-center">
                                 <span className="text-gray-500">Assessments</span>
-                                <span className="font-semibold text-gray-900">{displayQuotas.AS.toLocaleString()}</span>
+                                <span className="font-semibold text-gray-900">{formatQuotaValue(displayQuotas.AS)}</span>
                               </div>
                             )}
-                            {displayQuotas.AIU !== undefined && displayQuotas.AIU >= 1 && (
+                            {displayQuotas.AIU != null && formatQuotaValue(displayQuotas.AIU) !== '-' && (
                               <div className="flex justify-between items-center">
                                 <span className="text-gray-500">AI Interviews</span>
-                                <span className="font-semibold text-gray-900">{displayQuotas.AIU.toLocaleString()}</span>
+                                <span className="font-semibold text-gray-900">{formatQuotaValue(displayQuotas.AIU)}</span>
                               </div>
                             )}
                           </div>

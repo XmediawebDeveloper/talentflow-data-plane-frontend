@@ -29,6 +29,7 @@ import { getTokens } from '@/lib/services/api';
 import userService, { ApiUser } from '@/lib/services/userService';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useSearchParams } from 'next/navigation';
+import FeatureGate from '@/components/shared/FeatureGate';
 
 export default function TeamChatPage() {
   const searchParams = useSearchParams();

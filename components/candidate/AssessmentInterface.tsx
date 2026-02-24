@@ -129,10 +129,14 @@ export function AssessmentInterface({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [questionStartTime] = useState(Date.now());
+  // Wall-clock anchor for the current question's timer — updated when the question changes.
+  // Using a ref (not state) so it doesn't trigger re-renders.
+  const questionWallStartRef = useRef<number>(Date.now());
   const [timeRemaining, setTimeRemaining] = useState<number | null>(
     currentQuestion.time_limit_seconds
   );
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
   // const [showUnansweredPopup, setShowUnansweredPopup] = useState(false); // REMOVED: Combined into showCompleteConfirm modal
   const [unansweredQuestions, setUnansweredQuestions] = useState<number[]>([]);
@@ -158,20 +162,20 @@ export function AssessmentInterface({
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
 
   // Global assessment timer (30 minutes)
+  // Store parsed start time and total duration for accurate wall-clock computation
+  const assessmentStartTimeRef = useRef<number>(0);
+  const totalDurationSecsRef = useRef(durationMinutes * 60);
+
+  // Initialize: compute from wall clock (not decrement-based) to be accurate
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
-    // CRITICAL: Ensure startedAt is parsed as UTC by appending 'Z' if missing
-    // Server sends ISO timestamps without timezone indicator, which JS interprets as local time
     const utcStartedAt = startedAt.endsWith('Z') ? startedAt : startedAt + 'Z';
     const startTime = new Date(utcStartedAt).getTime();
-    const totalDuration = durationMinutes * 60; // Convert to seconds
+    assessmentStartTimeRef.current = startTime;
+    const totalDuration = durationMinutes * 60;
+    totalDurationSecsRef.current = totalDuration;
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     console.log('[TIMER] Calculating initial time:', {
-      startedAt,
-      utcStartedAt,
-      startTime,
-      now: Date.now(),
-      elapsed,
-      totalDuration,
+      startedAt, utcStartedAt, startTime, now: Date.now(), elapsed, totalDuration,
       remaining: Math.max(0, totalDuration - elapsed)
     });
     return Math.max(0, totalDuration - elapsed);
@@ -693,18 +697,20 @@ export function AssessmentInterface({
       return;
     }
 
+    // Use wall-clock calculation on each tick for accuracy.
+    // This prevents drift when the browser throttles background tabs or the system sleeps.
     globalTimerRef.current = setInterval(() => {
-      setGlobalTimeRemaining(prev => {
-        if (prev <= 1) {
-          console.log('[TIMER] Timer reached zero during countdown');
-          setIsGlobalTimeExpired(true);
-          // Auto-submit entire assessment
-          exitFullscreen();
-          onComplete();
-          return 0;
-        }
-        return prev - 1;
-      });
+      const elapsed = Math.floor((Date.now() - assessmentStartTimeRef.current) / 1000);
+      const remaining = Math.max(0, totalDurationSecsRef.current - elapsed);
+
+      setGlobalTimeRemaining(remaining);
+
+      if (remaining <= 0) {
+        console.log('[TIMER] Timer reached zero during countdown');
+        setIsGlobalTimeExpired(true);
+        exitFullscreen();
+        onComplete();
+      }
     }, 1000);
 
     return () => {
@@ -712,9 +718,40 @@ export function AssessmentInterface({
         clearInterval(globalTimerRef.current);
       }
     };
-    // Note: globalTimeRemaining removed from deps to prevent infinite loop
-    // We use setGlobalTimeRemaining(prev => prev - 1) which doesn't need it
   }, [isGlobalTimeExpired, onComplete, isInitialized]);
+
+  // Immediately resync both timers from wall-clock when the page becomes visible again.
+  // This covers two scenarios:
+  //   1. Browser "Cancel or Reload" dialog dismissed — JS was paused, timers froze.
+  //   2. User switched tabs and came back.
+  // Without this, the display stays frozen until the next 1-second setInterval tick.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      // Resync global timer
+      if (assessmentStartTimeRef.current && !isGlobalTimeExpired) {
+        const elapsed = Math.floor((Date.now() - assessmentStartTimeRef.current) / 1000);
+        const remaining = Math.max(0, totalDurationSecsRef.current - elapsed);
+        setGlobalTimeRemaining(remaining);
+        if (remaining <= 0) {
+          setIsGlobalTimeExpired(true);
+          exitFullscreen();
+          onComplete();
+        }
+      }
+
+      // Resync question timer
+      const limit = currentQuestion.time_limit_seconds;
+      if (limit && limit > 0 && questionWallStartRef.current) {
+        const elapsed = Math.floor((Date.now() - questionWallStartRef.current) / 1000);
+        setTimeRemaining(Math.max(0, limit - elapsed));
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isGlobalTimeExpired, onComplete, currentQuestion.time_limit_seconds]);
 
   // Automatic time-based unit deduction check (every 60 seconds)
   useEffect(() => {
@@ -804,26 +841,32 @@ export function AssessmentInterface({
       });
     }
 
+    // Record wall-clock time when this question was loaded.
+    // Used by the wall-clock timer below to compute accurate remaining time
+    // even after a page refresh or a browser cancel/reload dialog pause.
+    questionWallStartRef.current = Date.now();
     setTimeRemaining(currentQuestion.time_limit_seconds);
   }, [token, currentQuestion.question_id, currentQuestion.question_number]);
 
-  // Timer for timed questions
+  // Timer for timed questions — wall-clock based.
+  // Recomputes remaining time from Date.now() on every tick so it stays
+  // accurate even when JS was paused by a browser dialog or tab switch.
   useEffect(() => {
-    if (timeRemaining === null || timeRemaining <= 0) return;
+    const limit = currentQuestion.time_limit_seconds;
+    if (limit === null || limit === undefined || limit <= 0) return;
 
     const timer = setInterval(() => {
-      setTimeRemaining(prev => {
-        if (prev === null || prev <= 1) {
-          // Auto-submit when time runs out
-          handleSubmit(true);
-          return 0;
-        }
-        return prev - 1;
-      });
+      const elapsed = Math.floor((Date.now() - questionWallStartRef.current) / 1000);
+      const remaining = Math.max(0, limit - elapsed);
+      setTimeRemaining(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        handleSubmit(true);
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeRemaining, currentQuestion.question_id]);
+  }, [currentQuestion.question_id, currentQuestion.time_limit_seconds]);
 
   // Save answer as draft (auto-save) - editable
   const handleSaveDraft = async () => {
@@ -943,22 +986,48 @@ export function AssessmentInterface({
     }
   };
 
-  // Handle final submit - check for unanswered questions
+  // Handle final submit - save current answer first, THEN check for unanswered
   const handleFinalSubmit = async () => {
-    // Find unanswered questions by checking which ones are NOT in answerStatuses
+    if (isSubmitting) return;
+
+    // ── STEP 1: Submit & lock the current answer if it has content ───────────
+    // This is critical for the last question — the candidate may not have
+    // clicked "Submit" individually before clicking "Submit & Confirm".
+    const hasCurrentAnswer = !!(
+      answer.text_response ||
+      (answer.selected_options && answer.selected_options.length > 0) ||
+      answer.code_submission
+    );
+
+    if (hasCurrentAnswer && !isCurrentAnswerLocked) {
+      setIsSubmitting(true);
+      try {
+        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
+        // Mark current question as locked in local tracking
+        setAnswerStatuses(prev => {
+          const newMap = new Map(prev);
+          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: true });
+          return newMap;
+        });
+      } catch (error) {
+        console.error('[FINAL_SUBMIT] Failed to save current answer before completing:', error);
+        // Proceed anyway — do not block the completion flow
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
+
+    // ── STEP 2: Check unanswered questions (skip current — handled above) ────
     const unanswered: number[] = [];
     for (let i = 1; i <= currentQuestion.total_questions; i++) {
+      if (i === currentQuestion.question_number) continue;
       const status = answerStatuses.get(`question_${i}`);
-      // If not tracked in answerStatuses, it means no answer was saved (draft or submitted)
       if (!status || !status.hasDraft) {
         unanswered.push(i);
       }
     }
 
-    // Show single combined popup (includes unanswered questions if any)
-    if (unanswered.length > 0) {
-      setUnansweredQuestions(unanswered);
-    }
+    setUnansweredQuestions(unanswered.length > 0 ? unanswered : []);
     setShowCompleteConfirm(true);
   };
 
@@ -987,6 +1056,8 @@ export function AssessmentInterface({
   };
 
   const handleCompleteAssessment = async () => {
+    if (isCompleting) return;
+    setIsCompleting(true);
     setShowCompleteConfirm(false);
     // Exit fullscreen when assessment completes
     await exitFullscreen();
@@ -1067,7 +1138,7 @@ export function AssessmentInterface({
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const getRoundIcon = (roundType: string) => {
@@ -1823,6 +1894,8 @@ export function AssessmentInterface({
                 variant="primary"
                 className="w-full"
                 onClick={handleCompleteAssessment}
+                loading={isCompleting}
+                disabled={isCompleting}
               >
                 Submit Now
               </Button>

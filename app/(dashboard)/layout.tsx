@@ -10,7 +10,9 @@ import { SessionTimeoutProvider } from '@/components/SessionTimeoutProvider';
 import { toast } from 'sonner';
 import { scoringService } from '@/lib/services/scoringService';
 import { QuotaProvider } from '@/contexts/QuotaContext';
+import { PlanFeaturesProvider } from '@/components/providers/PlanFeaturesProvider';
 import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail } from '@/lib/services/api';
+import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 
 // Admin-only routes that require tenant_admin role
 const adminRoutes = [
@@ -66,6 +68,9 @@ export default function DashboardLayout({
   // Initialize as undefined to show locked state until we know for sure
   const [subscriptionExpired, setSubscriptionExpired] = useState<boolean | undefined>(undefined);
   const [accountSuspended, setAccountSuspended] = useState<boolean>(false);
+  const [suspensionReason, setSuspensionReason] = useState<string | undefined>(undefined);
+  const [suspendedAt, setSuspendedAt] = useState<string | undefined>(undefined);
+  const [supportEmail, setSupportEmail] = useState<string>('support@talentflow.com');
 
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -87,7 +92,10 @@ export default function DashboardLayout({
         // CRITICAL: Suspend accounts immediately - blocks all access except sign out
         console.log('[DASHBOARD] Account SUSPENDED - blocking all access');
         setAccountSuspended(true);
-        setSubscriptionExpired(false); // Suspended is different from expired
+        setSubscriptionExpired(false);
+        // Capture suspension details from user data (set at login from admin API)
+        if (user?.suspensionReason) setSuspensionReason(user.suspensionReason);
+        if (user?.suspendedAt) setSuspendedAt(user.suspendedAt);
       } else if (isExpired) {
         // Immediately lock if tenant data says expired
         console.log('[DASHBOARD] Locking menus - subscription expired');
@@ -100,14 +108,26 @@ export default function DashboardLayout({
         setAccountSuspended(false);
       }
     }
-  }, [isLoading, tenant]);
+  }, [isLoading, tenant, user]);
 
   // Listen for subscription-inactive events from API interceptor
-  // If API reports expired (even if tenant data said active), lock the menus
+  // If API reports suspended or expired, update state accordingly
   useEffect(() => {
     const handleSubscriptionInactive = (event: CustomEvent<SubscriptionInactiveDetail>) => {
-      console.log('[DASHBOARD] API reported subscription expired - locking menus:', event.detail?.status);
-      setSubscriptionExpired(true);
+      const detail = event.detail;
+      console.log('[DASHBOARD] API reported subscription inactive - status:', detail?.status);
+
+      if (detail?.status === 'SUSPENDED') {
+        // API confirmed account is suspended - block everything
+        setAccountSuspended(true);
+        setSubscriptionExpired(false);
+        if (detail.reason) setSuspensionReason(detail.reason);
+        if (detail.suspended_at) setSuspendedAt(detail.suspended_at);
+        if (detail.support_email) setSupportEmail(detail.support_email);
+      } else {
+        // Expired or other inactive status
+        setSubscriptionExpired(true);
+      }
     };
 
     window.addEventListener(
@@ -122,17 +142,6 @@ export default function DashboardLayout({
       );
     };
   }, []);
-
-  // CRITICAL: Redirect suspended accounts to current-plan (blocking page)
-  // Suspended accounts can ONLY access current-plan page (which shows blocking UI)
-  useEffect(() => {
-    if (accountSuspended && pathname) {
-      if (pathname !== '/subscription/current-plan') {
-        console.log('[DASHBOARD] Account SUSPENDED, redirecting to current-plan from:', pathname);
-        router.push('/subscription/current-plan');
-      }
-    }
-  }, [accountSuspended, pathname, router]);
 
   // Redirect to current-plan page when subscription is expired and user is on a non-allowed page
   useEffect(() => {
@@ -306,55 +315,68 @@ export default function DashboardLayout({
 
   return (
     <QuotaProvider>
-      <SessionTimeoutProvider skipSettingsLoad={subscriptionExpired !== false}>
-        <Suspense fallback={null}>
-          <SearchParamsErrorHandler />
-        </Suspense>
-        <div className="flex h-screen bg-gray-50">
-          {/* Mobile Menu Overlay */}
-          {isMobileMenuOpen && (
+      <PlanFeaturesProvider>
+        <SessionTimeoutProvider skipSettingsLoad={subscriptionExpired !== false}>
+          <Suspense fallback={null}>
+            <SearchParamsErrorHandler />
+          </Suspense>
+          <div className="flex h-screen bg-gray-50">
+            {/* Mobile Menu Overlay */}
+            {isMobileMenuOpen && (
+              <div
+                className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+                onClick={() => setIsMobileMenuOpen(false)}
+              />
+            )}
+
+            {/* Sidebar - Hidden on mobile, slide-in overlay when open */}
             <div
-              className="fixed inset-0 bg-black/50 z-40 lg:hidden"
-              onClick={() => setIsMobileMenuOpen(false)}
-            />
-          )}
-
-          {/* Sidebar - Hidden on mobile, slide-in overlay when open */}
-          <div
-            className={`
-              fixed lg:static inset-y-0 left-0 z-50
-              transform transition-transform duration-300 ease-in-out
-              ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-            `}
-          >
-            <Sidebar
-              user={user || undefined}
-              tenant={tenant || undefined}
-              subscriptionExpired={subscriptionExpired}
-              accountSuspended={accountSuspended}
-              onClose={() => setIsMobileMenuOpen(false)}
-            />
-          </div>
-
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <Header
-              user={user}
-              tenant={tenant}
-              onLogout={logout}
-              onOpenSettings={() => router.push('/settings')}
-              onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              isMobileMenuOpen={isMobileMenuOpen}
-            />
-
-            <div className="flex-1 overflow-y-auto">
-              {children}
+              className={`
+                fixed lg:static inset-y-0 left-0 z-50
+                transform transition-transform duration-300 ease-in-out
+                ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+              `}
+            >
+              <Sidebar
+                user={user || undefined}
+                tenant={tenant || undefined}
+                subscriptionExpired={subscriptionExpired}
+                accountSuspended={accountSuspended}
+                onClose={() => setIsMobileMenuOpen(false)}
+              />
             </div>
-          </div>
 
-          {/* Global subscription inactive modal - shown on all dashboard pages */}
-          <SubscriptionInactiveModal />
-        </div>
-      </SessionTimeoutProvider>
+            <div className="flex-1 flex flex-col overflow-hidden">
+              <Header
+                user={user}
+                tenant={tenant}
+                onLogout={logout}
+                onOpenSettings={() => router.push('/settings')}
+                onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                isMobileMenuOpen={isMobileMenuOpen}
+              />
+
+              <div className="flex-1 overflow-y-auto flex flex-col">
+                {children}
+              </div>
+            </div>
+
+            {/* Global subscription inactive modal - shown on all dashboard pages (not for suspended) */}
+            <SubscriptionInactiveModal />
+
+            {/* CRITICAL: Full-screen suspension overlay - blocks ALL interaction */}
+            {accountSuspended && (
+              <div className="fixed inset-0 z-[100]">
+                <SuspendedAccountBlock
+                  suspensionReason={suspensionReason}
+                  suspendedAt={suspendedAt}
+                  contactEmail={supportEmail}
+                />
+              </div>
+            )}
+          </div>
+        </SessionTimeoutProvider>
+      </PlanFeaturesProvider>
     </QuotaProvider>
   );
 }

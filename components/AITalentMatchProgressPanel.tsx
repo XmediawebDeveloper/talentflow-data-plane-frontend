@@ -86,13 +86,13 @@ export default function AITalentMatchProgressPanel({
   if (error) {
     return (
       <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6">
+        <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-4 sm:p-6">
           <div className="text-center">
-            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <AlertCircle className="w-6 h-6 text-red-600" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
             </div>
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Matching Failed</h2>
-            <p className="text-sm text-gray-600 mb-4">{error}</p>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Matching Failed</h2>
+            <p className="text-xs sm:text-sm text-gray-600 mb-4">{error}</p>
             <button
               onClick={() => window.location.reload()}
               className="px-5 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors font-medium text-sm"
@@ -108,14 +108,14 @@ export default function AITalentMatchProgressPanel({
   // Show progress panel
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6">
+      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-4 sm:p-6">
         {/* Header */}
-        <div className="text-center mb-5">
-          <div className="w-14 h-14 bg-gradient-to-br from-gray-800 to-gray-800 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">
-            <Sparkles className="w-7 h-7 text-white" />
+        <div className="text-center mb-4 sm:mb-5">
+          <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-gray-800 to-gray-800 rounded-full flex items-center justify-center mx-auto mb-3 animate-pulse">
+            <Sparkles className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-1">AI Matching in Progress</h2>
-          <p className="text-sm text-gray-600 truncate px-4">{jobTitle}</p>
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-1">AI Matching in Progress</h2>
+          <p className="text-xs sm:text-sm text-gray-600 truncate px-2 sm:px-4">{jobTitle}</p>
         </div>
 
         {/* Progress Bar */}
