@@ -20,8 +20,8 @@ import { ErrorScreen } from './ErrorScreen';
 import { CompletedScreen } from './CompletedScreen';
 import { IdentityVerificationScreen } from './IdentityVerificationScreen';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
-import { useProctoringMonitor, ProctoringWarning } from '@/hooks/useProctoringMonitor';
-import { ProctoringWarningModal, useProctoringWarnings } from './ProctoringWarningModal';
+import { useProctoringMonitor } from '@/hooks/useProctoringMonitor';
+import { ProctoringWarningModal } from './ProctoringWarningModal';
 import { Monitor, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getUserMedia, getErrorMessage, detectBrowser } from '@/lib/utils/browserCompat';
@@ -169,14 +169,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const [progress, setProgress] = useState({ answered: 0, total: 0, percent: 0 });
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
-  // Proctoring warnings state
-  const { warnings, addWarning, dismissWarning } = useProctoringWarnings();
-
-  // Stable callback for proctoring warnings (prevents re-renders)
-  const handleProctoringWarning = useCallback((warning: ProctoringWarning) => {
-    console.log('[PROCTORING] Warning:', warning.type, warning.message);
-    addWarning(warning);
-  }, [addWarning]);
+  // Proctoring warnings are displayed via ProctoringEventBus → ProctoringWarningModal
+  // (no local state needed — modal subscribes to EventBus directly)
 
   // Refs for proctoring
   const heartbeatRef = useRef<NodeJS.Timeout | null>(null);
@@ -243,9 +237,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     token,
     stream: cameraStream,
     enabled: isProctoringActive,
-    onWarning: handleProctoringWarning,
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
+    reportEvent: async (tok, event) => {
+      await candidateService.reportProctorEvent(tok, {
+        event_type: event.event_type as any,
+        timestamp: event.timestamp,
+        details: event.details,
+      });
+    },
   });
 
   // ============================================
@@ -1111,12 +1111,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   return (
     <>
       {renderContent()}
-      {/* Proctoring Warning Modal - shows warnings for violations */}
-      <ProctoringWarningModal
-        warnings={warnings}
-        onDismiss={dismissWarning}
-        autoDismissDelay={5000}
-      />
+      {/* Proctoring Warning Modal - self-contained, subscribes to ProctoringEventBus */}
+      <ProctoringWarningModal />
     </>
   );
 }

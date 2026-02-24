@@ -1465,6 +1465,7 @@ export default function AITalentMatchPage({
             jd_version: a.jd_version
           }))}
           prefilledCandidates={prefilledCandidates}
+          inviteSource="Resume Scoring"
         />
       )}
       </>
@@ -2563,6 +2564,7 @@ export default function AITalentMatchPage({
             jd_version: a.jd_version
           }))}
           prefilledCandidates={prefilledCandidates}
+          inviteSource="Resume Scoring"
         />
       )}
 

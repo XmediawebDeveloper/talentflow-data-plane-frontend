@@ -3977,6 +3977,7 @@ export default function MyResumesPage() {
             jd_version: a.jd_version
           }))}
           prefilledCandidates={prefilledCandidates}
+          inviteSource="My Resumes"
         />
       )}
 

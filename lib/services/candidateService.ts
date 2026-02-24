@@ -387,7 +387,11 @@ export interface ProctorEvent {
     | 'microphone_disabled'
     | 'camera_obstructed'
     | 'screenshot_attempt'
-    | 'screen_recording_attempt';
+    | 'screen_recording_attempt'
+    | 'multiple_faces'
+    | 'face_missing'
+    | 'gaze_away'
+    | string; // allow future event types without breaking the type
   event_data?: Record<string, unknown>;
   timestamp?: string;
   details?: Record<string, unknown>;
