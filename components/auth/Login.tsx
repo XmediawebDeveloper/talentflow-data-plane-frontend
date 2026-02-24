@@ -690,7 +690,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         <div style={formContainerStyle}>
           <div style={formCardStyle}>
             {/* Back Button */}
-            {onBackToPublic && (
+            {onBackToPublic && !subdomain && (
               <button type="button" onClick={onBackToPublic} style={backButtonStyle}>
                 <ArrowLeft style={{ width: 16, height: 16 }} />
                 <span>Back to Home</span>

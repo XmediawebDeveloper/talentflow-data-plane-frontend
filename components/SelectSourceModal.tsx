@@ -17,6 +17,7 @@ interface ProgressItem {
   candidateName: string;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
+  matchStatus?: string;
   errorMessage?: string;
 }
 
@@ -281,10 +282,10 @@ export default function SelectSourceModal({
         const result = await scoringService.scoreResume(jobId, resumeId);
         completed++;
 
-        // Update item to 'completed' with score
+        // Update item to 'completed' with score and actual match_status from API
         setProgressItems(prev => prev.map(item =>
           item.resumeId === resumeId
-            ? { ...item, status: 'completed' as const, score: Math.round(result.overall_score) }
+            ? { ...item, status: 'completed' as const, score: Math.round(result.overall_score), matchStatus: result.match_status }
             : item
         ));
         setScoringStats({
@@ -341,7 +342,7 @@ export default function SelectSourceModal({
       const result = await scoringService.scoreResume(jobId, resumeId);
       setProgressItems(prev => prev.map(i =>
         i.resumeId === resumeId
-          ? { ...i, status: 'completed' as const, score: Math.round(result.overall_score) }
+          ? { ...i, status: 'completed' as const, score: Math.round(result.overall_score), matchStatus: result.match_status }
           : i
       ));
       setScoringStats(prev => ({ ...prev, processing: prev.processing - 1, completed: prev.completed + 1 }));
@@ -1018,8 +1019,12 @@ export default function SelectSourceModal({
                     'Failed',
             errorReason: item.errorMessage,
             scoredDateTime: item.status === 'completed' ? new Date() : undefined,
-            matchResult: item.status === 'completed' && item.score !== undefined
-              ? (item.score >= 80 ? 'Exact Match' : item.score >= 60 ? 'Partial Match' : 'No Match')
+            matchResult: item.status === 'completed'
+              ? item.matchStatus
+                ? (item.matchStatus === 'exact_match' || item.matchStatus === 'excellent' ? 'Exact Match'
+                  : item.matchStatus === 'partial_match' || item.matchStatus === 'partial' ? 'Partial Match'
+                  : 'No Match')
+                : undefined
               : undefined,
             score: item.score,
           }))}

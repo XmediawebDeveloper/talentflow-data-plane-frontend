@@ -152,6 +152,8 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canCreateJD: apiUser.permissions.can_create_jd,
       canUpdateJD: apiUser.permissions.can_update_jd,
       canDeleteJD: apiUser.permissions.can_delete_jd,
+      canArchiveJD: apiUser.permissions.can_archive_jd,
+      canDisableJD: apiUser.permissions.can_disable_jd,
       canManageJD: apiUser.permissions.can_manage_jd,
       // Resumes - Granular CRUD
       canViewResumes: apiUser.permissions.can_view_resumes,

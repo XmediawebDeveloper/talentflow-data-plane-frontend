@@ -339,10 +339,10 @@ export default function JobOpeningsPage() {
         onUpdateJobStatus={handleUpdateJobStatus}
         onEditJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleEditJob : undefined}
         onPublishJob={hasPermission('canCreateJD') || isTenantAdmin ? handlePublishJob : undefined}
-        onDisableJob={isTenantAdmin ? handleDisableJob : undefined}
+        onDisableJob={isTenantAdmin || hasPermission('canDisableJD') ? handleDisableJob : undefined}
         onRepublishJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleRepublishJob : undefined}
-        onArchiveJob={isTenantAdmin ? handleArchiveJob : undefined}
-        onUnarchiveJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleUnarchiveJob : undefined}
+        onArchiveJob={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchiveJob : undefined}
+        onUnarchiveJob={hasPermission('canArchiveJD') || isTenantAdmin ? handleUnarchiveJob : undefined}
         onDeleteJob={hasPermission('canDeleteJD') || isTenantAdmin ? handleDeleteJob : undefined}
         quotaInfo={quotaInfo}
         initialStatusFilter={activeFilter}
