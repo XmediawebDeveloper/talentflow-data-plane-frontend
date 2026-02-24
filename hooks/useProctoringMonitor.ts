@@ -333,60 +333,6 @@ export function useProctoringMonitor({
     }
   }, []);
 
-  // ==================== VOICE DETECTION (Web Worker) ====================
-  const setupVoiceDetection = useCallback(async () => {
-    const currentStream = streamRef.current;
-    if (!currentStream || !workerRef.current) return;
-
-    const audioTracks = currentStream.getAudioTracks();
-    if (audioTracks.length === 0) return;
-
-    try {
-      audioContextRef.current = new AudioContext();
-      // AudioContext may start suspended — resume it to allow processing
-      if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {});
-      }
-      const source = audioContextRef.current.createMediaStreamSource(currentStream);
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256;
-      source.connect(analyserRef.current);
-
-      const bufferLength = analyserRef.current.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      const sampleRate = audioContextRef.current.sampleRate;
-
-      // Send frequency data to worker at low frequency
-      voiceIntervalRef.current = setInterval(() => {
-        if (!isMonitoringRef.current || !analyserRef.current || !audioWorkerRef.current) return;
-
-        analyserRef.current.getByteFrequencyData(dataArray);
-        const threshold = 128 - (voiceSensitivityRef.current * 1.28);
-        const dataToSend = new Uint8Array(dataArray);
-
-        audioWorkerRef.current.postMessage({
-          type: 'ANALYZE_VOICE',
-          data: {
-            frequencyData: dataToSend.buffer,
-            threshold,
-            sampleRate,
-          },
-        }, [dataToSend.buffer]);
-      }, VOICE_CHECK_INTERVAL);
-
-      // Start batch flush interval - send batched voice events every VOICE_BATCH_INTERVAL
-      voiceBatchIntervalRef.current = setInterval(() => {
-        if (voiceBatchRef.current.length > 0) {
-          flushVoiceBatch();
-        }
-      }, VOICE_BATCH_INTERVAL);
-
-      console.log(`[PROCTORING] Voice detection started (Web Worker, check: ${VOICE_CHECK_INTERVAL}ms, batch: ${VOICE_BATCH_INTERVAL}ms, log-only: ${VOICE_LOG_ONLY})`);
-    } catch (error) {
-      console.error('[PROCTORING] Failed to setup voice detection:', error);
-    }
-  }, [flushVoiceBatch]); // flushVoiceBatch is stable (useCallback with no deps)
-
   // ==================== MULTIPLE FACES DETECTION ====================
   const FACE_DETECTION_INTERVAL = 5000; // Check every 5 seconds
   // GitHub CDN hosts the actual weight files (npm package does not include them)

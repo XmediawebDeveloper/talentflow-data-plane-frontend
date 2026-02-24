@@ -419,7 +419,7 @@ export default function RoleManagement() {
                         <th className="px-4 lg:px-6 py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Priority
                         </th>
-                        <th className="px-4 lg:px-6 py-3 lg:py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-4 lg:px-6 py-3 lg:py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
                         </th>
                       </tr>
@@ -463,46 +463,56 @@ export default function RoleManagement() {
                             <span className="text-sm text-gray-600">{role.priority}</span>
                           </td>
                           <td className="px-4 lg:px-6 py-4">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                onClick={() => handleViewPermissions(role)}
-                                className="p-1.5 lg:p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="View permissions"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                              {!['admin', 'recruiter', 'billing_manager', 'viewer'].includes(role.code) && (
+                            <div className="grid grid-cols-3 items-center w-24 mx-auto">
+                              {/* Left: Edit (custom roles only) or spacer */}
+                              <div className="flex justify-center">
+                                {!['admin', 'recruiter', 'billing_manager', 'viewer'].includes(role.code) ? (
+                                  <button
+                                    onClick={() => {
+                                      console.log('[ROLE EDIT] Attempting to edit role:', { id: role.id, name: role.name, code: role.code });
+                                      if (!role.id || role.id <= 0) {
+                                        console.error('[ROLE EDIT] Invalid role ID:', role.id, 'Full role object:', role);
+                                        toast.error(`Invalid role ID: ${role.id}`);
+                                        return;
+                                      }
+                                      console.log('[ROLE EDIT] Navigating to edit page with ID:', role.id);
+                                      router.push(`/organization/role-management/edit/${role.id}`);
+                                    }}
+                                    className="p-1.5 lg:p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
+                                    title="Edit role"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <div className="w-8" />
+                                )}
+                              </div>
+                              {/* Center: Eye (always) */}
+                              <div className="flex justify-center">
                                 <button
-                                  onClick={() => {
-                                    console.log('[ROLE EDIT] Attempting to edit role:', { id: role.id, name: role.name, code: role.code });
-                                    if (!role.id || role.id <= 0) {
-                                      console.error('[ROLE EDIT] Invalid role ID:', role.id, 'Full role object:', role);
-                                      toast.error(`Invalid role ID: ${role.id}`);
-                                      return;
-                                    }
-                                    console.log('[ROLE EDIT] Navigating to edit page with ID:', role.id);
-                                    router.push(`/organization/role-management/edit/${role.id}`);
-                                  }}
-                                  className="p-1.5 lg:p-2 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition-colors"
-                                  title="Edit role"
+                                  onClick={() => handleViewPermissions(role)}
+                                  className="p-1.5 lg:p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                                  title="View permissions"
                                 >
-                                  <Pencil className="w-4 h-4" />
+                                  <Eye className="w-4 h-4" />
                                 </button>
-                              )}
-                              {!role.is_system && (
-                                <button
-                                  onClick={() => handleDeleteRole(role.id)}
-                                  className="p-1.5 lg:p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Deactivate role"
-                                >
-                                  <Ban className="w-4 h-4" />
-                                </button>
-                              )}
-                              {role.is_system && (
-                                <div className="p-1.5 lg:p-2 text-gray-300">
-                                  <Lock className="w-4 h-4" />
-                                </div>
-                              )}
+                              </div>
+                              {/* Right: Ban (custom) or Lock (system) */}
+                              <div className="flex justify-center">
+                                {!role.is_system ? (
+                                  <button
+                                    onClick={() => handleDeleteRole(role.id)}
+                                    className="p-1.5 lg:p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Deactivate role"
+                                  >
+                                    <Ban className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <div className="p-1.5 lg:p-2 text-gray-300">
+                                    <Lock className="w-4 h-4" />
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>

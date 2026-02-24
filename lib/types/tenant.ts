@@ -14,6 +14,8 @@ export interface Permission {
   canCreateJD: boolean;         // Create Job Descriptions
   canUpdateJD?: boolean;        // Edit Job Descriptions
   canDeleteJD?: boolean;        // Delete Job Descriptions
+  canArchiveJD?: boolean;       // Archive Job Descriptions
+  canDisableJD?: boolean;       // Disable/Enable Job Descriptions
   canManageJD: boolean;         // Legacy: JD Management (composite)
 
   // Resumes - Granular CRUD

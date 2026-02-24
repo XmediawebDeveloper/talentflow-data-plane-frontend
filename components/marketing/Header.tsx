@@ -51,6 +51,9 @@ export function Header() {
     setMounted(true);
   }, []);
 
+  // Hide the entire header on org-specific login pages (?org=xxx or <org>.0sms.com/login)
+  if (isOrgLogin) return null;
+
   const toggleDarkMode = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };

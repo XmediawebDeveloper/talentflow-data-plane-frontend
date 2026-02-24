@@ -5,6 +5,7 @@ import { useState, useEffect, ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDVersion, JDAssessmentResultsResponse, AssessmentResultItem } from '@/lib/services/jdService';
 import { toast } from 'sonner';
+import { useModulePermissions } from '@/lib/hooks/usePermissions';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -668,6 +669,7 @@ export default function JDDetailsPage() {
   const searchParams = useSearchParams();
   const jdId = searchParams.get('id');
   const tabParam = searchParams.get('tab') as TabType | null;
+  const jdPerms = useModulePermissions('jd');
 
   const [jd, setJd] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -880,14 +882,16 @@ export default function JDDetailsPage() {
                   Score Resumes
                 </button>
               )}
-              <button
-                onClick={() => router.push(`/recruitment/jd-creation?id=${jd.id}`)}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                <Edit2 className="w-4 h-4" />
-                Edit
-              </button>
-              {jd.status !== 'archived' && (
+              {jdPerms.canUpdate && (
+                <button
+                  onClick={() => router.push(`/recruitment/jd-creation?id=${jd.id}`)}
+                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Edit
+                </button>
+              )}
+              {jdPerms.canArchive && jd.status !== 'archived' && (
                 <button
                   onClick={handleArchive}
                   className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
