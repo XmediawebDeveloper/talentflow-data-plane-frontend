@@ -586,6 +586,55 @@ export default function PricingPage() {
             return priceA - priceB;
           });
 
+          // Build Custom plan card with ALL features from paid plans, placed last
+          // Exclude free trial features and features that duplicate quota rows
+          const quotaFeatureNames = new Set([
+            'resume storage', 'resume scoring', 'skill assessments',
+            'assessments', 'ai interview', 'ai interviews',
+          ]);
+          const trialOnlyPhrases = new Set([
+            'free access', 'no credit card', 'cancel anytime', 'free trial',
+          ]);
+          const allFeatures = Array.from(
+            new Set(
+              sortedPlans
+                .filter(p => p.id !== 'free-trial')
+                .flatMap(p => p.features)
+            )
+          ).filter(f => {
+            const lower = f.toLowerCase();
+            if (quotaFeatureNames.has(lower)) return false;
+            if ([...trialOnlyPhrases].some(phrase => lower.includes(phrase))) return false;
+            return true;
+          });
+          const customPlanCard: DisplayPlan = {
+            id: 'custom-plan',
+            name: 'Custom',
+            description: 'Tailored for large teams with custom requirements',
+            basePrice: null,
+            monthlyPrice: null,
+            yearlyPrice: null,
+            yearlyFullPrice: null,
+            billingPeriod: 'CUSTOM',
+            currency: 'INR',
+            icon: Zap,
+            gradient: 'from-gray-800 to-gray-900',
+            popular: false,
+            features: allFeatures,
+            trialDays: 0,
+            quotas: {
+              max_seats: 'unlimited' as any,
+              max_jobs: 'unlimited' as any,
+              RU: undefined,
+              RS: undefined,
+              AS: undefined,
+              AIU: undefined,
+            },
+            planSlug: 'custom',
+            planTier: 'Custom',
+          };
+          sortedPlans.push(customPlanCard);
+
           // Simple gray color scheme for all cards
           const getTierStyle = () => {
             return {
@@ -699,9 +748,38 @@ export default function PricingPage() {
 
                         {/* Quotas - Single column layout for clarity */}
                         {(() => {
+                          const isCustomPlan = plan.id === 'custom-plan';
                           const rawQuotas = isTrialPlan
                             ? plan.quotas
-                            : (isYearly ? (plan.annualQuotas || plan.quotas) : (plan.monthlyQuotas || plan.quotas));
+                            : isCustomPlan
+                              ? plan.quotas
+                              : (isYearly ? (plan.annualQuotas || plan.quotas) : (plan.monthlyQuotas || plan.quotas));
+
+                          if (!rawQuotas && !isCustomPlan) return null;
+
+                          // Custom plan shows all quotas as Unlimited
+                          if (isCustomPlan) {
+                            return (
+                              <div className="mb-6 py-4 border-t border-b border-gray-100 dark:border-gray-800">
+                                <div className="space-y-2 text-sm">
+                                  {[
+                                    { label: 'Max Users', value: 'Unlimited' },
+                                    { label: 'Max Jobs', value: 'Unlimited' },
+                                    { label: 'Resume Storage', value: 'Unlimited' },
+                                    { label: 'Resume Scores', value: 'Unlimited' },
+                                    { label: 'Assessments', value: 'Unlimited' },
+                                    { label: 'AI Interviews', value: 'Unlimited' },
+                                    { label: 'Total Storage', value: 'Unlimited' },
+                                  ].map((item) => (
+                                    <div key={item.label} className="flex justify-between items-center">
+                                      <span className="text-gray-500">{item.label}</span>
+                                      <span className="font-semibold text-gray-900 dark:text-white">{item.value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
 
                           if (!rawQuotas) return null;
 
@@ -811,10 +889,11 @@ export default function PricingPage() {
 
                         {/* CTA Button */}
                         {(() => {
+                          const isCustomPlan = plan.id === 'custom-plan';
                           // Check if selected billing option is available for this plan
                           const hasAnnual = !!plan.annualPlanId || !!plan.yearlyPrice;
                           const hasMonthly = !!plan.monthlyPlanId || !!plan.monthlyPrice;
-                          const isDisabled = !isTrialPlan && (
+                          const isDisabled = !isTrialPlan && !isCustomPlan && (
                             (isYearly && !hasAnnual) || (!isYearly && !hasMonthly)
                           );
 
