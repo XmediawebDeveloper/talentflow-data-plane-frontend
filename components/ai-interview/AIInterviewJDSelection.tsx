@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Briefcase, Plus, Loader2, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Briefcase, Plus, Loader2, Building2, MapPin, Clock, TrendingUp, Calendar, User, Users } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -43,52 +43,37 @@ export default function AIInterviewJDSelection() {
     <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
       <div className="w-full">
         {/* Header */}
-        <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push('/recruitment/ai-interviews')}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-600" />
+            </button>
+            <div>
+              <h1 className="text-gray-900 text-lg font-semibold">Select Job Description</h1>
+              <p className="text-sm text-gray-500">Choose the JD that this AI interview will be based on</p>
+            </div>
+          </div>
           <button
-            onClick={() => router.push('/recruitment/ai-interviews')}
-            className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+            onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
           >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+            <Plus className="w-4 h-4" />
+            Create New Job
           </button>
-          <div className="min-w-0">
-            <h1 className="text-gray-900 text-lg sm:text-xl font-semibold">AI Interview Configuration</h1>
-            <p className="text-xs sm:text-sm text-gray-500">Step 1: Select a published Job Description</p>
-          </div>
         </div>
 
-        {/* Step indicators */}
-        <div className="flex items-center gap-1.5 sm:gap-2 mb-5 sm:mb-8">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium bg-gray-900 text-white flex-shrink-0">
-              1
-            </div>
-            <span className="text-xs sm:text-sm text-gray-900 font-medium">Select JD</span>
-            <div className="w-6 sm:w-12 h-px bg-gray-200 mx-0.5 sm:mx-1" />
-          </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium bg-gray-100 text-gray-400 flex-shrink-0">
-              2
-            </div>
-            <span className="text-xs sm:text-sm text-gray-400">Configure & Publish</span>
-          </div>
-        </div>
-
-        {/* Search + Create */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+        {/* Search */}
+        <div className="mb-5">
           <input
             type="text"
             placeholder="Search job descriptions..."
             value={jdSearch}
             onChange={e => setJdSearch(e.target.value)}
-            className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-gray-600 placeholder-gray-500"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
           />
-          <button
-            onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-            className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors whitespace-nowrap"
-          >
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-            Create New JD
-          </button>
         </div>
 
         {/* JD List */}
@@ -111,46 +96,105 @@ export default function AIInterviewJDSelection() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-2 sm:gap-3">
-            {filteredJds.map(jd => (
-              <button
-                key={jd.id}
-                onClick={() => handleSelectJd(jd)}
-                className="w-full text-left p-3 sm:p-5 bg-white border border-gray-200 rounded-lg hover:border-gray-400 hover:shadow-md transition-all"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-medium text-gray-900 text-sm sm:text-base">{jd.title}</h3>
-                      <span className="px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs bg-green-100 text-green-700 rounded-full flex-shrink-0">Published</span>
+          <div className="space-y-3">
+            {filteredJds.map(jd => {
+              const isUsed = jd.has_published_config === true;
+              const postedDate = jd.published_at
+                ? new Date(jd.published_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                : jd.created_at
+                  ? new Date(jd.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                  : null;
+
+              return (
+                <div
+                  key={jd.id}
+                  className="flex items-center justify-between p-5 bg-white border border-gray-200 rounded-lg"
+                >
+                  {/* Left: icon + info */}
+                  <div className="flex items-start gap-4 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <Building2 className="w-5 h-5 text-gray-400" />
                     </div>
-                    <div className="flex items-center gap-2 sm:gap-4 mt-1 sm:mt-1.5 text-xs sm:text-sm text-gray-500 flex-wrap">
-                      {jd.department && <span>{jd.department}</span>}
-                      {jd.job_level && <span className="capitalize">{jd.job_level}</span>}
-                      {jd.location && <span className="truncate max-w-[120px] sm:max-w-none">{jd.location}</span>}
-                      {jd.experience_min != null && (
-                        <span>
-                          {jd.experience_min}{jd.experience_max ? `-${jd.experience_max}` : '+'} yrs
-                        </span>
-                      )}
-                    </div>
-                    {jd.must_have_skills.length > 0 && (
-                      <div className="flex flex-wrap gap-1 sm:gap-1.5 mt-1.5 sm:mt-2">
-                        {jd.must_have_skills.slice(0, 4).map(skill => (
-                          <span key={skill} className="px-1.5 sm:px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] sm:text-xs rounded-full">
-                            {skill}
+                    <div className="flex-1 min-w-0">
+                      {/* Title row */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {jd.job_id && (
+                          <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-gray-800 text-white rounded">
+                            {jd.job_id}
                           </span>
-                        ))}
-                        {jd.must_have_skills.length > 4 && (
-                          <span className="text-[10px] sm:text-xs text-gray-400">+{jd.must_have_skills.length - 4} more</span>
+                        )}
+                        <h3 className="font-semibold text-gray-900 truncate">{jd.title}</h3>
+                        <span className="flex items-center gap-1 px-2 py-0.5 text-xs text-green-700 bg-green-50 rounded-full border border-green-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          Published
+                        </span>
+                        {isUsed && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 text-xs text-blue-700 bg-blue-50 rounded-full border border-blue-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                            AI
+                          </span>
                         )}
                       </div>
+                      {/* Metadata row */}
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500 flex-wrap">
+                        {jd.department && (
+                          <span className="flex items-center gap-1">
+                            <Building2 className="w-3 h-3" />
+                            {jd.department}
+                          </span>
+                        )}
+                        {jd.location && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            {jd.location}
+                          </span>
+                        )}
+                        {jd.employment_type && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {jd.employment_type}
+                          </span>
+                        )}
+                        {jd.experience_min != null && (
+                          <span className="flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" />
+                            {jd.experience_min}{jd.experience_max ? `-${jd.experience_max}` : '+'} years
+                          </span>
+                        )}
+                        {postedDate && (
+                          <span className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            Posted {postedDate}
+                          </span>
+                        )}
+                        {jd.created_by_name && (
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            By {jd.created_by_name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: action */}
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                    {isUsed ? (
+                      <span className="px-3 py-1.5 text-xs text-green-700 bg-green-50 rounded-lg border border-green-200">
+                        AI Config Created
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleSelectJd(jd)}
+                        className="px-4 py-1.5 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                      >
+                        Select
+                      </button>
                     )}
                   </div>
-                  <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 rotate-180 flex-shrink-0 mt-1" />
                 </div>
-              </button>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

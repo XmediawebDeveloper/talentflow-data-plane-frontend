@@ -42,7 +42,10 @@ export async function middleware(request: NextRequest) {
   let isRealSubdomain = false; // true = from actual hostname (not ?org= dev param)
 
   // Real subdomain: acme.0sms.com → ['acme', '0sms', 'com']
-  if (hostParts.length >= 3 && !['www', 'app'].includes(hostParts[0])) {
+  // Skip subdomain extraction for raw IPv4 addresses (e.g. 192.168.1.100) —
+  // their dot-separated octets would otherwise be mistaken for subdomains.
+  const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
+  if (!isIPAddress && hostParts.length >= 3 && !['www', 'app'].includes(hostParts[0])) {
     tenantSubdomain = hostParts[0];
     isRealSubdomain = true;
   }
@@ -109,6 +112,13 @@ export async function middleware(request: NextRequest) {
 
   // Subdomain (acme.0sms.com) is LOGIN-ONLY — block /signup, redirect to /login
   if (tenantSubdomain && pathname === '/signup') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
+  }
+
+  // Subdomain root (acme.0sms.com/) → redirect to login page
+  if (tenantSubdomain && pathname === '/') {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
@@ -194,8 +204,11 @@ export async function middleware(request: NextRequest) {
   // the backend API. tenant_admin bypasses all permissions; other roles are
   // granted access based on their explicitly assigned permissions.
 
-  // If logged in and trying to access auth pages, redirect to dashboard
-  if (token && (pathname === '/login' || pathname === '/signup')) {
+  // If logged in and trying to access auth pages, redirect to dashboard.
+  // EXCEPTION: if 'must-reset-pwd' cookie is set the user closed the tab during
+  // the forced-password-reset flow — let them back to /login so they can finish.
+  const mustResetPwd = request.cookies.get('must-reset-pwd')?.value;
+  if (token && !mustResetPwd && (pathname === '/login' || pathname === '/signup')) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);

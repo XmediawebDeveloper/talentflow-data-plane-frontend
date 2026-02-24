@@ -694,6 +694,7 @@ export const assessmentService = {
       passed?: boolean;
       score_min?: number;
       score_max?: number;
+      result_ids?: string[];
     },
     sorting?: {
       sort_by?: string;
@@ -716,6 +717,7 @@ export const assessmentService = {
         if (filters.passed !== undefined) params.passed = filters.passed;
         if (filters.score_min !== undefined) params.score_min = filters.score_min;
         if (filters.score_max !== undefined) params.score_max = filters.score_max;
+        if (filters.result_ids && filters.result_ids.length > 0) params.result_ids = filters.result_ids.join(',');
         console.log('[EXPORT API] Applying filters:', filters);
       }
 

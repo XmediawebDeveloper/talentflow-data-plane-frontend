@@ -83,10 +83,14 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
     }
   }, [config.id]);
 
+  // Always load activity on mount (needed for invite count in header)
   useEffect(() => {
-    if (activeTab === 'activity') loadActivity();
+    loadActivity();
+  }, [loadActivity]);
+
+  useEffect(() => {
     if (activeTab === 'versions') loadVersionHistory();
-  }, [activeTab, loadActivity, loadVersionHistory]);
+  }, [activeTab, loadVersionHistory]);
 
   // Quick actions
   const handleCopyLink = async () => {
@@ -194,9 +198,21 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                   <Video className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-semibold text-gray-900">
-                    {config.jd_title || config.position || 'Untitled'}
-                  </h1>
+                  <div className="flex items-center gap-2">
+                    {config.display_id && (
+                      <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-gray-900 text-white rounded">
+                        {config.display_id}
+                      </span>
+                    )}
+                    <h1 className="text-xl font-semibold text-gray-900">
+                      {config.jd_title || config.position || 'Untitled'}
+                    </h1>
+                    {config.jd_version && (
+                      <span className="px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-500 rounded">
+                        v{config.jd_version}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-3 mt-1">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(config.status)}`}>
                       {getStatusLabel(config.status)}
@@ -207,7 +223,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-500 mt-2 ml-12">
+              <div className="flex items-center gap-4 text-sm text-gray-500 mt-2 ml-12 flex-wrap">
                 <span className="flex items-center gap-1">
                   <Clock className="w-3.5 h-3.5" />
                   {formattedDuration}
@@ -216,9 +232,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                   <span>{enabledRounds.length} round{enabledRounds.length !== 1 ? 's' : ''}</span>
                 )}
                 <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5" />
-                  Created {new Date(config.created_at).toLocaleDateString()}
+                  <Users className="w-3.5 h-3.5" />
+                  {invitationStats.total} invite{invitationStats.total !== 1 ? 's' : ''}
                 </span>
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5" />
+                  {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at {new Date(config.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+                {config.created_by_name && (
+                  <span>by {config.created_by_name}</span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">

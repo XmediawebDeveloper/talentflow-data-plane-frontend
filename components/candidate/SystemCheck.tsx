@@ -207,29 +207,59 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     }
   };
 
-  // Run face detection on the video element using FaceDetector API (Chrome/Edge)
-  // Falls back to trusting the video track on unsupported browsers
+  // GitHub CDN hosts the actual weight files (npm package does not include them)
+  const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights/';
+
+  // Apply face-count rules: exactly 1 face → pass, 0 or 2+ → fail
+  const applyFaceCountResult = (count: number) => {
+    if (count === 1) {
+      setCameraCheck({ status: 'success', message: 'Camera ready — face detected' });
+    } else if (count === 0) {
+      setCameraCheck({ status: 'error', message: 'No face detected. Look directly at the camera.' });
+    } else {
+      setCameraCheck({ status: 'error', message: `Multiple faces detected (${count}). Only you should be in frame.` });
+    }
+  };
+
+  // Path A — native FaceDetector API (Chrome / Edge)
   const runFaceDetection = async () => {
     if (!videoRef.current) return;
     try {
       const FaceDetector = (window as any).FaceDetector;
-      const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+      const detector = new FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
       const faces = await detector.detect(videoRef.current);
-      if (faces.length > 0) {
-        setCameraCheck({ status: 'success', message: 'Camera ready — face detected' });
-      } else {
-        setCameraCheck({ status: 'error', message: 'No face detected. Look directly at the camera.' });
-      }
+      applyFaceCountResult(faces.length);
     } catch {
-      // FaceDetector failed or not supported — just mark camera as working
-      setCameraCheck({ status: 'success', message: 'Camera working' });
+      // Native API failed — caller will switch to face-api.js path
+      throw new Error('native_face_detector_unavailable');
     }
   };
 
-  const startFaceDetectionPolling = () => {
+  // Path B — face-api.js TinyFaceDetector (Firefox / Safari)
+  const runFaceDetectionFaceApi = async () => {
+    if (!videoRef.current) return;
+    try {
+      const faceapi = await import('face-api.js');
+      if (!faceapi.nets.tinyFaceDetector.isLoaded) {
+        await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
+      }
+      const options = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
+      const detections = await faceapi.detectAllFaces(videoRef.current, options);
+      applyFaceCountResult(detections.length);
+    } catch (err) {
+      // Model load failed or inference error — camera is accessible but we can't verify face
+      console.warn('[SYSTEM CHECK] face-api.js detection failed:', err);
+      setCameraCheck({ status: 'success', message: 'Camera working (face check unavailable on this browser)' });
+    }
+  };
+
+  const startFaceDetectionPolling = (useFaceApi: boolean) => {
     if (faceCheckIntervalRef.current) clearInterval(faceCheckIntervalRef.current);
-    // Re-check every 2.5 s so status updates as user moves into/out of frame
-    faceCheckIntervalRef.current = setInterval(runFaceDetection, 2500);
+    // Re-check every 2.5 s so status updates as the user moves in/out of frame
+    faceCheckIntervalRef.current = setInterval(
+      useFaceApi ? runFaceDetectionFaceApi : runFaceDetection,
+      2500
+    );
   };
 
   const checkCameraAndMicrophone = async () => {
@@ -248,15 +278,24 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       const audioTracks = stream.getAudioTracks();
 
       if (videoTracks.length > 0) {
-        const hasFaceAPI = 'FaceDetector' in window;
-        if (hasFaceAPI) {
-          setCameraCheck({ status: 'checking', message: 'Detecting face...' });
-          // Give the video element a moment to render actual frames
-          await new Promise(r => setTimeout(r, 800));
-          await runFaceDetection();
-          startFaceDetectionPolling();
+        setCameraCheck({ status: 'checking', message: 'Detecting face...' });
+        // Give the video element a moment to render actual frames
+        await new Promise(r => setTimeout(r, 1000));
+
+        const hasNativeFaceDetector = 'FaceDetector' in window;
+        if (hasNativeFaceDetector) {
+          try {
+            await runFaceDetection();
+            startFaceDetectionPolling(false);
+          } catch {
+            // Native detector threw — fall back to face-api.js
+            await runFaceDetectionFaceApi();
+            startFaceDetectionPolling(true);
+          }
         } else {
-          setCameraCheck({ status: 'success', message: 'Camera working' });
+          // Firefox / Safari — use face-api.js TinyFaceDetector
+          await runFaceDetectionFaceApi();
+          startFaceDetectionPolling(true);
         }
       } else {
         setCameraCheck({ status: 'error', message: 'No video track available' });
@@ -331,7 +370,18 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-      setCameraCheck({ status: 'success', message: 'Camera working' });
+      // Run face detection on the fallback stream too
+      setCameraCheck({ status: 'checking', message: 'Detecting face...' });
+      await new Promise(r => setTimeout(r, 1000));
+      if ('FaceDetector' in window) {
+        try {
+          await runFaceDetection();
+        } catch {
+          await runFaceDetectionFaceApi();
+        }
+      } else {
+        await runFaceDetectionFaceApi();
+      }
     } catch (err: any) {
       console.error('Camera-only error:', err.name, err.message);
       // Keep the existing error message if already set
