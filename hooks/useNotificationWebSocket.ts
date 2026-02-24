@@ -148,8 +148,17 @@ export function useNotificationWebSocket({
           console.log('[WebSocket] ✅ Connected successfully — readyState:', ws.readyState, '(1=OPEN)');
           setIsConnected(true);
           setConnectionError(null);
-          reconnectAttemptsRef.current = 0;
           isConnectingRef.current = false;
+
+          // If this is a reconnect (not the initial connect), refresh permissions immediately.
+          // Any permissions_updated push sent while the socket was down was never received,
+          // so we pull the latest permissions now to avoid stale state.
+          if (reconnectAttemptsRef.current > 0 && onPermissionsUpdatedRef.current) {
+            console.log('[WebSocket] Reconnected after drop — refreshing permissions to catch missed pushes');
+            onPermissionsUpdatedRef.current();
+          }
+
+          reconnectAttemptsRef.current = 0;
 
           // Start ping/pong for keepalive
           pingIntervalRef.current = setInterval(() => {

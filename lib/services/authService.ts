@@ -114,6 +114,8 @@ export interface User {
     can_view_jd?: boolean;
     can_update_jd?: boolean;
     can_delete_jd?: boolean;
+    can_archive_jd?: boolean;
+    can_disable_jd?: boolean;
     can_update_resumes?: boolean;
     can_delete_resumes?: boolean;
     can_view_internal_db?: boolean;
