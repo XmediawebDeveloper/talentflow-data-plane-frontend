@@ -201,14 +201,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const recordingContextRef = useRef<AudioContext | null>(null);
-  const audioQueueRef = useRef<AudioBuffer[]>([]);
+  const audioQueueRef = useRef<AudioBuffer[]>([]); // kept for proctoring load-shedding count only
   const isPlayingRef = useRef(false);
+  // Scheduled playback — gapless audio via Web Audio API clock
+  const nextPlayTimeRef = useRef(0);   // ctx.currentTime when next buffer should start
+  const pendingBuffersRef = useRef(0); // buffers scheduled but not yet finished
   const isRecordingRef = useRef(false);
   const audioEndReceivedRef = useRef(false);
   const currentAiTextRef = useRef("");
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isAiSpeakingRef = useRef(false);
+  const isProcessingRef = useRef(false);
 
   // Stable callback refs — prevent WebSocket reconnection on re-renders
   const queueAudioRef = useRef<(pcmData: ArrayBuffer) => void>(() => {});
@@ -219,8 +223,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const revealedCharsRef = useRef(0);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Keep ref in sync with state
+  // Keep refs in sync with state — refs are always current inside stale closures
   useEffect(() => { isAiSpeakingRef.current = isAiSpeaking; }, [isAiSpeaking]);
+  useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
 
   // VAD settings
   const silenceStartRef = useRef<number | null>(null);
@@ -325,56 +330,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     }
   }, []);
 
-  // Audio playback
-  const playNextBuffer = useCallback(() => {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setMouthOpenness(0);
-      if (audioEndReceivedRef.current) {
-        setIsAiSpeaking(false);
-        avatarState.onAiStopSpeaking();
-        saveAiMessage();
-        if (shouldDisconnectAfterAudioRef.current) {
-          setStatus("Interview completed. Thank you!");
-          setTimeout(() => { disconnect(); }, 1500);
-          return;
-        }
-        setStatus("Your turn - speak now...");
-        setTimeout(() => {
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            startRecordingInternal();
-          }
-        }, 400);
+  // ── Gapless scheduled audio playback ────────────────────────────────────────
+  // Instead of onended → playNextBuffer (which has JS-event-loop gaps = clicks),
+  // each buffer is scheduled on the Web Audio clock so it starts exactly where
+  // the previous one ends.  pendingBuffersRef tracks how many have been scheduled
+  // but not yet finished — when it hits 0 AND audioEndReceivedRef is true we know
+  // playback is complete and it's time to start recording.
+
+  const handleAllAudioFinished = useCallback(() => {
+    isPlayingRef.current = false;
+    setMouthOpenness(0);
+    if (audioEndReceivedRef.current) {
+      setIsAiSpeaking(false);
+      avatarState.onAiStopSpeaking();
+      saveAiMessage();
+      if (shouldDisconnectAfterAudioRef.current) {
+        setStatus("Interview completed. Thank you!");
+        setTimeout(() => { disconnect(); }, 1500);
+        return;
       }
-      return;
+      setStatus("Your turn - speak now...");
+      setTimeout(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          startRecordingInternal();
+        }
+      }, 400);
     }
-    const ctx = audioContextRef.current;
-    if (!ctx || ctx.state === "closed") {
-      isPlayingRef.current = false;
-      return;
-    }
-    isPlayingRef.current = true;
-    setIsAiSpeaking(true);
-    avatarState.onAiStartSpeaking();
-    if (!revealTimerRef.current && tokenBufferRef.current.length > 0) {
-      startRevealingTokens();
-    }
-    const buffer = audioQueueRef.current.shift()!;
-    try {
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.onended = playNextBuffer;
-      source.start();
-      setMouthOpenness(Math.random() * 0.6 + 0.2);
-    } catch (err) {
-      console.error('[InterviewUI] Audio playback error:', err);
-      isPlayingRef.current = false;
-    }
-  }, [saveAiMessage, avatarState, startRevealingTokens]);
+  }, [saveAiMessage, avatarState]);
 
   const queueAudio = useCallback((pcmData: ArrayBuffer) => {
-    // Reuse existing context or create with default hardware sample rate
     if (!audioContextRef.current || audioContextRef.current.state === "closed") {
       try {
         audioContextRef.current = new AudioContext();
@@ -385,23 +369,61 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     }
     const ctx = audioContextRef.current;
     if (ctx.state === "suspended") { ctx.resume().catch(() => {}); }
+
     const int16 = new Int16Array(pcmData);
     const float32 = new Float32Array(int16.length);
     for (let i = 0; i < int16.length; i++) {
       float32[i] = int16[i] / 32768.0;
     }
-    // Buffer sample rate is 24kHz — browser auto-resamples to context output rate
+    // AudioBuffer declared at 24kHz — browser resamples to context output rate
     const buffer = ctx.createBuffer(1, float32.length, 24000);
     buffer.getChannelData(0).set(float32);
-    audioQueueRef.current.push(buffer);
-    // Load shedding: reduce proctoring frequency when audio is lagging
+
+    // ── Gapless scheduling ───────────────────────────────────────────────────
+    // Keep nextPlayTimeRef ahead of ctx.currentTime.  If we've fallen behind
+    // (first buffer or long gap), add a small 80 ms look-ahead so the scheduler
+    // never tries to play in the past.
+    const now = ctx.currentTime;
+    if (nextPlayTimeRef.current < now + 0.08) {
+      nextPlayTimeRef.current = now + 0.08;
+    }
+    const startTime = nextPlayTimeRef.current;
+    nextPlayTimeRef.current += buffer.duration; // schedule end-to-end with zero gap
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+
+    pendingBuffersRef.current += 1;
+    source.onended = () => {
+      pendingBuffersRef.current -= 1;
+      if (pendingBuffersRef.current === 0) {
+        handleAllAudioFinished();
+      }
+    };
+
+    source.start(startTime);
+    // ────────────────────────────────────────────────────────────────────────
+
+    if (!isPlayingRef.current) {
+      isPlayingRef.current = true;
+      setIsAiSpeaking(true);
+      avatarState.onAiStartSpeaking();
+      if (!revealTimerRef.current && tokenBufferRef.current.length > 0) {
+        startRevealingTokens();
+      }
+    }
+    setMouthOpenness(Math.random() * 0.6 + 0.2);
+
+    // Load shedding: reduce proctoring frequency when buffers are lagging
+    audioQueueRef.current.push(buffer); // count only — not used for playback
     if (audioQueueRef.current.length > 3) {
       setReducedFrequency(true);
     } else if (audioQueueRef.current.length <= 1) {
       setReducedFrequency(false);
     }
-    if (!isPlayingRef.current) { playNextBuffer(); }
-  }, [playNextBuffer, setReducedFrequency]);
+    audioQueueRef.current.shift(); // immediate clear — scheduling already done
+  }, [handleAllAudioFinished, avatarState, startRevealingTokens, setReducedFrequency]);
 
   // WebSocket handlers
   const handleMessage = useCallback((data: any) => {
@@ -449,6 +471,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         setIsAiSpeaking(true);
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
+        pendingBuffersRef.current = 0;   // reset for this new speaking turn
+        nextPlayTimeRef.current = 0;     // reset clock so first buffer gets fresh 80ms look-ahead
         noResponseRetryRef.current = 0; // Reset no-response tracking on new question
         setStatus("Linda is speaking...");
         startRevealingTokens();
@@ -457,7 +481,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         setIsProcessing(false);
         audioEndReceivedRef.current = true;
         revealAllTokens();
-        if (audioQueueRef.current.length === 0 && !isPlayingRef.current) {
+        // With scheduled playback, pendingBuffersRef tracks in-flight buffers.
+        // If nothing is playing/scheduled right now, trigger recording immediately.
+        if (pendingBuffersRef.current === 0 && !isPlayingRef.current) {
           setIsAiSpeaking(false);
           avatarState.onAiStopSpeaking();
           saveAiMessage();
@@ -580,7 +606,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer]);
 
   const startRecordingInternal = async () => {
-    if (isAiSpeaking || isProcessing || isRecordingRef.current) return;
+    // Use refs — NOT state values — because this function is called from stale
+    // closures (useCallback, setTimeout) where isAiSpeaking/isProcessing are stale.
+    if (isAiSpeakingRef.current || isProcessingRef.current || isRecordingRef.current) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true }
@@ -693,6 +721,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     shouldDisconnectAfterAudioRef.current = false;
     audioQueueRef.current = [];
     isPlayingRef.current = false;
+    pendingBuffersRef.current = 0;
+    nextPlayTimeRef.current = 0;
     audioEndReceivedRef.current = false;
     currentAiTextRef.current = "";
   }, [stopRecording, clearNoResponseTimer]);
