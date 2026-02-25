@@ -154,6 +154,7 @@ export default function AssessmentDetailsPage() {
             isOpen={showShareModal}
             onClose={() => setShowShareModal(false)}
             assessment={assessment}
+            inviteSource="Assessment"
           />
         )}
 
