@@ -140,6 +140,9 @@ export function AssessmentInterface({
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
   // const [showUnansweredPopup, setShowUnansweredPopup] = useState(false); // REMOVED: Combined into showCompleteConfirm modal
   const [unansweredQuestions, setUnansweredQuestions] = useState<number[]>([]);
+  const [skippedQuestions, setSkippedQuestions] = useState<number[]>([]);
+  // Track which question numbers the candidate has actually visited
+  const [visitedQuestions, setVisitedQuestions] = useState<Set<number>>(() => new Set([currentQuestion.question_number]));
 
   // Track answer statuses: questionId -> { hasDraft: boolean, isLocked: boolean }
   const [answerStatuses, setAnswerStatuses] = useState<Map<string, { hasDraft: boolean; isLocked: boolean }>>(new Map());
@@ -841,6 +844,13 @@ export function AssessmentInterface({
       });
     }
 
+    // Mark this question as visited
+    setVisitedQuestions(prev => {
+      const next = new Set(prev);
+      next.add(currentQuestion.question_number);
+      return next;
+    });
+
     // Record wall-clock time when this question was loaded.
     // Used by the wall-clock timer below to compute accurate remaining time
     // even after a page refresh or a browser cancel/reload dialog pause.
@@ -990,14 +1000,11 @@ export function AssessmentInterface({
   const handleFinalSubmit = async () => {
     if (isSubmitting) return;
 
-    // ── STEP 1: Submit & lock the current answer if it has content ───────────
+    // ── STEP 1: Submit & lock the current answer if it has meaningful content ─
     // This is critical for the last question — the candidate may not have
     // clicked "Submit" individually before clicking "Submit & Confirm".
-    const hasCurrentAnswer = !!(
-      answer.text_response ||
-      (answer.selected_options && answer.selected_options.length > 0) ||
-      answer.code_submission
-    );
+    // For coding: only lock if isAnswerValid() (i.e. code differs from template).
+    const hasCurrentAnswer = isAnswerValid();
 
     if (hasCurrentAnswer && !isCurrentAnswerLocked) {
       setIsSubmitting(true);
@@ -1017,17 +1024,25 @@ export function AssessmentInterface({
       }
     }
 
-    // ── STEP 2: Check unanswered questions (skip current — handled above) ────
+    // ── STEP 2: Check unanswered/skipped questions (skip current — handled above) ──
+    // Unanswered = visited but no answer selected
+    // Skipped    = never visited at all
     const unanswered: number[] = [];
+    const skipped: number[] = [];
     for (let i = 1; i <= currentQuestion.total_questions; i++) {
       if (i === currentQuestion.question_number) continue;
       const status = answerStatuses.get(`question_${i}`);
       if (!status || !status.hasDraft) {
-        unanswered.push(i);
+        if (visitedQuestions.has(i)) {
+          unanswered.push(i);
+        } else {
+          skipped.push(i);
+        }
       }
     }
 
-    setUnansweredQuestions(unanswered.length > 0 ? unanswered : []);
+    setUnansweredQuestions(unanswered);
+    setSkippedQuestions(skipped);
     setShowCompleteConfirm(true);
   };
 
@@ -1742,12 +1757,16 @@ export function AssessmentInterface({
 
           {/* Progress Indicator - Display Only (No Navigation) */}
           <div className="mt-3 sm:mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <p className="text-sm font-medium text-gray-700">Progress</p>
-              <div className="flex items-center gap-4 text-xs">
+              <div className="flex items-center gap-3 text-xs flex-wrap">
                 <span className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded bg-gray-100 border border-gray-300"></div>
-                  Not answered
+                  Skipped
+                </span>
+                <span className="flex items-center gap-1">
+                  <div className="w-3 h-3 rounded bg-yellow-100 border border-yellow-300"></div>
+                  Unanswered
                 </span>
                 <span className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded bg-orange-100 border border-orange-300"></div>
@@ -1764,39 +1783,37 @@ export function AssessmentInterface({
                 const num = i + 1;
                 const isCurrent = num === currentQuestion.question_number;
 
-                // Determine answer status for this question from our tracking Map
-                // Use question_id format that we set when navigating
                 const questionStatus = answerStatuses.get(`question_${num}`);
                 const isLocked = questionStatus?.isLocked || false;
                 const hasDraft = questionStatus?.hasDraft || false;
+                const wasVisited = visitedQuestions.has(num);
 
-                // Determine the color class - only show status if we've actually tracked it
-                let colorClass = 'bg-gray-100 text-gray-400'; // Not answered (default)
+                let colorClass = 'bg-gray-100 text-gray-400'; // Skipped (not visited)
                 let icon = null;
+                let titleText = `Question ${num} - Skipped`;
 
                 if (isCurrent) {
                   colorClass = 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2';
+                  titleText = 'Current question';
                 } else if (isLocked) {
-                  // Submitted (locked) - GREEN
                   colorClass = 'bg-green-100 text-green-700';
                   icon = <Lock className="w-4 h-4" />;
+                  titleText = `Question ${num} - Submitted`;
                 } else if (hasDraft) {
-                  // Draft saved - ORANGE
                   colorClass = 'bg-orange-100 text-orange-700';
                   icon = <Save className="w-4 h-4" />;
+                  titleText = `Question ${num} - Draft saved`;
+                } else if (wasVisited) {
+                  // Visited but no answer → Unanswered
+                  colorClass = 'bg-yellow-100 text-yellow-700';
+                  titleText = `Question ${num} - Unanswered`;
                 }
-                // If not tracked, stays gray (not answered)
 
                 return (
                   <div
                     key={num}
                     className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center ${colorClass}`}
-                    title={
-                      isCurrent ? 'Current question' :
-                      isLocked ? `Question ${num} - Submitted` :
-                      hasDraft ? `Question ${num} - Draft saved` :
-                      `Question ${num} - Not answered`
-                    }
+                    title={titleText}
                   >
                     {icon || num}
                   </div>
@@ -1845,34 +1862,58 @@ export function AssessmentInterface({
               </div>
             </div>
 
-            {/* Unanswered Questions Warning - shown if there are unanswered questions */}
+            {/* Unanswered Questions Warning */}
             {unansweredQuestions.length > 0 && (
-              <div className="bg-amber-50 rounded-xl p-4 mb-4 border border-amber-200">
-                <p className="text-sm text-amber-700 mb-3 font-semibold">
-                  ⚠️ You haven't answered <span className="font-bold">{unansweredQuestions.length}</span> question(s):
+              <div className="bg-yellow-50 rounded-xl p-4 mb-3 border border-yellow-200">
+                <p className="text-sm text-yellow-700 mb-2 font-semibold">
+                  ⚠️ Unanswered (visited, no answer): <span className="font-bold">{unansweredQuestions.length}</span> question(s)
                 </p>
-                <div className="flex flex-wrap gap-2 mb-3">
+                <div className="flex flex-wrap gap-2">
                   {unansweredQuestions.map((qNum) => (
-                    <span
-                      key={qNum}
-                      className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium"
-                    >
+                    <span key={qNum} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
                       Q{qNum}
                     </span>
                   ))}
                 </div>
-                <p className="text-xs text-amber-600">
-                  You can still submit, but unanswered questions will be marked as incorrect.
-                </p>
               </div>
             )}
 
-            <div className="bg-gray-50 rounded-xl p-4 mb-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600">Questions Answered</span>
-                <span className="font-medium text-gray-800">
-                  {progress.answered} / {progress.total}
-                </span>
+            {/* Skipped Questions Warning */}
+            {skippedQuestions.length > 0 && (
+              <div className="bg-gray-50 rounded-xl p-4 mb-3 border border-gray-200">
+                <p className="text-sm text-gray-600 mb-2 font-semibold">
+                  ⏭️ Skipped (not visited): <span className="font-bold">{skippedQuestions.length}</span> question(s)
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {skippedQuestions.map((qNum) => (
+                    <span key={qNum} className="px-3 py-1 bg-gray-200 text-gray-700 rounded-full text-sm font-medium">
+                      Q{qNum}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {unansweredQuestions.length === 0 && skippedQuestions.length === 0 && (
+              <div className="bg-green-50 rounded-xl p-3 mb-3 border border-green-200">
+                <p className="text-sm text-green-700 font-semibold">✅ All questions answered!</p>
+              </div>
+            )}
+
+            <div className="bg-gray-50 rounded-xl p-4 mb-4">
+              <div className="grid grid-cols-3 gap-3 text-center mb-3">
+                <div>
+                  <div className="text-lg font-bold text-green-600">{progress.answered}</div>
+                  <div className="text-xs text-gray-500">Answered</div>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-yellow-600">{unansweredQuestions.length}</div>
+                  <div className="text-xs text-gray-500">Unanswered</div>
+                </div>
+                <div>
+                  <div className="text-lg font-bold text-gray-500">{skippedQuestions.length}</div>
+                  <div className="text-xs text-gray-500">Skipped</div>
+                </div>
               </div>
               <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div

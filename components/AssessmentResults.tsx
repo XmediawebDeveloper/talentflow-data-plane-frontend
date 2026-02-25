@@ -1264,13 +1264,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               'JD':            'bg-blue-100 text-blue-700',
                               'Assessment':    'bg-purple-100 text-purple-700',
                               'Resume Scoring':'bg-orange-100 text-orange-700',
+                              'My Resumes':    'bg-orange-100 text-orange-700',
                               'Internal DB':   'bg-teal-100 text-teal-700',
                               'Manual':        'bg-gray-100 text-gray-600',
                             };
                             const labelMap: Record<string, string> = {
-                              'JD':            'JD',
-                              'Assessment':    'Assessments',
+                              'JD':            'Job',
+                              'Assessment':    'Assessment',
                               'Resume Scoring':'Resume Scoring',
+                              'My Resumes':    'My Resumes',
                               'Internal DB':   'Internal DB',
                               'Manual':        'Manual',
                             };

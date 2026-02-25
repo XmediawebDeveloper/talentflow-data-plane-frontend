@@ -16,6 +16,8 @@ function DetailsContent() {
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
   const [jdTitle, setJdTitle] = useState<string>('');
+  const [jdId, setJdId] = useState<string>('');
+  const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,6 +28,8 @@ function DetailsContent() {
         if (response) {
           setAssessmentTitle(response.title);
           setJdTitle(response.jd_title || '');
+          setJdId(response.jd_id || '');
+          setAssessmentVersion(response.version ?? null);
         } else {
           setError('Assessment not found');
         }
@@ -90,6 +94,8 @@ function DetailsContent() {
       candidateId={candidateId}
       assessmentTitle={assessmentTitle}
       jdTitle={jdTitle}
+      jdId={jdId}
+      assessmentVersion={assessmentVersion}
     />
   );
 }

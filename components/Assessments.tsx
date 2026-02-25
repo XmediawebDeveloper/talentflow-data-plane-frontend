@@ -830,6 +830,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               setSelectedAssessmentForShare(null);
             }}
             assessment={selectedAssessmentForShare}
+            inviteSource="Assessment"
           />
         )}
 
@@ -2477,6 +2478,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setSelectedAssessmentForShare(null);
           }}
           assessment={selectedAssessmentForShare}
+          inviteSource="Assessment"
         />
       )}
       

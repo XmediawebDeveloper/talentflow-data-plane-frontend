@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
@@ -12,6 +12,8 @@ interface CandidateResultDetailsProps {
   candidateId: string;
   assessmentTitle: string;
   jdTitle?: string;
+  jdId?: string;
+  assessmentVersion?: number | null;
 }
 
 interface CandidateBasicInfo {
@@ -35,7 +37,9 @@ export default function CandidateResultDetails({
   assessmentId,
   candidateId,
   assessmentTitle,
-  jdTitle
+  jdTitle,
+  jdId,
+  assessmentVersion,
 }: CandidateResultDetailsProps) {
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -321,6 +325,7 @@ export default function CandidateResultDetails({
               <div className="min-w-0">
                 <h1 className="text-sm sm:text-base md:text-lg text-gray-900 mb-0.5 sm:mb-1 truncate">{candidateData?.name || 'Unknown'}</h1>
                 <p className="text-xs sm:text-sm text-gray-600 truncate">{candidateData?.email}</p>
+                <p className="text-xs text-gray-400 mt-0.5 truncate">CID-{candidateId}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 self-start sm:self-auto">
@@ -375,6 +380,77 @@ export default function CandidateResultDetails({
               <div>
                 <div className="text-xs sm:text-sm text-gray-600">Time Taken</div>
                 <div className="text-sm sm:text-base text-gray-900">{candidateData?.duration}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs sm:text-sm text-gray-600">JD ID</div>
+                <div className="text-sm sm:text-base text-gray-900 truncate">
+                  {jdId ? `JD-${jdId}` : 'N/A'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Clipboard className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs sm:text-sm text-gray-600">Assessment ID</div>
+                <div className="text-sm sm:text-base text-gray-900 truncate">AS-{assessmentId}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Info className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs sm:text-sm text-gray-600">Version</div>
+                <div className="text-sm sm:text-base text-gray-900">
+                  {assessmentVersion != null ? `v${assessmentVersion}` : 'N/A'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-teal-600" />
+              </div>
+              <div>
+                <div className="text-xs sm:text-sm text-gray-600">Start Time</div>
+                <div className="text-sm sm:text-base text-gray-900">
+                  {detailedResult?.started_at
+                    ? new Date(detailedResult.started_at).toLocaleString('en-US', {
+                        timeZone: 'Asia/Kolkata',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'N/A'}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+              </div>
+              <div>
+                <div className="text-xs sm:text-sm text-gray-600">Submission Time</div>
+                <div className="text-sm sm:text-base text-gray-900">
+                  {detailedResult?.completed_at
+                    ? new Date(detailedResult.completed_at).toLocaleString('en-US', {
+                        timeZone: 'Asia/Kolkata',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'N/A'}
+                </div>
               </div>
             </div>
           </div>
@@ -1060,35 +1136,20 @@ export default function CandidateResultDetails({
                                   </div>
                                 )}
 
-                                {/* Strengths & Areas for Improvement */}
-                                {((q.strengths && q.strengths.length > 0) || (q.areas_for_improvement && q.areas_for_improvement.length > 0)) && (
-                                  <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-                                    {q.strengths && q.strengths.length > 0 && (
-                                      <div className="bg-green-50 rounded-lg p-4">
-                                        <div className="text-sm font-medium text-green-800 mb-2">Strengths</div>
-                                        <ul className="text-sm text-green-700 space-y-1">
-                                          {q.strengths.map((s, i) => (
-                                            <li key={i} className="flex items-start gap-2">
-                                              <CheckCircle className="w-3 h-3 mt-1 flex-shrink-0" />
-                                              {s}
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    )}
-                                    {q.areas_for_improvement && q.areas_for_improvement.length > 0 && (
-                                      <div className="bg-amber-50 rounded-lg p-4">
-                                        <div className="text-sm font-medium text-amber-800 mb-2">Areas for Improvement</div>
-                                        <ul className="text-sm text-amber-700 space-y-1">
-                                          {q.areas_for_improvement.map((a, i) => (
-                                            <li key={i} className="flex items-start gap-2">
-                                              <AlertCircle className="w-3 h-3 mt-1 flex-shrink-0" />
-                                              {a}
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    )}
+                                {/* Strengths */}
+                                {q.strengths && q.strengths.length > 0 && (
+                                  <div className="pt-4 border-t border-gray-200">
+                                    <div className="bg-green-50 rounded-lg p-4">
+                                      <div className="text-sm font-medium text-green-800 mb-2">Strengths</div>
+                                      <ul className="text-sm text-green-700 space-y-1">
+                                        {q.strengths.map((s, i) => (
+                                          <li key={i} className="flex items-start gap-2">
+                                            <CheckCircle className="w-3 h-3 mt-1 flex-shrink-0" />
+                                            {s}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -1359,6 +1420,34 @@ export default function CandidateResultDetails({
                           {detailedResult.proctoring_stats.fullscreen_exit_count || 0}
                         </div>
                         <div className="text-xs text-gray-500 mt-1">times</div>
+                      </div>
+
+                      {/* Screen Capture Attempts (screenshot + screen recording) */}
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                        (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
+                          ? 'bg-amber-50 border-amber-200'
+                          : 'bg-gray-50 border-gray-200'
+                      }`}>
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                          (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
+                            ? 'bg-amber-100'
+                            : 'bg-gray-100'
+                        }`}>
+                          <Camera className={`w-6 h-6 ${
+                            (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
+                              ? 'text-amber-600'
+                              : 'text-gray-400'
+                          }`} />
+                        </div>
+                        <div className="text-sm text-gray-600 mb-1">Screen Capture</div>
+                        <div className={`text-3xl font-bold ${
+                          (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
+                            ? 'text-amber-600'
+                            : 'text-gray-400'
+                        }`}>
+                          {detailedResult.proctoring_stats.screen_capture_count || 0}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">attempts</div>
                       </div>
 
                       {/* Other Violations (uncategorized) - Commented out for now */}

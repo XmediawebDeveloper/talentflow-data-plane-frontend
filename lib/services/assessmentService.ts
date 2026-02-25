@@ -183,6 +183,7 @@ export interface ProctoringStats {
   voice_violation_count: number;
   multiple_faces_count: number;
   fullscreen_exit_count: number;
+  screen_capture_count?: number; // screenshot_attempt + screen_recording_attempt combined
   other_violation_count?: number; // Uncategorized events
   total_violations: number;
   integrity_status: 'clean' | 'flagged' | 'suspicious';
