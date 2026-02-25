@@ -7,6 +7,7 @@ export type AvatarState = "idle" | "listening" | "thinking" | "speaking" | "hand
 interface AvatarProps {
   state: AvatarState;
   className?: string;
+  style?: React.CSSProperties;
   mouthOpenness?: number;
 }
 
@@ -22,7 +23,7 @@ function useSmoothValue(value: number, speed = 0.18) {
   return ref.current;
 }
 
-export function Avatar({ state, className = "", mouthOpenness = 0 }: AvatarProps) {
+export function Avatar({ state, className = "", style, mouthOpenness = 0 }: AvatarProps) {
   const [headTilt, setHeadTilt] = useState(0);
   const [eyeBlink, setEyeBlink] = useState(false);
   const [eyePosition, setEyePosition] = useState({ x: 0, y: 0 });
@@ -204,7 +205,7 @@ export function Avatar({ state, className = "", mouthOpenness = 0 }: AvatarProps
   const palmRotation = 0; // Keep palm straight, not rotated!
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className}`} style={style}>
       <div
         className="relative w-full h-full rounded-3xl overflow-hidden"
         style={{

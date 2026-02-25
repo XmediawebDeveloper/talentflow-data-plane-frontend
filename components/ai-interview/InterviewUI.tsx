@@ -37,6 +37,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const [currentAiText, setCurrentAiText] = useState("");
   const [status, setStatus] = useState("Connecting...");
   const [mouthOpenness, setMouthOpenness] = useState(0);
+  const [textInput, setTextInput] = useState("");
 
   // Interview closing state
   const [isClosing, setIsClosing] = useState(false);
@@ -704,6 +705,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     }
   };
 
+  const sendTextInput = useCallback((text: string) => {
+    if (!text.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (isAiSpeakingRef.current || isProcessingRef.current) return;
+    // Stop voice recording if active
+    if (isRecordingRef.current) stopRecordingSilentRef.current();
+    clearNoResponseTimer();
+    wsRef.current.send(JSON.stringify({ type: "text_input", text: text.trim() }));
+    setIsProcessing(true);
+    setStatus("Processing your message...");
+  }, [clearNoResponseTimer]);
+
   const disconnect = useCallback(() => {
     stopRecording();
     clearNoResponseTimer();
@@ -1035,109 +1047,87 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         </div>
       </div>
     )}
-    <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-700">
+    <div className="flex flex-col h-screen bg-gray-950 text-white overflow-hidden">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
         <div>
-          <h1 className="text-xl font-bold">AI Interview</h1>
-          <p className="text-xs text-gray-400">{interviewInfo.position} - {interviewInfo.interview_type}</p>
+          <h1 className="text-base font-bold tracking-tight">AI Interview</h1>
+          <p className="text-xs text-gray-400">{interviewInfo.position}</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {isConnected && !isClosing && (
-            <div className={`text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${
+            <div className={`text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-mono ${
               remainingSeconds <= 60 ? 'bg-red-500/20 text-red-400 animate-pulse' :
               remainingSeconds <= 300 ? 'bg-orange-500/20 text-orange-400' :
-              'bg-blue-500/20 text-blue-400'
+              'bg-blue-500/10 text-blue-300'
             }`}>
               <Clock className="w-3.5 h-3.5" />
-              <span className="font-mono font-medium">{formatTime(remainingSeconds)}</span>
-              <span className="text-xs opacity-75">remaining</span>
+              <span className="font-medium">{formatTime(remainingSeconds)}</span>
             </div>
           )}
           {isClosing && (
-            <div className="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg font-medium animate-pulse">
+            <div className="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-sm font-medium animate-pulse">
               Interview Ending...
             </div>
           )}
-          <div className={`text-sm px-3 py-1 rounded-full ${
-            isConnected ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+          <div className={`text-xs px-2.5 py-1 rounded-full ${
+            isConnected ? 'bg-green-500/15 text-green-400' : 'bg-gray-500/20 text-gray-500'
           }`}>
-            {isConnected ? 'Connected' : 'Disconnected'}
+            {isConnected ? '● Connected' : '○ Disconnected'}
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* ── Main Body ───────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Webcam */}
-        <div className="w-1/4 p-4 flex flex-col items-center justify-start border-r border-gray-700">
-          <Webcam
-            ref={webcamRef}
-            className="w-full aspect-video rounded-xl mb-2"
-            onVideoReady={handleVideoReady}
-            onStream={(stream) => setWebcamStream(stream)}
-            showHandIndicator={true}
-            isHandRaised={handDetection.isHandRaised}
-          />
-          <span className="text-sm text-gray-400">{interviewInfo.candidate_name}</span>
-          {isRecording && (
-            <div className="mt-2 flex items-center gap-2 text-red-400 text-sm">
-              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              Recording...
-            </div>
-          )}
-        </div>
 
-        {/* Center: Chat */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Chat header */}
-          <div className="px-4 py-2 border-b border-gray-700/60 flex items-center gap-2">
+        {/* ── LEFT PANEL: Chat transcript ──────────────────────────────────── */}
+        <div className="w-[340px] flex-shrink-0 flex flex-col border-r border-gray-800 bg-gray-900/60">
+          {/* Panel header */}
+          <div className="px-4 py-2.5 border-b border-gray-800/70 flex items-center gap-2 flex-shrink-0">
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="text-xs text-gray-400 font-medium">Live Conversation</span>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5"
-            style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}>
-
+          <div
+            className="flex-1 overflow-y-auto px-3 py-4 space-y-4"
+            style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}
+          >
             {messages.length === 0 && !currentAiText && (
               <div className="flex items-center justify-center h-full">
-                <p className="text-gray-600 text-sm">Conversation will appear here...</p>
+                <p className="text-gray-600 text-xs text-center">Conversation will appear here...</p>
               </div>
             )}
 
             {messages.map((msg) => (
               <div key={msg.id}>
                 {msg.role === "system" ? (
-                  /* System message — centered pill */
                   <div className="flex justify-center">
-                    <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full">
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/25 rounded-full">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                      <p className="text-xs text-amber-300 font-medium">{msg.content}</p>
+                      <p className="text-xs text-amber-300">{msg.content}</p>
                     </div>
                   </div>
                 ) : msg.role === "user" ? (
-                  /* User message — right aligned */
-                  <div className="flex justify-end items-end gap-2">
-                    <div className="max-w-[72%]">
-                      <p className="text-xs text-gray-500 mb-1 text-right font-medium">You</p>
-                      <div className="bg-blue-600 rounded-2xl rounded-br-sm px-4 py-3 shadow-lg shadow-blue-900/20">
+                  /* You — right */
+                  <div className="flex justify-end">
+                    <div className="max-w-[85%]">
+                      <p className="text-[10px] text-gray-500 mb-1 text-right">You</p>
+                      <div className="bg-blue-600 rounded-2xl rounded-br-sm px-3 py-2 shadow-md shadow-blue-900/20">
                         <p className="text-sm leading-relaxed text-white">{msg.content}</p>
                       </div>
                     </div>
-                    <div className="w-8 h-8 rounded-full bg-blue-700 flex items-center justify-center flex-shrink-0 mb-0.5">
-                      <span className="text-xs font-bold text-white">Y</span>
-                    </div>
                   </div>
                 ) : (
-                  /* AI message — left aligned */
-                  <div className="flex items-end gap-2">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mb-0.5 shadow-md">
-                      <span className="text-xs font-bold text-white">L</span>
+                  /* Linda — left */
+                  <div className="flex items-start gap-2">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                      <span className="text-[10px] font-bold text-white">L</span>
                     </div>
-                    <div className="max-w-[72%]">
-                      <p className="text-xs text-gray-500 mb-1 font-medium">Linda</p>
-                      <div className="bg-gray-700/80 border border-gray-600/50 rounded-2xl rounded-bl-sm px-4 py-3 shadow-lg">
+                    <div className="max-w-[85%]">
+                      <p className="text-[10px] text-gray-500 mb-1">Linda</p>
+                      <div className="bg-gray-800 border border-gray-700/50 rounded-2xl rounded-tl-sm px-3 py-2 shadow">
                         <p className="text-sm leading-relaxed text-gray-100">{msg.content}</p>
                       </div>
                     </div>
@@ -1146,60 +1136,55 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
               </div>
             ))}
 
-            {/* Live user speech */}
+            {/* Live speech transcript */}
             {currentTranscript && (
-              <div className="flex justify-end items-end gap-2">
-                <div className="max-w-[72%]">
-                  <p className="text-xs text-gray-500 mb-1 text-right font-medium">You</p>
-                  <div className="bg-blue-600/40 border border-blue-500/50 rounded-2xl rounded-br-sm px-4 py-3">
-                    <div className="flex items-center gap-1.5 mb-1">
+              <div className="flex justify-end">
+                <div className="max-w-[85%]">
+                  <p className="text-[10px] text-gray-500 mb-1 text-right">You</p>
+                  <div className="bg-blue-600/30 border border-blue-500/40 rounded-2xl rounded-br-sm px-3 py-2">
+                    <div className="flex items-center gap-1 mb-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                      <span className="text-xs text-red-300">speaking...</span>
+                      <span className="text-[10px] text-red-300">speaking...</span>
                     </div>
                     <p className="text-sm text-gray-200 italic">{currentTranscript}</p>
                   </div>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-blue-700/50 border border-blue-600 flex items-center justify-center flex-shrink-0 mb-0.5">
-                  <span className="text-xs font-bold text-white">Y</span>
-                </div>
               </div>
             )}
 
-            {/* Live AI response */}
+            {/* Live Linda response */}
             {currentAiText && (
-              <div className="flex items-end gap-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mb-0.5 shadow-md">
-                  <span className="text-xs font-bold text-white">L</span>
+              <div className="flex items-start gap-2">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                  <span className="text-[10px] font-bold text-white">L</span>
                 </div>
-                <div className="max-w-[72%]">
+                <div className="max-w-[85%]">
                   <div className="flex items-center gap-1.5 mb-1">
-                    <p className="text-xs text-gray-500 font-medium">Linda</p>
-                    <div className="flex items-center gap-0.5">
-                      <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
+                    <p className="text-[10px] text-gray-500">Linda</p>
+                    <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <div className="bg-gray-700/80 border border-violet-500/30 rounded-2xl rounded-bl-sm px-4 py-3 shadow-lg shadow-violet-900/10">
+                  <div className="bg-gray-800 border border-violet-500/25 rounded-2xl rounded-tl-sm px-3 py-2 shadow">
                     <p className="text-sm leading-relaxed text-gray-100">{currentAiText}</p>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Processing dots — AI is thinking but no text yet */}
+            {/* Thinking dots */}
             {isProcessing && !currentAiText && (
-              <div className="flex items-end gap-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md">
-                  <span className="text-xs font-bold text-white">L</span>
+              <div className="flex items-start gap-2">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                  <span className="text-[10px] font-bold text-white">L</span>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 mb-1 font-medium">Linda</p>
-                  <div className="bg-gray-700/80 border border-gray-600/50 rounded-2xl rounded-bl-sm px-5 py-4">
+                  <p className="text-[10px] text-gray-500 mb-1">Linda</p>
+                  <div className="bg-gray-800 border border-gray-700/50 rounded-2xl rounded-tl-sm px-4 py-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
                   </div>
                 </div>
@@ -1209,52 +1194,118 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Status Bar */}
-          <div className="px-4 py-2.5 border-t border-gray-700/60 bg-gray-900/40">
-            <div className="flex items-center justify-center gap-2">
+          {/* ── Text input (manual typing) ───────────────────────────────── */}
+          <div className="flex-shrink-0 p-3 border-t border-gray-800 bg-gray-900/80">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (textInput.trim()) {
+                  sendTextInput(textInput);
+                  setTextInput("");
+                }
+              }}
+              className="flex gap-2"
+            >
+              <input
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder={
+                  isAiSpeaking ? "Wait for Linda to finish..." :
+                  isProcessing ? "Processing..." :
+                  "Type your response..."
+                }
+                disabled={isAiSpeaking || isProcessing || !isConnected}
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 disabled:opacity-40 disabled:cursor-not-allowed"
+              />
+              <button
+                type="submit"
+                disabled={!textInput.trim() || isAiSpeaking || isProcessing || !isConnected}
+                className="px-3 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-sm font-medium transition-colors"
+              >
+                Send
+              </button>
+            </form>
+            {/* Voice status */}
+            <div className="flex items-center gap-1.5 mt-2">
               <div className={`w-1.5 h-1.5 rounded-full ${
                 isRecording ? 'bg-red-500 animate-pulse' :
-                isAiSpeaking ? 'bg-blue-400 animate-pulse' :
+                isAiSpeaking ? 'bg-violet-400 animate-pulse' :
                 isProcessing ? 'bg-yellow-400 animate-pulse' : 'bg-gray-600'
               }`} />
-              <span className={`text-xs font-medium ${
+              <span className={`text-[11px] ${
                 isRecording ? 'text-red-400' :
-                isAiSpeaking ? 'text-blue-400' :
+                isAiSpeaking ? 'text-violet-400' :
                 isProcessing ? 'text-yellow-400' : 'text-gray-500'
-              }`}>
-                {status}
-              </span>
+              }`}>{status}</span>
+              {isConnected && isRecording && (
+                <button
+                  onClick={stopRecording}
+                  className="ml-auto text-[10px] px-2 py-0.5 bg-yellow-600/20 text-yellow-400 border border-yellow-600/30 rounded-md hover:bg-yellow-600/30 transition-colors"
+                >
+                  Skip
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Right: Avatar */}
-        <div className="w-1/4 p-4 flex flex-col items-center justify-start border-l border-gray-700">
-          <Avatar
-            state={avatarState.currentState}
-            className="w-full aspect-[3/4] max-w-[250px]"
-            mouthOpenness={isAiSpeaking ? mouthOpenness : 0}
-          />
-          {handDetection.isHandRaised && (
-            <div className="mt-4 text-center">
-              <p className="text-lg text-orange-400 font-bold animate-pulse">
-                HAND RAISED
-              </p>
+        {/* ── RIGHT: Linda big screen + webcam PiP ─────────────────────────── */}
+        <div className="flex-1 relative bg-gradient-to-b from-gray-900 to-gray-950 flex items-center justify-center overflow-hidden">
+
+          {/* Linda avatar — fills the screen */}
+          <div className="h-full flex items-center justify-center py-4">
+            <Avatar
+              state={avatarState.currentState}
+              className="h-full max-h-full"
+              style={{ aspectRatio: '3/4' }}
+              mouthOpenness={isAiSpeaking ? mouthOpenness : 0}
+            />
+          </div>
+
+          {/* Speaking glow ring when Linda is talking */}
+          {isAiSpeaking && (
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute inset-0 rounded-none"
+                style={{
+                  background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.08) 0%, transparent 70%)',
+                  animation: 'pulse 2s infinite',
+                }}
+              />
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Footer Controls */}
-      <div className="p-4 border-t border-gray-700 flex justify-center gap-4">
-        {isConnected && isRecording && (
-          <button
-            onClick={stopRecording}
-            className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 rounded-xl font-bold transition-colors"
-          >
-            Skip to AI
-          </button>
-        )}
+          {/* Linda name + status — bottom left of main screen */}
+          <div className="absolute bottom-4 left-4 flex items-center gap-2">
+            <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl flex items-center gap-2 border border-white/10">
+              <div className={`w-2 h-2 rounded-full ${isAiSpeaking ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`} />
+              <span className="text-sm font-semibold text-white">Linda</span>
+              <span className="text-xs text-gray-400">AI Interviewer</span>
+            </div>
+            {handDetection.isHandRaised && (
+              <div className="px-3 py-1.5 bg-orange-500/20 backdrop-blur-md rounded-xl border border-orange-500/30">
+                <span className="text-xs text-orange-400 font-bold animate-pulse">✋ HAND RAISED</span>
+              </div>
+            )}
+          </div>
+
+          {/* Candidate webcam — PiP bottom right */}
+          <div className="absolute bottom-4 right-4 w-44 rounded-2xl overflow-hidden border-2 border-gray-700/80 shadow-2xl bg-gray-900">
+            <Webcam
+              ref={webcamRef}
+              className="w-full aspect-video"
+              onVideoReady={handleVideoReady}
+              onStream={(stream) => setWebcamStream(stream)}
+              showHandIndicator={false}
+              isHandRaised={handDetection.isHandRaised}
+            />
+            <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-black/60 backdrop-blur-sm flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-300 truncate">{interviewInfo.candidate_name}</span>
+              {isRecording && <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse ml-auto flex-shrink-0" />}
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
     <InterviewProctoringWarnings />
