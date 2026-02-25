@@ -414,7 +414,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         startRevealingTokens();
       }
     }
-    setMouthOpenness(Math.random() * 0.6 + 0.2);
+
+    // Real audio-driven lip sync:
+    // Calculate RMS amplitude from the actual PCM samples, then schedule
+    // setMouthOpenness to fire exactly when this buffer starts playing.
+    // This times the mouth movement to the real audio output.
+    let sum = 0;
+    for (let i = 0; i < float32.length; i++) sum += float32[i] * float32[i];
+    const rms = Math.sqrt(sum / float32.length);
+    const openness = Math.min(1, rms * 6); // scale: typical speech RMS 0.02–0.15 → 0.1–0.9
+    const delayMs = Math.max(0, (startTime - ctx.currentTime) * 1000);
+    setTimeout(() => setMouthOpenness(openness), delayMs);
 
     // Load shedding: reduce proctoring frequency when buffers are lagging
     audioQueueRef.current.push(buffer); // count only — not used for playback
@@ -693,13 +703,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
       startWebSpeechRecognition();
 
-      // Start no-response detection (3 seconds)
+      // No-response detection — only fire after 20s of total silence
+      // (3s was too aggressive; candidate may just be thinking)
       clearNoResponseTimer();
       noResponseTimerRef.current = setTimeout(() => {
         if (!speechDetectedRef.current && isRecordingRef.current) {
           handleNoResponseRef.current();
         }
-      }, 3000);
+      }, 20000);
     } catch {
       setStatus("Microphone error");
     }
@@ -1253,12 +1264,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         {/* ── RIGHT: Linda big screen + webcam PiP ─────────────────────────── */}
         <div className="flex-1 relative bg-gradient-to-b from-gray-900 to-gray-950 flex items-center justify-center overflow-hidden">
 
-          {/* Linda avatar — fills the screen */}
-          <div className="h-full flex items-center justify-center py-4">
+          {/* Linda — portrait container, centered in panel */}
+          <div className="absolute inset-0 flex items-center justify-center">
             <Avatar
               state={avatarState.currentState}
-              className="h-full max-h-full"
-              style={{ aspectRatio: '3/4' }}
+              isAiSpeaking={isAiSpeaking}
+              className="h-full rounded-none"
+              style={{ aspectRatio: "9/16", maxHeight: "100%", maxWidth: "100%" }}
               mouthOpenness={isAiSpeaking ? mouthOpenness : 0}
             />
           </div>
