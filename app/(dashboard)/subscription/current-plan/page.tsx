@@ -2784,29 +2784,6 @@ function CurrentPlanContent() {
                   </div>
                 </div>
 
-                {/* Annual Plan Offer Checkbox - Uses API prices directly */}
-                {selectedPlanForPayment?.annualPrice && (
-                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
-                    isYearly ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:bg-gray-50'
-                  }`}>
-                    <input
-                      type="checkbox"
-                      checked={isYearly}
-                      onChange={(e) => setIsYearly(e.target.checked)}
-                      className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Crown className="w-5 h-5 text-green-600" />
-                        <span className="font-medium text-gray-900">Annual Plan</span>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {formatCurrency(selectedPlanForPayment.annualPrice, selectedPlanForPayment.currency)}/year
-                      </p>
-                    </div>
-                  </label>
-                )}
-
                 {/* Dedicated Database Checkbox - Available for both Monthly and Annual */}
                 <label className={`flex items-start gap-3 p-4 border-2 rounded-xl transition-colors ${
                   hasDedicatedDatabase

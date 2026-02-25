@@ -58,6 +58,20 @@ export interface UserPermissions {
   can_view_invoices: boolean;
   can_view_usage: boolean;
 
+  // Granular billing section view permissions
+  can_view_current_plan?: boolean;
+  can_view_payment_methods?: boolean;
+  can_view_billing_history?: boolean;
+  can_view_refund_history?: boolean;
+  can_view_dispute_history?: boolean;
+
+  // Granular settings section view permissions
+  can_view_general_settings?: boolean;
+  can_view_permissions_roles?: boolean;
+  can_view_api_management?: boolean;
+  can_view_branding?: boolean;
+  can_view_security_settings?: boolean;
+
   // Feature Permissions
   can_view_scoring: boolean;  // View scoring results
   can_run_scoring: boolean;

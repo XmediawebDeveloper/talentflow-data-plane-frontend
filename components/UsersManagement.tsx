@@ -77,6 +77,20 @@ const permissionLabels: Record<keyof UserPermissions, string> = {
   can_view_invoices: 'View Invoices',
   can_view_usage: 'View Usage',
 
+  // Granular Billing Section Views
+  can_view_current_plan: 'View Current Plan',
+  can_view_payment_methods: 'View Payment Methods',
+  can_view_billing_history: 'View Billing History',
+  can_view_refund_history: 'View Refund History',
+  can_view_dispute_history: 'View Dispute History',
+
+  // Granular Settings Section Views
+  can_view_general_settings: 'View General Settings',
+  can_view_permissions_roles: 'View Permissions & Roles',
+  can_view_api_management: 'View API Management',
+  can_view_branding: 'View Branding',
+  can_view_security_settings: 'View Security Settings',
+
   // Feature Permissions
   can_run_scoring: 'Run Scoring',
   can_run_ai_interviews: 'AI Interviews',
@@ -163,6 +177,16 @@ const PERMISSION_DEPENDENCIES: Record<keyof UserPermissions, Array<keyof UserPer
   can_bulk_operations: [],
   can_export: [],
   can_api_access: [],
+  can_view_current_plan: [],
+  can_view_payment_methods: [],
+  can_view_billing_history: [],
+  can_view_refund_history: [],
+  can_view_dispute_history: [],
+  can_view_general_settings: [],
+  can_view_permissions_roles: [],
+  can_view_api_management: [],
+  can_view_branding: [],
+  can_view_security_settings: [],
 };
 
 // ✅ GRANULAR PERMISSIONS: Default permissions with 4 minimum view-only permissions enabled
@@ -218,6 +242,20 @@ const defaultPermissions: UserPermissions = {
   can_update_billing: false,
   can_view_invoices: false,
   can_view_usage: false,
+
+  // Granular Billing Section Views
+  can_view_current_plan: false,
+  can_view_payment_methods: false,
+  can_view_billing_history: false,
+  can_view_refund_history: false,
+  can_view_dispute_history: false,
+
+  // Granular Settings Section Views
+  can_view_general_settings: false,
+  can_view_permissions_roles: false,
+  can_view_api_management: false,
+  can_view_branding: false,
+  can_view_security_settings: false,
 
   // Feature Permissions
   can_run_scoring: false,
@@ -412,6 +450,20 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
         can_view_invoices: true,
         can_view_usage: true,
 
+        // Granular Billing Section Views
+        can_view_current_plan: true,
+        can_view_payment_methods: true,
+        can_view_billing_history: true,
+        can_view_refund_history: true,
+        can_view_dispute_history: true,
+
+        // Granular Settings Section Views
+        can_view_general_settings: true,
+        can_view_permissions_roles: true,
+        can_view_api_management: true,
+        can_view_branding: true,
+        can_view_security_settings: true,
+
         // Feature Permissions
         can_run_scoring: true,
         can_run_ai_interviews: true,
@@ -486,6 +538,26 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
         // Settings Permissions (keeping legacy fields for compatibility)
         can_view_settings: newUser.permissions.can_view_settings,
         can_update_settings: newUser.permissions.can_update_settings,
+
+        // Billing Permissions
+        can_view_billing: newUser.permissions.can_view_billing,
+        can_update_billing: newUser.permissions.can_update_billing,
+        can_view_invoices: newUser.permissions.can_view_invoices,
+        can_view_usage: newUser.permissions.can_view_usage,
+
+        // Granular Billing Section Views
+        can_view_current_plan: newUser.permissions.can_view_current_plan,
+        can_view_payment_methods: newUser.permissions.can_view_payment_methods,
+        can_view_billing_history: newUser.permissions.can_view_billing_history,
+        can_view_refund_history: newUser.permissions.can_view_refund_history,
+        can_view_dispute_history: newUser.permissions.can_view_dispute_history,
+
+        // Granular Settings Section Views
+        can_view_general_settings: newUser.permissions.can_view_general_settings,
+        can_view_permissions_roles: newUser.permissions.can_view_permissions_roles,
+        can_view_api_management: newUser.permissions.can_view_api_management,
+        can_view_branding: newUser.permissions.can_view_branding,
+        can_view_security_settings: newUser.permissions.can_view_security_settings,
       });
 
       toast.success('User created successfully');
@@ -545,13 +617,48 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
       const updatedUser = await userService.updateUser(editingUser.id, {
         name: editingUser.name,
         role: editingUser.role,
+        // JD Permissions
+        can_view_jd: editingUser.permissions.can_view_jd,
         can_create_jd: editingUser.permissions.can_create_jd,
+        can_update_jd: editingUser.permissions.can_update_jd,
+        can_delete_jd: editingUser.permissions.can_delete_jd,
         can_manage_jd: editingUser.permissions.can_manage_jd,
-        can_upload_resumes: editingUser.permissions.can_upload_resumes,
+        // Resume Permissions
         can_view_resumes: editingUser.permissions.can_view_resumes,
-        can_access_internal_db: editingUser.permissions.can_access_internal_db,
+        can_create_resumes: editingUser.permissions.can_create_resumes,
+        can_update_resumes: editingUser.permissions.can_update_resumes,
+        can_delete_resumes: editingUser.permissions.can_delete_resumes,
+        can_upload_resumes: editingUser.permissions.can_upload_resumes,
+        // Assessment Permissions
+        can_view_assessments: editingUser.permissions.can_view_assessments,
         can_create_assessments: editingUser.permissions.can_create_assessments,
+        can_update_assessments: editingUser.permissions.can_update_assessments,
+        can_delete_assessments: editingUser.permissions.can_delete_assessments,
+        // Internal DB Permissions
+        can_view_internal_db: editingUser.permissions.can_view_internal_db,
+        can_access_internal_db: editingUser.permissions.can_access_internal_db,
+        // Analytics Permissions
         can_view_analytics: editingUser.permissions.can_view_analytics,
+        // Settings Permissions
+        can_view_settings: editingUser.permissions.can_view_settings,
+        can_update_settings: editingUser.permissions.can_update_settings,
+        // Billing Permissions
+        can_view_billing: editingUser.permissions.can_view_billing,
+        can_update_billing: editingUser.permissions.can_update_billing,
+        can_view_invoices: editingUser.permissions.can_view_invoices,
+        can_view_usage: editingUser.permissions.can_view_usage,
+        // Granular Billing Section Views
+        can_view_current_plan: editingUser.permissions.can_view_current_plan,
+        can_view_payment_methods: editingUser.permissions.can_view_payment_methods,
+        can_view_billing_history: editingUser.permissions.can_view_billing_history,
+        can_view_refund_history: editingUser.permissions.can_view_refund_history,
+        can_view_dispute_history: editingUser.permissions.can_view_dispute_history,
+        // Granular Settings Section Views
+        can_view_general_settings: editingUser.permissions.can_view_general_settings,
+        can_view_permissions_roles: editingUser.permissions.can_view_permissions_roles,
+        can_view_api_management: editingUser.permissions.can_view_api_management,
+        can_view_branding: editingUser.permissions.can_view_branding,
+        can_view_security_settings: editingUser.permissions.can_view_security_settings,
       });
       toast.success('User updated successfully');
       setUsers(prev => prev.map(u => u.id === editingUser.id ? updatedUser : u));
