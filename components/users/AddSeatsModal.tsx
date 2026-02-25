@@ -378,9 +378,22 @@ export default function AddSeatsModal({
                     </span>
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-blue-200">
-                    <span className="text-sm sm:text-base font-medium text-blue-800">Total ({totalSeats} seats)</span>
-                    <span className="text-xl sm:text-2xl font-bold text-blue-900">
+                    <span className="text-xs sm:text-sm text-blue-700">Subtotal ({totalSeats} seats)</span>
+                    <span className="text-sm sm:text-base font-medium text-blue-900">
                       {getCurrencySymbol(currency)}{totalPrice}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs sm:text-sm text-blue-700">GST (18%)</span>
+                    <span className="text-sm sm:text-base font-medium text-blue-900">
+                      {getCurrencySymbol(currency)}{Math.round(parseFloat(totalPrice) * 0.18)}
+                    </span>
+                  </div>
+                  <div className="h-px bg-blue-200 my-2" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm sm:text-base font-medium text-blue-800">Total</span>
+                    <span className="text-xl sm:text-2xl font-bold text-blue-900">
+                      {getCurrencySymbol(currency)}{(parseFloat(totalPrice) + Math.round(parseFloat(totalPrice) * 0.18)).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -424,7 +437,7 @@ export default function AddSeatsModal({
                   ) : (
                     <>
                       <ShoppingCart className="w-4 h-4" />
-                      Pay & Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
+                      Pay {getCurrencySymbol(currency)}{(parseFloat(totalPrice) + Math.round(parseFloat(totalPrice) * 0.18)).toLocaleString()} & Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
                     </>
                   )}
                 </button>

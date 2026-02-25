@@ -1477,10 +1477,23 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     <Zap className="w-8 h-8 sm:w-10 sm:h-10 text-gray-400" />
                   </div>
                   <div className="h-px bg-gray-200 my-3"></div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-medium text-gray-900">
+                      ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm mt-1">
+                    <span className="text-gray-600">GST (18%)</span>
+                    <span className="font-medium text-gray-900">
+                      ₹{Math.round((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity * 0.18).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="h-px bg-gray-200 my-3"></div>
                   <div className="flex justify-between items-center">
                     <span className="font-semibold text-gray-900">Total Amount</span>
                     <span className="text-2xl sm:text-3xl font-bold text-gray-900">
-                      ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity).toLocaleString()}
+                      ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity + Math.round((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity * 0.18)).toLocaleString()}
                     </span>
                   </div>
                 </div>

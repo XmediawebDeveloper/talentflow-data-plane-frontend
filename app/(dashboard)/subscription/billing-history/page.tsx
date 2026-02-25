@@ -3,6 +3,8 @@
 import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import { generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
+import { toast } from 'sonner';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -42,6 +44,17 @@ interface BillingInvoice {
   new_plan_id?: number;
   previous_plan_id?: number;
   created_at: string;
+  payment_method?: string;
+  payment_status?: string;
+  razorpay_payment_id?: string;
+  razorpay_order_id?: string;
+  payment_amount?: number;
+  payment_currency?: string;
+  subscription_start_date?: string;
+  subscription_end_date?: string;
+  next_billing_date?: string;
+  billing_interval?: string;
+  paid_at?: string;
 }
 
 interface BillingStats {
@@ -58,6 +71,7 @@ export default function BillingHistoryPage() {
   const [stats, setStats] = useState<BillingStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<BillingInvoice | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchBillingData();
@@ -76,7 +90,7 @@ export default function BillingHistoryPage() {
       }
 
       // Fetch billing history from backend proxy (which calls Admin API)
-      const historyResponse = await fetch(`${API_URL}/billing/invoices/billing?skip=0&limit=100`, {
+      const historyResponse = await fetch(`${API_URL}/billing/invoices/billing`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
@@ -181,44 +195,16 @@ export default function BillingHistoryPage() {
     }
   };
 
-  const handleDownloadInvoice = (inv: BillingInvoice) => {
-    const lineItemsText = inv.line_items?.map(item =>
-      `  - ${item.description}: ${formatAmount(item.amount || item.unit_price)} (Qty: ${item.quantity})`
-    ).join('\n') || '  No line items';
-
-    const invoiceContent = `
-INVOICE
-==============================
-Invoice Number: ${inv.invoice_number}
-Issue Date: ${formatDate(inv.issue_date)}
-Due Date: ${formatDate(inv.due_date)}
--------------------------------
-Type: ${inv.invoice_type}
-Reason: ${inv.reason || inv.metadata?.reason || '-'}
--------------------------------
-LINE ITEMS:
-${lineItemsText}
--------------------------------
-Subtotal: ${formatAmount(inv.amount_inr || 0)}
-Tax (GST): ${formatAmount(inv.tax_amount_inr || 0)}
-Discount: -${formatAmount(inv.discount_amount_inr || 0)}
--------------------------------
-TOTAL: ${formatAmount(inv.total_amount_inr || 0)}
--------------------------------
-Status: ${inv.status?.toUpperCase() || 'UNKNOWN'}
-==============================
-Thank you for your business!
-    `.trim();
-
-    const blob = new Blob([invoiceContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${inv.invoice_number}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleDownloadInvoice = async (inv: BillingInvoice) => {
+    setDownloadingId(inv.id);
+    try {
+      await generateBillingInvoicePDF(inv);
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      toast.error('Failed to generate PDF. Please try again.');
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   return (
@@ -335,6 +321,7 @@ Thank you for your business!
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Due Date</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[180px]">Description</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Type</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Payment</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">Amount</th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Status</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Actions</th>
@@ -372,6 +359,12 @@ Thank you for your business!
                           {inv.invoice_type || '-'}
                         </span>
                       </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="text-sm text-gray-700 capitalize">{inv.payment_method || '-'}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-4 text-right">
                         <span className="text-sm font-semibold text-gray-900">
                           {formatAmount(inv.total_amount_inr || 0)}
@@ -400,10 +393,11 @@ Thank you for your business!
                           </button>
                           <button
                             onClick={() => handleDownloadInvoice(inv)}
-                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                            disabled={downloadingId === inv.id}
+                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Download Invoice"
                           >
-                            <Download className="w-3.5 h-3.5" />
+                            {downloadingId === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </td>
@@ -454,7 +448,53 @@ Thank you for your business!
                       {selectedInvoice.invoice_type}
                     </span>
                   </div>
+                  {selectedInvoice.payment_method && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Payment Method</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{selectedInvoice.payment_method}</p>
+                    </div>
+                  )}
+                  {selectedInvoice.paid_at && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Paid At</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.paid_at)}</p>
+                    </div>
+                  )}
                 </div>
+
+                {(selectedInvoice.subscription_start_date || selectedInvoice.billing_interval) && (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
+                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                      <p className="text-xs font-medium text-gray-500 uppercase">Subscription Period</p>
+                    </div>
+                    <div className="p-4 grid grid-cols-2 gap-3">
+                      {selectedInvoice.subscription_start_date && (
+                        <div>
+                          <p className="text-xs text-gray-500">Start Date</p>
+                          <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.subscription_start_date)}</p>
+                        </div>
+                      )}
+                      {selectedInvoice.subscription_end_date && (
+                        <div>
+                          <p className="text-xs text-gray-500">End Date</p>
+                          <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.subscription_end_date)}</p>
+                        </div>
+                      )}
+                      {selectedInvoice.next_billing_date && (
+                        <div>
+                          <p className="text-xs text-gray-500">Next Billing</p>
+                          <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.next_billing_date)}</p>
+                        </div>
+                      )}
+                      {selectedInvoice.billing_interval && (
+                        <div>
+                          <p className="text-xs text-gray-500">Billing Interval</p>
+                          <p className="text-sm font-medium text-gray-900 capitalize">{selectedInvoice.billing_interval}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
                   <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
@@ -517,13 +557,24 @@ Thank you for your business!
                   </div>
                 )}
 
+                {selectedInvoice.razorpay_payment_id && (
+                  <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <p className="text-xs text-blue-600 font-medium">Razorpay Payment ID</p>
+                    <p className="text-sm text-blue-900 font-mono">{selectedInvoice.razorpay_payment_id}</p>
+                  </div>
+                )}
+
                 <div className="mt-6 flex gap-3">
                   <button
                     onClick={() => handleDownloadInvoice(selectedInvoice)}
-                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                    disabled={downloadingId === selectedInvoice.id}
+                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Download className="w-4 h-4" />
-                    Download Invoice
+                    {downloadingId === selectedInvoice.id ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating PDF...</>
+                    ) : (
+                      <><Download className="w-4 h-4" /> Download Invoice</>
+                    )}
                   </button>
                   <button
                     onClick={() => setSelectedInvoice(null)}

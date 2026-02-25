@@ -2414,6 +2414,7 @@ function CurrentPlanContent() {
                                 ? (plan.annualPrice ? '/year' : '/month')
                                 : (plan.monthlyPrice ? '/month' : '/year')}
                             </span>
+                            <span className="text-gray-400 text-xs ml-1">(+18% GST)</span>
                           </div>
                           {/* Show strikethrough price and discount badge when viewing yearly and both prices exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (plan.monthlyPrice * 12) > plan.annualPrice && (
@@ -2699,6 +2700,42 @@ function CurrentPlanContent() {
                         </span>
                       </div>
                     )}
+                    {/* Subtotal */}
+                    <div className="flex justify-between pt-2 border-t border-gray-200">
+                      <span className="text-gray-600">Subtotal:</span>
+                      <span className="font-medium text-gray-900">
+                        {formatCurrency(
+                          (() => {
+                            const basePrice = isYearly
+                              ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
+                              : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
+                            const dbFee = isolationType === 'database'
+                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
+                              : 0;
+                            return basePrice + dbFee;
+                          })(),
+                          selectedPlanForPayment?.currency || 'INR'
+                        )}
+                      </span>
+                    </div>
+                    {/* GST Row */}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">GST (18%):</span>
+                      <span className="font-medium text-gray-900">
+                        {formatCurrency(
+                          Math.round((() => {
+                            const basePrice = isYearly
+                              ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
+                              : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
+                            const dbFee = isolationType === 'database'
+                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
+                              : 0;
+                            return (basePrice + dbFee) * 0.18;
+                          })()),
+                          selectedPlanForPayment?.currency || 'INR'
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -2706,7 +2743,7 @@ function CurrentPlanContent() {
                 <div className="bg-gray-800 text-white rounded-xl p-4">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="font-semibold">Total</span>
+                      <span className="font-semibold">Total (incl. GST)</span>
                       <p className="text-xs text-gray-300">
                         {/* Show actual billing period based on availability */}
                         {(isYearly && selectedPlanForPayment?.annualPrice) || (!selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice)
@@ -2728,7 +2765,8 @@ function CurrentPlanContent() {
                             const dbFee = isolationType === 'database'
                               ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (useYearlyPrice ? 12 : 1)
                               : 0;
-                            return basePrice + dbFee;
+                            const subtotal = basePrice + dbFee;
+                            return subtotal + Math.round(subtotal * 0.18);
                           })(),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
@@ -2836,11 +2874,14 @@ function CurrentPlanContent() {
                     <>
                       <CreditCard className="w-5 h-5" />
                       Pay {formatCurrency(
-                        isYearly
-                          ? (selectedPlanForPayment?.annualPrice || 0) +
-                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
-                          : (selectedPlanForPayment?.monthlyPrice || 0) +
-                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
+                        (() => {
+                          const subtotal = isYearly
+                            ? (selectedPlanForPayment?.annualPrice || 0) +
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
+                            : (selectedPlanForPayment?.monthlyPrice || 0) +
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0);
+                          return subtotal + Math.round(subtotal * 0.18);
+                        })(),
                         selectedPlanForPayment?.currency || 'INR'
                       )}
                     </>

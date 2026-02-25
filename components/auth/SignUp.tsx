@@ -1103,42 +1103,58 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               </div>
             </div>
 
-            {/* Price Display */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
-              <div>
+            {/* Price Display with GST Breakdown */}
+            <div style={{ padding: '16px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 14, color: '#6B7280' }}>Billing:</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginLeft: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>
                   {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
                 </span>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: 32, fontWeight: 700, color: '#111827' }}>
+              {/* Strikethrough price and Save badge for annual plans */}
+              {billingInterval === 'ANNUAL' && selectedPlanDetails.monthly_price && (selectedPlanDetails.monthly_price * 12) > selectedPlanDetails.base_price && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
+                    {formatCurrency(selectedPlanDetails.monthly_price * 12, selectedPlanDetails.currency)}
+                  </span>
+                  {selectedPlanDetails.discount_percentage && selectedPlanDetails.discount_percentage > 0 && (
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      backgroundColor: '#DCFCE7',
+                      color: '#15803D',
+                      borderRadius: 12
+                    }}>
+                      Save {Math.round(selectedPlanDetails.discount_percentage)}%
+                    </span>
+                  )}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 14, color: '#6B7280' }}>Plan Price:</span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>
                   {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
                 </span>
-                <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
-                  /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, color: '#6B7280' }}>GST (18%):</span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>
+                  {formatCurrency(Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
                 </span>
-                {/* Strikethrough price and Save badge for annual plans */}
-                {billingInterval === 'ANNUAL' && selectedPlanDetails.monthly_price && (selectedPlanDetails.monthly_price * 12) > selectedPlanDetails.base_price && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
-                    <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
-                      {formatCurrency(selectedPlanDetails.monthly_price * 12, selectedPlanDetails.currency)}
-                    </span>
-                    {selectedPlanDetails.discount_percentage && selectedPlanDetails.discount_percentage > 0 && (
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        backgroundColor: '#DCFCE7',
-                        color: '#15803D',
-                        borderRadius: 12
-                      }}>
-                        Save {Math.round(selectedPlanDetails.discount_percentage)}%
-                      </span>
-                    )}
-                  </div>
-                )}
+              </div>
+              <div style={{ height: 1, backgroundColor: '#E5E7EB', marginBottom: 8 }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>Total:</span>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+                    {formatCurrency(selectedPlanDetails.base_price + Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
+                  </span>
+                  <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
+                    /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -1221,7 +1237,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             ) : (
               <>
                 <CreditCard style={{ width: 20, height: 20 }} />
-                Pay & Activate - {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
+                Pay & Activate - {formatCurrency(selectedPlanDetails.base_price + Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
               </>
             )}
           </button>
