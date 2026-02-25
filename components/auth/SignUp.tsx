@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
+import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import PlanSelectionModal from './PlanSelectionModal';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -120,6 +121,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const [planLoading, setPlanLoading] = useState(false);
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
   const [createdSubdomain, setCreatedSubdomain] = useState<string | null>(null);
+  const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
 
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -507,7 +509,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
   };
 
-  // Handle payment submission (process payment for paid signup)
+  // Handle payment submission — 3-step Razorpay flow
   const handlePaymentSubmit = async () => {
     if (!createdTenantId || !selectedPlanDetails) {
       setError('Missing tenant or plan information');
@@ -518,23 +520,66 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     setError('');
 
     try {
+      // Step 1: Create Razorpay order
+      const orderRes = await fetch(`${API_URL}/signup/create-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: createdTenantId,
+          plan_id: selectedPlanDetails.id,
+          billing_interval: billingInterval,
+        }),
+      });
+
+      if (!orderRes.ok) {
+        const errData = await orderRes.json().catch(() => ({}));
+        throw new Error(errData.detail || `Failed to create order: ${orderRes.status}`);
+      }
+
+      const orderData = await orderRes.json();
+      console.log('[Signup] Razorpay order created:', orderData);
+
+      // Step 2: Open Razorpay checkout modal
+      let paymentResponse;
+      try {
+        paymentResponse = await openCheckout({
+          orderId: orderData.order_id,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          planName: selectedPlanDetails.plan_name || 'Plan',
+          userName: form.adminName || '',
+          userEmail: form.adminEmail || '',
+          userPhone: form.phoneNumber || '',
+        });
+      } catch (checkoutErr: any) {
+        setPaymentProcessing(false);
+        if (checkoutErr?.message?.includes('cancelled')) {
+          toast.info('Payment cancelled');
+        } else {
+          toast.error(checkoutErr?.message || 'Payment failed');
+        }
+        return;
+      }
+
+      // Step 3: Verify payment with backend
       const response = await fetch(`${API_URL}/signup/process-payment`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenant_id: createdTenantId,
           plan_id: selectedPlanDetails.id,
           billing_interval: billingInterval,
           user_email: form.adminEmail,
+          razorpay_payment_id: paymentResponse.razorpay_payment_id,
+          razorpay_order_id: paymentResponse.razorpay_order_id,
+          razorpay_signature: paymentResponse.razorpay_signature,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Payment processing failed');
+        throw new Error(data.detail || 'Payment verification failed');
       }
 
       // Payment successful - show success and redirect to org subdomain login
@@ -1161,14 +1206,14 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           {/* Complete Purchase Button */}
           <button
             onClick={handlePaymentSubmit}
-            disabled={paymentProcessing}
+            disabled={paymentProcessing || razorpayProcessing}
             style={{
               ...submitButtonStyle,
-              opacity: paymentProcessing ? 0.7 : 1,
-              cursor: paymentProcessing ? 'not-allowed' : 'pointer',
+              opacity: (paymentProcessing || razorpayProcessing) ? 0.7 : 1,
+              cursor: (paymentProcessing || razorpayProcessing) ? 'not-allowed' : 'pointer',
             }}
           >
-            {paymentProcessing ? (
+            {paymentProcessing || razorpayProcessing ? (
               <>
                 <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
                 Processing Payment...
@@ -1176,7 +1221,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             ) : (
               <>
                 <CreditCard style={{ width: 20, height: 20 }} />
-                Complete Purchase - {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
+                Pay & Activate - {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
               </>
             )}
           </button>
