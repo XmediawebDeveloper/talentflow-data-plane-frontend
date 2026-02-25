@@ -171,14 +171,21 @@ export function AssessmentInterface({
 
   // Initialize: compute from wall clock (not decrement-based) to be accurate
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
-    const utcStartedAt = startedAt.endsWith('Z') ? startedAt : startedAt + 'Z';
-    const startTime = new Date(utcStartedAt).getTime();
+    // Backend stores naive IST (UTC+05:30) datetimes without timezone annotation.
+    // Appending 'Z' would wrongly treat IST as UTC, inflating elapsed by -19800s → ~360 min timer.
+    // Instead: if no TZ info present, treat as IST by appending '+05:30'.
+    const parseBackendTs = (ts: string): number => {
+      if (!ts) return Date.now();
+      if (ts.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts).getTime();
+      return new Date(ts + '+05:30').getTime(); // naive IST → correct UTC ms
+    };
+    const startTime = parseBackendTs(startedAt);
     assessmentStartTimeRef.current = startTime;
     const totalDuration = durationMinutes * 60;
     totalDurationSecsRef.current = totalDuration;
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     console.log('[TIMER] Calculating initial time:', {
-      startedAt, utcStartedAt, startTime, now: Date.now(), elapsed, totalDuration,
+      startedAt, startTime, now: Date.now(), elapsed, totalDuration,
       remaining: Math.max(0, totalDuration - elapsed)
     });
     return Math.max(0, totalDuration - elapsed);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical } from 'lucide-react';
+import { Plus, Copy, GitBranch, Upload, Loader2, Search, History, X, CheckCircle, AlertCircle, Clock, Calendar, ChevronRight, ArrowLeft, FileText, Maximize2, LayoutGrid, List, Folder, FolderOpen, MapPin, Briefcase, Mail, Phone, Download, Eye, MoreHorizontal, Trash2, Archive, ClipboardCheck, UserPlus, Sparkles, GripVertical, RefreshCw } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
@@ -377,6 +377,10 @@ export default function MyResumesPage() {
   const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
   const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | null>(null);
+  const [retryingBatches, setRetryingBatches] = useState<Set<string>>(new Set());
+  const [cancellingBatches, setCancellingBatches] = useState<Set<string>>(new Set());
+  const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
+  const [cancellingItems, setCancellingItems] = useState<Set<string>>(new Set());
 
   // Bulk version resolution state
   const [selectedVersionedItems, setSelectedVersionedItems] = useState<Map<string, VersionedBatchItem>>(new Map());
@@ -602,6 +606,75 @@ export default function MyResumesPage() {
     setIsUploadHistoryModalOpen(false);
     setIsUploadHistoryMinimized(false);
     setUploadHistoryFilter(null);
+  };
+
+  const handleRetryBatch = async (batchId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRetryingBatches(prev => new Set(prev).add(batchId));
+    try {
+      await resumeService.retryBatchItems(batchId);
+      toast.success('Retrying stuck items. No additional units deducted.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to retry batch items');
+    } finally {
+      setRetryingBatches(prev => { const s = new Set(prev); s.delete(batchId); return s; });
+    }
+  };
+
+  const handleCancelBatch = async (batchId: string, pendingCount: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCancellingBatches(prev => new Set(prev).add(batchId));
+    try {
+      await resumeService.cancelBatch(batchId);
+      toast.success(`Cancelled ${pendingCount} pending item(s). Units refunded.`);
+      // Refresh upload history to reflect the cancellation
+      const batches = await resumeService.listUploadBatches(50);
+      if (batches?.batches) {
+        setUploadHistory(prev => {
+          const otherBatches = prev.filter(r => r.source !== 'my-resumes');
+          const updated = batches.batches.map((b: any) => ({ ...b, source: 'my-resumes', statuses: b.items || [] }));
+          return [...otherBatches, ...updated];
+        });
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to cancel batch');
+    } finally {
+      setCancellingBatches(prev => { const s = new Set(prev); s.delete(batchId); return s; });
+    }
+  };
+
+  const handleRetryItem = async (batchId: string, itemId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRetryingItems(prev => new Set(prev).add(itemId));
+    try {
+      await resumeService.retryItem(batchId, itemId);
+      toast.success('Retrying file. No additional units deducted.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to retry file');
+    } finally {
+      setRetryingItems(prev => { const s = new Set(prev); s.delete(itemId); return s; });
+    }
+  };
+
+  const handleCancelItem = async (batchId: string, itemId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCancellingItems(prev => new Set(prev).add(itemId));
+    try {
+      await resumeService.cancelItem(batchId, itemId);
+      toast.success('File cancelled. 1 unit refunded.');
+      const batches = await resumeService.listUploadBatches(50);
+      if (batches?.batches) {
+        setUploadHistory(prev => {
+          const otherBatches = prev.filter(r => r.source !== 'my-resumes');
+          const updated = batches.batches.map((b: any) => ({ ...b, source: 'my-resumes', statuses: b.items || [] }));
+          return [...otherBatches, ...updated];
+        });
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to cancel file');
+    } finally {
+      setCancellingItems(prev => { const s = new Set(prev); s.delete(itemId); return s; });
+    }
   };
 
   // Ref to store active polling intervals for cleanup
@@ -3244,7 +3317,8 @@ export default function MyResumesPage() {
                               const percentage = record.totalFiles > 0 ? Math.round((record.completed / record.totalFiles) * 100) : 100;
                               const isUploading = record.status === 'uploading';
                               const isProcessing = record.status === 'processing' || record.pending > 0;
-                              const hasErrors = record.errors > 0;
+                              const isCancelled = record.statuses?.some((s: any) => s.status === 'cancelled');
+                              const hasErrors = record.errors > 0 && !isCancelled;
                               const hasIssues = record.duplicated > 0 || (record.versioned || 0) > 0 || record.errors > 0;
 
                               return (
@@ -3375,6 +3449,42 @@ export default function MyResumesPage() {
                                     );
                                   })()}
 
+                                  {/* Retry / Cancel Batch actions */}
+                                  {!isCancelled && (isProcessing || hasErrors) && (
+                                    <div className="flex items-center gap-2 mb-3 sm:mb-4" onClick={e => e.stopPropagation()}>
+                                      {/* Retry — show when items are stuck in pending or have errors */}
+                                      {(isProcessing || hasErrors) && (
+                                        <button
+                                          disabled={retryingBatches.has(record.id)}
+                                          onClick={(e) => handleRetryBatch(record.id, e)}
+                                          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                                            retryingBatches.has(record.id)
+                                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                              : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                                          }`}
+                                        >
+                                          <RefreshCw className={`w-3 h-3 ${retryingBatches.has(record.id) ? 'animate-spin' : ''}`} />
+                                          {retryingBatches.has(record.id) ? 'Retrying...' : 'Retry'}
+                                        </button>
+                                      )}
+                                      {/* Cancel — show only while items are still pending */}
+                                      {isProcessing && record.pending > 0 && (
+                                        <button
+                                          disabled={cancellingBatches.has(record.id)}
+                                          onClick={(e) => handleCancelBatch(record.id, record.pending, e)}
+                                          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
+                                            cancellingBatches.has(record.id)
+                                              ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                              : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
+                                          }`}
+                                        >
+                                          <X className="w-3 h-3" />
+                                          {cancellingBatches.has(record.id) ? 'Cancelling...' : `Cancel Batch (${record.pending} pending)`}
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+
                                   {/* Individual File Statuses */}
                                   {record.statuses && record.statuses.length > 0 && (() => {
                                     const filteredStatuses = uploadHistoryFilter
@@ -3446,6 +3556,12 @@ export default function MyResumesPage() {
                                           </span>
                                         </div>
                                       </div>
+                                      {/* Short note: cancel only for queued items */}
+                                      {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error') && (
+                                        <p className="text-[10px] text-gray-400 mb-2">
+                                          ℹ️ Retry is available for queued &amp; failed files. Cancel is only available for queued files.
+                                        </p>
+                                      )}
                                       <div className="space-y-1.5 max-h-64 overflow-y-auto">
                                         {filteredStatuses.map((file: any, idx: number) => {
                                           const isClickable = ['completed', 'versioned', 'duplicate', 'error'].includes(file.status);
@@ -3553,6 +3669,29 @@ export default function MyResumesPage() {
                                                file.status === 'error' ? '✗ Failed' :
                                                '⏳ Queued'}
                                             </span>
+                                            {/* Per-item Retry / Cancel */}
+                                            {file.id && (file.status === 'pending' || file.status === 'error') && (
+                                              <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                                                <button
+                                                  disabled={retryingItems.has(file.id)}
+                                                  onClick={(e) => handleRetryItem(record.id, file.id, e)}
+                                                  className={`p-1 rounded text-[10px] font-medium transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:bg-blue-50'}`}
+                                                  title="Retry this file"
+                                                >
+                                                  <RefreshCw className={`w-3 h-3 ${retryingItems.has(file.id) ? 'animate-spin' : ''}`} />
+                                                </button>
+                                                {file.status === 'pending' && (
+                                                  <button
+                                                    disabled={cancellingItems.has(file.id)}
+                                                    onClick={(e) => handleCancelItem(record.id, file.id, e)}
+                                                    className={`p-1 rounded text-[10px] font-medium transition-colors ${cancellingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-red-500 hover:bg-red-50'}`}
+                                                    title="Cancel this file (queued only)"
+                                                  >
+                                                    <X className="w-3 h-3" />
+                                                  </button>
+                                                )}
+                                              </div>
+                                            )}
                                           </div>
                                         );
                                         })}

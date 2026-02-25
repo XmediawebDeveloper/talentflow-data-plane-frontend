@@ -215,10 +215,7 @@ export async function middleware(request: NextRequest) {
   // granted access based on their explicitly assigned permissions.
 
   // If logged in and trying to access auth pages, redirect to dashboard.
-  // EXCEPTION: if 'must-reset-pwd' cookie is set the user closed the tab during
-  // the forced-password-reset flow — let them back to /login so they can finish.
-  const mustResetPwd = request.cookies.get('must-reset-pwd')?.value;
-  if (token && !mustResetPwd && (pathname === '/login' || pathname === '/signup')) {
+  if (token && (pathname === '/login' || pathname === '/signup')) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';
     return NextResponse.redirect(url);
