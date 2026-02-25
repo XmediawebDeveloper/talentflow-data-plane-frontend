@@ -1371,7 +1371,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <div className="flex items-center justify-center gap-2">
                           {candidate.status !== 'Pending' && (
                           <button
-                            onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}`)}
+                            onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                             title="View Details"
                           >

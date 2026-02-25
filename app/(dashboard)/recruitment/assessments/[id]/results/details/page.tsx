@@ -13,8 +13,11 @@ function DetailsContent() {
 
   const assessmentId = params.id as string;
   const candidateId = searchParams.get('candidate_id');
+  // cid = human-readable candidate display ID (e.g. CID-05), passed by the results list
+  const candidateDisplayId = searchParams.get('cid') || '';
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
+  const [assessmentShortId, setAssessmentShortId] = useState<string>('');
   const [jdTitle, setJdTitle] = useState<string>('');
   const [jdId, setJdId] = useState<string>('');
   const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
@@ -27,8 +30,10 @@ function DetailsContent() {
         const response = await assessmentService.get(assessmentId);
         if (response) {
           setAssessmentTitle(response.title);
+          setAssessmentShortId(response.short_id || '');
           setJdTitle(response.jd_title || '');
-          setJdId(response.jd_id || '');
+          // Use jd_short_id (e.g. "JD-014") if available, else fall back to raw jd_id
+          setJdId(response.jd_short_id || (response.jd_id ? `JD-${response.jd_id}` : ''));
           setAssessmentVersion(response.version ?? null);
         } else {
           setError('Assessment not found');
@@ -91,7 +96,9 @@ function DetailsContent() {
     <CandidateResultDetails
       onBack={handleBack}
       assessmentId={assessmentId}
+      assessmentShortId={assessmentShortId}
       candidateId={candidateId}
+      candidateDisplayId={candidateDisplayId}
       assessmentTitle={assessmentTitle}
       jdTitle={jdTitle}
       jdId={jdId}

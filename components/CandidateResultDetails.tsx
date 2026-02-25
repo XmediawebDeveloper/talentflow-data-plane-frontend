@@ -9,7 +9,9 @@ import { toast } from 'sonner';
 interface CandidateResultDetailsProps {
   onBack: () => void;
   assessmentId: string;
+  assessmentShortId?: string;
   candidateId: string;
+  candidateDisplayId?: string;
   assessmentTitle: string;
   jdTitle?: string;
   jdId?: string;
@@ -35,7 +37,9 @@ interface CandidateBasicInfo {
 export default function CandidateResultDetails({
   onBack,
   assessmentId,
+  assessmentShortId,
   candidateId,
+  candidateDisplayId,
   assessmentTitle,
   jdTitle,
   jdId,
@@ -325,7 +329,9 @@ export default function CandidateResultDetails({
               <div className="min-w-0">
                 <h1 className="text-sm sm:text-base md:text-lg text-gray-900 mb-0.5 sm:mb-1 truncate">{candidateData?.name || 'Unknown'}</h1>
                 <p className="text-xs sm:text-sm text-gray-600 truncate">{candidateData?.email}</p>
-                <p className="text-xs text-gray-400 mt-0.5 truncate">CID-{candidateId}</p>
+                <span className="inline-flex items-center px-2 py-0.5 bg-purple-50 text-purple-700 rounded text-xs font-mono font-medium mt-0.5">
+                  {candidateDisplayId || detailedResult?.candidate_display_id || `CID-${candidateId}`}
+                </span>
               </div>
             </div>
             <div className="flex items-center gap-3 self-start sm:self-auto">
@@ -388,9 +394,9 @@ export default function CandidateResultDetails({
               </div>
               <div className="min-w-0">
                 <div className="text-xs sm:text-sm text-gray-600">JD ID</div>
-                <div className="text-sm sm:text-base text-gray-900 truncate">
-                  {jdId ? `JD-${jdId}` : 'N/A'}
-                </div>
+                <span className="inline-flex items-center px-2.5 py-1 bg-gray-800 text-white rounded text-xs font-semibold font-mono">
+                  {jdId || 'N/A'}
+                </span>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -399,7 +405,9 @@ export default function CandidateResultDetails({
               </div>
               <div className="min-w-0">
                 <div className="text-xs sm:text-sm text-gray-600">Assessment ID</div>
-                <div className="text-sm sm:text-base text-gray-900 truncate">AS-{assessmentId}</div>
+                <span className="inline-flex items-center px-2.5 py-1 bg-gray-800 text-white rounded text-xs font-semibold font-mono">
+                  {assessmentShortId || `AS-${assessmentId}`}
+                </span>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -507,8 +515,17 @@ export default function CandidateResultDetails({
                 q => q.round_type === roundType
               ) ?? [];
               const totalQ = questionsForRound.length;
+              // A question is "Submitted" only if status indicates answered/scored AND
+              // the candidate actually provided answer content. When the backend scores an
+              // unanswered question it sets status='scored' with 0 points — we must NOT
+              // count those as Submitted.
+              const hasActualAnswer = (q: QuestionEvaluation) => {
+                if (q.question_type === 'coding') return !!q.candidate_code_submission?.trim();
+                if (q.candidate_selected_options && q.candidate_selected_options.length > 0) return true;
+                return !!q.candidate_answer_text?.trim();
+              };
               const submittedQ = questionsForRound.filter(q =>
-                q.question_status === 'answered' || q.question_status === 'scored'
+                (q.question_status === 'answered' || q.question_status === 'scored') && hasActualAnswer(q)
               ).length;
               const skippedQ = questionsForRound.filter(q =>
                 q.question_status === 'skipped'

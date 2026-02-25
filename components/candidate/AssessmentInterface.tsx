@@ -208,9 +208,6 @@ export function AssessmentInterface({
     const initTimeout = setTimeout(() => {
       setIsInitialized(true);
       console.log('[TIMER] Component initialized, auto-complete protection disabled');
-
-      // 1️⃣ Force Fullscreen on Assessment Start
-      enterFullscreen();
     }, 1500); // 1.5 second grace period
 
     return () => clearTimeout(initTimeout);
@@ -413,26 +410,6 @@ export function AssessmentInterface({
     }
   }, [isOnline, queueSize, processQueue]);
 
-  // 🛡️ PROCTORING: Force Fullscreen on Start
-  const enterFullscreen = async () => {
-    try {
-      // Only enter fullscreen if not already in fullscreen
-      if (!document.fullscreenElement) {
-        const el = document.documentElement;
-        if (el.requestFullscreen) {
-          await el.requestFullscreen();
-          console.log('[PROCTORING] ✅ Entered fullscreen mode');
-        } else {
-          console.warn('[PROCTORING] ⚠️ Fullscreen API not supported');
-        }
-      } else {
-        console.log('[PROCTORING] Already in fullscreen mode');
-      }
-    } catch (error) {
-      console.error('[PROCTORING] ❌ Failed to enter fullscreen:', error);
-    }
-  };
-
   // 🛡️ PROCTORING: Exit Fullscreen on Complete
   const exitFullscreen = async () => {
     try {
@@ -477,12 +454,17 @@ export function AssessmentInterface({
 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      // Exit fullscreen on unmount
+    };
+  }, [token, isDisqualified, showCompleteConfirm]);
+
+  // Exit fullscreen only on unmount (separate effect so it doesn't run on every re-render)
+  useEffect(() => {
+    return () => {
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
     };
-  }, [token, isDisqualified, showCompleteConfirm, answer, currentQuestion, onAnswerSubmit, onComplete]);
+  }, []);
 
   // SECURITY: Block developer tools shortcuts (F12, Ctrl+Shift+I)
   // NOTE: ESC and Alt+Tab are NO LONGER blocked here to prevent false positives
