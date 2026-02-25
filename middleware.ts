@@ -45,13 +45,23 @@ export async function middleware(request: NextRequest) {
   // Skip subdomain extraction for raw IPv4 addresses (e.g. 192.168.1.100) —
   // their dot-separated octets would otherwise be mistaken for subdomains.
   const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
-  if (!isIPAddress && hostParts.length >= 3 && !['www', 'app'].includes(hostParts[0])) {
+  // Only treat as a real subdomain if the host is actually on the base domain.
+  // e.g. stgdata.talentflow.mo.vc is NOT a subdomain of 0sms.com.
+  const isOnBaseDomain = hostname === BASE_DOMAIN || hostname.endsWith(`.${BASE_DOMAIN}`);
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || isIPAddress;
+  if (!isIPAddress && isOnBaseDomain && hostParts.length >= 3 && !['www', 'app'].includes(hostParts[0])) {
     tenantSubdomain = hostParts[0];
     isRealSubdomain = true;
   }
   // Local dev fallback: localhost:3000?org=acme (skip DB validation)
   if (!tenantSubdomain) {
     tenantSubdomain = request.nextUrl.searchParams.get('org');
+  }
+
+  // Permanent fix: any request on a non-base-domain, non-localhost host
+  // (e.g. stgdata.talentflow.mo.vc) redirects to the main site unconditionally.
+  if (!isOnBaseDomain && !isLocalhost) {
+    return NextResponse.redirect(`https://${BASE_DOMAIN}`);
   }
   // --- End subdomain extraction ---
 

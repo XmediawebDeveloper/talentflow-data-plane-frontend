@@ -22,47 +22,35 @@ import { IdentityVerificationScreen } from './IdentityVerificationScreen';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
 import { useProctoringMonitor } from '@/hooks/useProctoringMonitor';
 import { ProctoringWarningModal } from './ProctoringWarningModal';
-import { Monitor, Loader2, AlertCircle } from 'lucide-react';
+import { Monitor, Loader2, AlertCircle, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getUserMedia, getErrorMessage, detectBrowser } from '@/lib/utils/browserCompat';
+import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 
 // ============================================
-// FULLSCREEN PROMPT SCREEN COMPONENT - COMMENTED OUT (NOT NEEDED)
+// FULLSCREEN PROMPT SCREEN COMPONENT
+// The button click here is the user gesture that allows requestFullscreen().
+// Calling requestFullscreen() from an async callback chain (e.g. system check
+// complete) loses the user gesture context and browsers deny the request.
 // ============================================
 
-// DISABLED: Fullscreen requirement removed - assessments run in normal mode now
-/*
 interface FullscreenPromptScreenProps {
   onFullscreenReady: () => void;
 }
 
 function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenProps) {
   const [isEnteringFullscreen, setIsEnteringFullscreen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
+  // This handler is directly attached to a button onClick — guaranteed user gesture context.
   const enterFullscreenAndStart = async () => {
     setIsEnteringFullscreen(true);
-    setError(null);
-
     try {
-      if (!document.fullscreenElement) {
-        // Request fullscreen — navigationUI option omitted for broad browser compatibility
-        try {
-          await document.documentElement.requestFullscreen();
-          await new Promise(resolve => setTimeout(resolve, 300));
-          console.log('[FULLSCREEN] Entered fullscreen mode');
-        } catch (fsErr) {
-          // Permissions check failed (iframe, browser policy, etc.) — proceed without fullscreen
-          console.warn('[FULLSCREEN] Could not enter fullscreen, proceeding anyway:', fsErr);
-        }
-      }
-      // Start the assessment regardless of fullscreen outcome
-      onFullscreenReady();
-    } catch (err) {
-      console.error('[FULLSCREEN] Unexpected error:', err);
-      // Still start — fullscreen is best-effort
-      onFullscreenReady();
+      await requestFullscreen();
+      console.log('[FULLSCREEN] Entered fullscreen mode');
+    } catch (fsErr) {
+      // Proceed even if fullscreen is denied (iframe, browser policy, etc.)
+      console.warn('[FULLSCREEN] Could not enter fullscreen, proceeding anyway:', fsErr);
     }
+    onFullscreenReady();
   };
 
   return (
@@ -82,33 +70,22 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
         </p>
 
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8">
-          <p className="font-semibold text-blue-900 mb-3">Fullscreen Assessment Benefits:</p>
+          <p className="font-semibold text-blue-900 mb-3">Fullscreen Assessment Rules:</p>
           <ul className="space-y-2 text-blue-800">
             <li className="flex items-start gap-2">
               <span className="text-blue-600 mt-1">✓</span>
-              <span>Hides browser tabs & navigation (like F11)</span>
+              <span>Browser tabs &amp; navigation will be hidden</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-blue-600 mt-1">✓</span>
-              <span>Full-screen immersive experience</span>
+              <span>Exiting fullscreen will be recorded as a violation</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-blue-600 mt-1">✓</span>
-              <span>Eliminates external distractions</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-blue-600 mt-1">✓</span>
-              <span>Provides fair testing environment</span>
+              <span>Keep the window focused throughout the assessment</span>
             </li>
           </ul>
         </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-red-800">{error}</p>
-          </div>
-        )}
 
         <Button
           onClick={enterFullscreenAndStart}
@@ -122,21 +99,15 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
             </>
           ) : (
             <>
-              <Monitor className="w-6 h-6 mr-3" />
-              Enter Fullscreen & Start Assessment
+              <Maximize2 className="w-6 h-6 mr-3" />
+              Enter Fullscreen &amp; Start Assessment
             </>
           )}
         </Button>
-
-        <p className="text-sm text-gray-500 mt-6 text-center">
-          Fullscreen mode will remain active during the assessment. Exiting fullscreen will be tracked as a violation.
-          After 3 violations, your assessment will be auto-submitted.
-        </p>
       </div>
     </div>
   );
 }
-*/
 
 type AssessmentStep =
   | 'loading'
@@ -145,7 +116,7 @@ type AssessmentStep =
   | 'landing'
   | 'consent'
   | 'system_check'
-  // | 'fullscreen_prompt'  // DISABLED: Fullscreen requirement removed
+  | 'fullscreen_prompt'
   | 'generating_questions'
   | 'assessment'
   | 'completing'
@@ -222,6 +193,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
   // Fullscreen state for pre-assessment fullscreen prompt
   const [isReadyToStart, setIsReadyToStart] = useState(false);
+
+  // Fullscreen enforcement — tracks whether assessment is running in fullscreen
+  const [isFullscreenActive, setIsFullscreenActive] = useState(false);
 
   useRefreshPrevention({
     enabled: isAssessmentActive,
@@ -306,6 +280,30 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     };
   }, [step]);
 
+  // Fullscreen enforcement — listen on ALL steps so entering fullscreen
+  // during 'fullscreen_prompt' is captured before assessment step starts.
+  useEffect(() => {
+    const eventName = getFullscreenChangeEvent();
+    const handleFullscreenChange = () => {
+      setIsFullscreenActive(isFullscreen());
+    };
+
+    // When assessment starts, sync the current state immediately
+    if (step === 'assessment') {
+      setIsFullscreenActive(isFullscreen());
+    }
+
+    document.addEventListener(eventName, handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener(eventName, handleFullscreenChange);
+      // Exit fullscreen when leaving assessment step
+      if (step === 'assessment' && isFullscreen()) {
+        exitFullscreen().catch(() => {});
+      }
+    };
+  }, [step]);
+
   // ============================================
   // LOAD ASSESSMENT INFO - WITH MULTIPLE GUARDS
   // ============================================
@@ -328,6 +326,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     const activeFlowSteps: AssessmentStep[] = [
       // 'identity_verification',  // DISABLED: Identity verification removed
       'system_check',
+      'fullscreen_prompt',
       'generating_questions',
       'assessment',
       'completing',
@@ -562,11 +561,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       }
     }
 
-    // DISABLED: Fullscreen requirement removed - start assessment directly
-    console.log('[PORTAL] System check complete, starting assessment directly (no fullscreen)...');
+    console.log('[PORTAL] System check complete, showing fullscreen prompt...');
     setIsReadyToStart(true);
-    // Directly call the start handler instead of showing fullscreen prompt
-    handleFullscreenReady();
+    setStepSafe('fullscreen_prompt');
   };
 
   // NEW: Handler for when user enters fullscreen and is ready to start
@@ -1038,9 +1035,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         />
       );
 
-    // DISABLED: Fullscreen prompt removed - assessments run in normal mode
-    // case 'fullscreen_prompt':
-    //   return <FullscreenPromptScreen onFullscreenReady={handleFullscreenReady} />;
+    case 'fullscreen_prompt':
+      return <FullscreenPromptScreen onFullscreenReady={handleFullscreenReady} />;
 
     case 'generating_questions':
       return (
@@ -1111,6 +1107,31 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   return (
     <>
       {renderContent()}
+      {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
+      {step === 'assessment' && !isFullscreenActive && (
+        <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm">
+          <div className="bg-white border-2 border-yellow-500 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
+            <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
+            <p className="text-gray-600 mb-6">
+              Please return to fullscreen mode to continue your assessment.
+            </p>
+            <button
+              onClick={() => {
+                const el = document.documentElement as any;
+                const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+                if (req) req.call(el).catch(() => {});
+              }}
+              className="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 rounded-xl font-bold text-white transition-colors w-full"
+            >
+              Return to Fullscreen
+            </button>
+            <p className="text-sm text-red-500 font-medium animate-pulse mt-4">
+              This event has been recorded
+            </p>
+          </div>
+        </div>
+      )}
       {/* Proctoring Warning Modal - self-contained, subscribes to ProctoringEventBus */}
       <ProctoringWarningModal />
     </>

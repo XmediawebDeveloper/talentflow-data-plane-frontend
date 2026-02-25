@@ -41,7 +41,9 @@ export interface AssessmentUpdate {
 export interface AssessmentResponse {
   id: string;
   tenant_id: string;
+  short_id?: string;     // Human-readable assessment ID like AS-022
   jd_id: string;
+  jd_short_id?: string;  // Human-readable JD ID like JD-014
   jd_title: string;
   created_by: string;
   created_by_name?: string;
@@ -193,6 +195,7 @@ export interface ProctoringStats {
 export interface DetailedResultResponse {
   id: string;
   assessment_id: string;
+  candidate_display_id?: string;  // Human-readable candidate ID like CID-001
   candidate_name: string;
   candidate_email: string;
   candidate_phone?: string;
