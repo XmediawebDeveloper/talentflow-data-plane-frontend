@@ -41,13 +41,17 @@ export async function middleware(request: NextRequest) {
   let tenantSubdomain: string | null = null;
   let isRealSubdomain = false; // true = from actual hostname (not ?org= dev param)
 
-  // Real subdomain: acme.0sms.com → ['acme', '0sms', 'com']
-  // Skip subdomain extraction for raw IPv4 addresses (e.g. 192.168.1.100) —
-  // their dot-separated octets would otherwise be mistaken for subdomains.
+  // Real subdomain: acme.talentflow.data.mo.vc → tenantSubdomain = 'acme'
+  // The BASE_DOMAIN itself (e.g. talentflow.data.mo.vc) must NOT be treated as having
+  // a subdomain — without this check, "talentflow" would be extracted and fail validation.
+  // Skip subdomain extraction for raw IPv4 addresses (e.g. 192.168.1.100).
   const isIPAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname);
-  if (!isIPAddress && hostParts.length >= 3 && !['www', 'app'].includes(hostParts[0])) {
-    tenantSubdomain = hostParts[0];
-    isRealSubdomain = true;
+  if (!isIPAddress && hostname !== BASE_DOMAIN && hostname.endsWith(`.${BASE_DOMAIN}`)) {
+    const candidateSubdomain = hostname.slice(0, hostname.length - BASE_DOMAIN.length - 1);
+    if (!['www', 'app'].includes(candidateSubdomain)) {
+      tenantSubdomain = candidateSubdomain;
+      isRealSubdomain = true;
+    }
   }
   // Local dev fallback: localhost:3000?org=acme (skip DB validation)
   if (!tenantSubdomain) {

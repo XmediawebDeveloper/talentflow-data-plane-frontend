@@ -230,7 +230,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   // Save AI message
   const saveAiMessage = useCallback(() => {
-    const text = currentAiTextRef.current.trim();
+    // Use currentAiTextRef first; fall back to full tokenBuffer if reveal timer
+    // stopped early (e.g. LLM continued streaming after the timer caught up)
+    const text = (currentAiTextRef.current || tokenBufferRef.current).trim();
     if (text) {
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
@@ -238,6 +240,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         content: text
       }]);
       currentAiTextRef.current = "";
+      tokenBufferRef.current = "";
+      revealedCharsRef.current = 0;
       setCurrentAiText("");
     }
   }, []);
@@ -433,6 +437,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         break;
       case "llm_token":
         tokenBufferRef.current += data.token;
+        // Restart reveal timer if it stopped (caught up) but more tokens arrived
+        if (!revealTimerRef.current && isAiSpeakingRef.current) {
+          startRevealingTokens();
+        }
         if (!isPlayingRef.current && !isAiSpeakingRef.current) {
           setStatus("Linda is thinking...");
         }
@@ -1051,47 +1059,119 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         </div>
 
         {/* Center: Chat */}
-        <div className="flex-1 flex flex-col">
-          <div className="flex-1 overflow-auto p-4 space-y-4">
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Chat header */}
+          <div className="px-4 py-2 border-b border-gray-700/60 flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs text-gray-400 font-medium">Live Conversation</span>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5"
+            style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}>
+
+            {messages.length === 0 && !currentAiText && (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-600 text-sm">Conversation will appear here...</p>
+              </div>
+            )}
+
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${
-                  msg.role === "system" ? "justify-center" :
-                  msg.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
-                <div
-                  className={`max-w-[70%] p-4 rounded-2xl ${
-                    msg.role === "system"
-                      ? "bg-yellow-600/20 border border-yellow-600 rounded-md"
-                      : msg.role === "user"
-                      ? "bg-blue-600 rounded-br-md"
-                      : "bg-gray-700 rounded-bl-md"
-                  }`}
-                >
-                  <p className="text-xs text-gray-300 mb-1 font-medium">
-                    {msg.role === "system" ? "System" : msg.role === "user" ? "You" : "Linda"}
-                  </p>
-                  <p className="text-sm leading-relaxed">{msg.content}</p>
-                </div>
+              <div key={msg.id}>
+                {msg.role === "system" ? (
+                  /* System message — centered pill */
+                  <div className="flex justify-center">
+                    <div className="flex items-center gap-2 px-4 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      <p className="text-xs text-amber-300 font-medium">{msg.content}</p>
+                    </div>
+                  </div>
+                ) : msg.role === "user" ? (
+                  /* User message — right aligned */
+                  <div className="flex justify-end items-end gap-2">
+                    <div className="max-w-[72%]">
+                      <p className="text-xs text-gray-500 mb-1 text-right font-medium">You</p>
+                      <div className="bg-blue-600 rounded-2xl rounded-br-sm px-4 py-3 shadow-lg shadow-blue-900/20">
+                        <p className="text-sm leading-relaxed text-white">{msg.content}</p>
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-blue-700 flex items-center justify-center flex-shrink-0 mb-0.5">
+                      <span className="text-xs font-bold text-white">Y</span>
+                    </div>
+                  </div>
+                ) : (
+                  /* AI message — left aligned */
+                  <div className="flex items-end gap-2">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mb-0.5 shadow-md">
+                      <span className="text-xs font-bold text-white">L</span>
+                    </div>
+                    <div className="max-w-[72%]">
+                      <p className="text-xs text-gray-500 mb-1 font-medium">Linda</p>
+                      <div className="bg-gray-700/80 border border-gray-600/50 rounded-2xl rounded-bl-sm px-4 py-3 shadow-lg">
+                        <p className="text-sm leading-relaxed text-gray-100">{msg.content}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
 
+            {/* Live user speech */}
             {currentTranscript && (
-              <div className="flex justify-end">
-                <div className="max-w-[70%] p-4 rounded-2xl bg-blue-600/50 rounded-br-md border border-blue-500">
-                  <p className="text-xs text-gray-300 mb-1">You (speaking...)</p>
-                  <p className="text-sm">{currentTranscript}</p>
+              <div className="flex justify-end items-end gap-2">
+                <div className="max-w-[72%]">
+                  <p className="text-xs text-gray-500 mb-1 text-right font-medium">You</p>
+                  <div className="bg-blue-600/40 border border-blue-500/50 rounded-2xl rounded-br-sm px-4 py-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                      <span className="text-xs text-red-300">speaking...</span>
+                    </div>
+                    <p className="text-sm text-gray-200 italic">{currentTranscript}</p>
+                  </div>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-blue-700/50 border border-blue-600 flex items-center justify-center flex-shrink-0 mb-0.5">
+                  <span className="text-xs font-bold text-white">Y</span>
                 </div>
               </div>
             )}
 
+            {/* Live AI response */}
             {currentAiText && (
-              <div className="flex justify-start">
-                <div className="max-w-[70%] p-4 rounded-2xl bg-gray-700/50 rounded-bl-md border border-gray-600">
-                  <p className="text-xs text-gray-300 mb-1">Linda (responding...)</p>
-                  <p className="text-sm">{currentAiText}</p>
+              <div className="flex items-end gap-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mb-0.5 shadow-md">
+                  <span className="text-xs font-bold text-white">L</span>
+                </div>
+                <div className="max-w-[72%]">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <p className="text-xs text-gray-500 font-medium">Linda</p>
+                    <div className="flex items-center gap-0.5">
+                      <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                  <div className="bg-gray-700/80 border border-violet-500/30 rounded-2xl rounded-bl-sm px-4 py-3 shadow-lg shadow-violet-900/10">
+                    <p className="text-sm leading-relaxed text-gray-100">{currentAiText}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Processing dots — AI is thinking but no text yet */}
+            {isProcessing && !currentAiText && (
+              <div className="flex items-end gap-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                  <span className="text-xs font-bold text-white">L</span>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-1 font-medium">Linda</p>
+                  <div className="bg-gray-700/80 border border-gray-600/50 rounded-2xl rounded-bl-sm px-5 py-4">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1100,13 +1180,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
           </div>
 
           {/* Status Bar */}
-          <div className="p-4 border-t border-gray-700">
-            <div className={`text-center text-sm font-medium ${
-              isRecording ? 'text-red-400' :
-              isAiSpeaking ? 'text-blue-400' :
-              isProcessing ? 'text-yellow-400' : 'text-gray-400'
-            }`}>
-              {status}
+          <div className="px-4 py-2.5 border-t border-gray-700/60 bg-gray-900/40">
+            <div className="flex items-center justify-center gap-2">
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                isRecording ? 'bg-red-500 animate-pulse' :
+                isAiSpeaking ? 'bg-blue-400 animate-pulse' :
+                isProcessing ? 'bg-yellow-400 animate-pulse' : 'bg-gray-600'
+              }`} />
+              <span className={`text-xs font-medium ${
+                isRecording ? 'text-red-400' :
+                isAiSpeaking ? 'text-blue-400' :
+                isProcessing ? 'text-yellow-400' : 'text-gray-500'
+              }`}>
+                {status}
+              </span>
             </div>
           </div>
         </div>

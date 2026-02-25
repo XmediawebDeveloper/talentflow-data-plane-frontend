@@ -378,7 +378,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
               <Video className="w-5 h-5 text-gray-500" />
               <h2 className="font-semibold text-gray-900">Video Preview</h2>
             </div>
-            <div className="relative bg-gray-900 rounded-lg overflow-hidden" style={{ aspectRatio: '16/9' }}>
+            <div className="flex justify-start">
+            <div className="relative bg-gray-900 rounded-lg overflow-hidden w-64" style={{ aspectRatio: '4/3' }}>
               <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
               {cameraStatus === 'checking' && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -403,6 +404,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                   <p className="text-gray-500 text-sm">Camera Preview</p>
                 </div>
               )}
+            </div>
             </div>
           </div>
 
