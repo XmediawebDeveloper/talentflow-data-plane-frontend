@@ -45,6 +45,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const [duration, setDuration] = useState(0);
   const shouldDisconnectAfterAudioRef = useRef(false);
 
+  // WebSocket keepalive / reconnect refs
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const isUnmountedRef = useRef(false);
+  const connectRef = useRef<() => void>(() => {});
+
   // Countdown timer
   const [remainingSeconds, setRemainingSeconds] = useState(interviewInfo.duration_minutes * 60);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -101,6 +107,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   // Proctoring (decoupled — no warning state here)
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  // Stable callback so Webcam's second effect doesn't re-fire on every render
+  const handleStream = useCallback((stream: MediaStream) => {
+    setWebcamStream(stream);
+  }, []);
   const reportProctorEvent = useCallback(async (t: string, event: any) => {
     return candidateAIInterviewService.reportProctorEvent(t, event);
   }, []);
@@ -157,6 +167,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     onGazeAway: handleGazeAway,
   });
 
+  // Stable video-ready callback: use the stable setVideoElement methods from each hook
+  // (both are useCallback([], []) — same ref across renders) so handleVideoReady
+  // won't change on every render and won't cause Webcam's second effect to re-fire.
   const handleVideoReady = useCallback((video: HTMLVideoElement) => {
     handDetection.setVideoElement(video);
     faceDetection.setVideoElement(video);
@@ -193,11 +206,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         }
       }
     }
-  }, [handDetection, faceDetection]);
+  }, [handDetection.setVideoElement, faceDetection.setVideoElement]);
 
   // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
   const talkingHeadRef   = useRef<TalkingHeadHandle>(null);
   const thStreamActive   = useRef(false); // guard against double streamStart
+
+  // Real-time amplitude → viseme lip sync
+  const analyserRef      = useRef<AnalyserNode | null>(null);
+  const amplitudeDataRef = useRef<Uint8Array | null>(null);
+  const visemeRafRef     = useRef<number | null>(null);
 
   // Refs
   const wsRef = useRef<WebSocket | null>(null);
@@ -334,6 +352,77 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     }
   }, []);
 
+  // ── Real-time viseme loop ────────────────────────────────────────────────────
+  // Driven by a Web Audio AnalyserNode tapped into the playback graph.
+  // Runs every animation frame while AI audio is playing, reads RMS amplitude,
+  // maps it to an Oculus viseme, and pushes it directly to head.animQueue at
+  // the current head.animClock (no scheduling or timing calculations needed).
+
+  const stopVisemeLoop = useCallback(() => {
+    if (visemeRafRef.current !== null) {
+      cancelAnimationFrame(visemeRafRef.current);
+      visemeRafRef.current = null;
+    }
+  }, []);
+
+  const startVisemeLoop = useCallback(() => {
+    stopVisemeLoop(); // cancel any existing loop first
+
+    const analyser = analyserRef.current;
+    const data     = amplitudeDataRef.current;
+    if (!analyser || !data) {
+      console.warn("[Lipsync] AnalyserNode not ready — skipping viseme loop");
+      return;
+    }
+
+    const loop = () => {
+      if (!isPlayingRef.current) {
+        visemeRafRef.current = null;
+        return;
+      }
+
+      // Read time-domain waveform: 256 values, 0–255, centre = 128 (silence)
+      analyser.getByteTimeDomainData(data);
+
+      // Compute RMS amplitude normalised to 0.0–1.0
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms       = Math.sqrt(sum / data.length);
+      const amplitude = Math.min(rms * 8, 1.0); // ×8 scale: typical speech RMS ~0.05–0.15
+
+      if (amplitude >= 0.05) {
+        // Map amplitude → Oculus viseme + influence value
+        let viseme: string;
+        let value: number;
+
+        if (amplitude < 0.25) {
+          // Low amplitude — barely open (bilabial / P-B-M sound region)
+          viseme = "viseme_PP";
+          value  = amplitude * 3.5;                       // 0.175 → 0.875
+        } else if (amplitude < 0.55) {
+          // Mid amplitude — open vowel (A sound region)
+          viseme = "viseme_aa";
+          value  = 0.4 + (amplitude - 0.25) * 1.5;       // 0.4 → 0.85
+        } else {
+          // High amplitude — wide open (O sound region)
+          viseme = "viseme_O";
+          value  = 0.7 + (amplitude - 0.55) * 0.55;      // 0.7 → 0.95
+        }
+
+        talkingHeadRef.current?.applyVisemeLive(viseme, Math.min(value, 0.95));
+      }
+      // Below threshold: don't push anything — TalkingHead naturally decays to idle
+
+      visemeRafRef.current = requestAnimationFrame(loop);
+    };
+
+    visemeRafRef.current = requestAnimationFrame(loop);
+    console.log("[Lipsync] Viseme loop started");
+  }, [stopVisemeLoop]);
+
   // ── Gapless scheduled audio playback ────────────────────────────────────────
   // Instead of onended → playNextBuffer (which has JS-event-loop gaps = clicks),
   // each buffer is scheduled on the Web Audio clock so it starts exactly where
@@ -342,6 +431,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   // playback is complete and it's time to start recording.
 
   const handleAllAudioFinished = useCallback(() => {
+    stopVisemeLoop(); // stop mouth animation when audio ends
     isPlayingRef.current = false;
     if (audioEndReceivedRef.current) {
       setIsAiSpeaking(false);
@@ -359,12 +449,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         }
       }, 400);
     }
-  }, [saveAiMessage, avatarState]);
+  }, [saveAiMessage, avatarState, stopVisemeLoop]);
 
   const queueAudio = useCallback((pcmData: ArrayBuffer) => {
     if (!audioContextRef.current || audioContextRef.current.state === "closed") {
       try {
         audioContextRef.current = new AudioContext();
+        // Reset analyser so it's recreated against the new AudioContext
+        analyserRef.current = null;
+        amplitudeDataRef.current = null;
       } catch (err) {
         console.error('[InterviewUI] Failed to create playback AudioContext:', err);
         return;
@@ -393,9 +486,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     const startTime = nextPlayTimeRef.current;
     nextPlayTimeRef.current += buffer.duration; // schedule end-to-end with zero gap
 
+    // ── Create AnalyserNode once per AudioContext ────────────────────────────
+    // All sources route through the analyser so amplitude can be read every
+    // animation frame to drive real-time viseme lip sync.
+    if (!analyserRef.current) {
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;           // 256 time-domain samples per read
+      analyser.smoothingTimeConstant = 0.6; // light smoothing for natural motion
+      analyser.connect(ctx.destination);
+      analyserRef.current = analyser;
+      amplitudeDataRef.current = new Uint8Array(analyser.fftSize);
+      console.log("[Lipsync] AnalyserNode created");
+    }
+
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(ctx.destination);
+    // Route: source → analyser → destination (speaker)
+    source.connect(analyserRef.current);
 
     pendingBuffersRef.current += 1;
     source.onended = () => {
@@ -412,14 +519,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       isPlayingRef.current = true;
       setIsAiSpeaking(true);
       avatarState.onAiStartSpeaking();
+      // ── Lip-sync: start real-time amplitude → viseme loop ───────────────────
+      // AnalyserNode reads what's actually playing → perfect audio/mouth sync.
+      startVisemeLoop();
+      // ────────────────────────────────────────────────────────────────────────
       if (!revealTimerRef.current && tokenBufferRef.current.length > 0) {
         startRevealingTokens();
       }
     }
 
-    // ── TalkingHead lip-sync ─────────────────────────────────────────────────
-    // Auto-start TalkingHead stream if not already started (covers the
-    // greeting case where there is no preceding speaking_started message).
+    // ── TalkingHead avatar state (speaking pose, hand gestures) ─────────────
+    // Auto-start TalkingHead stream so avatar enters speaking animation state.
+    // Audio is muted (gain:0) — actual playback is via the Web Audio API above.
     if (!thStreamActive.current && talkingHeadRef.current) {
       thStreamActive.current = true;
       talkingHeadRef.current.streamStart(24000, () => {});
@@ -435,11 +546,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       setReducedFrequency(false);
     }
     audioQueueRef.current.shift(); // immediate clear — scheduling already done
-  }, [handleAllAudioFinished, avatarState, startRevealingTokens, setReducedFrequency]);
+  }, [handleAllAudioFinished, avatarState, startRevealingTokens, setReducedFrequency, startVisemeLoop]);
 
   // WebSocket handlers
   const handleMessage = useCallback((data: any) => {
     switch (data.type) {
+      case "pong":
+        break; // Keepalive response — no action needed
+      case "viseme_timeline":
+        // Deprecated — lip sync is now driven by real-time amplitude analysis.
+        break;
       case "connected":
         if (data.vad_config) {
           silenceThresholdRef.current = data.vad_config.silence_threshold;
@@ -737,6 +853,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   }, [clearNoResponseTimer]);
 
   const disconnect = useCallback(() => {
+    stopVisemeLoop();
     stopRecording();
     clearNoResponseTimer();
     if (micPopupTimerRef.current) {
@@ -759,7 +876,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     nextPlayTimeRef.current = 0;
     audioEndReceivedRef.current = false;
     currentAiTextRef.current = "";
-  }, [stopRecording, clearNoResponseTimer]);
+  }, [stopRecording, clearNoResponseTimer, stopVisemeLoop]);
 
   // No-response handlers
   const handleMicPopupNo = useCallback(() => {
@@ -904,15 +1021,33 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     ws.onopen = () => {
       setIsConnected(true);
       setStatus("Connected - Linda is greeting you...");
+      reconnectAttemptsRef.current = 0;
+      // Keepalive ping every 25 s — prevents proxy/nginx from closing idle connections
+      if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = setInterval(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 25000);
     };
     ws.onclose = (event) => {
       setIsConnected(false);
+      if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (event.code === 1000 || shouldDisconnectAfterAudioRef.current) {
         setStatus("Interview completed. Thank you!");
         uploadRecording();
         onInterviewComplete?.();
-      } else {
-        setStatus("Disconnected");
+      } else if (event.code !== 1001 && !isUnmountedRef.current) {
+        // Unexpected disconnection — attempt auto-reconnect (max 3 times)
+        const attempt = ++reconnectAttemptsRef.current;
+        if (attempt <= 3) {
+          setStatus(`Connection lost. Reconnecting... (${attempt}/3)`);
+          setTimeout(() => {
+            if (!isUnmountedRef.current) connectRef.current();
+          }, 2000 * attempt);
+        } else {
+          setStatus("Connection failed. Please refresh the page.");
+        }
       }
       stopRecording();
     };
@@ -931,6 +1066,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     wsRef.current = ws;
   }, [token, onInterviewComplete, stopRecording, uploadRecording]);
 
+  // Keep connectRef pointing at the latest connect function so auto-reconnect works
+  useEffect(() => { connectRef.current = connect; }, [connect]);
+
   // Pre-acquire microphone permission on mount so the browser prompts early
   // (Webcam component only requests video; mic is otherwise deferred until after greeting)
   useEffect(() => {
@@ -946,10 +1084,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   // Auto-connect once on mount (refs keep handlers fresh without reconnecting)
   useEffect(() => {
+    isUnmountedRef.current = false;
     const timer = setTimeout(() => { connect(); }, 300);
     return () => {
+      isUnmountedRef.current = true;
       clearTimeout(timer);
-      wsRef.current?.close();
+      if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
+      // Use code 1001 (Going Away) on unmount so onclose doesn't trigger
+      // onInterviewComplete — only intentional interview completion uses code 1000.
+      wsRef.current?.close(1001, 'Component unmounted');
       // Clean up audio contexts on unmount
       try { audioContextRef.current?.close(); } catch {}
       audioContextRef.current = null;
@@ -1317,7 +1460,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
               ref={webcamRef}
               className="w-full aspect-video"
               onVideoReady={handleVideoReady}
-              onStream={(stream) => setWebcamStream(stream)}
+              onStream={handleStream}
               showHandIndicator={false}
               isHandRaised={handDetection.isHandRaised}
             />

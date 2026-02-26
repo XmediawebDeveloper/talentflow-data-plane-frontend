@@ -5,7 +5,8 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   serverExternalPackages: [
-    '@mediapipe/hands', '@mediapipe/camera_utils', '@mediapipe/drawing_utils',
+    '@mediapipe/hands', '@mediapipe/face_detection', '@mediapipe/face_mesh',
+    '@mediapipe/camera_utils', '@mediapipe/drawing_utils',
     'three', '@react-three/fiber', '@react-three/drei',
   ],
   reactStrictMode: false,

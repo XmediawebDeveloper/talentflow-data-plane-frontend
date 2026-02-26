@@ -60,6 +60,18 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
   const FRAMES_GAZE_AWAY = 3;
   const FRAMES_GAZE_RESTORED = 2;
 
+  // Load a CDN script tag (idempotent — skips if already loaded)
+  const loadScript = (src: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+      const s = document.createElement("script");
+      s.src = src;
+      s.crossOrigin = "anonymous";
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error(`Failed to load: ${src}`));
+      document.head.appendChild(s);
+    });
+
   const setVideoElement = useCallback((video: HTMLVideoElement | null) => {
     videoRef.current = video;
   }, []);
@@ -72,10 +84,14 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
 
     const initialize = async () => {
       try {
-        const { FaceDetection } = await import("@mediapipe/face_detection");
+        // Load from CDN — @mediapipe legacy packages break when webpack bundles them
+        await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js");
         if (!mounted) return;
 
-        const faceDetection = new FaceDetection({
+        const FaceDetectionClass = (window as any).FaceDetection;
+        if (!FaceDetectionClass) throw new Error("FaceDetection global not found after CDN load");
+
+        const faceDetection = new FaceDetectionClass({
           locateFile: (file: string) =>
             `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`,
         });
@@ -130,10 +146,13 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
         // Gaze tracking (FaceMesh)
         if (enableGazeTracking) {
           try {
-            const { FaceMesh } = await import("@mediapipe/face_mesh");
+            await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js");
             if (!mounted) return;
 
-            const faceMesh = new FaceMesh({
+            const FaceMeshClass = (window as any).FaceMesh;
+            if (!FaceMeshClass) throw new Error("FaceMesh global not found after CDN load");
+
+            const faceMesh = new FaceMeshClass({
               locateFile: (file: string) =>
                 `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`,
             });

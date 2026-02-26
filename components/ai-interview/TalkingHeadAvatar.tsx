@@ -3,17 +3,16 @@
 /**
  * TalkingHeadAvatar — wrapper around the TalkingHead library.
  *
- * Audio playback is handled externally (Web Audio API in InterviewUI).
- * This component receives the SAME PCM Int16 chunks and uses them
- * for visual lip-sync animation only (gain: 0 → silent internally).
+ * Audio playback is handled by InterviewUI via its own Web Audio API context.
+ * This component handles the 3D avatar rendering and lip-sync animation only.
  *
- * Avatar GLB requirements:
- *  - Mixamo-compatible rig (root bone named "Armature")
- *  - Oculus Viseme blend shapes (15 shapes) for lip sync
- *  - ARKit blend shapes (52 shapes) for expressions (optional but better)
- *
- * Get a compatible avatar from: avaturn.me (free, non-commercial)
- * Export as GLB → place at /public/avatar.glb
+ * Lip-sync strategy (real-time amplitude driven):
+ *  1. InterviewUI taps the playing audio through a Web Audio AnalyserNode.
+ *  2. Each animation frame it reads RMS amplitude → maps to an Oculus viseme.
+ *  3. It calls applyVisemeLive(visemeName, amplitude) on this handle.
+ *  4. applyVisemeLive pushes an animQueue entry stamped at head.animClock
+ *     (current time), so TalkingHead's own render loop picks it up immediately.
+ *     No AudioWorklet dependency, no timing calculations needed.
  */
 
 import React, {
@@ -24,18 +23,21 @@ import React, {
   useState,
 } from "react";
 
-// ── Public handle — used by InterviewUI to drive animation ───────────────────
 export interface TalkingHeadHandle {
-  /** Call before feeding audio chunks. sampleRate must match PCM stream (24000). */
   streamStart(sampleRate: number, onAudioEnd: () => void): void;
-  /** Feed a raw Int16 PCM ArrayBuffer chunk. */
   streamAudio(pcmData: ArrayBuffer): void;
-  /** Signal end of audio stream — avatar transitions back to idle. */
   streamStop(): void;
+  /**
+   * Apply a viseme to the avatar RIGHT NOW, driven by real-time amplitude.
+   * Call this every animation frame while AI audio is playing.
+   *
+   * @param visemeName  Oculus viseme blend shape name (e.g. "viseme_aa")
+   * @param amplitude   Normalised amplitude 0.0–1.0
+   */
+  applyVisemeLive(visemeName: string, amplitude: number): void;
 }
 
 interface Props {
-  /** Path to avatar GLB, e.g. "/avatar.glb" */
   avatarUrl: string;
   className?: string;
   style?: React.CSSProperties;
@@ -43,14 +45,13 @@ interface Props {
 
 export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
   function TalkingHeadAvatar({ avatarUrl, className, style }, ref) {
-    const containerRef   = useRef<HTMLDivElement>(null);
-    const headRef        = useRef<any>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const headRef      = useRef<any>(null);
     const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
 
-    // Stream state — managed inside the component so the handle stays stable
-    const streamReadyRef  = useRef(false);
-    const pendingRef      = useRef<ArrayBuffer[]>([]);
-    const onAudioEndRef   = useRef<(() => void) | null>(null);
+    const streamReadyRef = useRef(false);
+    const pendingRef     = useRef<ArrayBuffer[]>([]);
+    const onAudioEndRef  = useRef<(() => void) | null>(null);
 
     // ── Load TalkingHead avatar ──────────────────────────────────────────────
     useEffect(() => {
@@ -59,8 +60,6 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
       (async () => {
         try {
-          // Load from /public/talkinghead/ so import.meta.url resolves correctly
-          // (webpack bundles break TalkingHead's dynamic lipsync module loading)
           const { TalkingHead } = await import(
             /* webpackIgnore: true */ "/talkinghead/talkinghead.mjs"
           );
@@ -68,12 +67,11 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
           const head = new TalkingHead(containerRef.current!, {
             lipsyncModules: ["en"],
-            // ttsEndpoint intentionally omitted — we stream our own audio
           });
 
           await head.showAvatar({
             url: avatarUrl,
-            body: "F",        // Female avatar
+            body: "F",
             lipsyncLang: "en",
           });
 
@@ -96,11 +94,11 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
     // ── Imperative handle ────────────────────────────────────────────────────
     useImperativeHandle(ref, () => ({
-      streamStart(sampleRate: number, onAudioEnd: () => void) {
+
+      streamStart(_sampleRate: number, onAudioEnd: () => void) {
         const head = headRef.current;
         if (!head) return;
 
-        // Reset buffer for this new speaking turn
         streamReadyRef.current = false;
         pendingRef.current = [];
         onAudioEndRef.current = onAudioEnd;
@@ -108,36 +106,30 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         head
           .streamStart(
             {
-              sampleRate,
-              gain: 0,           // Mute TalkingHead — Web Audio API handles playback
+              gain: 0,              // Muted — InterviewUI handles real audio
               lipsyncLang: "en",
-              waitForAudioChunks: 2, // Buffer 2 chunks before starting animation
+              lipsyncType: "visemes",
+              waitForAudioChunks: 0,
             },
-            null,                // onAudioStart callback
-            () => {              // onAudioEnd callback
-              streamReadyRef.current = false;
-              // NOTE: We do NOT call onAudioEndRef here — Web Audio API fires
-              // handleAllAudioFinished independently. The TalkingHead callback
-              // is just for avatar animation cleanup.
-            },
+            null,
+            () => { streamReadyRef.current = false; },
           )
           .then(() => {
             if (!headRef.current) return;
             streamReadyRef.current = true;
-            // Flush chunks that arrived before streamStart resolved
             const queued = pendingRef.current.splice(0);
-            for (const chunk of queued) {
-              head.streamAudio({ audio: chunk });
+            for (const buf of queued) {
+              head.streamAudio({ audio: buf });
             }
           })
           .catch((e: Error) => {
             console.error("[TalkingHead] streamStart failed:", e);
+            streamReadyRef.current = true;
           });
       },
 
       streamAudio(pcmData: ArrayBuffer) {
         if (!streamReadyRef.current) {
-          // Buffer until streamStart resolves
           pendingRef.current.push(pcmData);
           return;
         }
@@ -146,18 +138,63 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
       streamStop() {
         streamReadyRef.current = false;
+        pendingRef.current = [];
+
+        // Release realtime control of all visemes so TalkingHead's own
+        // animation system can animate the mouth back to idle/baseline.
+        const h = headRef.current as any;
+        if (h?.mtAvatar) {
+          const VISEMES = [
+            "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
+            "viseme_CH", "viseme_SS", "viseme_nn", "viseme_RR", "viseme_aa",
+            "viseme_E",  "viseme_I",  "viseme_O",  "viseme_U",
+          ];
+          for (const v of VISEMES) {
+            const mt = h.mtAvatar[v];
+            if (mt) { mt.realtime = null; mt.needsUpdate = true; }
+          }
+        }
+
         headRef.current?.streamStop?.();
       },
+
+      applyVisemeLive(visemeName: string, amplitude: number) {
+        const h = headRef.current as any;
+        if (!h?.mtAvatar) return;
+
+        // Use TalkingHead's `realtime` morph target property.
+        // Unlike `system` (velocity-based, too slow) or animQueue entries,
+        // `realtime` is applied DIRECTLY each frame with no easing delay —
+        // exactly what we need for per-frame amplitude-driven lip sync.
+        //
+        // Strategy: every call sets the active viseme to `amplitude` and all
+        // other Oculus visemes to 0 (instant reset, no crossfade lag).
+        const VISEMES = [
+          "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
+          "viseme_CH", "viseme_SS", "viseme_nn", "viseme_RR", "viseme_aa",
+          "viseme_E",  "viseme_I",  "viseme_O",  "viseme_U",
+        ] as const;
+
+        const target = Math.min(amplitude, 0.95);
+
+        for (const v of VISEMES) {
+          const mt = h.mtAvatar[v];
+          if (!mt) continue;
+          const val = (v === visemeName) ? target : 0;
+          if (mt.realtime !== val) {
+            mt.realtime    = val;
+            mt.needsUpdate = true;
+          }
+        }
+      },
+
     }));
 
     // ── Render ───────────────────────────────────────────────────────────────
     return (
       <div className={`relative overflow-hidden ${className ?? ""}`} style={style}>
-
-        {/* TalkingHead mounts its own Three.js canvas here */}
         <div ref={containerRef} className="w-full h-full" />
 
-        {/* Loading overlay */}
         {status === "loading" && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm">
             <div className="text-center">
@@ -167,7 +204,6 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           </div>
         )}
 
-        {/* Error / missing GLB overlay */}
         {status === "error" && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
             <div className="text-center p-6 select-none">

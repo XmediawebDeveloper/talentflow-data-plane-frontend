@@ -15,6 +15,8 @@ interface Props {
 
 export function CandidateAIInterviewPortal({ token }: Props) {
   const [step, setStep] = useState<Step>('loading');
+  const stepRef = useRef<Step>('loading');
+  useEffect(() => { stepRef.current = step; }, [step]);
   const [interview, setInterview] = useState<CandidateInterviewInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -44,6 +46,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
   // Load interview info and determine initial step
   const loadInterview = useCallback(async () => {
+    // Don't disrupt an already-active interview (e.g. browser back/forward cache restore)
+    if (stepRef.current === 'interview') return;
     try {
       setStep('loading');
       const info = await candidateAIInterviewService.getInterviewInfo(token);
