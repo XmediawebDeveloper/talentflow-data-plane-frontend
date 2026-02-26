@@ -4,10 +4,22 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  serverExternalPackages: ['@mediapipe/hands', '@mediapipe/camera_utils', '@mediapipe/drawing_utils'],
-  reactStrictMode: false, // Disable StrictMode to prevent double API calls in development
+  serverExternalPackages: [
+    '@mediapipe/hands', '@mediapipe/camera_utils', '@mediapipe/drawing_utils',
+    'three', '@react-three/fiber', '@react-three/drei',
+  ],
+  reactStrictMode: false,
 
-  // Add headers to prevent RSC caching issues
+  webpack(config) {
+    // Allow .mjs ESM files from node_modules (TalkingHead uses ESM modules)
+    config.module.rules.push({
+      test: /\.mjs$/,
+      include: /node_modules/,
+      type: 'javascript/auto',
+    });
+    return config;
+  },
+
   async headers() {
     return [
       {

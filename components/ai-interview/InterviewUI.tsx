@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Avatar } from "./Avatar";
+import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
 import { Webcam, WebcamRef } from "./Webcam";
 import { useAvatarState } from "@/hooks/useAvatarState";
 import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
@@ -36,7 +36,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const [currentTranscript, setCurrentTranscript] = useState("");
   const [currentAiText, setCurrentAiText] = useState("");
   const [status, setStatus] = useState("Connecting...");
-  const [mouthOpenness, setMouthOpenness] = useState(0);
   const [textInput, setTextInput] = useState("");
 
   // Interview closing state
@@ -196,6 +195,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     }
   }, [handDetection, faceDetection]);
 
+  // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
+  const talkingHeadRef   = useRef<TalkingHeadHandle>(null);
+  const thStreamActive   = useRef(false); // guard against double streamStart
+
   // Refs
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -340,7 +343,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   const handleAllAudioFinished = useCallback(() => {
     isPlayingRef.current = false;
-    setMouthOpenness(0);
     if (audioEndReceivedRef.current) {
       setIsAiSpeaking(false);
       avatarState.onAiStopSpeaking();
@@ -415,16 +417,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       }
     }
 
-    // Real audio-driven lip sync:
-    // Calculate RMS amplitude from the actual PCM samples, then schedule
-    // setMouthOpenness to fire exactly when this buffer starts playing.
-    // This times the mouth movement to the real audio output.
-    let sum = 0;
-    for (let i = 0; i < float32.length; i++) sum += float32[i] * float32[i];
-    const rms = Math.sqrt(sum / float32.length);
-    const openness = Math.min(1, rms * 6); // scale: typical speech RMS 0.02–0.15 → 0.1–0.9
-    const delayMs = Math.max(0, (startTime - ctx.currentTime) * 1000);
-    setTimeout(() => setMouthOpenness(openness), delayMs);
+    // ── TalkingHead lip-sync ─────────────────────────────────────────────────
+    // Auto-start TalkingHead stream if not already started (covers the
+    // greeting case where there is no preceding speaking_started message).
+    if (!thStreamActive.current && talkingHeadRef.current) {
+      thStreamActive.current = true;
+      talkingHeadRef.current.streamStart(24000, () => {});
+    }
+    talkingHeadRef.current?.streamAudio(pcmData);
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Load shedding: reduce proctoring frequency when buffers are lagging
     audioQueueRef.current.push(buffer); // count only — not used for playback
@@ -487,11 +488,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         noResponseRetryRef.current = 0; // Reset no-response tracking on new question
         setStatus("Linda is speaking...");
         startRevealingTokens();
+        // Pre-start TalkingHead stream so it's ready when PCM chunks arrive
+        if (!thStreamActive.current && talkingHeadRef.current) {
+          thStreamActive.current = true;
+          talkingHeadRef.current.streamStart(24000, () => {});
+        }
         break;
       case "audio_end":
         setIsProcessing(false);
         audioEndReceivedRef.current = true;
         revealAllTokens();
+        // Stop TalkingHead stream — avatar transitions back to idle
+        thStreamActive.current = false;
+        talkingHeadRef.current?.streamStop();
         // With scheduled playback, pendingBuffersRef tracks in-flight buffers.
         // If nothing is playing/scheduled right now, trigger recording immediately.
         if (pendingBuffersRef.current === 0 && !isPlayingRef.current) {
@@ -742,6 +751,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     setIsProcessing(false);
     setIsAiSpeaking(false);
     shouldDisconnectAfterAudioRef.current = false;
+    thStreamActive.current = false;
+    talkingHeadRef.current?.streamStop();
     audioQueueRef.current = [];
     isPlayingRef.current = false;
     pendingBuffersRef.current = 0;
@@ -1264,14 +1275,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         {/* ── RIGHT: Linda big screen + webcam PiP ─────────────────────────── */}
         <div className="flex-1 relative bg-gradient-to-b from-gray-900 to-gray-950 flex items-center justify-center overflow-hidden">
 
-          {/* Linda — portrait container, centered in panel */}
+          {/* Linda — TalkingHead 3D avatar, portrait centered in panel */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <Avatar
-              state={avatarState.currentState}
-              isAiSpeaking={isAiSpeaking}
+            <TalkingHeadAvatar
+              ref={talkingHeadRef}
+              avatarUrl="/avatar.glb"
               className="h-full rounded-none"
               style={{ aspectRatio: "9/16", maxHeight: "100%", maxWidth: "100%" }}
-              mouthOpenness={isAiSpeaking ? mouthOpenness : 0}
             />
           </div>
 
