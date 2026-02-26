@@ -173,6 +173,11 @@ export default function DashboardLayout({
         return; // Allow access to all users
       }
 
+      // Exception: Profile Settings (/settings/general-settings) is accessible to ALL users
+      if (pathname === '/settings/general-settings' || pathname.startsWith('/settings/general-settings/')) {
+        return; // Allow access to all users regardless of role
+      }
+
       const isAdminRoute = adminRoutes.some(route =>
         pathname === route || pathname.startsWith(`${route}/`)
       );

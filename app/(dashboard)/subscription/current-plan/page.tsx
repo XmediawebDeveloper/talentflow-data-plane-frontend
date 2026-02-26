@@ -449,7 +449,8 @@ const formatQuotaValue = (value: number | string | undefined | null | Record<str
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout, user, isBillingManager, isTenantAdmin } = useAuth();
+  const { logout, user, isBillingManager, isTenantAdmin, hasPermission } = useAuth();
+  const canUpgradePlan = hasPermission('canUpgradePlan');
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
@@ -2550,6 +2551,7 @@ function CurrentPlanContent() {
                     <button
                       onClick={() => handleChoosePlan(plan)}
                       disabled={
+                        !canUpgradePlan ||
                         isCurrentForToggle ||
                         isSelectingPlan ||
                         isSelectedPending ||
@@ -2561,7 +2563,9 @@ function CurrentPlanContent() {
                         (!isYearly && !plan.monthlyPrice && plan.annualPrice)
                       }
                       className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
-                        isCurrentForToggle || isSelectedPending
+                        !canUpgradePlan && !isCurrentForToggle
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          : isCurrentForToggle || isSelectedPending
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : queuedUpgrades.length > 0
                             ? "bg-amber-100 text-amber-600 cursor-not-allowed"
@@ -2577,6 +2581,8 @@ function CurrentPlanContent() {
                     >
                       {isCurrentForToggle ? (
                         'Current Plan'
+                      ) : !canUpgradePlan ? (
+                        'No Permission'
                       ) : isSelectedPending ? (
                         'Pending Payment'
                       ) : queuedUpgrades.length > 0 ? (

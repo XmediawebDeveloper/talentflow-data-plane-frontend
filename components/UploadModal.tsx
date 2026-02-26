@@ -651,12 +651,12 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       <span className="text-[10px] sm:text-xs text-gray-600">
                         {quotaInfo.subscription.used.toLocaleString()} used
                       </span>
-                      {quotaInfo.status === 'LOW' && (
+                      {(quotaInfo.status === 'APPROACHING' || quotaInfo.status === 'WARNING' || quotaInfo.status === 'CRITICAL') && (
                         <span className="text-[10px] sm:text-xs text-amber-600 font-medium">
                           Low quota - consider upgrading
                         </span>
                       )}
-                      {quotaInfo.status === 'EXHAUSTED' && (
+                      {quotaInfo.status === 'EXCEEDED' && (
                         <span className="text-[10px] sm:text-xs text-red-600 font-medium">
                           Quota exhausted - upgrade required
                         </span>
@@ -999,7 +999,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           </button>
           <button
             onClick={handleValidateAndUpload}
-            disabled={isUploading || isCheckingQuota || (quotaInfo?.status === 'EXHAUSTED') || selectedFiles.length === 0}
+            disabled={isUploading || isCheckingQuota || (quotaInfo?.status === 'EXCEEDED') || selectedFiles.length === 0}
             className={`px-4 sm:px-8 py-2 sm:py-2.5 rounded-md transition-colors flex items-center justify-center gap-2 text-xs sm:text-sm ${
               selectedFiles.length === 0 && !isUploading && !isCheckingQuota
                 ? 'bg-gray-400 text-white hover:bg-gray-500 cursor-pointer'
@@ -1022,7 +1022,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 </svg>
                 Uploading...
               </>
-            ) : quotaInfo?.status === 'EXHAUSTED' ? (
+            ) : quotaInfo?.status === 'EXCEEDED' ? (
               'Quota Exhausted - Upgrade Plan'
             ) : selectedFiles.length === 0
               ? 'Select Files to Upload'

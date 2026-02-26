@@ -245,18 +245,20 @@ export async function recordStorageUsage(amountGb: number, resourceId?: string, 
 // Quota status response interface
 export interface QuotaInfo {
   subscription: {
-    limit: number;
+    limit: number | string;
     used: number;
-    remaining: number;
-    percentage: number;
   };
   addon: {
     total_purchased: number;
     total_consumed: number;
-    remaining: number;
+    status?: string;
+    expires_on?: string | null;
+    days_until_expiry?: number;
   };
-  total_remaining: number;
-  status: 'OK' | 'LOW' | 'EXHAUSTED';
+  total_remaining: number | string;
+  percentage: number;
+  remain_percentage: number;
+  status: 'OK' | 'APPROACHING' | 'WARNING' | 'CRITICAL' | 'EXCEEDED' | 'NOT_PROVISIONED';
 }
 
 export interface QuotaStatusResponse {

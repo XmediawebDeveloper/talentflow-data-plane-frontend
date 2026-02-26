@@ -7,6 +7,7 @@ import { userSettingsApi, sessionsApi, Session, UserSettings } from '@/lib/servi
 import { clearTokens } from '@/lib/services/api';
 import { toast } from 'sonner';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 // Password strength validation
 const getPasswordStrength = (password: string) => {
@@ -28,6 +29,8 @@ const getPasswordStrength = (password: string) => {
 
 export default function SecurityPage() {
   const router = useRouter();
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission('canManageSecuritySettings');
   const [isLoading, setIsLoading] = useState(true);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [settings, setSettings] = useState<Partial<UserSettings>>({
@@ -413,20 +416,22 @@ export default function SecurityPage() {
               </div>
             )}
 
-            <button
-              onClick={handleChangePassword}
-              disabled={isChangingPassword || (passwordForm.newPassword && passwordStrength < 3)}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
-            >
-              {isChangingPassword ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : passwordChanged ? (
-                <Check className="w-4 h-4" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              {passwordChanged ? 'Password Updated!' : isChangingPassword ? 'Changing...' : 'Change Password'}
-            </button>
+            {canManage && (
+              <button
+                onClick={handleChangePassword}
+                disabled={isChangingPassword || (passwordForm.newPassword && passwordStrength < 3)}
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
+              >
+                {isChangingPassword ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : passwordChanged ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {passwordChanged ? 'Password Updated!' : isChangingPassword ? 'Changing...' : 'Change Password'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -442,7 +447,7 @@ export default function SecurityPage() {
                 <p className="text-[10px] sm:text-xs md:text-sm text-gray-500">Add an extra layer of security</p>
               </div>
             </div>
-            {!show2FASetup && (
+            {!show2FASetup && canManage && (
               <button
                 onClick={settings.two_factor_enabled ? handleDisable2FA : handleEnable2FA}
                 disabled={is2FALoading}
@@ -616,7 +621,7 @@ export default function SecurityPage() {
             <select
               value={settings.session_timeout_minutes?.toString() || '30'}
               onChange={(e) => handleSessionTimeoutChange(e.target.value)}
-              disabled={isSavingTimeout}
+              disabled={!canManage || isSavingTimeout}
               className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none bg-white disabled:opacity-50 text-black text-xs sm:text-sm md:text-base"
             >
               <option value="15">15 minutes</option>
@@ -657,7 +662,7 @@ export default function SecurityPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 mb-2 sm:mb-3 md:mb-4">
             <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900">Active Sessions</h2>
-            {sessions.filter(s => !s.is_current).length > 0 && (
+            {canManage && sessions.filter(s => !s.is_current).length > 0 && (
               <button
                 onClick={handleRevokeAllOtherSessions}
                 className="text-xs sm:text-sm text-red-600 hover:text-red-700 self-start sm:self-auto"
@@ -698,14 +703,14 @@ export default function SecurityPage() {
                       <span className="px-1.5 sm:px-2 md:px-3 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] sm:text-xs md:text-sm font-medium whitespace-nowrap">
                         Current
                       </span>
-                    ) : (
+                    ) : canManage ? (
                       <button
                         onClick={() => handleRevokeSession(session.id)}
                         className="text-[10px] sm:text-xs md:text-sm text-red-600 hover:text-red-700 whitespace-nowrap"
                       >
                         Revoke
                       </button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               ))}

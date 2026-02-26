@@ -316,12 +316,12 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       id: 'subscription',
       label: 'SUBSCRIPTION & BILLING',
       items: [
-        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', permission: 'canViewBilling' },
+        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', permission: 'canViewCurrentPlan' },
         { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', permission: 'canViewUsage' },
-        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', permission: 'canViewBilling' },
-        { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', permission: 'canViewInvoices' },
-        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', permission: 'canViewInvoices' },
-        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', permission: 'canViewInvoices' },
+        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', permission: 'canViewPaymentMethods' },
+        { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', permission: 'canViewBillingHistory' },
+        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', permission: 'canViewRefundHistory' },
+        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', permission: 'canViewDisputeHistory' },
         { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', permission: 'canViewUsage' },
       ]
     },
@@ -331,12 +331,12 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       id: 'settings',
       label: 'SETTINGS',
       items: [
-        { id: 'general-settings', label: 'General Settings', icon: Settings, href: '/settings/general-settings', permission: 'canManageSettings' },
-        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canManageUsers', adminOnly: true },
-        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canManageSettings', planFeature: 'api_access' },
-        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canManageSettings' },
+        { id: 'general-settings', label: 'Profile Settings', icon: Settings, href: '/settings/general-settings' },
+        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canViewPermissionsRoles' },
+        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canViewApiManagement', planFeature: 'api_access' },
+        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canViewBranding' },
         // { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' }, // Hidden for demo
-        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canManageSettings' },
+        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canViewSecuritySettings' },
       ]
     },
 

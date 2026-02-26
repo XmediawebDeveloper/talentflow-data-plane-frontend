@@ -232,12 +232,14 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     subCategories: [
       {
         name: 'Current Plan',
+        viewCode: 'current_plan:read',
         actions: [
           { code: 'billing:upgrade', label: 'Upgrade' },
         ],
       },
       {
         name: 'Usage & Quotas',
+        viewCode: 'usage:read',
         actions: [
           { code: 'usage:upgrade', label: 'Upgrade' },
           { code: 'usage:export', label: 'Export' },
@@ -245,6 +247,7 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       },
       {
         name: 'Payment Methods',
+        viewCode: 'payment_methods:read',
         actions: [
           { code: 'payment_methods:create', label: 'Add' },
           { code: 'payment_methods:update', label: 'Edit' },
@@ -280,26 +283,30 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     subCategories: [
       {
         name: 'General Settings',
+        viewCode: 'general_settings:read',
         actions: [
-          { code: 'settings:general', label: 'Access' },
+          { code: 'settings:general', label: 'Manage' },
         ],
       },
       {
         name: 'Permissions & Roles',
+        viewCode: 'permissions_roles:read',
         actions: [
-          { code: 'settings:permissions_roles', label: 'Access' },
+          { code: 'settings:permissions_roles', label: 'Manage' },
         ],
       },
       {
         name: 'API Management',
+        viewCode: 'api_management:read',
         actions: [
-          { code: 'settings:api_management', label: 'Access' },
+          { code: 'settings:api_management', label: 'Manage' },
         ],
       },
       {
         name: 'Branding & White Label',
+        viewCode: 'branding:read',
         actions: [
-          { code: 'settings:branding', label: 'Access' },
+          { code: 'settings:branding', label: 'Manage' },
         ],
       },
     ],
@@ -313,8 +320,9 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     subCategories: [
       {
         name: 'Security Settings',
+        viewCode: 'security_settings:read',
         actions: [
-          { code: 'support:security_settings', label: 'Access' },
+          { code: 'support:security_settings', label: 'Manage' },
         ],
       },
     ],

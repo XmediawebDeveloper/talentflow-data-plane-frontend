@@ -1,28 +1,36 @@
 'use client';
 
-import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText } from 'lucide-react';
+import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
 import { toast } from 'sonner';
 
-// Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 interface LineItem {
   description: string;
   quantity: number;
   unit_price: number;
-  amount: number;
+  amount?: number;
+  total?: number;
+  unit?: string;
 }
 
 interface InvoiceMetadata {
   reason?: string;
-  plan_id?: number;
-  plan_name?: string;
-  subscription_id?: string;
-  initiated_by?: string;
-  notes?: string;
+  source?: string;
+  purchase_type?: string;
+  total_credits?: number;
+  payment_method?: string;
+  payment_reference?: string;
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  to_plan_name?: string;
+  from_plan_name?: string;
+  subscription_id?: number | null;
+  new_plan_id?: number | null;
+  previous_plan_id?: number | null;
   [key: string]: unknown;
 }
 
@@ -38,23 +46,26 @@ interface BillingInvoice {
   status: string;
   issue_date: string;
   due_date: string;
+  paid_at?: string | null;
   line_items: LineItem[];
   metadata: InvoiceMetadata;
-  reason?: string;
-  new_plan_id?: number;
-  previous_plan_id?: number;
-  created_at: string;
-  payment_method?: string;
-  payment_status?: string;
-  razorpay_payment_id?: string;
-  razorpay_order_id?: string;
-  payment_amount?: number;
-  payment_currency?: string;
+  payment_method?: string | null;
+  payment_status?: string | null;
+  razorpay_payment_id?: string | null;
+  razorpay_order_id?: string | null;
+  payment_amount?: number | null;
+  payment_currency?: string | null;
   subscription_start_date?: string;
   subscription_end_date?: string;
   next_billing_date?: string;
   billing_interval?: string;
-  paid_at?: string;
+  created_at: string;
+  reason?: string;
+  plan_name?: string;
+  plan_type?: string;
+  previous_plan_id?: number | null;
+  new_plan_id?: number | null;
+  subscription_id?: number | null;
 }
 
 interface BillingStats {
@@ -80,7 +91,6 @@ export default function BillingHistoryPage() {
   const fetchBillingData = async () => {
     setLoading(true);
     setError(null);
-
     try {
       const token = localStorage.getItem('accessToken');
       if (!token) {
@@ -89,37 +99,29 @@ export default function BillingHistoryPage() {
         return;
       }
 
-      // Fetch billing history from backend proxy (which calls Admin API)
-      const historyResponse = await fetch(`${API_URL}/billing/invoices/billing`, {
+      const res = await fetch(`${API_URL}/billing/invoices/billing`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      if (historyResponse.status === 401) {
-        handleUnauthorized();
-        return;
-      }
+      if (res.status === 401) { handleUnauthorized(); return; }
+      if (!res.ok) throw new Error('Failed to fetch billing history');
 
-      if (!historyResponse.ok) {
-        throw new Error('Failed to fetch billing history');
-      }
-
-      const historyResult = await historyResponse.json();
-      const invoiceData = historyResult.data?.invoices || [];
+      const result = await res.json();
+      const invoiceData: BillingInvoice[] = result.data?.invoices || [];
       setInvoices(invoiceData);
 
-      // Calculate stats from invoices
-      const paidInvoices = invoiceData.filter((inv: BillingInvoice) => inv.status.toUpperCase() === 'PAID');
-      const openInvoices = invoiceData.filter((inv: BillingInvoice) => inv.status.toUpperCase() === 'OPEN');
-      const totalAmount = invoiceData.reduce((sum: number, inv: BillingInvoice) => sum + (inv.total_amount_inr || 0), 0);
+      const paid = invoiceData.filter(inv => inv.status.toUpperCase() === 'PAID');
+      const open = invoiceData.filter(inv => ['OPEN', 'PENDING'].includes(inv.status.toUpperCase()));
+      const totalAmount = invoiceData.reduce((sum, inv) => sum + (inv.total_amount_inr || 0), 0);
 
       setStats({
         total_invoices: invoiceData.length,
         total_amount: totalAmount,
-        paid_count: paidInvoices.length,
-        open_count: openInvoices.length,
+        paid_count: paid.length,
+        open_count: open.length,
       });
     } catch (err) {
       console.error('[BillingHistory] Error:', err);
@@ -129,70 +131,49 @@ export default function BillingHistoryPage() {
     }
   };
 
+  const getDescription = (inv: BillingInvoice) => {
+    return inv.line_items?.[0]?.description || inv.metadata?.reason || inv.reason || '-';
+  };
+
   const filteredInvoices = invoices.filter(inv =>
     inv.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (inv.metadata?.plan_name && inv.metadata.plan_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    (inv.line_items?.[0]?.description && inv.line_items[0].description.toLowerCase().includes(searchQuery.toLowerCase()))
+    (inv.plan_name && inv.plan_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    getDescription(inv).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const formatDate = (dateString: string | null) => {
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const formatAmount = (amount: number) => {
-    return `₹${Math.abs(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
+  const formatAmount = (amount: number) =>
+    `₹${Math.abs(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'paid':
-      case 'success':
-        return <CheckCircle2 className="w-4 h-4 text-green-600" />;
-      case 'pending':
-        return <Clock className="w-4 h-4 text-yellow-600" />;
-      case 'failed':
-      case 'refunded':
-        return <XCircle className="w-4 h-4 text-red-600" />;
-      default:
-        return <CheckCircle2 className="w-4 h-4 text-gray-600" />;
+      case 'paid': case 'success': return <CheckCircle2 className="w-4 h-4 text-green-600" />;
+      case 'pending': return <Clock className="w-4 h-4 text-yellow-600" />;
+      case 'failed': case 'refunded': return <XCircle className="w-4 h-4 text-red-600" />;
+      default: return <CheckCircle2 className="w-4 h-4 text-gray-600" />;
     }
   };
 
   const getStatusStyles = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'paid':
-      case 'success':
-        return 'bg-green-100 text-green-700 border-green-200';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'failed':
-      case 'refunded':
-        return 'bg-red-100 text-red-700 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'paid': case 'success': return 'bg-green-100 text-green-700 border-green-200';
+      case 'pending': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'failed': case 'refunded': return 'bg-red-100 text-red-700 border-red-200';
+      case 'open': return 'bg-blue-100 text-blue-700 border-blue-200';
+      default: return 'bg-gray-100 text-gray-700 border-gray-200';
     }
   };
 
-  const getTypeStyles = (type: string) => {
-    switch (type.toUpperCase()) {
-      case 'BILLING':
-      case 'SUBSCRIPTION':
-        return 'bg-blue-100 text-blue-700';
-      case 'ADDON':
-        return 'bg-purple-100 text-purple-700';
-      case 'REFUND':
-        return 'bg-green-100 text-green-700';
-      case 'DISPUTE':
-        return 'bg-orange-100 text-orange-700';
-      default:
-        return 'bg-gray-100 text-gray-700';
-    }
+  const getPaymentLabel = (inv: BillingInvoice) => {
+    const method = inv.payment_method || inv.metadata?.payment_method;
+    const ref = inv.razorpay_payment_id || inv.metadata?.payment_reference;
+    if (!method && !ref) return '-';
+    if (method && ref) return `${method.charAt(0).toUpperCase() + method.slice(1)} • ${ref.slice(-8)}`;
+    return method ? method.charAt(0).toUpperCase() + method.slice(1) : (ref ? `••${ref.slice(-8)}` : '-');
   };
 
   const handleDownloadInvoice = async (inv: BillingInvoice) => {
@@ -210,6 +191,7 @@ export default function BillingHistoryPage() {
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <div className="max-w-6xl mx-auto">
+
         {/* Header */}
         <div className="mb-6 sm:mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -247,9 +229,9 @@ export default function BillingHistoryPage() {
               <p className="text-xs text-gray-500 mt-1">Completed payments</p>
             </div>
             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-xs text-gray-500 uppercase mb-1">Open</p>
+              <p className="text-xs text-gray-500 uppercase mb-1">Open / Pending</p>
               <p className="text-2xl font-bold text-yellow-600">{stats.open_count}</p>
-              <p className="text-xs text-gray-500 mt-1">Pending invoices</p>
+              <p className="text-xs text-gray-500 mt-1">Awaiting payment</p>
             </div>
             <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
               <p className="text-xs text-gray-500 uppercase mb-1">Total Invoices</p>
@@ -313,16 +295,14 @@ export default function BillingHistoryPage() {
               </p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full min-w-[800px]">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[200px]">Invoice</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Issue Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Due Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[180px]">Description</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Payment</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[105px]">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[160px]">Payment</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[130px]">Amount</th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Status</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[100px]">Actions</th>
                   </tr>
@@ -334,51 +314,47 @@ export default function BillingHistoryPage() {
                         <div className="flex items-center gap-2">
                           <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
                           <span className="text-sm font-medium text-gray-900 truncate" title={inv.invoice_number}>
-                            {inv.invoice_number || '-'}
+                            {inv.invoice_number}
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm text-gray-900">{formatDate(inv.issue_date)}</div>
+                      <td className="px-4 py-4 text-sm text-gray-900 whitespace-nowrap">
+                        {formatDate(inv.issue_date)}
                       </td>
                       <td className="px-4 py-4">
-                        <div className="text-sm text-gray-900">{formatDate(inv.due_date)}</div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="text-sm font-medium text-gray-900 truncate" title={inv.metadata?.plan_name || inv.line_items?.[0]?.description || ''}>
-                          {inv.metadata?.plan_name || inv.line_items?.[0]?.description || '-'}
+                        <div className="text-sm font-medium text-gray-900 truncate" title={getDescription(inv)}>
+                          {getDescription(inv)}
                         </div>
-                        {inv.metadata?.reason && (
-                          <div className="text-xs text-gray-500 truncate mt-0.5" title={inv.metadata.reason}>
-                            {inv.metadata.reason}
+                        {inv.plan_name && (
+                          <div className="text-xs text-gray-500 mt-0.5 truncate">{inv.plan_name.trim()}</div>
+                        )}
+                        {inv.subscription_start_date && (
+                          <div className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                            <Calendar className="w-3 h-3 flex-shrink-0" />
+                            {formatDate(inv.subscription_start_date)} – {formatDate(inv.subscription_end_date)}
                           </div>
                         )}
                       </td>
                       <td className="px-4 py-4">
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getTypeStyles(inv.invoice_type || 'unknown')}`}>
-                          {inv.invoice_type || '-'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4">
                         <div className="flex items-center gap-1.5">
-                          <CreditCard className="w-3.5 h-3.5 text-gray-400" />
-                          <span className="text-sm text-gray-700 capitalize">{inv.payment_method || '-'}</span>
+                          <CreditCard className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="text-sm text-gray-700 truncate" title={getPaymentLabel(inv)}>
+                            {getPaymentLabel(inv)}
+                          </span>
                         </div>
                       </td>
                       <td className="px-4 py-4 text-right">
                         <span className="text-sm font-semibold text-gray-900">
                           {formatAmount(inv.total_amount_inr || 0)}
                         </span>
-                        {inv.tax_amount_inr > 0 && (
-                          <div className="text-xs text-gray-500">
-                            incl. {formatAmount(inv.tax_amount_inr)} tax
-                          </div>
+                        {(inv.tax_amount_inr || 0) > 0 && (
+                          <div className="text-xs text-gray-500">incl. {formatAmount(inv.tax_amount_inr)} tax</div>
                         )}
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusStyles(inv.status || 'unknown')}`}>
-                          {getStatusIcon(inv.status || 'unknown')}
-                          {inv.status || '-'}
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusStyles(inv.status)}`}>
+                          {getStatusIcon(inv.status)}
+                          {inv.status}
                         </span>
                       </td>
                       <td className="px-4 py-4 text-right">
@@ -397,7 +373,9 @@ export default function BillingHistoryPage() {
                             className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Download Invoice"
                           >
-                            {downloadingId === inv.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                            {downloadingId === inv.id
+                              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              : <Download className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </td>
@@ -413,172 +391,181 @@ export default function BillingHistoryPage() {
         {selectedInvoice && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50 rounded-t-xl">
+              {/* Modal Header */}
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50 rounded-t-xl sticky top-0">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Invoice Details</h2>
-                  <p className="text-sm text-gray-600">{selectedInvoice.invoice_number}</p>
+                  <p className="text-sm text-gray-500 font-mono">{selectedInvoice.invoice_number}</p>
                 </div>
-                <button
-                  onClick={() => setSelectedInvoice(null)}
-                  className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                >
+                <button onClick={() => setSelectedInvoice(null)} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
                   <XCircle className="w-5 h-5 text-gray-500" />
                 </button>
               </div>
-              <div className="p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
+
+              <div className="p-6 space-y-5">
+                {/* Key Info Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   <div>
-                    <p className="text-xs text-gray-500 uppercase">Issue Date</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Issue Date</p>
                     <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.issue_date)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 uppercase">Due Date</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Due Date</p>
                     <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.due_date)}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 uppercase">Status</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Status</p>
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getStatusStyles(selectedInvoice.status)}`}>
                       {getStatusIcon(selectedInvoice.status)}
                       {selectedInvoice.status}
                     </span>
                   </div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase">Type</p>
-                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getTypeStyles(selectedInvoice.invoice_type)}`}>
-                      {selectedInvoice.invoice_type}
-                    </span>
-                  </div>
-                  {selectedInvoice.payment_method && (
-                    <div>
-                      <p className="text-xs text-gray-500 uppercase">Payment Method</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{selectedInvoice.payment_method}</p>
-                    </div>
-                  )}
                   {selectedInvoice.paid_at && (
                     <div>
-                      <p className="text-xs text-gray-500 uppercase">Paid At</p>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Paid At</p>
                       <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.paid_at)}</p>
+                    </div>
+                  )}
+                  {selectedInvoice.billing_interval && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Billing Interval</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{selectedInvoice.billing_interval.toLowerCase()}</p>
+                    </div>
+                  )}
+                  {(selectedInvoice.payment_method || selectedInvoice.metadata?.payment_method) && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Payment</p>
+                      <p className="text-sm font-medium text-gray-900">{getPaymentLabel(selectedInvoice)}</p>
                     </div>
                   )}
                 </div>
 
-                {(selectedInvoice.subscription_start_date || selectedInvoice.billing_interval) && (
-                  <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
-                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                      <p className="text-xs font-medium text-gray-500 uppercase">Subscription Period</p>
+                {/* Plan Info */}
+                {(selectedInvoice.plan_name || selectedInvoice.plan_type) && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-blue-500 uppercase tracking-wide mb-0.5">Plan</p>
+                      <p className="text-sm font-semibold text-blue-900">{selectedInvoice.plan_name?.trim()}</p>
                     </div>
-                    <div className="p-4 grid grid-cols-2 gap-3">
-                      {selectedInvoice.subscription_start_date && (
-                        <div>
-                          <p className="text-xs text-gray-500">Start Date</p>
-                          <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.subscription_start_date)}</p>
-                        </div>
-                      )}
-                      {selectedInvoice.subscription_end_date && (
-                        <div>
-                          <p className="text-xs text-gray-500">End Date</p>
-                          <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.subscription_end_date)}</p>
-                        </div>
-                      )}
+                    {selectedInvoice.plan_type && (
+                      <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full">
+                        {selectedInvoice.plan_type}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Subscription Period */}
+                {selectedInvoice.subscription_start_date && (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Subscription Period</p>
+                    </div>
+                    <div className="p-4 grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-0.5">Start</p>
+                        <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.subscription_start_date)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-0.5">End</p>
+                        <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.subscription_end_date)}</p>
+                      </div>
                       {selectedInvoice.next_billing_date && (
                         <div>
-                          <p className="text-xs text-gray-500">Next Billing</p>
+                          <p className="text-xs text-gray-500 mb-0.5">Next Billing</p>
                           <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.next_billing_date)}</p>
-                        </div>
-                      )}
-                      {selectedInvoice.billing_interval && (
-                        <div>
-                          <p className="text-xs text-gray-500">Billing Interval</p>
-                          <p className="text-sm font-medium text-gray-900 capitalize">{selectedInvoice.billing_interval}</p>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
 
-                <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
-                  <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                    <p className="text-xs font-medium text-gray-500 uppercase">Line Items</p>
+                {/* Line Items */}
+                {selectedInvoice.line_items?.length > 0 && (
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
+                    <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Line Items</p>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {selectedInvoice.line_items.map((item, idx) => (
+                        <div key={idx} className="px-4 py-3 flex items-center justify-between gap-4">
+                          <span className="text-sm text-gray-700 flex-1">{item.description}</span>
+                          <span className="text-sm text-gray-500 shrink-0">
+                            {item.quantity} × {formatAmount(item.unit_price)}
+                          </span>
+                          <span className="text-sm font-semibold text-gray-900 shrink-0 min-w-[80px] text-right">
+                            {formatAmount(Math.abs(item.amount ?? item.total ?? 0))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="p-4 space-y-3">
-                    {selectedInvoice.line_items?.map((item, idx) => (
-                      <div key={idx} className="flex justify-between">
-                        <span className="text-sm text-gray-600">{item.description}</span>
-                        <span className="text-sm font-medium text-gray-900">
-                          {item.quantity} x {formatAmount(item.unit_price)} = {formatAmount(item.amount)}
-                        </span>
-                      </div>
-                    ))}
-                    {selectedInvoice.metadata?.plan_name && (
-                      <div className="flex justify-between border-t border-gray-100 pt-2">
-                        <span className="text-sm text-gray-600">Plan</span>
-                        <span className="text-sm font-medium text-gray-900">{selectedInvoice.metadata.plan_name}</span>
-                      </div>
-                    )}
-                    {selectedInvoice.metadata?.reason && (
-                      <div className="flex justify-between">
-                        <span className="text-sm text-gray-600">Reason</span>
-                        <span className="text-sm font-medium text-gray-900">{selectedInvoice.metadata.reason}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                )}
 
-                <div className="space-y-2 border-t border-gray-200 pt-4">
+                {/* Totals */}
+                <div className="border-t border-gray-200 pt-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal</span>
+                    <span className="text-gray-500">Subtotal</span>
                     <span className="text-gray-900">{formatAmount(selectedInvoice.amount_inr || 0)}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Tax (GST)</span>
-                    <span className="text-gray-900">{formatAmount(selectedInvoice.tax_amount_inr || 0)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Discount</span>
-                    <span className="text-green-600">-{formatAmount(selectedInvoice.discount_amount_inr || 0)}</span>
-                  </div>
-                  <div className="flex justify-between text-lg font-semibold border-t border-gray-200 pt-2">
+                  {(selectedInvoice.tax_amount_inr || 0) > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Tax (GST)</span>
+                      <span className="text-gray-900">{formatAmount(selectedInvoice.tax_amount_inr)}</span>
+                    </div>
+                  )}
+                  {(selectedInvoice.discount_amount_inr || 0) > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Discount</span>
+                      <span className="text-green-600">-{formatAmount(selectedInvoice.discount_amount_inr)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-base font-semibold border-t border-gray-200 pt-2 mt-1">
                     <span className="text-gray-900">Total</span>
                     <span className="text-gray-900">{formatAmount(selectedInvoice.total_amount_inr || 0)}</span>
                   </div>
                 </div>
 
-                {selectedInvoice.metadata?.initiated_by && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-xs text-blue-600 font-medium">Initiated By</p>
-                    <p className="text-sm text-blue-900">{selectedInvoice.metadata.initiated_by}</p>
+                {/* Payment Reference */}
+                {(selectedInvoice.razorpay_payment_id || selectedInvoice.razorpay_order_id) && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 space-y-2">
+                    {selectedInvoice.razorpay_payment_id && (
+                      <div>
+                        <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">Payment ID</p>
+                        <p className="text-sm text-blue-900 font-mono mt-0.5">{selectedInvoice.razorpay_payment_id}</p>
+                      </div>
+                    )}
+                    {selectedInvoice.razorpay_order_id && (
+                      <div>
+                        <p className="text-xs text-blue-500 font-medium uppercase tracking-wide">Order ID</p>
+                        <p className="text-sm text-blue-900 font-mono mt-0.5">{selectedInvoice.razorpay_order_id}</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                {selectedInvoice.metadata?.notes && (
-                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-600 font-medium">Notes</p>
-                    <p className="text-sm text-gray-900">{selectedInvoice.metadata.notes}</p>
+                {/* Reason */}
+                {(selectedInvoice.reason || selectedInvoice.metadata?.reason) && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Reason</p>
+                    <p className="text-sm text-gray-800">{selectedInvoice.reason || selectedInvoice.metadata?.reason}</p>
                   </div>
                 )}
 
-                {selectedInvoice.razorpay_payment_id && (
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-xs text-blue-600 font-medium">Razorpay Payment ID</p>
-                    <p className="text-sm text-blue-900 font-mono">{selectedInvoice.razorpay_payment_id}</p>
-                  </div>
-                )}
-
-                <div className="mt-6 flex gap-3">
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-1">
                   <button
                     onClick={() => handleDownloadInvoice(selectedInvoice)}
                     disabled={downloadingId === selectedInvoice.id}
-                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {downloadingId === selectedInvoice.id ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating PDF...</>
-                    ) : (
-                      <><Download className="w-4 h-4" /> Download Invoice</>
-                    )}
+                    {downloadingId === selectedInvoice.id
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Generating PDF...</>
+                      : <><Download className="w-4 h-4" /> Download Invoice</>}
                   </button>
                   <button
                     onClick={() => setSelectedInvoice(null)}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                   >
                     Close
                   </button>

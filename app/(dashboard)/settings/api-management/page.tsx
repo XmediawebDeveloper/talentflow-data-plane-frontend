@@ -5,8 +5,11 @@ import { useState, useEffect } from 'react';
 import { apiKeysApi, ApiKey, ApiKeyCreateResponse } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 export default function ApiManagementPage() {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission('canManageApiManagement');
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showKey, setShowKey] = useState<string | null>(null);
@@ -154,13 +157,15 @@ export default function ApiManagementPage() {
                 <p className="text-sm text-gray-600">Manage your API keys and access</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Create API Key
-            </button>
+            {canManage && (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Create API Key
+              </button>
+            )}
           </div>
         </div>
 
@@ -171,13 +176,15 @@ export default function ApiManagementPage() {
               <Key className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No API Keys</h3>
               <p className="text-gray-500 mb-4">Create your first API key to start using the TalentFlow API.</p>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Create API Key
-              </button>
+              {canManage && (
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create API Key
+                </button>
+              )}
             </div>
           ) : (
             apiKeys.map((apiKey) => (
@@ -216,28 +223,30 @@ export default function ApiManagementPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => regenerateKey(apiKey.id)}
-                      disabled={regeneratingId === apiKey.id}
-                      className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50"
-                      title="Regenerate key"
-                    >
-                      <RefreshCw className={`w-4 h-4 text-gray-600 ${regeneratingId === apiKey.id ? 'animate-spin' : ''}`} />
-                    </button>
-                    <button
-                      onClick={() => deleteKey(apiKey.id)}
-                      disabled={deletingId === apiKey.id}
-                      className="p-2 hover:bg-red-50 rounded-lg disabled:opacity-50"
-                      title="Delete key"
-                    >
-                      {deletingId === apiKey.id ? (
-                        <Loader2 className="w-4 h-4 text-red-600 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      )}
-                    </button>
-                  </div>
+                  {canManage && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => regenerateKey(apiKey.id)}
+                        disabled={regeneratingId === apiKey.id}
+                        className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50"
+                        title="Regenerate key"
+                      >
+                        <RefreshCw className={`w-4 h-4 text-gray-600 ${regeneratingId === apiKey.id ? 'animate-spin' : ''}`} />
+                      </button>
+                      <button
+                        onClick={() => deleteKey(apiKey.id)}
+                        disabled={deletingId === apiKey.id}
+                        className="p-2 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                        title="Delete key"
+                      >
+                        {deletingId === apiKey.id ? (
+                          <Loader2 className="w-4 h-4 text-red-600 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))
@@ -263,8 +272,8 @@ export default function ApiManagementPage() {
         </div>
       </div>
 
-      {/* Create API Key Modal */}
-      {showCreateModal && (
+      {/* Create API Key Modal — only renders if user has Manage permission */}
+      {showCreateModal && canManage && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
             <div className="flex items-center justify-between mb-6">

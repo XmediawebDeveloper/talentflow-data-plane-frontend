@@ -119,6 +119,29 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         canViewBilling: response.user.permissions.can_view_billing,
         canViewInvoices: response.user.permissions.can_view_invoices,
         canViewUsage: response.user.permissions.can_view_usage,
+        // Granular billing section view permissions
+        canViewCurrentPlan: response.user.permissions.can_view_current_plan,
+        canViewPaymentMethods: response.user.permissions.can_view_payment_methods,
+        canViewBillingHistory: response.user.permissions.can_view_billing_history,
+        canViewRefundHistory: response.user.permissions.can_view_refund_history,
+        canViewDisputeHistory: response.user.permissions.can_view_dispute_history,
+        // Granular settings section view permissions
+        canViewGeneralSettings: response.user.permissions.can_view_general_settings,
+        canViewPermissionsRoles: response.user.permissions.can_view_permissions_roles,
+        canViewApiManagement: response.user.permissions.can_view_api_management,
+        canViewBranding: response.user.permissions.can_view_branding,
+        canViewSecuritySettings: response.user.permissions.can_view_security_settings,
+        // Granular Action Permissions — Billing
+        canUpgradePlan: response.user.permissions.can_upgrade_plan,
+        canExportUsage: response.user.permissions.can_export_usage,
+        canAddPaymentMethod: response.user.permissions.can_add_payment_method,
+        canEditPaymentMethod: response.user.permissions.can_edit_payment_method,
+        canDeletePaymentMethod: response.user.permissions.can_delete_payment_method,
+        // Granular Action Permissions — Settings
+        canManagePermissionsRoles: response.user.permissions.can_manage_permissions_roles,
+        canManageApiManagement: response.user.permissions.can_manage_api_management,
+        canManageBranding: response.user.permissions.can_manage_branding,
+        canManageSecuritySettings: response.user.permissions.can_manage_security_settings,
         // Feature permissions
         canViewScoring: response.user.permissions.can_view_scoring,
         canRunScoring: response.user.permissions.can_run_scoring,

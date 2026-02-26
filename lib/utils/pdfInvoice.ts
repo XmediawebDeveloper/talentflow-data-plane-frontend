@@ -12,6 +12,15 @@ interface LineItem {
   amount: number;
 }
 
+interface BillingLineItem {
+  description: string;
+  quantity: number;
+  unit_price: number;
+  amount?: number;
+  total?: number;
+  unit?: string;
+}
+
 interface BillingInvoice {
   id: number;
   invoice_number: string;
@@ -23,22 +32,29 @@ interface BillingInvoice {
   status: string;
   issue_date: string;
   due_date: string;
-  line_items: LineItem[];
+  paid_at?: string | null;
+  line_items: BillingLineItem[];
   metadata: {
     reason?: string;
     plan_name?: string;
-    initiated_by?: string;
-    notes?: string;
+    payment_method?: string;
+    payment_reference?: string;
+    razorpay_payment_id?: string;
+    razorpay_order_id?: string;
+    to_plan_name?: string;
+    from_plan_name?: string;
     [key: string]: unknown;
   };
-  reason?: string;
-  payment_method?: string;
-  razorpay_payment_id?: string;
+  payment_method?: string | null;
+  razorpay_payment_id?: string | null;
+  razorpay_order_id?: string | null;
   subscription_start_date?: string;
   subscription_end_date?: string;
   next_billing_date?: string;
   billing_interval?: string;
-  paid_at?: string;
+  plan_name?: string;
+  plan_type?: string;
+  reason?: string;
 }
 
 interface RefundInvoice {
@@ -159,14 +175,14 @@ function fmtAmount(amount: number): string {
 
 function headerHTML(logo: string, title: string, accent: string, number: string, companyName?: string): string {
   return `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 700px; margin: 0 auto; color: #1f2937;">
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 700px; margin: 0 auto; color: #1f2937; padding-bottom: 8px;">
       <!-- Header -->
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 3px solid ${accent}; margin-bottom: 24px;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-          ${logo ? `<img src="${logo}" style="width: 44px; height: 44px; object-fit: contain;" />` : ''}
-          <div>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 3px solid ${accent}; margin-bottom: 24px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          ${logo ? `<img src="${logo}" style="height: 38px; width: auto; display: block;" />` : ''}
+          <div style="line-height: 1.2;">
             <div style="font-size: 20px; font-weight: 700; color: #111827;">TalentFlow</div>
-            ${companyName ? `<div style="font-size: 12px; color: #6b7280;">${companyName}</div>` : ''}
+            ${companyName ? `<div style="font-size: 12px; color: #6b7280; margin-top: 2px;">${companyName}</div>` : ''}
           </div>
         </div>
         <div style="text-align: right;">
@@ -179,7 +195,7 @@ function headerHTML(logo: string, title: string, accent: string, number: string,
 function footerHTML(): string {
   return `
       <!-- Footer -->
-      <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center;">
+      <div style="margin-top: 28px; padding-top: 16px; padding-bottom: 28px; border-top: 1px solid #e5e7eb; text-align: center;">
         <div style="font-size: 13px; color: #6b7280;">Thank you for your business!</div>
         <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">Generated on ${fmtDate(new Date().toISOString())}</div>
       </div>
@@ -191,15 +207,15 @@ function infoGrid(rows: [string, string][]): string {
     .filter(([, v]) => v && v !== '-')
     .map(
       ([label, value]) =>
-        `<div style="padding: 8px 0;">
-          <div style="font-size: 10px; text-transform: uppercase; color: #9ca3af; letter-spacing: 0.5px; margin-bottom: 2px;">${label}</div>
+        `<div style="padding: 8px 4px; overflow: visible;">
+          <div style="font-size: 10px; text-transform: uppercase; color: #9ca3af; letter-spacing: 0.5px; margin-bottom: 4px;">${label}</div>
           <div style="font-size: 13px; font-weight: 500; color: #1f2937;">${value}</div>
         </div>`
     )
     .join('');
 
   return `
-    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 24px; margin-bottom: 20px; background: #f9fafb; padding: 12px 16px; border-radius: 8px;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px 16px; margin-bottom: 20px; background: #f9fafb; padding: 12px 16px; border-radius: 8px; overflow: visible;">
       ${cells}
     </div>`;
 }
@@ -218,37 +234,37 @@ export async function generateBillingInvoicePDF(
 
   const statusColor =
     inv.status?.toLowerCase() === 'paid' ? '#16a34a' :
+    inv.status?.toLowerCase() === 'open' ? '#2563eb' :
     inv.status?.toLowerCase() === 'pending' ? '#ca8a04' : '#6b7280';
 
-  // Line items table
-  const lineRows = (inv.line_items || [])
-    .map(
-      (item) => `
-      <tr>
-        <td style="padding: 8px 12px; font-size: 13px; color: #374151; border-bottom: 1px solid #f3f4f6;">${item.description}</td>
-        <td style="padding: 8px 12px; font-size: 13px; color: #374151; text-align: center; border-bottom: 1px solid #f3f4f6;">${item.quantity}</td>
-        <td style="padding: 8px 12px; font-size: 13px; color: #374151; text-align: right; border-bottom: 1px solid #f3f4f6;">${fmtAmount(item.unit_price)}</td>
-        <td style="padding: 8px 12px; font-size: 13px; font-weight: 600; color: #1f2937; text-align: right; border-bottom: 1px solid #f3f4f6;">${fmtAmount(item.amount)}</td>
-      </tr>`
-    )
-    .join('');
+  const paymentMethod = inv.payment_method || inv.metadata?.payment_method || null;
+  const paymentRef = inv.razorpay_payment_id || inv.metadata?.razorpay_payment_id || null;
+  const orderId = inv.razorpay_order_id || inv.metadata?.razorpay_order_id || null;
 
-  // Subscription section
+  // Subscription period section
   let subscriptionHTML = '';
   if (inv.subscription_start_date || inv.billing_interval) {
     const parts: string[] = [];
     if (inv.subscription_start_date)
-      parts.push(`<span style="font-weight: 500;">${fmtDate(inv.subscription_start_date)}</span> → <span style="font-weight: 500;">${fmtDate(inv.subscription_end_date)}</span>`);
+      parts.push(`<span style="font-weight:500;">${fmtDate(inv.subscription_start_date)}</span> → <span style="font-weight:500;">${fmtDate(inv.subscription_end_date)}</span>`);
     if (inv.billing_interval)
-      parts.push(`<span style="text-transform: capitalize;">${inv.billing_interval}</span>`);
+      parts.push(`<span style="text-transform:capitalize;">${inv.billing_interval.toLowerCase()}</span>`);
     if (inv.next_billing_date)
       parts.push(`Next billing: ${fmtDate(inv.next_billing_date)}`);
-
     subscriptionHTML = `
-      <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 16px; margin-bottom: 20px; font-size: 13px; color: #1e40af;">
-        <span style="font-weight: 600;">Subscription:</span> ${parts.join(' | ')}
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 16px;margin-bottom:20px;font-size:13px;color:#1e40af;">
+        <span style="font-weight:600;">Subscription Period:</span> ${parts.join(' | ')}
       </div>`;
   }
+
+  // Line items rows
+  const lineRows = (inv.line_items || []).map(item => `
+    <tr>
+      <td style="padding:8px 12px;font-size:13px;color:#374151;border-bottom:1px solid #f3f4f6;">${item.description}</td>
+      <td style="padding:8px 12px;font-size:13px;color:#374151;text-align:center;border-bottom:1px solid #f3f4f6;">${item.quantity}</td>
+      <td style="padding:8px 12px;font-size:13px;color:#374151;text-align:right;border-bottom:1px solid #f3f4f6;">${fmtAmount(item.unit_price)}</td>
+      <td style="padding:8px 12px;font-size:13px;font-weight:600;color:#1f2937;text-align:right;border-bottom:1px solid #f3f4f6;">${fmtAmount(Math.abs(item.amount ?? item.total ?? 0))}</td>
+    </tr>`).join('');
 
   const html = `
     ${headerHTML(logo, 'INVOICE', '#1f2937', inv.invoice_number, companyName)}
@@ -257,63 +273,70 @@ export async function generateBillingInvoicePDF(
       ['Issue Date', fmtDate(inv.issue_date)],
       ['Due Date', fmtDate(inv.due_date)],
       ['Status', statusBadge(inv.status || '-', statusColor)],
-      ['Type', inv.invoice_type || '-'],
-      ['Payment Method', inv.payment_method ? inv.payment_method.charAt(0).toUpperCase() + inv.payment_method.slice(1) : '-'],
+      ['Payment Method', paymentMethod ? paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1) : '-'],
       ['Paid At', fmtDate(inv.paid_at)],
+      ['Plan', (inv.plan_name || '').trim() || '-'],
     ])}
 
     ${subscriptionHTML}
 
     <!-- Line Items -->
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
       <thead>
-        <tr style="background: #f9fafb;">
-          <th style="padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.5px; border-bottom: 2px solid #e5e7eb;">Description</th>
-          <th style="padding: 10px 12px; text-align: center; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.5px; border-bottom: 2px solid #e5e7eb;">Qty</th>
-          <th style="padding: 10px 12px; text-align: right; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.5px; border-bottom: 2px solid #e5e7eb;">Unit Price</th>
-          <th style="padding: 10px 12px; text-align: right; font-size: 11px; text-transform: uppercase; color: #6b7280; letter-spacing: 0.5px; border-bottom: 2px solid #e5e7eb;">Amount</th>
+        <tr style="background:#f9fafb;">
+          <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.5px;border-bottom:2px solid #e5e7eb;">Description</th>
+          <th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.5px;border-bottom:2px solid #e5e7eb;">Qty</th>
+          <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.5px;border-bottom:2px solid #e5e7eb;">Unit Price</th>
+          <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;color:#6b7280;letter-spacing:0.5px;border-bottom:2px solid #e5e7eb;">Amount</th>
         </tr>
       </thead>
       <tbody>
-        ${lineRows || '<tr><td colspan="4" style="padding: 12px; text-align: center; color: #9ca3af; font-size: 13px;">No line items</td></tr>'}
+        ${lineRows || '<tr><td colspan="4" style="padding:12px;text-align:center;color:#9ca3af;font-size:13px;">No line items</td></tr>'}
       </tbody>
     </table>
 
     <!-- Totals -->
-    <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
-      <div style="width: 260px;">
-        <div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px;">
-          <span style="color: #6b7280;">Subtotal</span>
-          <span style="color: #1f2937;">${fmtAmount(inv.amount_inr || 0)}</span>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:20px;">
+      <div style="width:260px;">
+        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
+          <span style="color:#6b7280;">Subtotal</span>
+          <span style="color:#1f2937;">${fmtAmount(inv.amount_inr || 0)}</span>
         </div>
-        <div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px;">
-          <span style="color: #6b7280;">Tax (GST)</span>
-          <span style="color: #1f2937;">${fmtAmount(inv.tax_amount_inr || 0)}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px;">
-          <span style="color: #6b7280;">Discount</span>
-          <span style="color: #16a34a;">-${fmtAmount(inv.discount_amount_inr || 0)}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; padding: 10px 0 0; margin-top: 6px; border-top: 2px solid #1f2937; font-size: 16px; font-weight: 700;">
-          <span style="color: #1f2937;">TOTAL</span>
-          <span style="color: #1f2937;">${fmtAmount(inv.total_amount_inr || 0)}</span>
+        ${(inv.tax_amount_inr || 0) > 0 ? `
+        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
+          <span style="color:#6b7280;">Tax (GST)</span>
+          <span style="color:#1f2937;">${fmtAmount(inv.tax_amount_inr)}</span>
+        </div>` : ''}
+        ${(inv.discount_amount_inr || 0) > 0 ? `
+        <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;">
+          <span style="color:#6b7280;">Discount</span>
+          <span style="color:#16a34a;">-${fmtAmount(inv.discount_amount_inr)}</span>
+        </div>` : ''}
+        <div style="display:flex;justify-content:space-between;padding:10px 0 0;margin-top:6px;border-top:2px solid #1f2937;font-size:16px;font-weight:700;">
+          <span style="color:#1f2937;">TOTAL</span>
+          <span style="color:#1f2937;">${fmtAmount(inv.total_amount_inr || 0)}</span>
         </div>
       </div>
     </div>
 
-    ${inv.razorpay_payment_id ? `
-    <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 16px; margin-bottom: 16px;">
-      <div style="font-size: 10px; text-transform: uppercase; color: #3b82f6; font-weight: 600; margin-bottom: 2px;">Razorpay Payment ID</div>
-      <div style="font-size: 13px; color: #1e3a5f; font-family: monospace;">${inv.razorpay_payment_id}</div>
+    ${paymentRef || orderId ? `
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 16px;margin-bottom:16px;">
+      ${paymentRef ? `
+      <div style="margin-bottom:${orderId ? '8px' : '0'};">
+        <div style="font-size:10px;text-transform:uppercase;color:#3b82f6;font-weight:600;margin-bottom:2px;">Payment ID</div>
+        <div style="font-size:13px;color:#1e3a5f;font-family:monospace;">${paymentRef}</div>
+      </div>` : ''}
+      ${orderId ? `
+      <div>
+        <div style="font-size:10px;text-transform:uppercase;color:#3b82f6;font-weight:600;margin-bottom:2px;">Order ID</div>
+        <div style="font-size:13px;color:#1e3a5f;font-family:monospace;">${orderId}</div>
+      </div>` : ''}
     </div>` : ''}
 
-    ${inv.metadata?.plan_name || inv.metadata?.reason || inv.metadata?.initiated_by || inv.metadata?.notes ? `
-    <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px;">
-      <div style="font-size: 10px; text-transform: uppercase; color: #6b7280; font-weight: 600; margin-bottom: 8px;">Additional Information</div>
-      ${inv.metadata.plan_name ? `<div style="font-size: 13px; color: #374151; margin-bottom: 4px;"><span style="color: #6b7280;">Plan:</span> ${inv.metadata.plan_name}</div>` : ''}
-      ${inv.metadata.reason ? `<div style="font-size: 13px; color: #374151; margin-bottom: 4px;"><span style="color: #6b7280;">Reason:</span> ${inv.metadata.reason}</div>` : ''}
-      ${inv.metadata.initiated_by ? `<div style="font-size: 13px; color: #374151; margin-bottom: 4px;"><span style="color: #6b7280;">Initiated By:</span> ${inv.metadata.initiated_by}</div>` : ''}
-      ${inv.metadata.notes ? `<div style="font-size: 13px; color: #374151;"><span style="color: #6b7280;">Notes:</span> ${inv.metadata.notes}</div>` : ''}
+    ${inv.reason || inv.metadata?.reason ? `
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:10px 16px;margin-bottom:16px;">
+      <div style="font-size:10px;text-transform:uppercase;color:#6b7280;font-weight:600;margin-bottom:2px;">Reason</div>
+      <div style="font-size:13px;color:#374151;">${inv.reason || inv.metadata?.reason}</div>
     </div>` : ''}
 
     ${footerHTML()}
