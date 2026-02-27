@@ -361,8 +361,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         const usagePercentage = isUnlimited ? 0 : (limit > 0 ? (used / limit) * 100 : 0);
 
         const hasQuota = limit > 0;
-        // Exceeded: API status = EXCEEDED means total pool (plan + addon) is fully consumed
-        const isExceeded = q.status === 'EXCEEDED';
+        // Exceeded: API status = EXCEEDED AND used is genuinely over the limit (not just exactly at it)
+        const isExceeded = q.status === 'EXCEEDED' && used > limit;
         const exceededBy = isExceeded ? Math.max(0, used - limit) : 0;
         const isExceededCritical = isExceeded;
         // Exhausted: remaining is zero but API hasn't marked EXCEEDED (edge case)

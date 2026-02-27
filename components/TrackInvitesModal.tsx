@@ -123,6 +123,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
     if (inv.status === 'opened') {
       return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Link Opened</span>;
     }
+    if (inv.email_read_at && (inv.status === 'sent')) {
+      return <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Email Read</span>;
+    }
     if (inv.status === 'sent' || inv.sent_at) {
       return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
     }
@@ -390,6 +393,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                 <div className="flex items-center gap-2">
                                   <Mail className="w-3 h-3 text-blue-500 flex-shrink-0" />
                                   <span>Sent: {formatDate(invitation.sent_at)}</span>
+                                </div>
+                              )}
+                              {invitation.email_read_at && (
+                                <div className="flex items-center gap-2">
+                                  <Eye className="w-3 h-3 text-indigo-500 flex-shrink-0" />
+                                  <span>Email Read: {formatDate(invitation.email_read_at)}</span>
                                 </div>
                               )}
                               {invitation.started_at && (

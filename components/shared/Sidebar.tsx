@@ -279,15 +279,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       ]
     },
 
-    // ORGANIZATION
-    {
-      id: 'organization',
-      label: 'ORGANIZATION',
-      items: [
-        { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', permission: 'canManageSettings' },
-      ]
-    },
-
     // USER MANAGEMENT
     {
       id: 'user-management-section',
@@ -297,17 +288,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
         { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canManageUsers', planFeature: 'teams' },
         { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat' },
-      ]
-    },
-
-    // MASTERS - Settings permission required
-    {
-      id: 'masters',
-      label: 'MASTERS',
-      items: [
-        { id: 'experience-levels', label: 'Experience Levels', icon: Clock, href: '/masters/experience-levels', permission: 'canManageSettings' },
-        { id: 'education-levels', label: 'Education Levels', icon: GraduationCap, href: '/masters/education-levels', permission: 'canManageSettings' },
-        { id: 'industry-types', label: 'Industry Types', icon: Factory, href: '/masters/industry-types', permission: 'canManageSettings' },
       ]
     },
 
@@ -323,6 +303,26 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
         { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', permission: 'canViewRefundHistory' },
         { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', permission: 'canViewDisputeHistory' },
         { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', permission: 'canViewUsage' },
+      ]
+    },
+
+    // MASTERS - Settings permission required
+    {
+      id: 'masters',
+      label: 'MASTERS',
+      items: [
+        { id: 'experience-levels', label: 'Experience Levels', icon: Clock, href: '/masters/experience-levels', permission: 'canManageSettings' },
+        { id: 'education-levels', label: 'Education Levels', icon: GraduationCap, href: '/masters/education-levels', permission: 'canManageSettings' },
+        { id: 'industry-types', label: 'Industry Types', icon: Factory, href: '/masters/industry-types', permission: 'canManageSettings' },
+      ]
+    },
+
+    // ORGANIZATION
+    {
+      id: 'organization',
+      label: 'ORGANIZATION',
+      items: [
+        { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', permission: 'canManageSettings' },
       ]
     },
 

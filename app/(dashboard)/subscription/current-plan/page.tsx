@@ -482,6 +482,7 @@ function CurrentPlanContent() {
 
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isDowngradePayment, setIsDowngradePayment] = useState(false);
   const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<DisplayPlan | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentFormData>({
     cardholderName: '',
@@ -1289,6 +1290,7 @@ function CurrentPlanContent() {
 
     // It's an upgrade or same tier - proceed normally
     setSelectedPlanForPayment(plan);
+    setIsDowngradePayment(false);
     setModalStep('isolation');
     setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
     setIsNewTenant(false); // Always use existing
@@ -1365,7 +1367,14 @@ function CurrentPlanContent() {
       let razorpayFields: { razorpay_payment_id?: string; razorpay_order_id?: string; razorpay_signature?: string } = {};
 
       // Only create Razorpay order for paid plans (price > 0)
-      const planPrice = selectedPlanForPayment.price || 0;
+      // Use the billing-period-correct price — selectedPlanForPayment.price is always monthly,
+      // so if the user is in yearly mode and the plan has no monthly variant, price is null
+      // and Razorpay would be skipped. Use annualPrice/monthlyPrice instead.
+      const planPrice = (() => {
+        if (isYearly && selectedPlanForPayment.annualPrice != null) return selectedPlanForPayment.annualPrice;
+        if (!isYearly && selectedPlanForPayment.monthlyPrice != null) return selectedPlanForPayment.monthlyPrice;
+        return selectedPlanForPayment.price || 0;
+      })();
       if (planPrice > 0) {
         const orderResponse = await fetch(`${API_URL}/subscription/${tenantId}/create-order`, {
           method: 'POST',
@@ -2625,14 +2634,16 @@ function CurrentPlanContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">
-                    {modalStep === 'result' ? 'Upgrade Complete!' : 'Upgrade Plan'}
+                    {modalStep === 'result'
+                      ? (isDowngradePayment ? 'Downgrade Confirmed!' : 'Upgrade Complete!')
+                      : (isDowngradePayment ? 'Downgrade Plan' : 'Upgrade Plan')}
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
                     {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}/month
                   </p>
                 </div>
                 <button
-                  onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); }}
+                  onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); setIsDowngradePayment(false); }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
@@ -3357,6 +3368,7 @@ function CurrentPlanContent() {
             // User confirmed downgrade - open payment modal
             if (downgradeWarningData.targetPlan) {
               setSelectedPlanForPayment(downgradeWarningData.targetPlan);
+              setIsDowngradePayment(true);
               setModalStep('isolation');
               setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
               setIsNewTenant(false);
