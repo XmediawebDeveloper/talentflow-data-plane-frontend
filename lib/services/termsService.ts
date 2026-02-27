@@ -73,7 +73,7 @@ export const termsService = {
    */
   async getCurrentTerms(): Promise<TermsAndConditions> {
     try {
-      const response = await api.get('/tenant/terms-and-conditions/current');
+      const response = await api.get('/public/terms-and-conditions/current');
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -85,7 +85,7 @@ export const termsService = {
    */
   async getCurrentTermsPublic(): Promise<TermsAndConditions> {
     try {
-      const response = await fetch(`${API_URL}/tenant/terms-and-conditions/current`, {
+      const response = await fetch(`${API_URL}/public/terms-and-conditions/current`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -108,7 +108,7 @@ export const termsService = {
     }
 
     try {
-      const response = await api.get('/tenant/terms-and-conditions/status');
+      const response = await api.get('/public/terms-and-conditions/status');
       const data: TermsAcceptanceStatus = response.data;
       setCachedStatus(data);
       return data;
@@ -122,7 +122,7 @@ export const termsService = {
    */
   async acceptTerms(termsId: string): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await api.post('/tenant/terms-and-conditions/accept', {
+      const response = await api.post('/public/terms-and-conditions/accept', {
         terms_id: termsId,
       });
       invalidateCache();
@@ -137,7 +137,7 @@ export const termsService = {
    */
   async getAcceptanceHistory(): Promise<TermsAcceptanceRecord[]> {
     try {
-      const response = await api.get('/tenant/terms-and-conditions/history');
+      const response = await api.get('/public/terms-and-conditions/history');
       return response.data;
     } catch (error) {
       throw handleApiError(error);

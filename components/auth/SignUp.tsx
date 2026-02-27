@@ -128,8 +128,33 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   // Terms & Conditions state for signup flow
   const [signupTerms, setSignupTerms] = useState<TermsAndConditions | null>(null);
   const [acceptedTermsId, setAcceptedTermsId] = useState<string | null>(null);
+  const [legalModal, setLegalModal] = useState<{ type: 'terms' | 'privacy'; title: string; content_html: string } | null>(null);
+  const [legalModalLoading, setLegalModalLoading] = useState(false);
 
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const openLegalModal = async (type: 'terms' | 'privacy') => {
+    setLegalModalLoading(true);
+    setLegalModal({ type, title: type === 'terms' ? 'Terms of Service' : 'Privacy Policy', content_html: '' });
+    try {
+      const response = await fetch(`${API_URL}/public/terms-and-conditions/current`);
+      if (response.ok) {
+        const data = await response.json();
+        const content = data?.data || data;
+        setLegalModal({
+          type,
+          title: type === 'terms' ? (content.title || 'Terms of Service') : 'Privacy Policy',
+          content_html: content.content_html || '<p>Content not available.</p>',
+        });
+      } else {
+        setLegalModal({ type, title: type === 'terms' ? 'Terms of Service' : 'Privacy Policy', content_html: '<p>Unable to load content. Please try again later.</p>' });
+      }
+    } catch {
+      setLegalModal({ type, title: type === 'terms' ? 'Terms of Service' : 'Privacy Policy', content_html: '<p>Unable to load content. Please try again later.</p>' });
+    } finally {
+      setLegalModalLoading(false);
+    }
+  };
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -409,7 +434,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
     // Fetch T&C before proceeding. If API fails, skip terms step gracefully.
     try {
-      const response = await fetch(`${API_URL}/tenant/terms-and-conditions/current`, {
+      const response = await fetch(`${API_URL}/public/terms-and-conditions/current`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -1841,9 +1866,9 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 <input type="checkbox" id="terms" required style={{ marginTop: 4 }} />
                 <label htmlFor="terms" style={{ fontSize: 14, color: '#4B5563' }}>
                   I agree to the{' '}
-                  <button type="button" style={{ color: '#2563EB', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>Terms of Service</button>
+                  <button type="button" onClick={() => openLegalModal('terms')} style={{ color: '#2563EB', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>Terms of Service</button>
                   {' '}and{' '}
-                  <button type="button" style={{ color: '#2563EB', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>Privacy Policy</button>
+                  <button type="button" onClick={() => openLegalModal('privacy')} style={{ color: '#2563EB', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>Privacy Policy</button>
                 </label>
               </div>
 
@@ -1894,6 +1919,41 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       </div>
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
+      {/* Legal Modal (Terms of Service / Privacy Policy) */}
+      {legalModal && (
+        <div
+          onClick={() => setLegalModal(null)}
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: '#fff', borderRadius: 16, width: '100%', maxWidth: 680, maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px rgba(0,0,0,0.25)' }}
+          >
+            {/* Header */}
+            <div style={{ padding: '20px 24px', borderBottom: '1px solid #E5E7EB', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111827', margin: 0 }}>{legalModal.title}</h2>
+              <button onClick={() => setLegalModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#6B7280', lineHeight: 1 }}>✕</button>
+            </div>
+            {/* Content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+              {legalModalLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+                  <Loader2 style={{ width: 32, height: 32, color: '#2563EB', animation: 'spin 1s linear infinite' }} />
+                </div>
+              ) : (
+                <div dangerouslySetInnerHTML={{ __html: legalModal.content_html }} style={{ fontSize: 14, color: '#374151', lineHeight: 1.7 }} />
+              )}
+            </div>
+            {/* Footer */}
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #E5E7EB', textAlign: 'right' }}>
+              <button onClick={() => setLegalModal(null)} style={{ padding: '10px 24px', backgroundColor: '#2563EB', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
