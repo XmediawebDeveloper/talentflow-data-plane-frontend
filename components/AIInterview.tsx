@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback, type ComponentType } from 're
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { useQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
@@ -27,6 +28,7 @@ export default function AIInterview() {
   const { user, isTenantAdmin } = useAuth();
   const canRunAiInterviews = isTenantAdmin || (user?.permissions?.canRunAiInterviews ?? false);
   const { available: aiInterviewAvailable } = usePlanFeature('ai_interview');
+  const { quotaData } = useQuota();
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
@@ -89,40 +91,45 @@ export default function AIInterview() {
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null);
 
-  // Load configs, stats, and quota
+  // Sync quota from shared QuotaContext (AIU = AI Interview Units)
+  useEffect(() => {
+    const quotas = quotaData?.quotas;
+    if (!quotas?.AIU) return;
+    const sub = quotas.AIU.subscription || {};
+    const addon = quotas.AIU.addon || {};
+    const subLimit = sub.limit;
+    const used = sub.used || 0;
+    const addonPurchased = typeof addon.total_purchased === 'number' ? addon.total_purchased : 0;
+    const addonConsumed = typeof addon.total_consumed === 'number' ? addon.total_consumed : 0;
+    const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
+
+    const unlimited = subLimit === -1 || subLimit === 'unlimited';
+    setIsUnlimited(unlimited);
+    if (unlimited) {
+      setTotalUnits(-1);
+      setAvailableUnits(-1);
+    } else if (typeof subLimit === 'number' && subLimit > 0) {
+      const totalLimit = subLimit + addonPurchased;
+      setTotalUnits(totalLimit);
+      const subRemaining = Math.max(0, subLimit - used);
+      const remaining = typeof quotas.AIU.total_remaining === 'number'
+        ? Math.max(0, quotas.AIU.total_remaining)
+        : Math.max(0, subRemaining + addonRemaining);
+      setAvailableUnits(remaining);
+    }
+  }, [quotaData]);
+
+  // Load configs and stats
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [configsRes, statsRes, quotaRes] = await Promise.allSettled([
+      const [configsRes, statsRes] = await Promise.allSettled([
         aiInterviewService.listConfigs({ page_size: 100 }),
         aiInterviewService.getConfigStats(),
-        api.get('/usage/quota-status'),
       ]);
 
       if (configsRes.status === 'fulfilled') setConfigs(configsRes.value.items);
       if (statsRes.status === 'fulfilled') setStats(statsRes.value);
-
-      // Process quota (AIU = AI Interview Units)
-      if (quotaRes.status === 'fulfilled') {
-        const apiData = quotaRes.value.data?.data;
-        const quotas = apiData?.quotas;
-        if (quotas?.AIU) {
-          const subLimit = quotas.AIU.subscription?.limit;
-          const addonRemaining = quotas.AIU.addon?.remaining || 0;
-          const used = quotas.AIU.subscription?.used || 0;
-          const unlimited = subLimit === -1 || subLimit === 'unlimited';
-          setIsUnlimited(unlimited);
-          if (unlimited) {
-            setTotalUnits(-1);
-            setAvailableUnits(-1);
-          } else if (typeof subLimit === 'number' && subLimit > 0) {
-            const totalLimit = subLimit + addonRemaining;
-            setTotalUnits(totalLimit);
-            const remaining = quotas.AIU.total_remaining ?? (totalLimit - used);
-            setAvailableUnits(remaining);
-          }
-        }
-      }
     } catch (error) {
       console.error('Failed to load AI interview data:', error);
       toast.error('Failed to load data. Please refresh.');

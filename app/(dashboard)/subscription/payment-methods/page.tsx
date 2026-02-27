@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 interface PaymentMethod {
   id: string;
@@ -38,6 +39,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1
 
 export default function PaymentMethodsPage() {
   const dialog = useGlobalDialog();
+  const { hasPermission } = useAuth();
+  const canAdd = hasPermission('canAddPaymentMethod');
+  const canEdit = hasPermission('canEditPaymentMethod');
+  const canDelete = hasPermission('canDeletePaymentMethod');
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -308,13 +313,15 @@ export default function PaymentMethodsPage() {
                 <p className="text-sm text-gray-600">Manage your payment methods</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Payment Method
-            </button>
+            {canAdd && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Payment Method
+              </button>
+            )}
           </div>
         </div>
 
@@ -333,13 +340,15 @@ export default function PaymentMethodsPage() {
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No payment methods</h3>
             <p className="text-gray-500 mb-6">Add a payment method to manage your subscription</p>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Payment Method
-            </button>
+            {canAdd && (
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Payment Method
+              </button>
+            )}
           </div>
         )}
 
@@ -371,7 +380,7 @@ export default function PaymentMethodsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {!method.is_default && (
+                    {canEdit && !method.is_default && (
                       <button
                         onClick={() => setAsDefault(method.id)}
                         className="px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -379,17 +388,19 @@ export default function PaymentMethodsPage() {
                         Set as Default
                       </button>
                     )}
-                    <button
-                      onClick={() => deleteMethod(method.id)}
-                      disabled={deleting === method.id}
-                      className="p-2 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {deleting === method.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin text-red-600" />
-                      ) : (
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      )}
-                    </button>
+                    {canDelete && (
+                      <button
+                        onClick={() => deleteMethod(method.id)}
+                        disabled={deleting === method.id}
+                        className="p-2 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {deleting === method.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-red-600" />
+                        ) : (
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -413,8 +424,8 @@ export default function PaymentMethodsPage() {
         </div>
       </div>
 
-      {/* Add Payment Method Modal */}
-      {showAddModal && (
+      {/* Add Payment Method Modal — only renders if user has Add permission */}
+      {showAddModal && canAdd && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}

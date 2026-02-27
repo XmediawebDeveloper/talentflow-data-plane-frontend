@@ -1,7 +1,7 @@
 'use client';
 
-import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Pencil, Send } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/services/api';
 
@@ -30,6 +30,9 @@ const formatDateTimeIST = (dateStr: string | null | undefined, options?: { inclu
   return date.toLocaleString('en-US', dateOptions);
 };
 
+const isValidEmail = (email: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
 export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: TrackInvitesModalProps) {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
@@ -41,15 +44,28 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
     completed: 0,
     failed: 0,
   });
+  // Email editing state
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [newEmailValue, setNewEmailValue] = useState('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (isOpen && jdId) {
       loadInvitations();
+      // Auto-refresh every 15s so pixel-fired status updates are reflected automatically
+      refreshIntervalRef.current = setInterval(() => {
+        loadInvitations(true); // silent = don't show spinner
+      }, 15000);
     }
+    return () => {
+      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
+    };
   }, [isOpen, jdId]);
 
-  const loadInvitations = async () => {
-    setIsLoading(true);
+  const loadInvitations = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       // Fetch all assessments for this JD
       const assessmentsResponse = await api.get('/assessments', {
@@ -101,12 +117,32 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
   };
 
   const handleResendInvitation = async (invitation: any) => {
+    setResendingId(invitation.id);
     try {
       await api.post(`/assessments/${invitation.assessment_id}/invitations/${invitation.id}/resend`);
-      // Reload invitations
-      await loadInvitations();
+      await loadInvitations(true);
     } catch (error) {
       console.error('Failed to resend invitation:', error);
+    } finally {
+      setResendingId(null);
+    }
+  };
+
+  const handleUpdateEmail = async (invitation: any) => {
+    if (!isValidEmail(newEmailValue)) return;
+    setIsSendingEmail(true);
+    try {
+      await api.patch(
+        `/assessments/${invitation.assessment_id}/invitations/${invitation.id}/update-email`,
+        { new_email: newEmailValue }
+      );
+      setEditingEmailId(null);
+      setNewEmailValue('');
+      await loadInvitations(true);
+    } catch (error) {
+      console.error('Failed to update email:', error);
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -123,8 +159,14 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
     if (inv.status === 'opened') {
       return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Link Opened</span>;
     }
+    if (inv.email_read_at && inv.status === 'sent') {
+      return <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Email Read</span>;
+    }
     if (inv.status === 'sent' || inv.sent_at) {
       return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
+    }
+    if (inv.status === 'pending') {
+      return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
     }
     if (inv.status === 'expired') {
       return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
@@ -392,6 +434,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                   <span>Sent: {formatDate(invitation.sent_at)}</span>
                                 </div>
                               )}
+                              {invitation.email_read_at && (
+                                <div className="flex items-center gap-2">
+                                  <Eye className="w-3 h-3 text-indigo-500 flex-shrink-0" />
+                                  <span>Email Read: {formatDate(invitation.email_read_at)}</span>
+                                </div>
+                              )}
                               {invitation.started_at && (
                                 <div className="flex items-center gap-2">
                                   <Play className="w-3 h-3 text-yellow-500 flex-shrink-0" />
@@ -444,13 +492,56 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                 View Results
                               </button>
                             ) : invitation.status === 'failed' ? (
-                              <button
-                                onClick={() => handleResendInvitation(invitation)}
-                                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
-                              >
-                                <Mail className="w-3.5 h-3.5" />
-                                Resend
-                              </button>
+                              editingEmailId === invitation.id ? (
+                                // Inline email editor
+                                <div className="flex flex-col gap-1.5 min-w-[180px]">
+                                  <input
+                                    type="email"
+                                    value={newEmailValue}
+                                    onChange={e => setNewEmailValue(e.target.value)}
+                                    placeholder="new@email.com"
+                                    className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => handleUpdateEmail(invitation)}
+                                      disabled={!isValidEmail(newEmailValue) || isSendingEmail}
+                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      {isSendingEmail ? 'Sending…' : 'Send'}
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
+                                      className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                // Retry or Change Email buttons depending on email validity
+                                <div className="flex flex-col gap-1">
+                                  {isValidEmail(invitation.candidate_email) ? (
+                                    <button
+                                      onClick={() => handleResendInvitation(invitation)}
+                                      disabled={resendingId === invitation.id}
+                                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 rounded-lg transition-colors whitespace-nowrap"
+                                    >
+                                      <RefreshCw className={`w-3.5 h-3.5 ${resendingId === invitation.id ? 'animate-spin' : ''}`} />
+                                      {resendingId === invitation.id ? 'Sending…' : 'Retry'}
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
+                                    className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-400 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors whitespace-nowrap"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    Change Email
+                                  </button>
+                                </div>
+                              )
                             ) : null}
                           </td>
                         </tr>

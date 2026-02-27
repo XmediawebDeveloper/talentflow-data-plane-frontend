@@ -548,14 +548,14 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
                 <div className="flex items-center justify-between mt-1">
                   <span className="text-xs sm:text-sm text-gray-600">GST (18%)</span>
                   <span className="text-sm sm:text-base font-medium text-gray-900">
-                    {getCurrencySymbol(currency)}{Math.round(parseFloat(totalPrice) * 0.18)}
+                    {getCurrencySymbol(currency)}{(parseFloat(totalPrice) * 0.18).toFixed(2)}
                   </span>
                 </div>
                 <div className="h-px bg-gray-300 my-2" />
                 <div className="flex items-center justify-between">
                   <span className="text-sm sm:text-base font-medium text-gray-800">Total</span>
                   <span className="text-xl sm:text-2xl font-bold text-gray-900">
-                    {getCurrencySymbol(currency)}{(parseFloat(totalPrice) + Math.round(parseFloat(totalPrice) * 0.18)).toLocaleString()}
+                    {getCurrencySymbol(currency)}{(parseFloat(totalPrice) * 1.18).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -598,7 +598,7 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
                   ) : (
                     <>
                       <ShoppingCart className="w-4 h-4" />
-                      Pay {getCurrencySymbol(currency)}{(parseFloat(totalPrice) + Math.round(parseFloat(totalPrice) * 0.18)).toLocaleString()} & Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
+                      Pay {getCurrencySymbol(currency)}{(parseFloat(totalPrice) * 1.18).toFixed(2)} & Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
                     </>
                   )}
                 </button>

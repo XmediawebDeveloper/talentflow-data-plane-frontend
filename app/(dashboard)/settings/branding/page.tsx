@@ -4,8 +4,11 @@ import { Palette, Upload, Save, Eye, Check, Loader2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { brandingApi, BrandingSettings, BrandingUpdate } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 export default function BrandingPage() {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission('canManageBranding');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -89,14 +92,16 @@ export default function BrandingPage() {
                 <p className="text-xs sm:text-sm text-gray-600">Customize your platform appearance</p>
               </div>
             </div>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 transition-colors flex-shrink-0 w-full sm:w-auto"
-            >
-              {saved ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : isSaving ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-              {saved ? 'Saved!' : isSaving ? 'Saving...' : 'Save Changes'}
-            </button>
+            {canManage && (
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 disabled:opacity-50 transition-colors flex-shrink-0 w-full sm:w-auto"
+              >
+                {saved ? <Check className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : isSaving ? <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" /> : <Save className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                {saved ? 'Saved!' : isSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            )}
           </div>
         </div>
 

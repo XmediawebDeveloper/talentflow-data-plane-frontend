@@ -3,6 +3,7 @@
 import { Shield, Users, Check, X, Edit2, Save, Plus, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -42,6 +43,8 @@ interface Role {
 }
 
 export default function PermissionsPage() {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission('canManagePermissionsRoles');
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -313,7 +316,7 @@ export default function PermissionsPage() {
                     <p className="text-xs sm:text-sm text-gray-500 truncate">{selectedRole.description || 'No description'}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-                    {!selectedRole.is_system && !isEditing && selectedRole.code !== 'recruiter' && (
+                    {canManage && !selectedRole.is_system && !isEditing && selectedRole.code !== 'recruiter' && (
                       <button
                         onClick={startEditing}
                         className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900"
