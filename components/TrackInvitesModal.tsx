@@ -102,9 +102,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
       const newStats = {
         total: allInvitations.length,
         sent: allInvitations.filter(inv => inv.sent_at).length,
-        started: allInvitations.filter(inv => inv.started_at && inv.status !== 'completed').length,
-        completed: allInvitations.filter(inv => inv.status === 'completed').length,
-        failed: allInvitations.filter(inv => inv.status === 'failed' || inv.status === 'expired').length,
+        started: allInvitations.filter(inv => inv.started_at && inv.status?.toLowerCase() !== 'completed').length,
+        completed: allInvitations.filter(inv => inv.status?.toLowerCase() === 'completed').length,
+        failed: allInvitations.filter(inv => ['failed', 'expired'].includes(inv.status?.toLowerCase())).length,
       };
 
       setInvitations(allInvitations);
@@ -149,35 +149,36 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
   if (!isOpen) return null;
 
   const getStatusBadge = (inv: any) => {
-    // Status priority: completed > started > opened > sent > expired > failed > pending
-    if (inv.status === 'completed') {
+    // Normalize to lowercase for case-insensitive comparison (API may return 'BOUNCED' or 'bounced')
+    const s = inv.status?.toLowerCase();
+    // Priority: terminal/negative states first, then progress states, then sent
+    if (s === 'completed') {
       return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Completed</span>;
     }
-    if (inv.status === 'started' || (inv.started_at && inv.status !== 'completed')) {
-      return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> Started</span>;
+    if (s === 'bounced') {
+      return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Bounced</span>;
     }
-    if (inv.status === 'opened') {
-      return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Link Opened</span>;
-    }
-    if (inv.email_read_at && inv.status === 'sent') {
-      return <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Email Read</span>;
-    }
-    if (inv.status === 'sent' || inv.sent_at) {
-      return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
-    }
-    if (inv.status === 'pending') {
-      return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
-    }
-    if (inv.status === 'expired') {
-      return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
-    }
-    if (inv.status === 'failed') {
+    if (s === 'failed') {
       return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Failed</span>;
     }
-    if (inv.status === 'abandoned') {
+    if (s === 'expired') {
+      return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
+    }
+    if (s === 'abandoned') {
       return <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Abandoned</span>;
     }
-    // Default: pending
+    if (s === 'started' || (inv.started_at && s !== 'completed')) {
+      return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> Started</span>;
+    }
+    if (s === 'opened') {
+      return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Link Opened</span>;
+    }
+    if (inv.email_read_at && s === 'sent') {
+      return <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Email Read</span>;
+    }
+    if (s === 'sent' || inv.sent_at) {
+      return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
+    }
     return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
   };
 
@@ -331,7 +332,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                       {/* Progress + Actions */}
                       <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                         <div>
-                          {invitation.status === 'completed' ? (
+                          {invitation.status?.toLowerCase() === 'completed' ? (
                             <div className="flex items-center gap-1.5 text-xs">
                               <span className="text-gray-600">Score:</span>
                               <span className={`font-medium ${invitation.passed ? 'text-green-600' : 'text-red-600'}`}>
@@ -355,7 +356,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                           )}
                         </div>
                         <div>
-                          {invitation.status === 'completed' ? (
+                          {invitation.status?.toLowerCase() === 'completed' ? (
                             <button
                               onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results`)}
                               className="flex items-center gap-1 px-2 py-1 text-[10px] text-purple-600 hover:bg-purple-50 rounded transition-colors"
@@ -363,7 +364,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                               <Eye className="w-3 h-3" />
                               View
                             </button>
-                          ) : invitation.status === 'failed' ? (
+                          ) : (['failed', 'bounced'].includes(invitation.status?.toLowerCase())) ? (
                             <button
                               onClick={() => handleResendInvitation(invitation)}
                               className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-600 text-white hover:bg-red-700 rounded transition-colors"
@@ -440,6 +441,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                   <span>Email Read: {formatDate(invitation.email_read_at)}</span>
                                 </div>
                               )}
+                              {invitation.bounced_at && (
+                                <div className="flex items-center gap-2">
+                                  <RefreshCw className="w-3 h-3 text-red-500 flex-shrink-0" />
+                                  <span className="text-red-600">Bounced: {formatDate(invitation.bounced_at)}</span>
+                                </div>
+                              )}
                               {invitation.started_at && (
                                 <div className="flex items-center gap-2">
                                   <Play className="w-3 h-3 text-yellow-500 flex-shrink-0" />
@@ -455,7 +462,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                             </div>
                           </td>
                           <td className="py-3 px-3 lg:px-4">
-                            {invitation.status === 'completed' ? (
+                            {invitation.status?.toLowerCase() === 'completed' ? (
                               <div>
                                 <div className="flex items-center gap-2 text-sm">
                                   <span className="text-gray-600">Score</span>
@@ -483,7 +490,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                             )}
                           </td>
                           <td className="py-3 px-3 lg:px-4">
-                            {invitation.status === 'completed' ? (
+                            {invitation.status?.toLowerCase() === 'completed' ? (
                               <button
                                 onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results`)}
                                 className="flex items-center gap-1 px-3 py-1.5 text-xs text-purple-600 hover:bg-purple-50 rounded-lg transition-colors whitespace-nowrap"
@@ -491,7 +498,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                 <Eye className="w-3.5 h-3.5" />
                                 View Results
                               </button>
-                            ) : invitation.status === 'failed' ? (
+                            ) : (['failed', 'bounced'].includes(invitation.status?.toLowerCase())) ? (
                               editingEmailId === invitation.id ? (
                                 // Inline email editor
                                 <div className="flex flex-col gap-1.5 min-w-[180px]">
