@@ -11,8 +11,12 @@ import { toast } from 'sonner';
 import { scoringService } from '@/lib/services/scoringService';
 import { QuotaProvider } from '@/contexts/QuotaContext';
 import { PlanFeaturesProvider } from '@/components/providers/PlanFeaturesProvider';
+import { TermsProvider } from '@/components/providers/TermsProvider';
 import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail } from '@/lib/services/api';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
+import TermsReminderBanner from '@/components/terms/TermsReminderBanner';
+import TermsBlockingOverlay from '@/components/terms/TermsBlockingOverlay';
+import TermsAcceptanceModal from '@/components/terms/TermsAcceptanceModal';
 
 // Admin-only routes that require tenant_admin role
 const adminRoutes = [
@@ -316,6 +320,7 @@ export default function DashboardLayout({
   return (
     <QuotaProvider>
       <PlanFeaturesProvider>
+        <TermsProvider>
         <SessionTimeoutProvider skipSettingsLoad={subscriptionExpired !== false}>
           <Suspense fallback={null}>
             <SearchParamsErrorHandler />
@@ -356,6 +361,7 @@ export default function DashboardLayout({
                 isMobileMenuOpen={isMobileMenuOpen}
               />
 
+              <TermsReminderBanner />
               <div className="flex-1 overflow-y-auto flex flex-col">
                 {children}
               </div>
@@ -363,6 +369,12 @@ export default function DashboardLayout({
 
             {/* Global subscription inactive modal - shown on all dashboard pages (not for suspended) */}
             <SubscriptionInactiveModal />
+
+            {/* T&C blocking overlay - z-[95], below suspension z-[100] */}
+            <TermsBlockingOverlay accountSuspended={accountSuspended} />
+
+            {/* T&C acceptance modal - z-[90] */}
+            <TermsAcceptanceModal />
 
             {/* CRITICAL: Full-screen suspension overlay - blocks ALL interaction */}
             {accountSuspended && (
@@ -376,6 +388,7 @@ export default function DashboardLayout({
             )}
           </div>
         </SessionTimeoutProvider>
+        </TermsProvider>
       </PlanFeaturesProvider>
     </QuotaProvider>
   );
