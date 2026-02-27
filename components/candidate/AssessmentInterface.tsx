@@ -171,14 +171,21 @@ export function AssessmentInterface({
 
   // Initialize: compute from wall clock (not decrement-based) to be accurate
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
-    const utcStartedAt = startedAt.endsWith('Z') ? startedAt : startedAt + 'Z';
-    const startTime = new Date(utcStartedAt).getTime();
+    // Backend stores naive IST (UTC+05:30) datetimes without timezone annotation.
+    // Appending 'Z' would wrongly treat IST as UTC, inflating elapsed by -19800s → ~360 min timer.
+    // Instead: if no TZ info present, treat as IST by appending '+05:30'.
+    const parseBackendTs = (ts: string): number => {
+      if (!ts) return Date.now();
+      if (ts.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts).getTime();
+      return new Date(ts + '+05:30').getTime(); // naive IST → correct UTC ms
+    };
+    const startTime = parseBackendTs(startedAt);
     assessmentStartTimeRef.current = startTime;
     const totalDuration = durationMinutes * 60;
     totalDurationSecsRef.current = totalDuration;
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
     console.log('[TIMER] Calculating initial time:', {
-      startedAt, utcStartedAt, startTime, now: Date.now(), elapsed, totalDuration,
+      startedAt, startTime, now: Date.now(), elapsed, totalDuration,
       remaining: Math.max(0, totalDuration - elapsed)
     });
     return Math.max(0, totalDuration - elapsed);
@@ -208,9 +215,6 @@ export function AssessmentInterface({
     const initTimeout = setTimeout(() => {
       setIsInitialized(true);
       console.log('[TIMER] Component initialized, auto-complete protection disabled');
-
-      // 1️⃣ Force Fullscreen on Assessment Start
-      enterFullscreen();
     }, 1500); // 1.5 second grace period
 
     return () => clearTimeout(initTimeout);
@@ -413,26 +417,6 @@ export function AssessmentInterface({
     }
   }, [isOnline, queueSize, processQueue]);
 
-  // 🛡️ PROCTORING: Force Fullscreen on Start
-  const enterFullscreen = async () => {
-    try {
-      // Only enter fullscreen if not already in fullscreen
-      if (!document.fullscreenElement) {
-        const el = document.documentElement;
-        if (el.requestFullscreen) {
-          await el.requestFullscreen();
-          console.log('[PROCTORING] ✅ Entered fullscreen mode');
-        } else {
-          console.warn('[PROCTORING] ⚠️ Fullscreen API not supported');
-        }
-      } else {
-        console.log('[PROCTORING] Already in fullscreen mode');
-      }
-    } catch (error) {
-      console.error('[PROCTORING] ❌ Failed to enter fullscreen:', error);
-    }
-  };
-
   // 🛡️ PROCTORING: Exit Fullscreen on Complete
   const exitFullscreen = async () => {
     try {
@@ -477,12 +461,17 @@ export function AssessmentInterface({
 
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      // Exit fullscreen on unmount
+    };
+  }, [token, isDisqualified, showCompleteConfirm]);
+
+  // Exit fullscreen only on unmount (separate effect so it doesn't run on every re-render)
+  useEffect(() => {
+    return () => {
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
     };
-  }, [token, isDisqualified, showCompleteConfirm, answer, currentQuestion, onAnswerSubmit, onComplete]);
+  }, []);
 
   // SECURITY: Block developer tools shortcuts (F12, Ctrl+Shift+I)
   // NOTE: ESC and Alt+Tab are NO LONGER blocked here to prevent false positives

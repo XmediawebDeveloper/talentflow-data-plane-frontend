@@ -304,6 +304,48 @@ export const resumeService = {
   },
 
   /**
+   * Retry stuck/failed items in a batch (units are NOT re-deducted)
+   */
+  async retryItem(batchId: string, itemId: string): Promise<any> {
+    try {
+      const response = await api.post(`/resumes/upload/batch/${batchId}/item/${itemId}/retry`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  async cancelItem(batchId: string, itemId: string): Promise<any> {
+    try {
+      const response = await api.post(`/resumes/upload/batch/${batchId}/item/${itemId}/cancel`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  async retryBatchItems(batchId: string): Promise<any> {
+    try {
+      const response = await api.post(`/resumes/upload/batch/${batchId}/retry`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Cancel all pending items in a batch and refund their units
+   */
+  async cancelBatch(batchId: string): Promise<any> {
+    try {
+      const response = await api.post(`/resumes/upload/batch/${batchId}/cancel`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Delete all completed upload batches (where pending = 0)
    */
   async deleteCompletedBatches(): Promise<any> {

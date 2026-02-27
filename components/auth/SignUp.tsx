@@ -8,7 +8,10 @@ import {
 } from 'lucide-react';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
+import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import PlanSelectionModal from './PlanSelectionModal';
+import TermsAcceptanceStep from './TermsAcceptanceStep';
+import type { TermsAndConditions } from '@/lib/types/terms';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -43,7 +46,7 @@ interface SignUpForm {
   confirmPassword: string;
 }
 
-type SignUpStep = 'form' | 'verification' | 'payment' | 'success';
+type SignUpStep = 'form' | 'terms' | 'verification' | 'payment' | 'success';
 
 interface PlanDetails {
   id: number;
@@ -120,6 +123,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const [planLoading, setPlanLoading] = useState(false);
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
   const [createdSubdomain, setCreatedSubdomain] = useState<string | null>(null);
+  const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
+
+  // Terms & Conditions state for signup flow
+  const [signupTerms, setSignupTerms] = useState<TermsAndConditions | null>(null);
+  const [acceptedTermsId, setAcceptedTermsId] = useState<string | null>(null);
 
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -399,8 +407,23 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
     setError('');
 
-    // Always call complete-registration API when "Create Account" is clicked
-    // Backend handles purchase_intent (trial or paid) based on plan_id
+    // Fetch T&C before proceeding. If API fails, skip terms step gracefully.
+    try {
+      const response = await fetch(`${API_URL}/tenant/terms-and-conditions/current`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.ok) {
+        const termsData: TermsAndConditions = await response.json();
+        setSignupTerms(termsData);
+        setStep('terms');
+        return;
+      }
+    } catch (err) {
+      console.warn('T&C fetch failed during signup, skipping terms step:', err);
+    }
+
+    // If T&C API unavailable, proceed directly
     await completeRegistration();
   };
 
@@ -422,6 +445,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       if (encodedPlanFromUrl && encodedPlanFromUrl !== 'free_trial' && selectedPlanDetails) {
         requestBody.plan_id = selectedPlanDetails.id;
         requestBody.billing_interval = billingInterval;
+      }
+
+      // Include accepted terms ID if user accepted T&C during signup
+      if (acceptedTermsId) {
+        requestBody.terms_id = acceptedTermsId;
       }
 
       // Note: If freeTrialAcknowledged is true and no plan_id, backend handles as trial
@@ -507,7 +535,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
   };
 
-  // Handle payment submission (process payment for paid signup)
+  // Handle payment submission — 3-step Razorpay flow
   const handlePaymentSubmit = async () => {
     if (!createdTenantId || !selectedPlanDetails) {
       setError('Missing tenant or plan information');
@@ -518,23 +546,66 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     setError('');
 
     try {
+      // Step 1: Create Razorpay order
+      const orderRes = await fetch(`${API_URL}/signup/create-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: createdTenantId,
+          plan_id: selectedPlanDetails.id,
+          billing_interval: billingInterval,
+        }),
+      });
+
+      if (!orderRes.ok) {
+        const errData = await orderRes.json().catch(() => ({}));
+        throw new Error(errData.detail || `Failed to create order: ${orderRes.status}`);
+      }
+
+      const orderData = await orderRes.json();
+      console.log('[Signup] Razorpay order created:', orderData);
+
+      // Step 2: Open Razorpay checkout modal
+      let paymentResponse;
+      try {
+        paymentResponse = await openCheckout({
+          orderId: orderData.order_id,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          planName: selectedPlanDetails.plan_name || 'Plan',
+          userName: form.adminName || '',
+          userEmail: form.adminEmail || '',
+          userPhone: form.phoneNumber || '',
+        });
+      } catch (checkoutErr: any) {
+        setPaymentProcessing(false);
+        if (checkoutErr?.message?.includes('cancelled')) {
+          toast.info('Payment cancelled');
+        } else {
+          toast.error(checkoutErr?.message || 'Payment failed');
+        }
+        return;
+      }
+
+      // Step 3: Verify payment with backend
       const response = await fetch(`${API_URL}/signup/process-payment`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenant_id: createdTenantId,
           plan_id: selectedPlanDetails.id,
           billing_interval: billingInterval,
           user_email: form.adminEmail,
+          razorpay_payment_id: paymentResponse.razorpay_payment_id,
+          razorpay_order_id: paymentResponse.razorpay_order_id,
+          razorpay_signature: paymentResponse.razorpay_signature,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Payment processing failed');
+        throw new Error(data.detail || 'Payment verification failed');
       }
 
       // Payment successful - show success and redirect to org subdomain login
@@ -996,6 +1067,43 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     return `${symbol}${amount.toLocaleString()}`;
   };
 
+  // Terms Step UI (shown after form validation, before registration)
+  if (step === 'terms' && signupTerms) {
+    return (
+      <div style={containerStyle}>
+        <div style={contentStyle}>
+          {!isMobile && <div style={leftSideStyle}>
+            <div style={logoContainerStyle}>
+              <div style={logoBoxStyle}>
+                <Briefcase className="w-7 h-7 text-white" />
+              </div>
+              <span style={{ fontSize: '28px', fontWeight: 700, color: '#1F2937' }}>TalentFlow</span>
+            </div>
+            <h1 style={{ fontSize: '36px', fontWeight: 700, color: '#1F2937', lineHeight: 1.3 }}>
+              Terms & Conditions
+            </h1>
+            <p style={{ fontSize: '18px', color: '#6B7280', marginTop: '16px', lineHeight: 1.6 }}>
+              Please review and accept our terms to complete your registration.
+            </p>
+          </div>}
+          <div style={formContainerStyle}>
+            <div style={formCardStyle}>
+              <TermsAcceptanceStep
+                terms={signupTerms}
+                isLoading={isLoading}
+                onAccept={async (termsId) => {
+                  setAcceptedTermsId(termsId);
+                  await completeRegistration();
+                }}
+                onBack={() => setStep('form')}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Payment Step UI (shown after account created - user needs to complete payment)
   if (step === 'payment' && selectedPlanDetails) {
     // Helper to get quota label
@@ -1058,42 +1166,58 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               </div>
             </div>
 
-            {/* Price Display */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
-              <div>
+            {/* Price Display with GST Breakdown */}
+            <div style={{ padding: '16px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 14, color: '#6B7280' }}>Billing:</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginLeft: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>
                   {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
                 </span>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: 32, fontWeight: 700, color: '#111827' }}>
+              {/* Strikethrough price and Save badge for annual plans */}
+              {billingInterval === 'ANNUAL' && selectedPlanDetails.monthly_price && (selectedPlanDetails.monthly_price * 12) > selectedPlanDetails.base_price && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
+                    {formatCurrency(selectedPlanDetails.monthly_price * 12, selectedPlanDetails.currency)}
+                  </span>
+                  {selectedPlanDetails.discount_percentage && selectedPlanDetails.discount_percentage > 0 && (
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      backgroundColor: '#DCFCE7',
+                      color: '#15803D',
+                      borderRadius: 12
+                    }}>
+                      Save {Math.round(selectedPlanDetails.discount_percentage)}%
+                    </span>
+                  )}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 14, color: '#6B7280' }}>Plan Price:</span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>
                   {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
                 </span>
-                <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
-                  /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, color: '#6B7280' }}>GST (18%):</span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>
+                  {formatCurrency(Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
                 </span>
-                {/* Strikethrough price and Save badge for annual plans */}
-                {billingInterval === 'ANNUAL' && selectedPlanDetails.monthly_price && (selectedPlanDetails.monthly_price * 12) > selectedPlanDetails.base_price && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
-                    <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
-                      {formatCurrency(selectedPlanDetails.monthly_price * 12, selectedPlanDetails.currency)}
-                    </span>
-                    {selectedPlanDetails.discount_percentage && selectedPlanDetails.discount_percentage > 0 && (
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        backgroundColor: '#DCFCE7',
-                        color: '#15803D',
-                        borderRadius: 12
-                      }}>
-                        Save {Math.round(selectedPlanDetails.discount_percentage)}%
-                      </span>
-                    )}
-                  </div>
-                )}
+              </div>
+              <div style={{ height: 1, backgroundColor: '#E5E7EB', marginBottom: 8 }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>Total:</span>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+                    {formatCurrency(selectedPlanDetails.base_price + Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
+                  </span>
+                  <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
+                    /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -1161,14 +1285,14 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           {/* Complete Purchase Button */}
           <button
             onClick={handlePaymentSubmit}
-            disabled={paymentProcessing}
+            disabled={paymentProcessing || razorpayProcessing}
             style={{
               ...submitButtonStyle,
-              opacity: paymentProcessing ? 0.7 : 1,
-              cursor: paymentProcessing ? 'not-allowed' : 'pointer',
+              opacity: (paymentProcessing || razorpayProcessing) ? 0.7 : 1,
+              cursor: (paymentProcessing || razorpayProcessing) ? 'not-allowed' : 'pointer',
             }}
           >
-            {paymentProcessing ? (
+            {paymentProcessing || razorpayProcessing ? (
               <>
                 <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
                 Processing Payment...
@@ -1176,7 +1300,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             ) : (
               <>
                 <CreditCard style={{ width: 20, height: 20 }} />
-                Complete Purchase - {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
+                Pay & Activate - {formatCurrency(selectedPlanDetails.base_price + Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
               </>
             )}
           </button>

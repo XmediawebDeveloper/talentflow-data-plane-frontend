@@ -449,7 +449,8 @@ const formatQuotaValue = (value: number | string | undefined | null | Record<str
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout, user, isBillingManager, isTenantAdmin } = useAuth();
+  const { logout, user, isBillingManager, isTenantAdmin, hasPermission } = useAuth();
+  const canUpgradePlan = hasPermission('canUpgradePlan');
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
@@ -481,6 +482,7 @@ function CurrentPlanContent() {
 
   // Payment modal state
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isDowngradePayment, setIsDowngradePayment] = useState(false);
   const [selectedPlanForPayment, setSelectedPlanForPayment] = useState<DisplayPlan | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentFormData>({
     cardholderName: '',
@@ -1288,6 +1290,7 @@ function CurrentPlanContent() {
 
     // It's an upgrade or same tier - proceed normally
     setSelectedPlanForPayment(plan);
+    setIsDowngradePayment(false);
     setModalStep('isolation');
     setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
     setIsNewTenant(false); // Always use existing
@@ -1364,7 +1367,14 @@ function CurrentPlanContent() {
       let razorpayFields: { razorpay_payment_id?: string; razorpay_order_id?: string; razorpay_signature?: string } = {};
 
       // Only create Razorpay order for paid plans (price > 0)
-      const planPrice = selectedPlanForPayment.price || 0;
+      // Use the billing-period-correct price — selectedPlanForPayment.price is always monthly,
+      // so if the user is in yearly mode and the plan has no monthly variant, price is null
+      // and Razorpay would be skipped. Use annualPrice/monthlyPrice instead.
+      const planPrice = (() => {
+        if (isYearly && selectedPlanForPayment.annualPrice != null) return selectedPlanForPayment.annualPrice;
+        if (!isYearly && selectedPlanForPayment.monthlyPrice != null) return selectedPlanForPayment.monthlyPrice;
+        return selectedPlanForPayment.price || 0;
+      })();
       if (planPrice > 0) {
         const orderResponse = await fetch(`${API_URL}/subscription/${tenantId}/create-order`, {
           method: 'POST',
@@ -2414,6 +2424,7 @@ function CurrentPlanContent() {
                                 ? (plan.annualPrice ? '/year' : '/month')
                                 : (plan.monthlyPrice ? '/month' : '/year')}
                             </span>
+                            <span className="text-gray-400 text-xs ml-1">(+18% GST)</span>
                           </div>
                           {/* Show strikethrough price and discount badge when viewing yearly and both prices exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (plan.monthlyPrice * 12) > plan.annualPrice && (
@@ -2549,6 +2560,7 @@ function CurrentPlanContent() {
                     <button
                       onClick={() => handleChoosePlan(plan)}
                       disabled={
+                        !canUpgradePlan ||
                         isCurrentForToggle ||
                         isSelectingPlan ||
                         isSelectedPending ||
@@ -2560,7 +2572,9 @@ function CurrentPlanContent() {
                         (!isYearly && !plan.monthlyPrice && plan.annualPrice)
                       }
                       className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
-                        isCurrentForToggle || isSelectedPending
+                        !canUpgradePlan && !isCurrentForToggle
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                          : isCurrentForToggle || isSelectedPending
                           ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                           : queuedUpgrades.length > 0
                             ? "bg-amber-100 text-amber-600 cursor-not-allowed"
@@ -2576,6 +2590,8 @@ function CurrentPlanContent() {
                     >
                       {isCurrentForToggle ? (
                         'Current Plan'
+                      ) : !canUpgradePlan ? (
+                        'No Permission'
                       ) : isSelectedPending ? (
                         'Pending Payment'
                       ) : queuedUpgrades.length > 0 ? (
@@ -2618,14 +2634,16 @@ function CurrentPlanContent() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">
-                    {modalStep === 'result' ? 'Upgrade Complete!' : 'Upgrade Plan'}
+                    {modalStep === 'result'
+                      ? (isDowngradePayment ? 'Downgrade Confirmed!' : 'Upgrade Complete!')
+                      : (isDowngradePayment ? 'Downgrade Plan' : 'Upgrade Plan')}
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
                     {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}/month
                   </p>
                 </div>
                 <button
-                  onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); }}
+                  onClick={() => { setShowPaymentModal(false); setModalStep('isolation'); setIsDowngradePayment(false); }}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500" />
@@ -2699,6 +2717,42 @@ function CurrentPlanContent() {
                         </span>
                       </div>
                     )}
+                    {/* Subtotal */}
+                    <div className="flex justify-between pt-2 border-t border-gray-200">
+                      <span className="text-gray-600">Subtotal:</span>
+                      <span className="font-medium text-gray-900">
+                        {formatCurrency(
+                          (() => {
+                            const basePrice = isYearly
+                              ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
+                              : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
+                            const dbFee = isolationType === 'database'
+                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
+                              : 0;
+                            return basePrice + dbFee;
+                          })(),
+                          selectedPlanForPayment?.currency || 'INR'
+                        )}
+                      </span>
+                    </div>
+                    {/* GST Row */}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">GST (18%):</span>
+                      <span className="font-medium text-gray-900">
+                        {formatCurrency(
+                          Math.round((() => {
+                            const basePrice = isYearly
+                              ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
+                              : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
+                            const dbFee = isolationType === 'database'
+                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
+                              : 0;
+                            return (basePrice + dbFee) * 0.18;
+                          })()),
+                          selectedPlanForPayment?.currency || 'INR'
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -2706,7 +2760,7 @@ function CurrentPlanContent() {
                 <div className="bg-gray-800 text-white rounded-xl p-4">
                   <div className="flex justify-between items-center">
                     <div>
-                      <span className="font-semibold">Total</span>
+                      <span className="font-semibold">Total (incl. GST)</span>
                       <p className="text-xs text-gray-300">
                         {/* Show actual billing period based on availability */}
                         {(isYearly && selectedPlanForPayment?.annualPrice) || (!selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice)
@@ -2728,7 +2782,8 @@ function CurrentPlanContent() {
                             const dbFee = isolationType === 'database'
                               ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (useYearlyPrice ? 12 : 1)
                               : 0;
-                            return basePrice + dbFee;
+                            const subtotal = basePrice + dbFee;
+                            return subtotal + Math.round(subtotal * 0.18);
                           })(),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
@@ -2745,29 +2800,6 @@ function CurrentPlanContent() {
                     </div>
                   </div>
                 </div>
-
-                {/* Annual Plan Offer Checkbox - Uses API prices directly */}
-                {selectedPlanForPayment?.annualPrice && (
-                  <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
-                    isYearly ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:bg-gray-50'
-                  }`}>
-                    <input
-                      type="checkbox"
-                      checked={isYearly}
-                      onChange={(e) => setIsYearly(e.target.checked)}
-                      className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <Crown className="w-5 h-5 text-green-600" />
-                        <span className="font-medium text-gray-900">Annual Plan</span>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {formatCurrency(selectedPlanForPayment.annualPrice, selectedPlanForPayment.currency)}/year
-                      </p>
-                    </div>
-                  </label>
-                )}
 
                 {/* Dedicated Database Checkbox - Available for both Monthly and Annual */}
                 <label className={`flex items-start gap-3 p-4 border-2 rounded-xl transition-colors ${
@@ -2836,11 +2868,14 @@ function CurrentPlanContent() {
                     <>
                       <CreditCard className="w-5 h-5" />
                       Pay {formatCurrency(
-                        isYearly
-                          ? (selectedPlanForPayment?.annualPrice || 0) +
-                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
-                          : (selectedPlanForPayment?.monthlyPrice || 0) +
-                            (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0),
+                        (() => {
+                          const subtotal = isYearly
+                            ? (selectedPlanForPayment?.annualPrice || 0) +
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
+                            : (selectedPlanForPayment?.monthlyPrice || 0) +
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0);
+                          return subtotal + Math.round(subtotal * 0.18);
+                        })(),
                         selectedPlanForPayment?.currency || 'INR'
                       )}
                     </>
@@ -3333,6 +3368,7 @@ function CurrentPlanContent() {
             // User confirmed downgrade - open payment modal
             if (downgradeWarningData.targetPlan) {
               setSelectedPlanForPayment(downgradeWarningData.targetPlan);
+              setIsDowngradePayment(true);
               setModalStep('isolation');
               setIsolationType(hasDedicatedDatabase ? 'database' : 'schema');
               setIsNewTenant(false);

@@ -688,15 +688,39 @@ export function useProctoringMonitor({
       return false;
     };
 
+    // Timestamps to deduplicate clipboard events.
+    // Firefox (and sometimes Safari) fires BOTH the keydown AND the clipboard event
+    // (copy/paste/cut) even after e.preventDefault() on keydown — causing each key
+    // press to count as 2 violations. We suppress the clipboard event if the keydown
+    // handler already emitted within the last 100 ms.
+    let lastCopyKeyTime = 0;
+    let lastPasteKeyTime = 0;
+    let lastCutKeyTime = 0;
+
     const handleCopy = (e: ClipboardEvent) => {
+      if (Date.now() - lastCopyKeyTime < 100) {
+        // Already emitted by keydown; just block without double-counting
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        return false;
+      }
       if ((e as any).clipboardData) (e as any).clipboardData.clearData();
       return block(e, 'copy_attempt', { selectedText: window.getSelection()?.toString()?.substring(0, 100) });
     };
     const handlePaste = (e: ClipboardEvent) => {
+      if (Date.now() - lastPasteKeyTime < 100) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        return false;
+      }
       if ((e as any).clipboardData) (e as any).clipboardData.clearData();
       return block(e, 'paste_attempt', {});
     };
-    const handleCut = (e: ClipboardEvent) => block(e, 'copy_attempt', { action: 'cut' });
+    const handleCut = (e: ClipboardEvent) => {
+      if (Date.now() - lastCutKeyTime < 100) {
+        e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+        return false;
+      }
+      return block(e, 'copy_attempt', { action: 'cut' });
+    };
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
       return false;
@@ -708,9 +732,18 @@ export function useProctoringMonitor({
       if (e.metaKey && e.key === 'Tab') return block(e, 'tab_switch', { method: 'cmd_tab' });
       if (e.ctrlKey && e.key === 'Tab') return block(e, 'tab_switch', { method: 'ctrl_tab' });
       if (e.key === 'Meta' || e.key === 'OS') return block(e, 'window_blur', { method: 'windows_key' });
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') return block(e, 'copy_attempt', { method: 'keyboard' });
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') return block(e, 'paste_attempt', { method: 'keyboard' });
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') return block(e, 'copy_attempt', { method: 'keyboard', action: 'cut' });
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        lastCopyKeyTime = Date.now();
+        return block(e, 'copy_attempt', { method: 'keyboard' });
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        lastPasteKeyTime = Date.now();
+        return block(e, 'paste_attempt', { method: 'keyboard' });
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'x') {
+        lastCutKeyTime = Date.now();
+        return block(e, 'copy_attempt', { method: 'keyboard', action: 'cut' });
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
         e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
         return false;
@@ -834,12 +867,38 @@ export function useProctoringMonitor({
   }, []);
 
   const setupMouseTracking = useCallback(() => {
-    const handleMouseLeave = () => {
-      emitEventRef.current('window_blur', { reason: 'mouse_left_window' });
+    // Use document.documentElement (<html> element) instead of document —
+    // more reliable across Chrome, Firefox, and Safari for mouseleave events.
+    // Only emit when relatedTarget is null (mouse went to browser chrome or outside window).
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (e.relatedTarget === null || e.relatedTarget === undefined) {
+        emitEventRef.current('window_blur', { reason: 'mouse_left_window' });
+      }
     };
-    document.addEventListener('mouseleave', handleMouseLeave);
+
+    // mousemove tracking: detect mouse approaching the very top edge of the viewport
+    // (entering browser chrome / address bar area) — catches cases where mouseleave
+    // doesn't fire reliably (e.g. Safari, Firefox in some configurations).
+    let topEdgeTriggered = false;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (e.clientY <= 3) {
+        if (!topEdgeTriggered) {
+          topEdgeTriggered = true;
+          emitEventRef.current('window_blur', { reason: 'mouse_at_top' });
+        }
+      } else {
+        topEdgeTriggered = false;
+      }
+    };
+
+    document.documentElement.addEventListener('mouseleave', handleMouseLeave);
+    document.addEventListener('mousemove', handleMouseMove);
     console.log('[PROCTORING] Mouse tracking started');
-    return () => document.removeEventListener('mouseleave', handleMouseLeave);
+
+    return () => {
+      document.documentElement.removeEventListener('mouseleave', handleMouseLeave);
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
   }, []);
 
   // ==================== LOAD SHEDDING ====================
