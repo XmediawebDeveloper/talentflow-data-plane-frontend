@@ -486,7 +486,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         });
         // Redirect to org subdomain login after brief success message
         setTimeout(() => {
-          const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+          const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
           const sub = data.subdomain;
           if (sub) {
             window.location.href = `https://${sub}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
@@ -541,7 +541,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       toast.success('Payment successful!', { description: 'Your plan is now active.' });
       setStep('success');
       setTimeout(() => {
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
         if (createdSubdomain) {
           window.location.href = `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
         } else {
@@ -562,7 +562,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   // Handle continue to login (skip payment - stay on trial)
   const handleSkipPayment = () => {
     toast.info('Starting with free trial', { description: 'You can upgrade anytime from your dashboard.' });
-    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
     if (createdSubdomain) {
       window.location.href = `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
     } else {

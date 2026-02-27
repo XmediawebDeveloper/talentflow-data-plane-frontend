@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Avatar3D } from "./Avatar3D";
+import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
 import { Webcam, WebcamRef } from "./Webcam";
 import { useAvatarState } from "@/hooks/useAvatarState";
 import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
@@ -39,14 +39,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const [currentTranscript, setCurrentTranscript] = useState("");
   const [currentAiText, setCurrentAiText] = useState("");
   const [status, setStatus] = useState("Connecting...");
-  const [mouthOpenness, setMouthOpenness] = useState(0);
-
-  // Text-based viseme lip-sync (data sent via BroadcastChannel, NOT React state)
-  const visemeTimelineRef = useRef(new VisemeTimeline());
-  const playbackStartTimeRef = useRef(0); // when current speech playback started
-  const totalAudioDurationRef = useRef(0); // accumulated audio duration in seconds
-  const textConsumedRef = useRef(0); // how many chars of tokenBuffer have been mapped to visemes
-  const avatar3dSenderRef = useRef<ReturnType<typeof createAvatar3DSender> | null>(null);
+  const [textInput, setTextInput] = useState("");
 
   // Interview closing state
   const [isClosing, setIsClosing] = useState(false);
@@ -54,6 +47,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const [questionCount, setQuestionCount] = useState(0);
   const [duration, setDuration] = useState(0);
   const shouldDisconnectAfterAudioRef = useRef(false);
+
+  // WebSocket keepalive / reconnect refs
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reconnectAttemptsRef = useRef(0);
+  const isUnmountedRef = useRef(false);
+  const connectRef = useRef<() => void>(() => {});
 
   // Countdown timer
   const [remainingSeconds, setRemainingSeconds] = useState(interviewInfo.duration_minutes * 60);
@@ -151,6 +150,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   // Proctoring (decoupled — no warning state here)
   const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  // Stable callback so Webcam's second effect doesn't re-fire on every render
+  const handleStream = useCallback((stream: MediaStream) => {
+    setWebcamStream(stream);
+  }, []);
   const reportProctorEvent = useCallback(async (t: string, event: any) => {
     return candidateAIInterviewService.reportProctorEvent(t, event);
   }, []);
@@ -207,6 +210,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     onGazeAway: handleGazeAway,
   });
 
+  // Stable video-ready callback: use the stable setVideoElement methods from each hook
+  // (both are useCallback([], []) — same ref across renders) so handleVideoReady
+  // won't change on every render and won't cause Webcam's second effect to re-fire.
   const handleVideoReady = useCallback((video: HTMLVideoElement) => {
     handDetection.setVideoElement(video);
     faceDetection.setVideoElement(video);
@@ -243,7 +249,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         }
       }
     }
-  }, [handDetection, faceDetection]);
+  }, [handDetection.setVideoElement, faceDetection.setVideoElement]);
+
+  // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
+  const talkingHeadRef   = useRef<TalkingHeadHandle>(null);
+  const thStreamActive   = useRef(false); // guard against double streamStart
+
+  // Real-time amplitude → viseme lip sync
+  const analyserRef      = useRef<AnalyserNode | null>(null);
+  const amplitudeDataRef = useRef<Uint8Array | null>(null);
+  const visemeRafRef     = useRef<number | null>(null);
 
   // Refs
   const wsRef = useRef<WebSocket | null>(null);
@@ -251,8 +266,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const recordingContextRef = useRef<AudioContext | null>(null);
-  const audioQueueRef = useRef<AudioBuffer[]>([]);
+  const audioQueueRef = useRef<AudioBuffer[]>([]); // kept for proctoring load-shedding count only
   const isPlayingRef = useRef(false);
+  // Scheduled playback — gapless audio via Web Audio API clock
+  const nextPlayTimeRef = useRef(0);   // ctx.currentTime when next buffer should start
+  const pendingBuffersRef = useRef(0); // buffers scheduled but not yet finished
   const isRecordingRef = useRef(false);
   const audioEndReceivedRef = useRef(false);
   const currentAiTextRef = useRef("");
@@ -270,7 +288,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const revealedCharsRef = useRef(0);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Keep refs in sync with state
+  // Keep refs in sync with state — refs are always current inside stale closures
   useEffect(() => { isAiSpeakingRef.current = isAiSpeaking; }, [isAiSpeaking]);
   useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
 
@@ -282,7 +300,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   // Save AI message
   const saveAiMessage = useCallback(() => {
-    const text = currentAiTextRef.current.trim();
+    // Use currentAiTextRef first; fall back to full tokenBuffer if reveal timer
+    // stopped early (e.g. LLM continued streaming after the timer caught up)
+    const text = (currentAiTextRef.current || tokenBufferRef.current).trim();
     if (text) {
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
@@ -290,6 +310,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         content: text
       }]);
       currentAiTextRef.current = "";
+      tokenBufferRef.current = "";
+      revealedCharsRef.current = 0;
       setCurrentAiText("");
     }
   }, []);
@@ -373,91 +395,112 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     }
   }, []);
 
-  // Audio playback
-  const playNextBuffer = useCallback(() => {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setMouthOpenness(0);
-      visemeTimelineRef.current.reset();
-      textConsumedRef.current = 0;
-      totalAudioDurationRef.current = 0;
-      if (audioEndReceivedRef.current) {
-        setIsAiSpeaking(false);
-        avatarState.onAiStopSpeaking();
-        saveAiMessage();
-        if (shouldDisconnectAfterAudioRef.current) {
-          setStatus("Interview completed. Thank you!");
-          setTimeout(() => { disconnect(); }, 1500);
-          return;
-        }
-        setStatus("Your turn - speak now...");
-        setTimeout(() => {
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            startRecordingInternal();
-          }
-        }, 400);
+  // ── Real-time viseme loop ────────────────────────────────────────────────────
+  // Driven by a Web Audio AnalyserNode tapped into the playback graph.
+  // Runs every animation frame while AI audio is playing, reads RMS amplitude,
+  // maps it to an Oculus viseme, and pushes it directly to head.animQueue at
+  // the current head.animClock (no scheduling or timing calculations needed).
+
+  const stopVisemeLoop = useCallback(() => {
+    if (visemeRafRef.current !== null) {
+      cancelAnimationFrame(visemeRafRef.current);
+      visemeRafRef.current = null;
+    }
+  }, []);
+
+  const startVisemeLoop = useCallback(() => {
+    stopVisemeLoop(); // cancel any existing loop first
+
+    const analyser = analyserRef.current;
+    const data     = amplitudeDataRef.current;
+    if (!analyser || !data) {
+      console.warn("[Lipsync] AnalyserNode not ready — skipping viseme loop");
+      return;
+    }
+
+    const loop = () => {
+      if (!isPlayingRef.current) {
+        visemeRafRef.current = null;
+        return;
       }
-      return;
-    }
-    const ctx = audioContextRef.current;
-    if (!ctx || ctx.state === "closed") {
-      isPlayingRef.current = false;
-      return;
-    }
-    const wasPlaying = isPlayingRef.current;
-    isPlayingRef.current = true;
-    setIsAiSpeaking(true);
-    avatarState.onAiStartSpeaking();
-    if (!revealTimerRef.current && tokenBufferRef.current.length > 0) {
-      startRevealingTokens();
-    }
-    const buffer = audioQueueRef.current.shift()!;
-    const bufferDuration = buffer.length / buffer.sampleRate;
 
-    // Build viseme timeline from text — on first buffer of a new speech
-    if (!wasPlaying) {
-      visemeTimelineRef.current.reset();
-      textConsumedRef.current = 0;
-      totalAudioDurationRef.current = 0;
-      playbackStartTimeRef.current = performance.now();
-    }
+      // Read time-domain waveform: 256 values, 0–255, centre = 128 (silence)
+      analyser.getByteTimeDomainData(data);
 
-    // Map new text to visemes for this buffer's duration
-    const fullText = tokenBufferRef.current;
-    const unconsumed = fullText.slice(textConsumedRef.current);
-    if (unconsumed.length > 0) {
-      // Estimate how many chars this buffer covers based on remaining audio
-      const remainingBuffers = audioQueueRef.current.length;
-      const totalRemaining = unconsumed.length;
-      const charsForThisBuffer = remainingBuffers > 0
-        ? Math.ceil(totalRemaining / (remainingBuffers + 1))
-        : totalRemaining; // last buffer gets all remaining text
-      const textSlice = unconsumed.slice(0, charsForThisBuffer);
-      visemeTimelineRef.current.extend(textSlice, bufferDuration);
-      textConsumedRef.current += textSlice.length;
-    } else {
-      // No new text yet — add silence for this buffer
-      visemeTimelineRef.current.extend(" ", bufferDuration);
-    }
-    totalAudioDurationRef.current += bufferDuration;
+      // Compute RMS amplitude normalised to 0.0–1.0
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) {
+        const v = (data[i] - 128) / 128;
+        sum += v * v;
+      }
+      const rms       = Math.sqrt(sum / data.length);
+      const amplitude = Math.min(rms * 8, 1.0); // ×8 scale: typical speech RMS ~0.05–0.15
 
-    try {
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.onended = playNextBuffer;
-      source.start();
-    } catch (err) {
-      console.error('[InterviewUI] Audio playback error:', err);
-      isPlayingRef.current = false;
+      if (amplitude >= 0.05) {
+        // Map amplitude → Oculus viseme + influence value
+        let viseme: string;
+        let value: number;
+
+        if (amplitude < 0.25) {
+          // Low amplitude — barely open (bilabial / P-B-M sound region)
+          viseme = "viseme_PP";
+          value  = amplitude * 3.5;                       // 0.175 → 0.875
+        } else if (amplitude < 0.55) {
+          // Mid amplitude — open vowel (A sound region)
+          viseme = "viseme_aa";
+          value  = 0.4 + (amplitude - 0.25) * 1.5;       // 0.4 → 0.85
+        } else {
+          // High amplitude — wide open (O sound region)
+          viseme = "viseme_O";
+          value  = 0.7 + (amplitude - 0.55) * 0.55;      // 0.7 → 0.95
+        }
+
+        talkingHeadRef.current?.applyVisemeLive(viseme, Math.min(value, 0.95));
+      }
+      // Below threshold: don't push anything — TalkingHead naturally decays to idle
+
+      visemeRafRef.current = requestAnimationFrame(loop);
+    };
+
+    visemeRafRef.current = requestAnimationFrame(loop);
+    console.log("[Lipsync] Viseme loop started");
+  }, [stopVisemeLoop]);
+
+  // ── Gapless scheduled audio playback ────────────────────────────────────────
+  // Instead of onended → playNextBuffer (which has JS-event-loop gaps = clicks),
+  // each buffer is scheduled on the Web Audio clock so it starts exactly where
+  // the previous one ends.  pendingBuffersRef tracks how many have been scheduled
+  // but not yet finished — when it hits 0 AND audioEndReceivedRef is true we know
+  // playback is complete and it's time to start recording.
+
+  const handleAllAudioFinished = useCallback(() => {
+    stopVisemeLoop(); // stop mouth animation when audio ends
+    isPlayingRef.current = false;
+    if (audioEndReceivedRef.current) {
+      setIsAiSpeaking(false);
+      avatarState.onAiStopSpeaking();
+      saveAiMessage();
+      if (shouldDisconnectAfterAudioRef.current) {
+        setStatus("Interview completed. Thank you!");
+        setTimeout(() => { disconnect(); }, 1500);
+        return;
+      }
+      setStatus("Your turn - speak now...");
+      setTimeout(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          startRecordingInternal();
+        }
+      }, 400);
     }
-  }, [saveAiMessage, avatarState, startRevealingTokens]);
+  }, [saveAiMessage, avatarState, stopVisemeLoop]);
 
   const queueAudio = useCallback((pcmData: ArrayBuffer) => {
-    // Reuse existing context or create with default hardware sample rate
     if (!audioContextRef.current || audioContextRef.current.state === "closed") {
       try {
         audioContextRef.current = new AudioContext();
+        // Reset analyser so it's recreated against the new AudioContext
+        analyserRef.current = null;
+        amplitudeDataRef.current = null;
       } catch (err) {
         console.error('[InterviewUI] Failed to create playback AudioContext:', err);
         return;
@@ -465,27 +508,97 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     }
     const ctx = audioContextRef.current;
     if (ctx.state === "suspended") { ctx.resume().catch(() => {}); }
+
     const int16 = new Int16Array(pcmData);
     const float32 = new Float32Array(int16.length);
     for (let i = 0; i < int16.length; i++) {
       float32[i] = int16[i] / 32768.0;
     }
-    // Buffer sample rate is 24kHz — browser auto-resamples to context output rate
+    // AudioBuffer declared at 24kHz — browser resamples to context output rate
     const buffer = ctx.createBuffer(1, float32.length, 24000);
     buffer.getChannelData(0).set(float32);
-    audioQueueRef.current.push(buffer);
-    // Load shedding: reduce proctoring frequency when audio is lagging
+
+    // ── Gapless scheduling ───────────────────────────────────────────────────
+    // Keep nextPlayTimeRef ahead of ctx.currentTime.  If we've fallen behind
+    // (first buffer or long gap), add a small 80 ms look-ahead so the scheduler
+    // never tries to play in the past.
+    const now = ctx.currentTime;
+    if (nextPlayTimeRef.current < now + 0.08) {
+      nextPlayTimeRef.current = now + 0.08;
+    }
+    const startTime = nextPlayTimeRef.current;
+    nextPlayTimeRef.current += buffer.duration; // schedule end-to-end with zero gap
+
+    // ── Create AnalyserNode once per AudioContext ────────────────────────────
+    // All sources route through the analyser so amplitude can be read every
+    // animation frame to drive real-time viseme lip sync.
+    if (!analyserRef.current) {
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;           // 256 time-domain samples per read
+      analyser.smoothingTimeConstant = 0.6; // light smoothing for natural motion
+      analyser.connect(ctx.destination);
+      analyserRef.current = analyser;
+      amplitudeDataRef.current = new Uint8Array(analyser.fftSize);
+      console.log("[Lipsync] AnalyserNode created");
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    // Route: source → analyser → destination (speaker)
+    source.connect(analyserRef.current);
+
+    pendingBuffersRef.current += 1;
+    source.onended = () => {
+      pendingBuffersRef.current -= 1;
+      if (pendingBuffersRef.current === 0) {
+        handleAllAudioFinished();
+      }
+    };
+
+    source.start(startTime);
+    // ────────────────────────────────────────────────────────────────────────
+
+    if (!isPlayingRef.current) {
+      isPlayingRef.current = true;
+      setIsAiSpeaking(true);
+      avatarState.onAiStartSpeaking();
+      // ── Lip-sync: start real-time amplitude → viseme loop ───────────────────
+      // AnalyserNode reads what's actually playing → perfect audio/mouth sync.
+      startVisemeLoop();
+      // ────────────────────────────────────────────────────────────────────────
+      if (!revealTimerRef.current && tokenBufferRef.current.length > 0) {
+        startRevealingTokens();
+      }
+    }
+
+    // ── TalkingHead avatar state (speaking pose, hand gestures) ─────────────
+    // Auto-start TalkingHead stream so avatar enters speaking animation state.
+    // Audio is muted (gain:0) — actual playback is via the Web Audio API above.
+    if (!thStreamActive.current && talkingHeadRef.current) {
+      thStreamActive.current = true;
+      talkingHeadRef.current.streamStart(24000, () => {});
+    }
+    talkingHeadRef.current?.streamAudio(pcmData);
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Load shedding: reduce proctoring frequency when buffers are lagging
+    audioQueueRef.current.push(buffer); // count only — not used for playback
     if (audioQueueRef.current.length > 3) {
       setReducedFrequency(true);
     } else if (audioQueueRef.current.length <= 1) {
       setReducedFrequency(false);
     }
-    if (!isPlayingRef.current) { playNextBuffer(); }
-  }, [playNextBuffer, setReducedFrequency]);
+    audioQueueRef.current.shift(); // immediate clear — scheduling already done
+  }, [handleAllAudioFinished, avatarState, startRevealingTokens, setReducedFrequency, startVisemeLoop]);
 
   // WebSocket handlers
   const handleMessage = useCallback((data: any) => {
     switch (data.type) {
+      case "pong":
+        break; // Keepalive response — no action needed
+      case "viseme_timeline":
+        // Deprecated — lip sync is now driven by real-time amplitude analysis.
+        break;
       case "connected":
         if (data.vad_config) {
           silenceThresholdRef.current = data.vad_config.silence_threshold;
@@ -517,6 +630,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         break;
       case "llm_token":
         tokenBufferRef.current += data.token;
+        // Restart reveal timer if it stopped (caught up) but more tokens arrived
+        if (!revealTimerRef.current && isAiSpeakingRef.current) {
+          startRevealingTokens();
+        }
         if (!isPlayingRef.current && !isAiSpeakingRef.current) {
           setStatus("Linda is thinking...");
         }
@@ -525,15 +642,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         setIsAiSpeaking(true);
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
+        pendingBuffersRef.current = 0;   // reset for this new speaking turn
+        nextPlayTimeRef.current = 0;     // reset clock so first buffer gets fresh 80ms look-ahead
         noResponseRetryRef.current = 0; // Reset no-response tracking on new question
         setStatus("Linda is speaking...");
         startRevealingTokens();
+        // Pre-start TalkingHead stream so it's ready when PCM chunks arrive
+        if (!thStreamActive.current && talkingHeadRef.current) {
+          thStreamActive.current = true;
+          talkingHeadRef.current.streamStart(24000, () => {});
+        }
         break;
       case "audio_end":
         setIsProcessing(false);
         audioEndReceivedRef.current = true;
         revealAllTokens();
-        if (audioQueueRef.current.length === 0 && !isPlayingRef.current) {
+        // Stop TalkingHead stream — avatar transitions back to idle
+        thStreamActive.current = false;
+        talkingHeadRef.current?.streamStop();
+        // With scheduled playback, pendingBuffersRef tracks in-flight buffers.
+        // If nothing is playing/scheduled right now, trigger recording immediately.
+        if (pendingBuffersRef.current === 0 && !isPlayingRef.current) {
           setIsAiSpeaking(false);
           avatarState.onAiStopSpeaking();
           saveAiMessage();
@@ -656,6 +785,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer]);
 
   const startRecordingInternal = async () => {
+    // Use refs — NOT state values — because this function is called from stale
+    // closures (useCallback, setTimeout) where isAiSpeaking/isProcessing are stale.
     if (isAiSpeakingRef.current || isProcessingRef.current || isRecordingRef.current) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -740,19 +871,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
       startWebSpeechRecognition();
 
-      // Start no-response detection (3 seconds)
+      // No-response detection — only fire after 20s of total silence
+      // (3s was too aggressive; candidate may just be thinking)
       clearNoResponseTimer();
       noResponseTimerRef.current = setTimeout(() => {
         if (!speechDetectedRef.current && isRecordingRef.current) {
           handleNoResponseRef.current();
         }
-      }, 3000);
+      }, 20000);
     } catch {
       setStatus("Microphone error");
     }
   };
 
+  const sendTextInput = useCallback((text: string) => {
+    if (!text.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (isAiSpeakingRef.current || isProcessingRef.current) return;
+    // Stop voice recording if active
+    if (isRecordingRef.current) stopRecordingSilentRef.current();
+    clearNoResponseTimer();
+    wsRef.current.send(JSON.stringify({ type: "text_input", text: text.trim() }));
+    setIsProcessing(true);
+    setStatus("Processing your message...");
+  }, [clearNoResponseTimer]);
+
   const disconnect = useCallback(() => {
+    stopVisemeLoop();
     stopRecording();
     clearNoResponseTimer();
     if (micPopupTimerRef.current) {
@@ -767,11 +911,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     setIsProcessing(false);
     setIsAiSpeaking(false);
     shouldDisconnectAfterAudioRef.current = false;
+    thStreamActive.current = false;
+    talkingHeadRef.current?.streamStop();
     audioQueueRef.current = [];
     isPlayingRef.current = false;
+    pendingBuffersRef.current = 0;
+    nextPlayTimeRef.current = 0;
     audioEndReceivedRef.current = false;
     currentAiTextRef.current = "";
-  }, [stopRecording, clearNoResponseTimer]);
+  }, [stopRecording, clearNoResponseTimer, stopVisemeLoop]);
 
   // No-response handlers
   const handleMicPopupNo = useCallback(() => {
@@ -916,15 +1064,33 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     ws.onopen = () => {
       setIsConnected(true);
       setStatus("Connected - Linda is greeting you...");
+      reconnectAttemptsRef.current = 0;
+      // Keepalive ping every 25 s — prevents proxy/nginx from closing idle connections
+      if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = setInterval(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 25000);
     };
     ws.onclose = (event) => {
       setIsConnected(false);
+      if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (event.code === 1000 || shouldDisconnectAfterAudioRef.current) {
         setStatus("Interview completed. Thank you!");
         uploadRecording();
         onInterviewComplete?.();
-      } else {
-        setStatus("Disconnected");
+      } else if (event.code !== 1001 && !isUnmountedRef.current) {
+        // Unexpected disconnection — attempt auto-reconnect (max 3 times)
+        const attempt = ++reconnectAttemptsRef.current;
+        if (attempt <= 3) {
+          setStatus(`Connection lost. Reconnecting... (${attempt}/3)`);
+          setTimeout(() => {
+            if (!isUnmountedRef.current) connectRef.current();
+          }, 2000 * attempt);
+        } else {
+          setStatus("Connection failed. Please refresh the page.");
+        }
       }
       stopRecording();
     };
@@ -943,6 +1109,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     wsRef.current = ws;
   }, [token, onInterviewComplete, stopRecording, uploadRecording]);
 
+  // Keep connectRef pointing at the latest connect function so auto-reconnect works
+  useEffect(() => { connectRef.current = connect; }, [connect]);
+
   // Pre-acquire microphone permission on mount so the browser prompts early
   // (Webcam component only requests video; mic is otherwise deferred until after greeting)
   useEffect(() => {
@@ -958,10 +1127,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   // Auto-connect once on mount (refs keep handlers fresh without reconnecting)
   useEffect(() => {
+    isUnmountedRef.current = false;
     const timer = setTimeout(() => { connect(); }, 300);
     return () => {
+      isUnmountedRef.current = true;
       clearTimeout(timer);
-      wsRef.current?.close();
+      if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
+      // Use code 1001 (Going Away) on unmount so onclose doesn't trigger
+      // onInterviewComplete — only intentional interview completion uses code 1000.
+      wsRef.current?.close(1001, 'Component unmounted');
       // Clean up audio contexts on unmount
       try { audioContextRef.current?.close(); } catch {}
       audioContextRef.current = null;
@@ -1081,101 +1255,146 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         </div>
       </div>
     )}
-    <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white">
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-700">
+    <div className="flex flex-col h-screen bg-gray-950 text-white overflow-hidden">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
         <div>
-          <h1 className="text-xl font-bold">AI Interview</h1>
-          <p className="text-xs text-gray-400">{interviewInfo.position} - {interviewInfo.interview_type}</p>
+          <h1 className="text-base font-bold tracking-tight">AI Interview</h1>
+          <p className="text-xs text-gray-400">{interviewInfo.position}</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {isConnected && !isClosing && (
-            <div className={`text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${
+            <div className={`text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-mono ${
               remainingSeconds <= 60 ? 'bg-red-500/20 text-red-400 animate-pulse' :
               remainingSeconds <= 300 ? 'bg-orange-500/20 text-orange-400' :
-              'bg-blue-500/20 text-blue-400'
+              'bg-blue-500/10 text-blue-300'
             }`}>
               <Clock className="w-3.5 h-3.5" />
-              <span className="font-mono font-medium">{formatTime(remainingSeconds)}</span>
-              <span className="text-xs opacity-75">remaining</span>
+              <span className="font-medium">{formatTime(remainingSeconds)}</span>
             </div>
           )}
           {isClosing && (
-            <div className="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg font-medium animate-pulse">
+            <div className="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-sm font-medium animate-pulse">
               Interview Ending...
             </div>
           )}
-          <div className={`text-sm px-3 py-1 rounded-full ${
-            isConnected ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'
+          <div className={`text-xs px-2.5 py-1 rounded-full ${
+            isConnected ? 'bg-green-500/15 text-green-400' : 'bg-gray-500/20 text-gray-500'
           }`}>
-            {isConnected ? 'Connected' : 'Disconnected'}
+            {isConnected ? '● Connected' : '○ Disconnected'}
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* ── Main Body ───────────────────────────────────────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Webcam */}
-        <div className="w-1/4 p-4 flex flex-col items-center justify-start border-r border-gray-700">
-          <Webcam
-            ref={webcamRef}
-            className="w-full aspect-video rounded-xl mb-2"
-            onVideoReady={handleVideoReady}
-            onStream={(stream) => setWebcamStream(stream)}
-            showHandIndicator={true}
-            isHandRaised={handDetection.isHandRaised}
-          />
-          <span className="text-sm text-gray-400">{interviewInfo.candidate_name}</span>
-          {isRecording && (
-            <div className="mt-2 flex items-center gap-2 text-red-400 text-sm">
-              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              Recording...
-            </div>
-          )}
-        </div>
 
-        {/* Center: Chat */}
-        <div className="flex-1 flex flex-col">
-          <div className="flex-1 overflow-auto p-4 space-y-4">
+        {/* ── LEFT PANEL: Chat transcript ──────────────────────────────────── */}
+        <div className="w-[340px] flex-shrink-0 flex flex-col border-r border-gray-800 bg-gray-900/60">
+          {/* Panel header */}
+          <div className="px-4 py-2.5 border-b border-gray-800/70 flex items-center gap-2 flex-shrink-0">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs text-gray-400 font-medium">Live Conversation</span>
+          </div>
+
+          {/* Messages */}
+          <div
+            className="flex-1 overflow-y-auto px-3 py-4 space-y-4"
+            style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}
+          >
+            {messages.length === 0 && !currentAiText && (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-600 text-xs text-center">Conversation will appear here...</p>
+              </div>
+            )}
+
             {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${
-                  msg.role === "system" ? "justify-center" :
-                  msg.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
-                <div
-                  className={`max-w-[70%] p-4 rounded-2xl ${
-                    msg.role === "system"
-                      ? "bg-yellow-600/20 border border-yellow-600 rounded-md"
-                      : msg.role === "user"
-                      ? "bg-blue-600 rounded-br-md"
-                      : "bg-gray-700 rounded-bl-md"
-                  }`}
-                >
-                  <p className="text-xs text-gray-300 mb-1 font-medium">
-                    {msg.role === "system" ? "System" : msg.role === "user" ? "You" : "Linda"}
-                  </p>
-                  <p className="text-sm leading-relaxed">{msg.content}</p>
-                </div>
+              <div key={msg.id}>
+                {msg.role === "system" ? (
+                  <div className="flex justify-center">
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/25 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      <p className="text-xs text-amber-300">{msg.content}</p>
+                    </div>
+                  </div>
+                ) : msg.role === "user" ? (
+                  /* You — right */
+                  <div className="flex justify-end">
+                    <div className="max-w-[85%]">
+                      <p className="text-[10px] text-gray-500 mb-1 text-right">You</p>
+                      <div className="bg-blue-600 rounded-2xl rounded-br-sm px-3 py-2 shadow-md shadow-blue-900/20">
+                        <p className="text-sm leading-relaxed text-white">{msg.content}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Linda — left */
+                  <div className="flex items-start gap-2">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                      <span className="text-[10px] font-bold text-white">L</span>
+                    </div>
+                    <div className="max-w-[85%]">
+                      <p className="text-[10px] text-gray-500 mb-1">Linda</p>
+                      <div className="bg-gray-800 border border-gray-700/50 rounded-2xl rounded-tl-sm px-3 py-2 shadow">
+                        <p className="text-sm leading-relaxed text-gray-100">{msg.content}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
 
+            {/* Live speech transcript */}
             {currentTranscript && (
               <div className="flex justify-end">
-                <div className="max-w-[70%] p-4 rounded-2xl bg-blue-600/50 rounded-br-md border border-blue-500">
-                  <p className="text-xs text-gray-300 mb-1">You (speaking...)</p>
-                  <p className="text-sm">{currentTranscript}</p>
+                <div className="max-w-[85%]">
+                  <p className="text-[10px] text-gray-500 mb-1 text-right">You</p>
+                  <div className="bg-blue-600/30 border border-blue-500/40 rounded-2xl rounded-br-sm px-3 py-2">
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                      <span className="text-[10px] text-red-300">speaking...</span>
+                    </div>
+                    <p className="text-sm text-gray-200 italic">{currentTranscript}</p>
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* Live Linda response */}
             {currentAiText && (
-              <div className="flex justify-start">
-                <div className="max-w-[70%] p-4 rounded-2xl bg-gray-700/50 rounded-bl-md border border-gray-600">
-                  <p className="text-xs text-gray-300 mb-1">Linda (responding...)</p>
-                  <p className="text-sm">{currentAiText}</p>
+              <div className="flex items-start gap-2">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                  <span className="text-[10px] font-bold text-white">L</span>
+                </div>
+                <div className="max-w-[85%]">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <p className="text-[10px] text-gray-500">Linda</p>
+                    <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <div className="bg-gray-800 border border-violet-500/25 rounded-2xl rounded-tl-sm px-3 py-2 shadow">
+                    <p className="text-sm leading-relaxed text-gray-100">{currentAiText}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Thinking dots */}
+            {isProcessing && !currentAiText && (
+              <div className="flex items-start gap-2">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
+                  <span className="text-[10px] font-bold text-white">L</span>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-500 mb-1">Linda</p>
+                  <div className="bg-gray-800 border border-gray-700/50 rounded-2xl rounded-tl-sm px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1183,45 +1402,118 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Status Bar */}
-          <div className="p-4 border-t border-gray-700">
-            <div className={`text-center text-sm font-medium ${
-              isRecording ? 'text-red-400' :
-              isAiSpeaking ? 'text-blue-400' :
-              isProcessing ? 'text-yellow-400' : 'text-gray-400'
-            }`}>
-              {status}
+          {/* ── Text input (manual typing) ───────────────────────────────── */}
+          <div className="flex-shrink-0 p-3 border-t border-gray-800 bg-gray-900/80">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (textInput.trim()) {
+                  sendTextInput(textInput);
+                  setTextInput("");
+                }
+              }}
+              className="flex gap-2"
+            >
+              <input
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder={
+                  isAiSpeaking ? "Wait for Linda to finish..." :
+                  isProcessing ? "Processing..." :
+                  "Type your response..."
+                }
+                disabled={isAiSpeaking || isProcessing || !isConnected}
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 disabled:opacity-40 disabled:cursor-not-allowed"
+              />
+              <button
+                type="submit"
+                disabled={!textInput.trim() || isAiSpeaking || isProcessing || !isConnected}
+                className="px-3 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-sm font-medium transition-colors"
+              >
+                Send
+              </button>
+            </form>
+            {/* Voice status */}
+            <div className="flex items-center gap-1.5 mt-2">
+              <div className={`w-1.5 h-1.5 rounded-full ${
+                isRecording ? 'bg-red-500 animate-pulse' :
+                isAiSpeaking ? 'bg-violet-400 animate-pulse' :
+                isProcessing ? 'bg-yellow-400 animate-pulse' : 'bg-gray-600'
+              }`} />
+              <span className={`text-[11px] ${
+                isRecording ? 'text-red-400' :
+                isAiSpeaking ? 'text-violet-400' :
+                isProcessing ? 'text-yellow-400' : 'text-gray-500'
+              }`}>{status}</span>
+              {isConnected && isRecording && (
+                <button
+                  onClick={stopRecording}
+                  className="ml-auto text-[10px] px-2 py-0.5 bg-yellow-600/20 text-yellow-400 border border-yellow-600/30 rounded-md hover:bg-yellow-600/30 transition-colors"
+                >
+                  Skip
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Right: Avatar */}
-        <div className="w-1/4 p-4 flex flex-col items-center justify-start border-l border-gray-700">
-          <Avatar3D
-            state={avatarState.currentState}
-            className="w-full aspect-[9/16] max-w-[280px]"
-            mouthOpenness={isAiSpeaking ? mouthOpenness : 0}
-          />
-          {handDetection.isHandRaised && (
-            <div className="mt-4 text-center">
-              <p className="text-lg text-orange-400 font-bold animate-pulse">
-                HAND RAISED
-              </p>
+        {/* ── RIGHT: Linda big screen + webcam PiP ─────────────────────────── */}
+        <div className="flex-1 relative bg-gradient-to-b from-gray-900 to-gray-950 flex items-center justify-center overflow-hidden">
+
+          {/* Linda — TalkingHead 3D avatar, portrait centered in panel */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <TalkingHeadAvatar
+              ref={talkingHeadRef}
+              avatarUrl="/avatar.glb"
+              className="h-full rounded-none"
+              style={{ aspectRatio: "9/16", maxHeight: "100%", maxWidth: "100%" }}
+            />
+          </div>
+
+          {/* Speaking glow ring when Linda is talking */}
+          {isAiSpeaking && (
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute inset-0 rounded-none"
+                style={{
+                  background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.08) 0%, transparent 70%)',
+                  animation: 'pulse 2s infinite',
+                }}
+              />
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Footer Controls */}
-      <div className="p-4 border-t border-gray-700 flex justify-center gap-4">
-        {isConnected && isRecording && (
-          <button
-            onClick={stopRecording}
-            className="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 rounded-xl font-bold transition-colors"
-          >
-            Skip to AI
-          </button>
-        )}
+          {/* Linda name + status — bottom left of main screen */}
+          <div className="absolute bottom-4 left-4 flex items-center gap-2">
+            <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl flex items-center gap-2 border border-white/10">
+              <div className={`w-2 h-2 rounded-full ${isAiSpeaking ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`} />
+              <span className="text-sm font-semibold text-white">Linda</span>
+              <span className="text-xs text-gray-400">AI Interviewer</span>
+            </div>
+            {handDetection.isHandRaised && (
+              <div className="px-3 py-1.5 bg-orange-500/20 backdrop-blur-md rounded-xl border border-orange-500/30">
+                <span className="text-xs text-orange-400 font-bold animate-pulse">✋ HAND RAISED</span>
+              </div>
+            )}
+          </div>
+
+          {/* Candidate webcam — PiP bottom right */}
+          <div className="absolute bottom-4 right-4 w-44 rounded-2xl overflow-hidden border-2 border-gray-700/80 shadow-2xl bg-gray-900">
+            <Webcam
+              ref={webcamRef}
+              className="w-full aspect-video"
+              onVideoReady={handleVideoReady}
+              onStream={handleStream}
+              showHandIndicator={false}
+              isHandRaised={handDetection.isHandRaised}
+            />
+            <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-black/60 backdrop-blur-sm flex items-center gap-1.5">
+              <span className="text-[10px] text-gray-300 truncate">{interviewInfo.candidate_name}</span>
+              {isRecording && <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse ml-auto flex-shrink-0" />}
+            </div>
+          </div>
+
+        </div>
       </div>
     </div>
     <InterviewProctoringWarnings />

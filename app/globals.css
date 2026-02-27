@@ -1,5 +1,18 @@
 @import "tailwindcss";
 
+/* ── Linda speaking mouth animation ─────────────────────────────────── */
+@keyframes linda-talk {
+  0%   { transform: scaleY(0.05); }
+  10%  { transform: scaleY(0.8);  }
+  20%  { transform: scaleY(0.2);  }
+  35%  { transform: scaleY(1);    }
+  50%  { transform: scaleY(0.3);  }
+  65%  { transform: scaleY(0.9);  }
+  75%  { transform: scaleY(0.1);  }
+  88%  { transform: scaleY(0.7);  }
+  100% { transform: scaleY(0.05); }
+}
+
 /* Hide scrollbar for horizontal scrollable tabs */
 .scrollbar-hide {
   -ms-overflow-style: none;
