@@ -98,7 +98,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       return user.permissions.canManageJD === true;
     }
     if (permission === 'canViewResumes') {
-      return user.permissions.canUploadResumes === true || user.permissions.canManageResumes === true;
+      return user.permissions.canUploadResumes === true || user.permissions.canManageResumes === true || user.permissions.canViewResumes === true;
     }
     if (permission === 'canViewInternalDB' || permission === 'canAccessInternalDB') {
       return user.permissions.canAccessInternalDB === true || user.permissions.canViewInternalDB === true;
@@ -159,8 +159,8 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
         { id: 'assessments', label: 'Assessments', icon: ClipboardList, permission: 'canViewAssessments', feature: 'assessment' },
         // AI Interviews - requires resume view permission
         { id: 'ai-interviews', label: 'AI Interviews', icon: Video, permission: 'canViewResumes', feature: 'ai_interview' },
-        // My Resumes - requires resume view/upload permission
-        { id: 'my-resumes', label: 'My Resumes', icon: Users, permission: 'canUploadResumes', feature: 'resume_upload' },
+        // My Resumes - requires resume view permission (upload button hidden separately inside the page)
+        { id: 'my-resumes', label: 'My Resumes', icon: Users, permission: 'canViewResumes', feature: 'resume_upload' },
         // Internal Resume Database - requires internal DB access
         { id: 'resume-database', label: 'Internal Resume Database', icon: Database, permission: 'canViewInternalDB', feature: 'resume_database_access' },
       ]
