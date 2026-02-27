@@ -337,6 +337,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
         { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canViewBranding' },
         // { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' }, // Hidden for demo
         { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canViewSecuritySettings' },
+        { id: 'legal', label: 'Legal & Compliance', icon: ScrollText, href: '/settings/legal', permission: 'canManageSettings' },
       ]
     },
 

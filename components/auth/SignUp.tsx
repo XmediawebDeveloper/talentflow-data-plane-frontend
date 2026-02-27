@@ -10,6 +10,8 @@ import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import PlanSelectionModal from './PlanSelectionModal';
+import TermsAcceptanceStep from './TermsAcceptanceStep';
+import type { TermsAndConditions } from '@/lib/types/terms';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -44,7 +46,7 @@ interface SignUpForm {
   confirmPassword: string;
 }
 
-type SignUpStep = 'form' | 'verification' | 'payment' | 'success';
+type SignUpStep = 'form' | 'terms' | 'verification' | 'payment' | 'success';
 
 interface PlanDetails {
   id: number;
@@ -122,6 +124,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
   const [createdSubdomain, setCreatedSubdomain] = useState<string | null>(null);
   const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
+
+  // Terms & Conditions state for signup flow
+  const [signupTerms, setSignupTerms] = useState<TermsAndConditions | null>(null);
+  const [acceptedTermsId, setAcceptedTermsId] = useState<string | null>(null);
 
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -401,8 +407,23 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
     setError('');
 
-    // Always call complete-registration API when "Create Account" is clicked
-    // Backend handles purchase_intent (trial or paid) based on plan_id
+    // Fetch T&C before proceeding. If API fails, skip terms step gracefully.
+    try {
+      const response = await fetch(`${API_URL}/tenant/terms-and-conditions/current`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.ok) {
+        const termsData: TermsAndConditions = await response.json();
+        setSignupTerms(termsData);
+        setStep('terms');
+        return;
+      }
+    } catch (err) {
+      console.warn('T&C fetch failed during signup, skipping terms step:', err);
+    }
+
+    // If T&C API unavailable, proceed directly
     await completeRegistration();
   };
 
@@ -424,6 +445,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       if (encodedPlanFromUrl && encodedPlanFromUrl !== 'free_trial' && selectedPlanDetails) {
         requestBody.plan_id = selectedPlanDetails.id;
         requestBody.billing_interval = billingInterval;
+      }
+
+      // Include accepted terms ID if user accepted T&C during signup
+      if (acceptedTermsId) {
+        requestBody.terms_id = acceptedTermsId;
       }
 
       // Note: If freeTrialAcknowledged is true and no plan_id, backend handles as trial
@@ -1040,6 +1066,43 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     const symbol = currencySymbols[currency] || currency + ' ';
     return `${symbol}${amount.toLocaleString()}`;
   };
+
+  // Terms Step UI (shown after form validation, before registration)
+  if (step === 'terms' && signupTerms) {
+    return (
+      <div style={containerStyle}>
+        <div style={contentStyle}>
+          {!isMobile && <div style={leftSideStyle}>
+            <div style={logoContainerStyle}>
+              <div style={logoBoxStyle}>
+                <Briefcase className="w-7 h-7 text-white" />
+              </div>
+              <span style={{ fontSize: '28px', fontWeight: 700, color: '#1F2937' }}>TalentFlow</span>
+            </div>
+            <h1 style={{ fontSize: '36px', fontWeight: 700, color: '#1F2937', lineHeight: 1.3 }}>
+              Terms & Conditions
+            </h1>
+            <p style={{ fontSize: '18px', color: '#6B7280', marginTop: '16px', lineHeight: 1.6 }}>
+              Please review and accept our terms to complete your registration.
+            </p>
+          </div>}
+          <div style={formContainerStyle}>
+            <div style={formCardStyle}>
+              <TermsAcceptanceStep
+                terms={signupTerms}
+                isLoading={isLoading}
+                onAccept={async (termsId) => {
+                  setAcceptedTermsId(termsId);
+                  await completeRegistration();
+                }}
+                onBack={() => setStep('form')}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Payment Step UI (shown after account created - user needs to complete payment)
   if (step === 'payment' && selectedPlanDetails) {
