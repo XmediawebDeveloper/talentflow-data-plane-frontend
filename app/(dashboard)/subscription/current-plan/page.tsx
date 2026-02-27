@@ -532,6 +532,7 @@ function CurrentPlanContent() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [hoveredPlan, setHoveredPlan] = useState<string | null>(null);
+  const [expandedFeaturesPlan, setExpandedFeaturesPlan] = useState<string | null>(null);
   const [showAdminMeta, setShowAdminMeta] = useState(false);
 
   // Use ref to track if data has been fetched to prevent duplicate calls
@@ -1549,11 +1550,13 @@ function CurrentPlanContent() {
           ? errorDetail
           : errorDetail?.message || data.message || 'Failed to upgrade plan';
 
-        // Check for migration/database errors and show user-friendly message
+        // Check for migration/database/async errors and show user-friendly message
         if (errorMessage.toLowerCase().includes('migration failed') ||
             errorMessage.toLowerCase().includes('does not exist') ||
             errorMessage.toLowerCase().includes('relation') ||
-            errorMessage.toLowerCase().includes('database error')) {
+            errorMessage.toLowerCase().includes('database error') ||
+            errorMessage.toLowerCase().includes('greenlet_spawn') ||
+            errorMessage.toLowerCase().includes('await_only')) {
           errorMessage = 'We encountered an issue while upgrading your plan. Please contact support for assistance.';
         }
 
@@ -1567,11 +1570,13 @@ function CurrentPlanContent() {
       console.error('Error selecting plan:', err);
       let errorMessage = err instanceof Error ? err.message : 'Failed to select plan';
 
-      // Check for migration/database errors and show user-friendly message
+      // Check for migration/database/async errors and show user-friendly message
       if (errorMessage.toLowerCase().includes('migration failed') ||
           errorMessage.toLowerCase().includes('does not exist') ||
           errorMessage.toLowerCase().includes('relation') ||
-          errorMessage.toLowerCase().includes('database error')) {
+          errorMessage.toLowerCase().includes('database error') ||
+          errorMessage.toLowerCase().includes('greenlet_spawn') ||
+          errorMessage.toLowerCase().includes('await_only')) {
         errorMessage = 'We encountered an issue while upgrading your plan. Please contact support for assistance.';
       }
 
@@ -2359,9 +2364,16 @@ function CurrentPlanContent() {
                     className="flex"
                     onMouseEnter={() => setHoveredPlan(plan.id)}
                     style={{
-                      transition: 'all 0.3s ease-out',
+                      transition: 'opacity 0.3s ease-out',
                       opacity: hasHoveredPlan && !isHovered ? 0.5 : 1,
+                    }}
+                  >
+                  <div
+                    style={{
+                      width: '100%',
+                      display: 'flex',
                       transform: isHovered ? 'translateY(-8px)' : 'translateY(0)',
+                      transition: 'transform 0.3s ease-out',
                     }}
                   >
                   <Card
@@ -2539,17 +2551,25 @@ function CurrentPlanContent() {
                     {plan.features.length > 0 && (
                       <div className="mb-6">
                         <ul className="space-y-2.5">
-                          {plan.features.slice(0, isHovered ? undefined : 4).map((feature, idx) => (
+                          {plan.features.slice(0, expandedFeaturesPlan === plan.id ? undefined : 4).map((feature, idx) => (
                             <li key={idx} className="flex items-start gap-2.5">
                               <Check className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
                               <span className="text-gray-700 text-sm">{feature}</span>
                             </li>
                           ))}
                         </ul>
-                        {!isHovered && plan.features.length > 4 && (
-                          <p className="text-gray-400 text-sm mt-2 pl-6">
-                            +{plan.features.length - 4} more features
-                          </p>
+                        {plan.features.length > 4 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedFeaturesPlan(expandedFeaturesPlan === plan.id ? null : plan.id);
+                            }}
+                            className="text-gray-400 hover:text-gray-600 text-sm mt-2 pl-6 text-left"
+                          >
+                            {expandedFeaturesPlan === plan.id
+                              ? 'Show less'
+                              : `+${plan.features.length - 4} more features`}
+                          </button>
                         )}
                       </div>
                     )}
@@ -2611,6 +2631,7 @@ function CurrentPlanContent() {
                       })()}
                     </button>
                   </Card>
+                  </div>
                   </div>
                 );
               })}

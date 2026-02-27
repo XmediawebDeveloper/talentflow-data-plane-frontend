@@ -1,11 +1,8 @@
 /**
  * Terms & Conditions Service
  *
- * Provides methods for:
- * - Fetching current T&C content
- * - Checking acceptance status (with sessionStorage cache)
- * - Accepting terms
- * - Fetching acceptance history
+ * Supports all three document types:
+ *   TERMS_AND_CONDITIONS, PRIVACY_POLICY, COOKIES_POLICY
  */
 
 import api from './api';
@@ -15,10 +12,11 @@ import type {
   TermsAcceptanceRecord,
 } from '@/lib/types/terms';
 
+export type DocumentType = 'TERMS_AND_CONDITIONS' | 'PRIVACY_POLICY' | 'COOKIES_POLICY';
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
-// Session cache config
-const CACHE_KEY = 'tf_terms_status';
+// Session cache config (keyed by document_type)
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 interface CachedStatus {
@@ -26,13 +24,17 @@ interface CachedStatus {
   timestamp: number;
 }
 
-function getCachedStatus(): TermsAcceptanceStatus | null {
+function cacheKey(documentType: DocumentType) {
+  return `tf_terms_status_${documentType}`;
+}
+
+function getCachedStatus(documentType: DocumentType): TermsAcceptanceStatus | null {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY);
+    const raw = sessionStorage.getItem(cacheKey(documentType));
     if (!raw) return null;
     const cached: CachedStatus = JSON.parse(raw);
     if (Date.now() - cached.timestamp > CACHE_TTL) {
-      sessionStorage.removeItem(CACHE_KEY);
+      sessionStorage.removeItem(cacheKey(documentType));
       return null;
     }
     return cached.data;
@@ -41,18 +43,25 @@ function getCachedStatus(): TermsAcceptanceStatus | null {
   }
 }
 
-function setCachedStatus(data: TermsAcceptanceStatus): void {
+function setCachedStatus(documentType: DocumentType, data: TermsAcceptanceStatus): void {
   try {
     const cached: CachedStatus = { data, timestamp: Date.now() };
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify(cached));
+    sessionStorage.setItem(cacheKey(documentType), JSON.stringify(cached));
   } catch {
     // sessionStorage unavailable
   }
 }
 
-function invalidateCache(): void {
+function invalidateCache(documentType?: DocumentType): void {
   try {
-    sessionStorage.removeItem(CACHE_KEY);
+    if (documentType) {
+      sessionStorage.removeItem(cacheKey(documentType));
+    } else {
+      // Invalidate all document types
+      (['TERMS_AND_CONDITIONS', 'PRIVACY_POLICY', 'COOKIES_POLICY'] as DocumentType[]).forEach(
+        (t) => sessionStorage.removeItem(cacheKey(t))
+      );
+    }
   } catch {
     // sessionStorage unavailable
   }
@@ -69,11 +78,11 @@ function handleApiError(error: any): Error {
 
 export const termsService = {
   /**
-   * Get current T&C content (authenticated)
+   * Get current published document (authenticated)
    */
-  async getCurrentTerms(): Promise<TermsAndConditions> {
+  async getCurrentTerms(documentType: DocumentType = 'TERMS_AND_CONDITIONS'): Promise<TermsAndConditions> {
     try {
-      const response = await api.get('/tenant/terms-and-conditions/current');
+      const response = await api.get(`/public/terms-and-conditions/current?document_type=${documentType}`);
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -81,36 +90,39 @@ export const termsService = {
   },
 
   /**
-   * Get current T&C content (public, no auth - for signup)
+   * Get current published document (public, no auth — for signup)
    */
-  async getCurrentTermsPublic(): Promise<TermsAndConditions> {
+  async getCurrentTermsPublic(documentType: DocumentType = 'TERMS_AND_CONDITIONS'): Promise<TermsAndConditions> {
     try {
-      const response = await fetch(`${API_URL}/tenant/terms-and-conditions/current`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const response = await fetch(
+        `${API_URL}/public/terms-and-conditions/current?document_type=${documentType}`,
+        { method: 'GET', headers: { 'Content-Type': 'application/json' } }
+      );
       if (!response.ok) {
-        throw new Error(`Failed to fetch terms: ${response.status}`);
+        throw new Error(`Failed to fetch document: ${response.status}`);
       }
       return response.json();
     } catch (error) {
-      throw error instanceof Error ? error : new Error('Failed to fetch terms');
+      throw error instanceof Error ? error : new Error('Failed to fetch document');
     }
   },
 
   /**
-   * Get acceptance status (with sessionStorage cache)
+   * Get acceptance status (with sessionStorage cache, per document type)
    */
-  async getAcceptanceStatus(forceRefresh = false): Promise<TermsAcceptanceStatus> {
+  async getAcceptanceStatus(
+    forceRefresh = false,
+    documentType: DocumentType = 'TERMS_AND_CONDITIONS'
+  ): Promise<TermsAcceptanceStatus> {
     if (!forceRefresh) {
-      const cached = getCachedStatus();
+      const cached = getCachedStatus(documentType);
       if (cached) return cached;
     }
 
     try {
-      const response = await api.get('/tenant/terms-and-conditions/status');
+      const response = await api.get(`/public/terms-and-conditions/status?document_type=${documentType}`);
       const data: TermsAcceptanceStatus = response.data;
-      setCachedStatus(data);
+      setCachedStatus(documentType, data);
       return data;
     } catch (error) {
       throw handleApiError(error);
@@ -118,14 +130,14 @@ export const termsService = {
   },
 
   /**
-   * Accept terms
+   * Accept a document version (terms_id identifies the exact version)
    */
-  async acceptTerms(termsId: string): Promise<{ success: boolean; message: string }> {
+  async acceptTerms(termsId: string, documentType?: DocumentType): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await api.post('/tenant/terms-and-conditions/accept', {
+      const response = await api.post('/public/terms-and-conditions/accept', {
         terms_id: termsId,
       });
-      invalidateCache();
+      invalidateCache(documentType);
       return response.data;
     } catch (error) {
       throw handleApiError(error);
@@ -133,11 +145,11 @@ export const termsService = {
   },
 
   /**
-   * Get acceptance history
+   * Get acceptance history for a document type
    */
-  async getAcceptanceHistory(): Promise<TermsAcceptanceRecord[]> {
+  async getAcceptanceHistory(documentType: DocumentType = 'TERMS_AND_CONDITIONS'): Promise<TermsAcceptanceRecord[]> {
     try {
-      const response = await api.get('/tenant/terms-and-conditions/history');
+      const response = await api.get(`/public/terms-and-conditions/history?document_type=${documentType}`);
       return response.data;
     } catch (error) {
       throw handleApiError(error);

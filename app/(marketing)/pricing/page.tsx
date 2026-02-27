@@ -797,19 +797,19 @@ export default function PricingPage() {
                           return (
                             <div className="mb-6 py-4 border-t border-b border-gray-100 dark:border-gray-800">
                               <div className="space-y-2 text-sm">
-                                {normalizedQuotas.max_seats !== undefined && (String(normalizedQuotas.max_seats).toLowerCase() === 'unlimited' || Number(normalizedQuotas.max_seats) >= 1) && (
+                                {normalizedQuotas.max_seats !== undefined && normalizedQuotas.max_seats !== 0 && (String(normalizedQuotas.max_seats).toLowerCase() === 'unlimited' || Number(normalizedQuotas.max_seats) >= 1 || Number(normalizedQuotas.max_seats) === -1) && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">Max Users</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {String(normalizedQuotas.max_seats).toLowerCase() === 'unlimited' ? 'Unlimited' : Number(normalizedQuotas.max_seats).toLocaleString()}
+                                      {String(normalizedQuotas.max_seats).toLowerCase() === 'unlimited' || Number(normalizedQuotas.max_seats) === -1 ? 'Unlimited' : Number(normalizedQuotas.max_seats).toLocaleString()}
                                     </span>
                                   </div>
                                 )}
-                                {normalizedQuotas.max_jobs !== undefined && (String(normalizedQuotas.max_jobs).toLowerCase() === 'unlimited' || Number(normalizedQuotas.max_jobs) >= 1) && (
+                                {normalizedQuotas.max_jobs !== undefined && normalizedQuotas.max_jobs !== 0 && (String(normalizedQuotas.max_jobs).toLowerCase() === 'unlimited' || Number(normalizedQuotas.max_jobs) >= 1 || Number(normalizedQuotas.max_jobs) === -1) && (
                                   <div className="flex justify-between items-center">
                                     <span className="text-gray-500">Max Jobs</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
-                                      {String(normalizedQuotas.max_jobs).toLowerCase() === 'unlimited' ? 'Unlimited' : (isTrialPlan ? Number(normalizedQuotas.max_jobs).toLocaleString() : 'Unlimited')}
+                                      {String(normalizedQuotas.max_jobs).toLowerCase() === 'unlimited' || Number(normalizedQuotas.max_jobs) === -1 ? 'Unlimited' : Number(normalizedQuotas.max_jobs).toLocaleString()}
                                     </span>
                                   </div>
                                 )}

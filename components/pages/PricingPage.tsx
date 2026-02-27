@@ -49,6 +49,11 @@ interface DisplayPlan {
   gradient: string;
   popular: boolean;
   features: string[];
+  quotas?: {
+    max_jobs?: number;
+    max_seats?: number;
+    storage_gb?: number;
+  };
 }
 
 // Use backend proxy instead of direct Admin API calls
@@ -86,23 +91,30 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [trialDays, setTrialDays] = useState<number>(14);
+  const [freeTrialQuotas, setFreeTrialQuotas] = useState<{ max_jobs?: number | string; max_seats?: number | string } | null>(null);
 
-  // Fetch trial days from backend proxy (which calls Admin API)
+  // Fetch trial days and quotas — /addons/free-trial proxies admin API (no auth required)
   useEffect(() => {
-    const fetchTrialDays = async () => {
+    const fetchTrialData = async () => {
       try {
-        // Use backend proxy endpoint for free trial settings
-        const response = await fetch(`${API_URL}/subscription/public/free-trial`);
+        const response = await fetch(`${API_URL}/addons/free-trial`);
         if (response.ok) {
           const result = await response.json();
-          const days = result?.data?.trial_days || 14;
-          setTrialDays(days);
+          const data = result?.data || result;
+          setTrialDays(data?.trial_days || 14);
+          // features keys may be uppercase (MAX_JOBS) or lowercase (max_jobs)
+          const features = data?.features || {};
+          const maxJobs = features.MAX_JOBS ?? features.max_jobs;
+          const maxSeats = features.MAX_SEATS ?? features.max_seats;
+          if (maxJobs !== undefined || maxSeats !== undefined) {
+            setFreeTrialQuotas({ max_jobs: maxJobs, max_seats: maxSeats });
+          }
         }
       } catch (err) {
-        console.error('Error fetching trial days:', err);
+        console.error('Error fetching trial data:', err);
       }
     };
-    fetchTrialDays();
+    fetchTrialData();
   }, []);
 
   // Fetch plans from backend proxy (which calls Admin API)
@@ -146,7 +158,10 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
             // Add default features based on plan limits/quotas if no features provided
             if (featureNames.length === 0) {
               if (plan.included_seats) featureNames.push(`${plan.included_seats} team members`);
-              if (plan.quotas?.max_jobs) featureNames.push(`${plan.quotas.max_jobs} job postings`);
+              if (plan.quotas?.max_jobs) {
+                const jobDisplay = plan.quotas.max_jobs === -1 ? 'Unlimited' : plan.quotas.max_jobs;
+                featureNames.push(`${jobDisplay} job postings`);
+              }
               if (plan.quotas?.storage_gb) featureNames.push(`${plan.quotas.storage_gb}GB storage`);
               if (plan.trial_period_days) featureNames.push(`${plan.trial_period_days}-day free trial`);
             }
@@ -162,6 +177,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
               gradient: getGradientForPlan(plan.plan_name, index),
               popular: plan.is_featured || false,
               features: featureNames,
+              quotas: plan.quotas,
             };
           });
 
@@ -539,6 +555,29 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                     <span style={priceAmountStyle}>Custom</span>
                   )}
                 </div>
+
+                {isTrialPlan && freeTrialQuotas && (
+                  <div style={{ borderTop: `1px solid ${isDark ? '#334155' : '#E5E7EB'}`, paddingTop: '12px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
+                      {freeTrialQuotas.max_seats !== undefined && freeTrialQuotas.max_seats !== 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: isDark ? '#94A3B8' : '#6B7280' }}>Users</span>
+                          <span style={{ fontWeight: 600, color: isDark ? '#ffffff' : '#111827' }}>
+                            {freeTrialQuotas.max_seats === -1 || String(freeTrialQuotas.max_seats).toLowerCase() === 'unlimited' ? 'Unlimited' : freeTrialQuotas.max_seats}
+                          </span>
+                        </div>
+                      )}
+                      {freeTrialQuotas.max_jobs !== undefined && freeTrialQuotas.max_jobs !== 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: isDark ? '#94A3B8' : '#6B7280' }}>Jobs</span>
+                          <span style={{ fontWeight: 600, color: isDark ? '#ffffff' : '#111827' }}>
+                            {freeTrialQuotas.max_jobs === -1 || String(freeTrialQuotas.max_jobs).toLowerCase() === 'unlimited' ? 'Unlimited' : freeTrialQuotas.max_jobs}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <ul style={featureListStyle}>
                   {plan.features.map((feature, idx) => (

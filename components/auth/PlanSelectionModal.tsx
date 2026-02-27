@@ -73,6 +73,13 @@ interface PlanSelectionModalProps {
   onClose?: () => void;
 }
 
+const formatQuota = (value: number | string | undefined): string | null => {
+  if (value === undefined || value === null) return null;
+  if (value === 0) return null;
+  if (value === -1 || String(value).toLowerCase() === 'unlimited') return 'Unlimited';
+  return String(value);
+};
+
 const formatCurrency = (amount: number | null, currency: string): string => {
   if (amount === null) return 'Contact us';
   const currencySymbols: Record<string, string> = {
@@ -566,42 +573,40 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                       return (
                         <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: '12px', marginBottom: '12px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
-                            {normalizedQuotas.max_seats !== undefined && typeof normalizedQuotas.max_seats === 'number' && (
+                            {formatQuota(normalizedQuotas.max_seats) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ color: '#6B7280' }}>Users</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{normalizedQuotas.max_seats}</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.max_seats)}</span>
                               </div>
                             )}
-                            {normalizedQuotas.max_jobs !== undefined && typeof normalizedQuotas.max_jobs === 'number' && (
+                            {formatQuota(normalizedQuotas.max_jobs) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ color: '#6B7280' }}>Jobs</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>
-                                  {isFreeTrial ? normalizedQuotas.max_jobs : 'Unlimited'}
-                                </span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.max_jobs)}</span>
                               </div>
                             )}
-                            {normalizedQuotas.RS !== undefined && typeof normalizedQuotas.RS === 'number' && (
+                            {formatQuota(normalizedQuotas.RS) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ color: '#6B7280' }}>Resume Scores</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{normalizedQuotas.RS}</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.RS)}</span>
                               </div>
                             )}
-                            {normalizedQuotas.AS !== undefined && typeof normalizedQuotas.AS === 'number' && (
+                            {formatQuota(normalizedQuotas.AS) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ color: '#6B7280' }}>Assessments</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{normalizedQuotas.AS}</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.AS)}</span>
                               </div>
                             )}
-                            {normalizedQuotas.RU !== undefined && typeof normalizedQuotas.RU === 'number' && (
+                            {formatQuota(normalizedQuotas.RU) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ color: '#6B7280' }}>Resume Storage</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{normalizedQuotas.RU}</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.RU)}</span>
                               </div>
                             )}
-                            {normalizedQuotas.AIU !== undefined && typeof normalizedQuotas.AIU === 'number' && (
+                            {formatQuota(normalizedQuotas.AIU) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ color: '#6B7280' }}>AI Interviews</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{normalizedQuotas.AIU}</span>
+                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.AIU)}</span>
                               </div>
                             )}
                           </div>
