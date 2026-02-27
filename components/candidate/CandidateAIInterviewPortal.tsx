@@ -5,7 +5,9 @@ import { Video, CheckCircle, X, Play, Info, AlertTriangle, FileText, Loader2, Mi
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
 import { InterviewUI } from '@/components/ai-interview/InterviewUI';
-import { requestFullscreen } from '@/lib/utils/browserCompat';
+import { getUserMedia, requestFullscreen } from '@/lib/utils/browserCompat';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
 type Step = 'loading' | 'consent' | 'system_check' | 'interview' | 'completed' | 'error';
 
@@ -35,12 +37,28 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [aiEngineStatus, setAiEngineStatus] = useState<'checking' | 'ready' | 'error'>('checking');
   const [lightingStatus, setLightingStatus] = useState<'checking' | 'good' | 'poor'>('checking');
   const [noiseStatus, setNoiseStatus] = useState<'checking' | 'normal' | 'noisy'>('checking');
+  const [micQuality, setMicQuality] = useState<'checking' | 'good' | 'low' | 'silent'>('checking');
+  const [audioLevel, setAudioLevel] = useState<number>(0);
+  const [networkLatency, setNetworkLatency] = useState<number | null>(null);
+  const [aiEngineLatency, setAiEngineLatency] = useState<number | null>(null);
+  const [networkVariance, setNetworkVariance] = useState<number | null>(null);
+  const [videoBrightness, setVideoBrightness] = useState<number | null>(null);
   const [systemCheckSubmitting, setSystemCheckSubmitting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const audioLevelIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const micQualityAudioContextRef = useRef<AudioContext | null>(null);
 
-  const allChecksReady = cameraStatus === 'granted' && micStatus === 'granted' && networkStatus === 'stable' && aiEngineStatus === 'ready' && lightingStatus === 'good' && noiseStatus === 'normal';
+  const allChecksReady =
+    cameraStatus === 'granted'
+    && micStatus === 'granted'
+    && micQuality === 'good'
+    && networkStatus === 'stable'
+    && aiEngineStatus === 'ready'
+    && lightingStatus === 'good'
+    && noiseStatus === 'normal';
 
   // Load interview info and determine initial step
   const loadInterview = useCallback(async () => {
@@ -71,94 +89,178 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     loadInterview();
   }, [loadInterview]);
 
-  // System checks
-  const runSystemChecks = useCallback(async () => {
-    setCameraStatus('checking');
-    setMicStatus('checking');
-    setNetworkStatus('checking');
-    setAiEngineStatus('checking');
-    setLightingStatus('checking');
-    setNoiseStatus('checking');
-
+  // ---- Microphone quality (AudioContext + AnalyserNode) ----
+  // Continuously monitors audio level; passes ('good') once user speaks loudly enough.
+  // Shows real-time level bar so the candidate can see their voice is detected.
+  const checkMicrophoneQuality = useCallback((stream: MediaStream) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-      setCameraStatus('granted');
-      setMicStatus('granted');
+      const audioCtx = new AudioContext();
+      micQualityAudioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+      const timeDomainData = new Uint8Array(analyser.fftSize);
+      let goodFrames = 0;
+      let settled = false;
 
-      // Lighting quality check — analyze camera frame brightness after video loads
-      setTimeout(() => {
-        try {
-          const video = videoRef.current;
-          if (video && video.videoWidth > 0) {
-            if (!canvasRef.current) {
-              canvasRef.current = document.createElement('canvas');
-            }
-            canvasRef.current.width = 160;
-            canvasRef.current.height = 120;
-            const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true });
-            if (ctx) {
-              ctx.drawImage(video, 0, 0, 160, 120);
-              const imageData = ctx.getImageData(0, 0, 160, 120);
-              let totalBrightness = 0;
-              for (let i = 0; i < imageData.data.length; i += 4) {
-                totalBrightness += (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
-              }
-              const avgBrightness = totalBrightness / (160 * 120);
-              setLightingStatus(avgBrightness >= 40 ? 'good' : 'poor');
-            } else {
-              setLightingStatus('good');
-            }
-          } else {
-            setLightingStatus('good');
-          }
-        } catch {
-          setLightingStatus('good');
+      // Update audio level bar every 100ms, continuously
+      audioLevelIntervalRef.current = setInterval(() => {
+        analyser.getByteTimeDomainData(timeDomainData);
+        let peak = 0;
+        for (let i = 0; i < timeDomainData.length; i++) {
+          const val = Math.abs(timeDomainData[i] - 128);
+          if (val > peak) peak = val;
         }
-      }, 2000);
+        setAudioLevel(peak);
 
-      // Noise baseline check — measure ambient audio level
-      try {
-        const audioContext = new AudioContext();
-        const source = audioContext.createMediaStreamSource(stream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        if (settled) return;
 
-        setTimeout(() => {
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
-          }
-          const avgLevel = sum / dataArray.length;
-          setNoiseStatus(avgLevel < 80 ? 'normal' : 'noisy');
-          audioContext.close().catch(() => {});
-        }, 2500);
-      } catch {
-        setNoiseStatus('normal');
-      }
+        // Count consecutive frames with good audio level
+        if (peak > 15) {
+          goodFrames++;
+        } else {
+          // Reset if silence returns
+          if (goodFrames < 5) goodFrames = 0;
+        }
+
+        // Need ~0.5s of good audio (5 frames at 100ms) to pass
+        if (goodFrames >= 5) {
+          settled = true;
+          setMicQuality('good');
+          // Keep interval running for the level bar visualization
+        }
+      }, 100);
     } catch {
-      setCameraStatus('denied');
-      setMicStatus('denied');
-      setLightingStatus('good');
-      setNoiseStatus('normal');
+      setMicQuality('good'); // graceful degradation
     }
-
-    setTimeout(() => {
-      setNetworkStatus(navigator.onLine ? 'stable' : 'unstable');
-    }, 1000);
-
-    setTimeout(() => {
-      setAiEngineStatus('ready');
-    }, 1500);
   }, []);
 
-  const stopMediaStream = useCallback(() => {
+  // ---- Network quality (5 sequential RTT pings) ----
+  const checkNetworkQuality = useCallback(async () => {
+    const healthUrl = `${API_BASE_URL.replace('/api/v1', '')}/health`;
+    const latencies: number[] = [];
+    let failCount = 0;
+
+    for (let i = 0; i < 5; i++) {
+      try {
+        const t0 = performance.now();
+        await fetch(healthUrl, { method: 'GET', cache: 'no-store' });
+        const t1 = performance.now();
+        latencies.push(t1 - t0);
+      } catch {
+        failCount++;
+      }
+    }
+
+    if (failCount >= 3 || latencies.length === 0) {
+      setNetworkStatus('unstable');
+      setNetworkLatency(null);
+      setNetworkVariance(null);
+      return;
+    }
+
+    const avg = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+    const variance = latencies.reduce((sum, l) => sum + Math.pow(l - avg, 2), 0) / latencies.length;
+    const stddev = Math.sqrt(variance);
+
+    setNetworkLatency(Math.round(avg));
+    setNetworkVariance(Math.round(stddev));
+
+    if (avg < 500 && stddev < 200) {
+      setNetworkStatus('stable');
+    } else {
+      setNetworkStatus('unstable');
+    }
+  }, []);
+
+  // ---- AI engine health check ----
+  const checkAIEngine = useCallback(async () => {
+    try {
+      const result = await candidateAIInterviewService.checkAIHealth(token);
+      setAiEngineLatency(result.latency_ms);
+      if (result.status === 'ready') {
+        setAiEngineStatus('ready');
+      } else {
+        setAiEngineStatus('error');
+      }
+    } catch {
+      setAiEngineStatus('error');
+      setAiEngineLatency(null);
+    }
+  }, [token]);
+
+  // ---- Lighting check (canvas brightness analysis) ----
+  const checkLighting = useCallback(() => {
+    try {
+      const video = videoRef.current;
+      if (video && video.videoWidth > 0) {
+        if (!canvasRef.current) {
+          canvasRef.current = document.createElement('canvas');
+        }
+        canvasRef.current.width = 160;
+        canvasRef.current.height = 120;
+        const ctx = canvasRef.current.getContext('2d', { willReadFrequently: true });
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, 160, 120);
+          const imageData = ctx.getImageData(0, 0, 160, 120);
+          let totalBrightness = 0;
+          for (let i = 0; i < imageData.data.length; i += 4) {
+            totalBrightness += (imageData.data[i] + imageData.data[i + 1] + imageData.data[i + 2]) / 3;
+          }
+          const avgBrightness = totalBrightness / (160 * 120);
+          setVideoBrightness(avgBrightness);
+          setLightingStatus(avgBrightness >= 40 ? 'good' : 'poor');
+        } else {
+          setLightingStatus('good');
+        }
+      } else {
+        setLightingStatus('good');
+      }
+    } catch {
+      setLightingStatus('good');
+    }
+  }, []);
+
+  // ---- Noise check (frequency bin analysis) ----
+  const checkNoise = useCallback((stream: MediaStream) => {
+    try {
+      const audioCtx = new AudioContext();
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      setTimeout(() => {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const avgLevel = sum / dataArray.length;
+        setNoiseStatus(avgLevel < 80 ? 'normal' : 'noisy');
+      }, 2500);
+    } catch {
+      setNoiseStatus('normal');
+    }
+  }, []);
+
+  // ---- Cleanup helper ----
+  const cleanupAllChecks = useCallback(() => {
+    if (audioLevelIntervalRef.current) {
+      clearInterval(audioLevelIntervalRef.current);
+      audioLevelIntervalRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+      audioContextRef.current = null;
+    }
+    if (micQualityAudioContextRef.current) {
+      micQualityAudioContextRef.current.close().catch(() => {});
+      micQualityAudioContextRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
@@ -168,16 +270,86 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     }
   }, []);
 
+  // ---- Main system checks orchestrator ----
+  const runSystemChecks = useCallback(async () => {
+    setCameraStatus('checking');
+    setMicStatus('checking');
+    setNetworkStatus('checking');
+    setAiEngineStatus('checking');
+    setLightingStatus('checking');
+    setNoiseStatus('checking');
+    setMicQuality('checking');
+    setAudioLevel(0);
+    setNetworkLatency(null);
+    setNetworkVariance(null);
+    setAiEngineLatency(null);
+    setVideoBrightness(null);
+
+    // Run network + AI checks in parallel with media checks
+    const networkPromise = checkNetworkQuality();
+    const aiPromise = checkAIEngine();
+
+    try {
+      const stream = await getUserMedia({ video: true, audio: true });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+
+        // Wait for actual video frames before running lighting check
+        const video = videoRef.current;
+        const onVideoReady = () => {
+          video.removeEventListener('playing', onVideoReady);
+          setTimeout(() => {
+            checkLighting();
+          }, 500);
+        };
+        if (!video.paused && video.videoWidth > 0) {
+          setTimeout(() => {
+            checkLighting();
+          }, 500);
+        } else {
+          video.addEventListener('playing', onVideoReady);
+        }
+      }
+      setCameraStatus('granted');
+      setMicStatus('granted');
+
+      // Start mic quality measurement
+      checkMicrophoneQuality(stream);
+
+      // Start noise check
+      checkNoise(stream);
+    } catch {
+      setCameraStatus('denied');
+      setMicStatus('denied');
+      setLightingStatus('good');
+      setNoiseStatus('normal');
+      setMicQuality('silent');
+    }
+
+    await Promise.allSettled([networkPromise, aiPromise]);
+  }, [checkNetworkQuality, checkAIEngine, checkMicrophoneQuality, checkNoise, checkLighting]);
+
+  // ---- Re-run checks ----
+  const handleRerunChecks = useCallback(() => {
+    cleanupAllChecks();
+    // Small delay to allow cleanup to complete
+    setTimeout(() => runSystemChecks(), 100);
+  }, [cleanupAllChecks, runSystemChecks]);
+
+  const stopMediaStream = useCallback(() => {
+    cleanupAllChecks();
+  }, [cleanupAllChecks]);
+
   useEffect(() => {
     if (step === 'system_check') {
       runSystemChecks();
     }
     return () => {
-      if (step !== 'system_check') {
-        stopMediaStream();
-      }
+      cleanupAllChecks();
     };
-  }, [step, runSystemChecks, stopMediaStream]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   // Handlers
   const handleConsentSubmit = async () => {
@@ -204,30 +376,46 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const handleBeginInterview = async () => {
     if (!allChecksReady || systemCheckSubmitting) return;
     setSystemCheckSubmitting(true);
+
+    // Request fullscreen immediately — must be in the user gesture (click) context
     try {
-      await candidateAIInterviewService.recordSystemCheck(token, {
+      await requestFullscreen();
+    } catch {
+      // Continue even if fullscreen fails
+    }
+
+    try {
+      // Record system check results (fire-and-forget is fine, don't block start)
+      candidateAIInterviewService.recordSystemCheck(token, {
         camera: cameraStatus,
         microphone: micStatus,
         network: networkStatus,
         ai_engine: aiEngineStatus,
         lighting: lightingStatus,
         noise: noiseStatus,
-      });
-      stopMediaStream();
+        video_resolution: videoRef.current ? `${videoRef.current.videoWidth}x${videoRef.current.videoHeight}` : undefined,
+        video_brightness: videoBrightness ?? undefined,
+        audio_level_db: audioLevel > 0 ? audioLevel : undefined,
+        network_latency_ms: networkLatency ?? undefined,
+        network_latency_variance_ms: networkVariance ?? undefined,
+        ai_engine_latency_ms: aiEngineLatency ?? undefined,
+      }).catch(() => {}); // non-blocking — best effort
 
-      // Request fullscreen before starting interview (user gesture context)
-      try {
-        await requestFullscreen();
-      } catch {
-        // Continue even if fullscreen fails
-      }
+      stopMediaStream();
 
       const result = await candidateAIInterviewService.startInterview(token);
       setInterview(result);
       setStep('interview');
     } catch (err: any) {
-      setErrorMessage(err?.response?.data?.detail || 'Failed to start interview');
-      setStep('error');
+      const detail = err?.response?.data?.detail || 'Failed to start interview';
+      console.error('[BEGIN-INTERVIEW] Error:', detail);
+      // If interview is already completed/cancelled, reload to show correct state
+      if (detail.includes('completed') || detail.includes('cancelled') || detail.includes('expired')) {
+        await loadInterview();
+      } else {
+        setErrorMessage(detail);
+        setStep('error');
+      }
     } finally {
       setSystemCheckSubmitting(false);
     }
@@ -316,6 +504,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (status === 'checking') return <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />;
       if (status === 'granted' || status === 'stable' || status === 'ready' || status === 'good' || status === 'normal')
         return <CheckCircle className="w-5 h-5 text-gray-800" />;
+      if (status === 'low') return <AlertTriangle className="w-5 h-5 text-gray-600" />;
       return <X className="w-5 h-5 text-gray-400" />;
     };
 
@@ -330,12 +519,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       if (status === 'unstable') return 'Unstable';
       if (status === 'poor') return 'Too Dark';
       if (status === 'noisy') return 'Too Noisy';
+      if (status === 'low') return 'Low Volume';
+      if (status === 'silent') return 'No Audio Detected';
       return 'Error';
     };
 
     const checkBorder = (status: string) => {
       if (status === 'checking') return 'border-gray-200';
       if (status === 'granted' || status === 'stable' || status === 'ready' || status === 'good' || status === 'normal') return 'border-gray-300 bg-gray-50';
+      if (status === 'low') return 'border-gray-300 bg-gray-50'; // warning — still passes
       return 'border-gray-300 bg-gray-100';
     };
 
@@ -392,12 +584,6 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                   <p className="text-gray-400 text-sm">Camera access denied. Please allow camera permissions.</p>
                 </div>
               )}
-              {cameraStatus === 'granted' && (
-                <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-gray-800/80 text-white text-xs px-3 py-1.5 rounded-full">
-                  <Circle className="w-2.5 h-2.5 fill-gray-300 text-gray-300" />
-                  Ready
-                </div>
-              )}
               {cameraStatus !== 'granted' && (
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
                   <p className="text-gray-500 text-sm">Camera Preview</p>
@@ -413,42 +599,78 @@ export function CandidateAIInterviewPortal({ token }: Props) {
               <h2 className="font-semibold text-gray-900">System Checks</h2>
             </div>
             <div className="grid grid-cols-3 gap-4">
+              {/* Camera Access */}
               <div className={`border rounded-lg p-4 ${checkBorder(cameraStatus)}`}>
                 <div className="flex items-center gap-3">
                   <StatusIcon status={cameraStatus} />
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <div className="font-medium text-gray-900 text-sm">Camera Access</div>
                     <div className="text-xs text-gray-500">{statusLabel(cameraStatus)}</div>
                   </div>
                 </div>
               </div>
+              {/* Microphone + Audio Level */}
               <div className={`border rounded-lg p-4 ${checkBorder(micStatus)}`}>
                 <div className="flex items-center gap-3">
-                  <StatusIcon status={micStatus} />
-                  <div>
-                    <div className="font-medium text-gray-900 text-sm">Microphone Access</div>
-                    <div className="text-xs text-gray-500">{statusLabel(micStatus)}</div>
+                  <StatusIcon status={micQuality === 'good' ? 'granted' : micStatus} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 text-sm">Microphone</div>
+                    <div className="text-xs text-gray-500">
+                      {micStatus === 'checking' ? 'Checking...' :
+                       micStatus === 'denied' ? 'Denied' :
+                       micQuality === 'good' ? 'Good Quality' :
+                       'Speak now to test...'}
+                    </div>
+                    {micStatus === 'granted' && (
+                      <>
+                        <div className="mt-1.5 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-100 ${micQuality === 'good' ? 'bg-green-500' : 'bg-gray-600'}`}
+                            style={{ width: `${Math.min(100, (audioLevel / 128) * 100)}%` }}
+                          />
+                        </div>
+                        {micQuality !== 'good' && (
+                          <div className="mt-1 flex items-center gap-1">
+                            <Mic className="w-3 h-3 text-gray-400 animate-pulse" />
+                            <span className="text-[10px] text-gray-400">Say something to verify your mic</span>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
+              {/* Network */}
               <div className={`border rounded-lg p-4 ${checkBorder(networkStatus)}`}>
                 <div className="flex items-center gap-3">
                   <StatusIcon status={networkStatus} />
                   <div>
                     <div className="font-medium text-gray-900 text-sm">Network Connection</div>
-                    <div className="text-xs text-gray-500">{statusLabel(networkStatus)}</div>
+                    <div className="text-xs text-gray-500">
+                      {networkStatus === 'checking' ? 'Pinging...' :
+                       networkStatus === 'stable' && networkLatency !== null ? `Stable (${networkLatency}ms)` :
+                       networkStatus === 'unstable' && networkLatency !== null ? `Unstable (${networkLatency}ms)` :
+                       statusLabel(networkStatus)}
+                    </div>
                   </div>
                 </div>
               </div>
+              {/* AI Engine */}
               <div className={`border rounded-lg p-4 ${checkBorder(aiEngineStatus)}`}>
                 <div className="flex items-center gap-3">
                   <StatusIcon status={aiEngineStatus} />
                   <div>
                     <div className="font-medium text-gray-900 text-sm">AI Engine</div>
-                    <div className="text-xs text-gray-500">{statusLabel(aiEngineStatus)}</div>
+                    <div className="text-xs text-gray-500">
+                      {aiEngineStatus === 'checking' ? 'Checking...' :
+                       aiEngineStatus === 'ready' && aiEngineLatency !== null ? `Ready (${aiEngineLatency}ms)` :
+                       aiEngineStatus === 'error' ? 'AI engine unavailable' :
+                       statusLabel(aiEngineStatus)}
+                    </div>
                   </div>
                 </div>
               </div>
+              {/* Lighting */}
               <div className={`border rounded-lg p-4 ${checkBorder(lightingStatus)}`}>
                 <div className="flex items-center gap-3">
                   <StatusIcon status={lightingStatus} />
@@ -460,6 +682,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                   </div>
                 </div>
               </div>
+              {/* Ambient Noise */}
               <div className={`border rounded-lg p-4 ${checkBorder(noiseStatus)}`}>
                 <div className="flex items-center gap-3">
                   <StatusIcon status={noiseStatus} />
@@ -504,9 +727,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         {/* Sticky Footer */}
         <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Circle className="w-3 h-3 fill-gray-400 text-gray-400" />
-              Pre-Check
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Circle className="w-3 h-3 fill-gray-400 text-gray-400" />
+                Pre-Check
+              </div>
+              <button
+                onClick={handleRerunChecks}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Re-run Checks
+              </button>
             </div>
             <button
               onClick={handleBeginInterview}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { Avatar } from "./Avatar";
+import { Avatar3D } from "./Avatar3D";
 import { Webcam, WebcamRef } from "./Webcam";
 import { useAvatarState } from "@/hooks/useAvatarState";
 import { useHandRaiseDetection } from "@/hooks/useHandRaiseDetection";
@@ -13,6 +13,9 @@ import {
 import { CandidateInterviewInfo, candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
 import { Maximize2, Clock } from "lucide-react";
+import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
+import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
+import { VisemeTimeline } from "./avatar3d/text-to-viseme";
 
 interface InterviewUIProps {
   token: string;
@@ -37,6 +40,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const [currentAiText, setCurrentAiText] = useState("");
   const [status, setStatus] = useState("Connecting...");
   const [mouthOpenness, setMouthOpenness] = useState(0);
+
+  // Text-based viseme lip-sync (data sent via BroadcastChannel, NOT React state)
+  const visemeTimelineRef = useRef(new VisemeTimeline());
+  const playbackStartTimeRef = useRef(0); // when current speech playback started
+  const totalAudioDurationRef = useRef(0); // accumulated audio duration in seconds
+  const textConsumedRef = useRef(0); // how many chars of tokenBuffer have been mapped to visemes
+  const avatar3dSenderRef = useRef<ReturnType<typeof createAvatar3DSender> | null>(null);
 
   // Interview closing state
   const [isClosing, setIsClosing] = useState(false);
@@ -90,6 +100,46 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   // Avatar state controller
   const avatarState = useAvatarState();
+
+  // BroadcastChannel sender for 3D avatar (created once, cleaned up on unmount)
+  useEffect(() => {
+    avatar3dSenderRef.current = createAvatar3DSender();
+    return () => {
+      avatar3dSenderRef.current?.destroy();
+      avatar3dSenderRef.current = null;
+    };
+  }, []);
+
+  // Push avatar state to 3D scene at ~30fps (uses refs, zero React re-renders)
+  const avatarStateRef = useRef(avatarState.currentState);
+  avatarStateRef.current = avatarState.currentState;
+
+  useEffect(() => {
+    let lastSend = 0;
+    const INTERVAL = 1000 / 30;
+    let raf: number;
+
+    const tick = () => {
+      const now = performance.now();
+      if (now - lastSend >= INTERVAL && avatar3dSenderRef.current) {
+        const timeline = visemeTimelineRef.current;
+        const elapsed = (now - playbackStartTimeRef.current) / 1000;
+        const isSpeaking = isPlayingRef.current && timeline.length > 0;
+
+        avatar3dSenderRef.current.send({
+          avatarState: avatarStateRef.current,
+          mouthOpenness: isSpeaking ? timeline.getMouthOpennessAtTime(elapsed) : 0,
+          visemeWeights: isSpeaking ? timeline.getWeightsAtTime(elapsed) : DEFAULT_VISEME_WEIGHTS,
+          timestamp: now,
+        });
+        lastSend = now;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   // Hand raise detection
   const handDetection = useHandRaiseDetection({
@@ -209,6 +259,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isAiSpeakingRef = useRef(false);
+  const isProcessingRef = useRef(false);
 
   // Stable callback refs — prevent WebSocket reconnection on re-renders
   const queueAudioRef = useRef<(pcmData: ArrayBuffer) => void>(() => {});
@@ -219,8 +270,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const revealedCharsRef = useRef(0);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Keep ref in sync with state
+  // Keep refs in sync with state
   useEffect(() => { isAiSpeakingRef.current = isAiSpeaking; }, [isAiSpeaking]);
+  useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
 
   // VAD settings
   const silenceStartRef = useRef<number | null>(null);
@@ -326,6 +378,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     if (audioQueueRef.current.length === 0) {
       isPlayingRef.current = false;
       setMouthOpenness(0);
+      visemeTimelineRef.current.reset();
+      textConsumedRef.current = 0;
+      totalAudioDurationRef.current = 0;
       if (audioEndReceivedRef.current) {
         setIsAiSpeaking(false);
         avatarState.onAiStopSpeaking();
@@ -349,6 +404,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       isPlayingRef.current = false;
       return;
     }
+    const wasPlaying = isPlayingRef.current;
     isPlayingRef.current = true;
     setIsAiSpeaking(true);
     avatarState.onAiStartSpeaking();
@@ -356,13 +412,41 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       startRevealingTokens();
     }
     const buffer = audioQueueRef.current.shift()!;
+    const bufferDuration = buffer.length / buffer.sampleRate;
+
+    // Build viseme timeline from text — on first buffer of a new speech
+    if (!wasPlaying) {
+      visemeTimelineRef.current.reset();
+      textConsumedRef.current = 0;
+      totalAudioDurationRef.current = 0;
+      playbackStartTimeRef.current = performance.now();
+    }
+
+    // Map new text to visemes for this buffer's duration
+    const fullText = tokenBufferRef.current;
+    const unconsumed = fullText.slice(textConsumedRef.current);
+    if (unconsumed.length > 0) {
+      // Estimate how many chars this buffer covers based on remaining audio
+      const remainingBuffers = audioQueueRef.current.length;
+      const totalRemaining = unconsumed.length;
+      const charsForThisBuffer = remainingBuffers > 0
+        ? Math.ceil(totalRemaining / (remainingBuffers + 1))
+        : totalRemaining; // last buffer gets all remaining text
+      const textSlice = unconsumed.slice(0, charsForThisBuffer);
+      visemeTimelineRef.current.extend(textSlice, bufferDuration);
+      textConsumedRef.current += textSlice.length;
+    } else {
+      // No new text yet — add silence for this buffer
+      visemeTimelineRef.current.extend(" ", bufferDuration);
+    }
+    totalAudioDurationRef.current += bufferDuration;
+
     try {
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(ctx.destination);
       source.onended = playNextBuffer;
       source.start();
-      setMouthOpenness(Math.random() * 0.6 + 0.2);
     } catch (err) {
       console.error('[InterviewUI] Audio playback error:', err);
       isPlayingRef.current = false;
@@ -572,7 +656,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer]);
 
   const startRecordingInternal = async () => {
-    if (isAiSpeaking || isProcessing || isRecordingRef.current) return;
+    if (isAiSpeakingRef.current || isProcessingRef.current || isRecordingRef.current) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true }
@@ -1113,9 +1197,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
         {/* Right: Avatar */}
         <div className="w-1/4 p-4 flex flex-col items-center justify-start border-l border-gray-700">
-          <Avatar
+          <Avatar3D
             state={avatarState.currentState}
-            className="w-full aspect-[3/4] max-w-[250px]"
+            className="w-full aspect-[9/16] max-w-[280px]"
             mouthOpenness={isAiSpeaking ? mouthOpenness : 0}
           />
           {handDetection.isHandRaised && (

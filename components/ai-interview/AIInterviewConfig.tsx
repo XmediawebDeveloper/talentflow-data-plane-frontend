@@ -14,6 +14,7 @@ interface RoundConfig {
   topics: string[];
   topicWeights: Record<string, number>;
   suggestedTopics: string[];
+  skills: string[];
   enabled: boolean;
   order: number;
 }
@@ -29,9 +30,9 @@ const ROUND_TYPES = [
 ];
 
 const DEFAULT_ROUNDS: RoundConfig[] = [
-  { type: 'hr', percentage: 30, topics: [], topicWeights: {}, suggestedTopics: [], enabled: true, order: 1 },
-  { type: 'must_have_skills', percentage: 35, topics: [], topicWeights: {}, suggestedTopics: [], enabled: true, order: 2 },
-  { type: 'nice_to_have_skills', percentage: 35, topics: [], topicWeights: {}, suggestedTopics: [], enabled: true, order: 3 },
+  { type: 'hr', percentage: 30, topics: [], topicWeights: {}, suggestedTopics: [], skills: [], enabled: true, order: 1 },
+  { type: 'must_have_skills', percentage: 35, topics: [], topicWeights: {}, suggestedTopics: [], skills: [], enabled: true, order: 2 },
+  { type: 'nice_to_have_skills', percentage: 35, topics: [], topicWeights: {}, suggestedTopics: [], skills: [], enabled: true, order: 3 },
 ];
 
 export default function AIInterviewConfig() {
@@ -87,17 +88,15 @@ export default function AIInterviewConfig() {
     loadJD();
   }, [jdId, router]);
 
-  // Auto-populate topics from JD skills
+  // Auto-populate skills (not topics) from JD — topics stay empty until user clicks "Suggest from JD"
   useEffect(() => {
     if (!selectedJd) return;
     setRounds(prev => prev.map(r => {
-      if (r.type === 'must_have_skills' && r.topics.length === 0 && selectedJd.must_have_skills.length > 0) {
-        const topics = [...selectedJd.must_have_skills];
-        return { ...r, topics, topicWeights: distributeWeights(topics, {}) };
+      if (r.type === 'must_have_skills' && r.skills.length === 0 && selectedJd.must_have_skills.length > 0) {
+        return { ...r, skills: [...selectedJd.must_have_skills] };
       }
-      if (r.type === 'nice_to_have_skills' && r.topics.length === 0 && selectedJd.nice_to_have_skills.length > 0) {
-        const topics = [...selectedJd.nice_to_have_skills];
-        return { ...r, topics, topicWeights: distributeWeights(topics, {}) };
+      if (r.type === 'nice_to_have_skills' && r.skills.length === 0 && selectedJd.nice_to_have_skills.length > 0) {
+        return { ...r, skills: [...selectedJd.nice_to_have_skills] };
       }
       return r;
     }));
@@ -270,15 +269,42 @@ export default function AIInterviewConfig() {
     ));
   };
 
+  const handleAddSkill = (roundIndex: number, skill: string) => {
+    if (!skill.trim()) return;
+    setRounds(prev => prev.map((r, i) => {
+      if (i !== roundIndex || r.skills.includes(skill.trim())) return r;
+      return { ...r, skills: [...r.skills, skill.trim()] };
+    }));
+  };
+
+  const handleRemoveSkill = (roundIndex: number, skill: string) => {
+    setRounds(prev => prev.map((r, i) => {
+      if (i !== roundIndex) return r;
+      return { ...r, skills: r.skills.filter(s => s !== skill) };
+    }));
+  };
+
   const handleSuggestTopics = async (roundIndex: number) => {
     if (!selectedJd) return;
     const round = rounds[roundIndex];
     setSuggestingTopics(round.type);
     try {
       const result = await aiInterviewService.suggestTopics(selectedJd.id, round.type);
+
+      // Filter out suggestions that duplicate the round's existing skills or topics
+      const existingSkills = new Set(round.skills.map(s => s.toLowerCase()));
+      const existingTopics = new Set(round.topics.map(t => t.toLowerCase()));
+      const filtered = result.suggested_topics.filter(
+        st => !existingSkills.has(st.toLowerCase()) && !existingTopics.has(st.toLowerCase())
+      );
+
       setRounds(prev => prev.map((r, i) =>
-        i === roundIndex ? { ...r, suggestedTopics: result.suggested_topics } : r
+        i === roundIndex ? { ...r, suggestedTopics: filtered } : r
       ));
+
+      if (filtered.length === 0) {
+        toast.info('No additional related topics found. Try adding topics manually.');
+      }
     } catch (error) {
       console.error('Failed to suggest topics:', error);
       toast.error('Failed to get topic suggestions');
@@ -298,6 +324,7 @@ export default function AIInterviewConfig() {
       topics: [],
       topicWeights: {},
       suggestedTopics: [],
+      skills: [],
       enabled: true,
       order: prev.length + 1,
     }]);
@@ -553,25 +580,43 @@ export default function AIInterviewConfig() {
                               </div>
                             </div>
 
-                            {/* JD Skills display for must-have / nice-to-have rounds */}
-                            {round.type === 'must_have_skills' && selectedJd && selectedJd.must_have_skills.length > 0 && (
+                            {/* Editable Skills from JD for must-have / nice-to-have rounds */}
+                            {(round.type === 'must_have_skills' || round.type === 'nice_to_have_skills') && (
                               <div className="mb-3">
                                 <label className="text-xs text-gray-500 mb-1.5 block">Skills from JD</label>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {selectedJd.must_have_skills.map(skill => (
-                                    <span key={skill} className="px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded-full border border-purple-200">{skill}</span>
-                                  ))}
+                                <div className="flex flex-wrap gap-1.5 mb-2">
+                                  {round.skills.map(skill => {
+                                    const colorClass = round.type === 'must_have_skills'
+                                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                      : 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                                    return (
+                                      <span key={skill} className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full border ${colorClass}`}>
+                                        {skill}
+                                        <button
+                                          onClick={() => handleRemoveSkill(index, skill)}
+                                          className="hover:opacity-70 transition-opacity"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      </span>
+                                    );
+                                  })}
+                                  {round.skills.length === 0 && (
+                                    <span className="text-xs text-gray-400 italic">No skills added yet</span>
+                                  )}
                                 </div>
-                              </div>
-                            )}
-                            {round.type === 'nice_to_have_skills' && selectedJd && selectedJd.nice_to_have_skills.length > 0 && (
-                              <div className="mb-3">
-                                <label className="text-xs text-gray-500 mb-1.5 block">Skills from JD</label>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {selectedJd.nice_to_have_skills.map(skill => (
-                                    <span key={skill} className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-200">{skill}</span>
-                                  ))}
-                                </div>
+                                <input
+                                  type="text"
+                                  placeholder="Type a skill and press Enter to add..."
+                                  className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleAddSkill(index, (e.target as HTMLInputElement).value);
+                                      (e.target as HTMLInputElement).value = '';
+                                    }
+                                  }}
+                                />
                               </div>
                             )}
 

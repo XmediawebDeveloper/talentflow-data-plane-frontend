@@ -128,6 +128,8 @@ export interface AIInterviewResponse {
   special_instructions?: string;
   score?: number;
   ai_evaluation?: Record<string, any>;
+  conversation_transcript?: Record<string, any>[];
+  recording_file_path?: string;
   invitation_sent: boolean;
   created_by: string;
   created_by_name?: string;
@@ -597,5 +599,13 @@ export const aiInterviewService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * Get recording URL for an interview
+   */
+  getRecordingUrl(interviewId: string): string {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    return `${baseUrl}/ai-interview/${interviewId}/recording`;
   },
 };

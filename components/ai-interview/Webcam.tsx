@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle, memo } from "react";
 
 interface WebcamProps {
   onStream?: (stream: MediaStream) => void;
@@ -14,7 +14,7 @@ export interface WebcamRef {
   getVideoElement: () => HTMLVideoElement | null;
 }
 
-export const Webcam = forwardRef<WebcamRef, WebcamProps>(function Webcam(
+export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
   { onStream, onVideoReady, className = "", showHandIndicator = false, isHandRaised = false },
   ref
 ) {
@@ -125,4 +125,4 @@ export const Webcam = forwardRef<WebcamRef, WebcamProps>(function Webcam(
       )}
     </div>
   );
-});
+}));
