@@ -20,9 +20,8 @@ interface QuotaData {
     plan_name?: string;
     plan_tier?: string;
     subscribed_price?: number;  // Tenant-specific: what this tenant actually pays
-    billing_period?: string;    // MONTHLY or ANNUAL
-    billing_interval?: string;
-    allocated_quotas?: Record<string, number>;  // Tenant-specific: quotas allocated to this tenant
+    billing_period?: string;    // MONTHLY or ANNUAL (billing_interval removed from API)
+    allocated_quotas?: Record<string, number | string>;  // Tenant-specific: quotas allocated to this tenant (string for "unlimited")
     isolation_type?: 'SCHEMA' | 'DATABASE' | 'DEDICATED' | string | null;
     features?: string[];  // Boolean plan features (api_access, sso, etc.)
   };
@@ -52,15 +51,17 @@ interface QuotaInfo {
   subscription?: {
     limit: number | string;
     used: number;
-    remaining: number | string;
-    percentage: number;
   };
   addon?: {
     total_purchased: number;
     total_consumed: number;
-    remaining: number;
+    status?: string;
+    expires_on?: string | null;
+    days_until_expiry?: number;
   };
   total_remaining?: number | string;
+  percentage?: number;
+  remain_percentage?: number;
   status?: string;
 }
 

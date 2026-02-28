@@ -3,6 +3,8 @@
 import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, MessageSquare, RefreshCw, Shield, Filter, Calendar } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import { generateDisputeRecordPDF } from '@/lib/utils/pdfInvoice';
+import { toast } from 'sonner';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -46,6 +48,13 @@ interface DisputeInvoice {
   dispute_status?: string;
   customer_claim?: string;
   deadline?: string;
+  payment_method?: string;
+  payment_status?: string;
+  razorpay_payment_id?: string;
+  razorpay_order_id?: string;
+  payment_amount?: number;
+  payment_currency?: string;
+  paid_at?: string;
 }
 
 interface DisputeStats {
@@ -72,6 +81,7 @@ export default function DisputeHistoryPage() {
   const [stats, setStats] = useState<DisputeStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedDispute, setSelectedDispute] = useState<DisputeInvoice | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   // New filter states
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -95,7 +105,7 @@ export default function DisputeHistoryPage() {
       }
 
       // Fetch dispute invoices from backend proxy (which calls Admin API)
-      const disputeResponse = await fetch(`${API_URL}/billing/invoices/disputes?skip=0&limit=100`, {
+      const disputeResponse = await fetch(`${API_URL}/billing/invoices/disputes`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
@@ -222,38 +232,16 @@ export default function DisputeHistoryPage() {
     }
   };
 
-  const handleDownloadDispute = (inv: DisputeInvoice) => {
-    const disputeContent = `
-DISPUTE RECORD
-==============================
-Dispute Number: ${inv.invoice_number}
-Issue Date: ${formatDate(inv.issue_date)}
-Deadline: ${formatDate(inv.metadata?.deadline || inv.deadline || null)}
--------------------------------
-Original Invoice: ${inv.metadata?.original_invoice_number || '-'}
-Reason: ${inv.metadata?.reason || inv.reason || '-'}
-Customer Claim: ${inv.metadata?.customer_claim || inv.customer_claim || '-'}
--------------------------------
-Description: ${inv.line_items?.[0]?.description || '-'}
--------------------------------
-Disputed Amount: ${formatAmount(inv.total_amount_inr)}
--------------------------------
-Dispute Status: ${inv.metadata?.dispute_status || inv.dispute_status || inv.status}
-Bank Reference: ${inv.metadata?.bank_reference || '-'}
-${inv.metadata?.razorpay_dispute_id ? `Razorpay Dispute ID: ${inv.metadata.razorpay_dispute_id}` : ''}
-==============================
-Please contact support for assistance.
-    `.trim();
-
-    const blob = new Blob([disputeContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${inv.invoice_number}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleDownloadDispute = async (inv: DisputeInvoice) => {
+    setDownloadingId(inv.id);
+    try {
+      await generateDisputeRecordPDF(inv);
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      toast.error('Failed to generate PDF. Please try again.');
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   // Export filtered data to CSV
@@ -535,10 +523,11 @@ Please contact support for assistance.
                           </button>
                           <button
                             onClick={() => handleDownloadDispute(dispute)}
-                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                            disabled={downloadingId === dispute.id}
+                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Download Record"
                           >
-                            <Download className="w-3.5 h-3.5" />
+                            {downloadingId === dispute.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </td>
@@ -587,6 +576,18 @@ Please contact support for assistance.
                     <p className="text-xs text-gray-500 uppercase">Original Invoice</p>
                     <p className="text-sm font-medium text-gray-900 font-mono">{selectedDispute.metadata?.original_invoice_number || '-'}</p>
                   </div>
+                  {selectedDispute.payment_method && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Payment Method</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{selectedDispute.payment_method}</p>
+                    </div>
+                  )}
+                  {selectedDispute.paid_at && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Paid At</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDate(selectedDispute.paid_at)}</p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
@@ -648,10 +649,14 @@ Please contact support for assistance.
                 <div className="flex gap-3">
                   <button
                     onClick={() => handleDownloadDispute(selectedDispute)}
-                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                    disabled={downloadingId === selectedDispute.id}
+                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Download className="w-4 h-4" />
-                    Download Record
+                    {downloadingId === selectedDispute.id ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating PDF...</>
+                    ) : (
+                      <><Download className="w-4 h-4" /> Download Record</>
+                    )}
                   </button>
                   <button
                     onClick={() => setSelectedDispute(null)}

@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, KeyRound, Building2, CheckCircle } from 'lucide-react';
+import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, Building2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { User } from '@/lib/types/tenant';
 import { authService, isTwoFactorRequired, LoginResponse } from '@/lib/services';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -57,25 +58,11 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const [userEmail2FA, setUserEmail2FA] = useState('');
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Inline password-reset state (first login / invite flow)
-  const [showPasswordReset, setShowPasswordReset] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  // If the user closed the tab mid-flow (must_reset_password), restore the reset form
-  useEffect(() => {
-    if (document.cookie.split(';').some(c => c.trim().startsWith('must-reset-pwd='))) {
-      setShowPasswordReset(true);
-    }
   }, []);
 
   // Load saved email from localStorage on mount
@@ -132,6 +119,29 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         canViewBilling: response.user.permissions.can_view_billing,
         canViewInvoices: response.user.permissions.can_view_invoices,
         canViewUsage: response.user.permissions.can_view_usage,
+        // Granular billing section view permissions
+        canViewCurrentPlan: response.user.permissions.can_view_current_plan,
+        canViewPaymentMethods: response.user.permissions.can_view_payment_methods,
+        canViewBillingHistory: response.user.permissions.can_view_billing_history,
+        canViewRefundHistory: response.user.permissions.can_view_refund_history,
+        canViewDisputeHistory: response.user.permissions.can_view_dispute_history,
+        // Granular settings section view permissions
+        canViewGeneralSettings: response.user.permissions.can_view_general_settings,
+        canViewPermissionsRoles: response.user.permissions.can_view_permissions_roles,
+        canViewApiManagement: response.user.permissions.can_view_api_management,
+        canViewBranding: response.user.permissions.can_view_branding,
+        canViewSecuritySettings: response.user.permissions.can_view_security_settings,
+        // Granular Action Permissions — Billing
+        canUpgradePlan: response.user.permissions.can_upgrade_plan,
+        canExportUsage: response.user.permissions.can_export_usage,
+        canAddPaymentMethod: response.user.permissions.can_add_payment_method,
+        canEditPaymentMethod: response.user.permissions.can_edit_payment_method,
+        canDeletePaymentMethod: response.user.permissions.can_delete_payment_method,
+        // Granular Action Permissions — Settings
+        canManagePermissionsRoles: response.user.permissions.can_manage_permissions_roles,
+        canManageApiManagement: response.user.permissions.can_manage_api_management,
+        canManageBranding: response.user.permissions.can_manage_branding,
+        canManageSecuritySettings: response.user.permissions.can_manage_security_settings,
         // Feature permissions
         canViewScoring: response.user.permissions.can_view_scoring,
         canRunScoring: response.user.permissions.can_run_scoring,
@@ -167,13 +177,11 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       console.error('Error saving remember me preference:', error);
     }
 
-    // Check if user must reset password (invite flow) — show inline panel instead of navigating away.
-    // Also set a cookie so if the user closes the tab, the middleware won't auto-redirect them
-    // to /dashboard the next time they click the email link — it will let them back to /login.
-    if (response.must_reset_password) {
-      document.cookie = 'must-reset-pwd=1; path=/; SameSite=Lax';
-      setShowPasswordReset(true);
-      return;
+    // First-time login (invite flow) — show a toast so user knows where to change their password
+    if (!response.user.last_login) {
+      toast.info('You are logged in with a temporary password. Please change it via Settings → Change Password.', {
+        duration: 8000,
+      });
     }
 
     // Check if tenant has pending payment - redirect to payment page with encoded params
@@ -300,56 +308,6 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     setError('');
   };
 
-  const handlePasswordResetSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (newPassword.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const token = localStorage.getItem('accessToken');
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
-      const resp = await fetch(`${API_URL}/auth/set-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          new_password: newPassword,
-          confirm_password: confirmPassword,
-        }),
-      });
-
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        setError(data.detail || 'Failed to set password. Please try again.');
-        return;
-      }
-
-      // Password set — clear the must-reset-pwd cookie so middleware resumes normal behaviour
-      document.cookie = 'must-reset-pwd=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
-
-      // Continue to dashboard (or plan page if redirected from pricing)
-      if (encodedPlanFromUrl) {
-        router.push(`/subscription/current-plan?plan=${encodedPlanFromUrl}`);
-      } else {
-        router.push('/dashboard');
-      }
-    } catch {
-      setError('Network error. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Styles
   const containerStyle: React.CSSProperties = {
@@ -811,129 +769,6 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                 <p style={{ marginTop: '24px', textAlign: 'center', fontSize: '14px', color: '#6B7280' }}>
                   Open your authenticator app (Google Authenticator, Authy, etc.) to view your verification code.
                 </p>
-              </>
-            ) : showPasswordReset ? (
-              <>
-                {/* ── Inline password-reset panel (first login / invite flow) ── */}
-                <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-                  <div style={{
-                    width: '64px',
-                    height: '64px',
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #2563EB, #4338CA)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 16px',
-                    boxShadow: '0 10px 40px rgba(37, 99, 235, 0.3)',
-                  }}>
-                    <KeyRound style={{ width: 32, height: 32, color: '#ffffff' }} />
-                  </div>
-                  <h2 style={{ fontSize: '24px', fontWeight: 700, color: '#111827', marginBottom: '8px' }}>
-                    Set Your Password
-                  </h2>
-                  <p style={{ fontSize: '14px', color: '#6B7280' }}>
-                    You're signed in with a temporary password.<br />
-                    Please set a new password to continue.
-                  </p>
-                </div>
-
-                {error && (
-                  <div style={errorBoxStyle}>
-                    <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-                    <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handlePasswordResetSubmit}>
-                  {/* New Password */}
-                  <div style={inputGroupStyle}>
-                    <label style={labelStyle}>New Password</label>
-                    <div style={inputContainerStyle}>
-                      <Lock style={{ ...inputIconStyle, width: 20, height: 20 }} />
-                      <input
-                        type={showNewPassword ? 'text' : 'password'}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="Min. 6 characters"
-                        required
-                        autoFocus
-                        style={{ ...inputStyle, paddingRight: 48 }}
-                        onFocus={(e) => { e.target.style.borderColor = '#2563EB'; e.target.style.backgroundColor = '#ffffff'; }}
-                        onBlur={(e) => { e.target.style.borderColor = '#D1D5DB'; e.target.style.backgroundColor = '#F9FAFB'; }}
-                      />
-                      <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} style={eyeButtonStyle}>
-                        {showNewPassword ? <EyeOff style={{ width: 20, height: 20 }} /> : <Eye style={{ width: 20, height: 20 }} />}
-                      </button>
-                    </div>
-                    {newPassword.length > 0 && newPassword.length < 6 && (
-                      <p style={{ marginTop: '6px', fontSize: '13px', color: '#DC2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <AlertCircle style={{ width: 13, height: 13 }} />
-                        Password must be at least 6 characters.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Confirm Password */}
-                  <div style={{ ...inputGroupStyle, marginBottom: '28px' }}>
-                    <label style={labelStyle}>Confirm Password</label>
-                    <div style={inputContainerStyle}>
-                      <Lock style={{ ...inputIconStyle, width: 20, height: 20 }} />
-                      <input
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Re-enter your new password"
-                        required
-                        style={{
-                          ...inputStyle,
-                          paddingRight: 48,
-                          borderColor: confirmPassword.length > 0 && newPassword !== confirmPassword ? '#EF4444' : '#D1D5DB',
-                        }}
-                        onFocus={(e) => { e.target.style.borderColor = confirmPassword.length > 0 && newPassword !== confirmPassword ? '#EF4444' : '#2563EB'; e.target.style.backgroundColor = '#ffffff'; }}
-                        onBlur={(e) => { e.target.style.borderColor = confirmPassword.length > 0 && newPassword !== confirmPassword ? '#EF4444' : '#D1D5DB'; e.target.style.backgroundColor = '#F9FAFB'; }}
-                      />
-                      <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={eyeButtonStyle}>
-                        {showConfirmPassword ? <EyeOff style={{ width: 20, height: 20 }} /> : <Eye style={{ width: 20, height: 20 }} />}
-                      </button>
-                    </div>
-                    {confirmPassword.length > 0 && newPassword !== confirmPassword && (
-                      <p style={{ marginTop: '6px', fontSize: '13px', color: '#DC2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <AlertCircle style={{ width: 13, height: 13 }} />
-                        Passwords do not match.
-                      </p>
-                    )}
-                    {confirmPassword.length > 0 && newPassword === confirmPassword && newPassword.length >= 6 && (
-                      <p style={{ marginTop: '6px', fontSize: '13px', color: '#059669', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <CheckCircle style={{ width: 13, height: 13 }} />
-                        Passwords match.
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Submit */}
-                  <button
-                    type="submit"
-                    disabled={isLoading || newPassword.length < 6 || newPassword !== confirmPassword || confirmPassword.length === 0}
-                    style={{
-                      ...submitButtonStyle,
-                      opacity: isLoading || newPassword.length < 6 || newPassword !== confirmPassword || confirmPassword.length === 0 ? 0.5 : 1,
-                      cursor: isLoading || newPassword.length < 6 || newPassword !== confirmPassword || confirmPassword.length === 0 ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {isLoading ? (
-                      <>
-                        <div style={{ width: 20, height: 20, border: '2px solid #ffffff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        Set Password & Continue
-                        <ArrowRight style={{ width: 20, height: 20 }} />
-                      </>
-                    )}
-                  </button>
-                </form>
               </>
             ) : (
               <>

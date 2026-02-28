@@ -49,6 +49,33 @@ export interface Permission {
   canViewInvoices?: boolean;
   canViewUsage?: boolean;
 
+  // Granular billing section view permissions
+  canViewCurrentPlan?: boolean;
+  canViewPaymentMethods?: boolean;
+  canViewBillingHistory?: boolean;
+  canViewRefundHistory?: boolean;
+  canViewDisputeHistory?: boolean;
+
+  // Granular settings section view permissions
+  canViewGeneralSettings?: boolean;
+  canViewPermissionsRoles?: boolean;
+  canViewApiManagement?: boolean;
+  canViewBranding?: boolean;
+  canViewSecuritySettings?: boolean;
+
+  // Granular Action Permissions — Billing
+  canUpgradePlan?: boolean;
+  canExportUsage?: boolean;
+  canAddPaymentMethod?: boolean;
+  canEditPaymentMethod?: boolean;
+  canDeletePaymentMethod?: boolean;
+
+  // Granular Action Permissions — Settings
+  canManagePermissionsRoles?: boolean;
+  canManageApiManagement?: boolean;
+  canManageBranding?: boolean;
+  canManageSecuritySettings?: boolean;
+
   // RBAC06: Feature flags
   canViewScoring?: boolean;      // NEW: View resume scoring page/results
   canRunScoring?: boolean;       // Run scoring operations

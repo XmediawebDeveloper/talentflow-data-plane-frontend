@@ -922,7 +922,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         <button
                           onClick={() => {
                             if (result.assessmentId) {
-                              router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}`);
+                              router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
                             }
                           }}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -1137,7 +1137,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     <button
                       onClick={() => {
                         if (result.assessmentId) {
-                          router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}`);
+                          router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
                         }
                       }}
                       className="flex-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-1.5"

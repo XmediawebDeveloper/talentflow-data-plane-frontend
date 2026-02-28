@@ -279,15 +279,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       ]
     },
 
-    // ORGANIZATION
-    {
-      id: 'organization',
-      label: 'ORGANIZATION',
-      items: [
-        { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', permission: 'canManageSettings' },
-      ]
-    },
-
     // USER MANAGEMENT
     {
       id: 'user-management-section',
@@ -297,6 +288,21 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
         { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canManageUsers', planFeature: 'teams' },
         { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat' },
+      ]
+    },
+
+    // SUBSCRIPTION & BILLING - RBAC03: Billing Manager access
+    {
+      id: 'subscription',
+      label: 'SUBSCRIPTION & BILLING',
+      items: [
+        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', permission: 'canViewCurrentPlan' },
+        { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', permission: 'canViewUsage' },
+        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', permission: 'canViewPaymentMethods' },
+        { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', permission: 'canViewBillingHistory' },
+        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', permission: 'canViewRefundHistory' },
+        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', permission: 'canViewDisputeHistory' },
+        { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', permission: 'canViewUsage' },
       ]
     },
 
@@ -311,18 +317,12 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       ]
     },
 
-    // SUBSCRIPTION & BILLING - RBAC03: Billing Manager access
+    // ORGANIZATION
     {
-      id: 'subscription',
-      label: 'SUBSCRIPTION & BILLING',
+      id: 'organization',
+      label: 'ORGANIZATION',
       items: [
-        { id: 'current-plan', label: 'Current Plan', icon: CreditCard, href: '/subscription/current-plan', permission: 'canViewBilling' },
-        { id: 'usage-quotas', label: 'Usage & Quotas', icon: BarChart3, href: '/subscription/usage-quotas', permission: 'canViewUsage' },
-        { id: 'payment-methods', label: 'Payment Methods', icon: Wallet, href: '/subscription/payment-methods', permission: 'canViewBilling' },
-        { id: 'billing-history', label: 'Billing History', icon: Receipt, href: '/subscription/billing-history', permission: 'canViewInvoices' },
-        { id: 'refund-history', label: 'Refund History', icon: RefreshCw, href: '/subscription/refund-history', permission: 'canViewInvoices' },
-        { id: 'dispute-history', label: 'Dispute History', icon: AlertTriangle, href: '/subscription/dispute-history', permission: 'canViewInvoices' },
-        { id: 'unit-disputes', label: 'Unit Disputes', icon: Shield, href: '/subscription/unit-disputes', permission: 'canViewUsage' },
+        { id: 'company-profile', label: 'Company Profile', icon: Building2, href: '/organization/company-profile', permission: 'canManageSettings' },
       ]
     },
 
@@ -331,24 +331,25 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       id: 'settings',
       label: 'SETTINGS',
       items: [
-        { id: 'general-settings', label: 'General Settings', icon: Settings, href: '/settings/general-settings', permission: 'canManageSettings' },
-        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canManageUsers', adminOnly: true },
-        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canManageSettings', planFeature: 'api_access' },
-        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canManageSettings' },
+        { id: 'general-settings', label: 'Profile Settings', icon: Settings, href: '/settings/general-settings' },
+        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canViewPermissionsRoles' },
+        { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canViewApiManagement', planFeature: 'api_access' },
+        { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canViewBranding' },
         // { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' }, // Hidden for demo
-        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canManageSettings' },
+        { id: 'security', label: 'Security Settings', icon: Lock, href: '/settings/security', permission: 'canViewSecuritySettings' },
+        { id: 'legal', label: 'Legal & Compliance', icon: ScrollText, href: '/settings/legal', permission: 'canManageSettings' },
       ]
     },
 
-    // REPORTS & ANALYTICS - Hidden for demo, will be enabled in future
-    // {
-    //   id: 'reports',
-    //   label: 'REPORTS & ANALYTICS',
-    //   items: [
-    //     { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', permission: 'canViewAnalytics' },
-    //     { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'canViewAnalytics' },
-    //   ]
-    // },
+    // REPORTS & ANALYTICS
+    {
+      id: 'reports',
+      label: 'REPORTS & ANALYTICS',
+      items: [
+        { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', permission: 'canViewAnalytics' },
+        // { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'canViewAnalytics' },
+      ]
+    },
 
     // AUDITS & TRAIL - Tenant Admin Only
     {
@@ -417,9 +418,9 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
   };
 
   return (
-    <aside className="w-64 sm:w-72 lg:w-64 bg-gray-200 border-r border-gray-300 flex flex-col shadow-lg lg:shadow-sm h-screen">
+    <aside className="w-64 sm:w-72 lg:w-64 bg-gray-50 border-r border-gray-200 flex flex-col shadow-lg lg:shadow-sm h-screen">
       {/* Logo + Close Button */}
-      <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
+      <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
         <Link href="/dashboard" prefetch={false} className="flex items-center justify-center flex-1">
          <img
               src="/logos/talent_flow_logo.png"
@@ -442,7 +443,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-2">
+      <nav className="flex-1 overflow-y-auto py-2 min-h-0">
         {visibleSections.map((section) => (
           <div key={section.id} className="mb-2">
             {/* Section Header */}
@@ -522,7 +523,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                     className={`w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm sm:text-base lg:text-sm transition-colors ${
                       isActive(item.href)
                         ? 'bg-gray-800 text-white font-medium shadow-sm'
-                        : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
                     }`}
                     style={{ width: 'calc(100% - 16px)' }}
                   >
@@ -537,7 +538,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-200 bg-gray-50">
+      <div className="p-4 border-t border-gray-200 bg-white shrink-0">
         <p className="text-xs text-gray-500 text-center">
           {tenant?.name || 'TalentFlow'} v1.0
         </p>
