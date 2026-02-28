@@ -1,4 +1,4 @@
-// The 10 plan features
+// The plan features
 export type PlanFeatureKey =
   | 'seats'           // Always included
   | 'resume_upload'   // Resume Storage (RU)

@@ -5,16 +5,12 @@ import { Users, Plus } from 'lucide-react';
 interface EmptyStateProps {
   isTenantAdmin: boolean;
   canCreateTeams: boolean;
-  isAtTeamLimit: boolean;
-  maxTeams: number;
   onCreateTeam: () => void;
 }
 
 export default function EmptyState({
   isTenantAdmin,
   canCreateTeams,
-  isAtTeamLimit,
-  maxTeams,
   onCreateTeam,
 }: EmptyStateProps) {
   return (
@@ -25,12 +21,10 @@ export default function EmptyState({
       <h3 className="text-lg font-semibold text-gray-900 mb-2">No teams yet</h3>
       <p className="text-gray-600 mb-6 max-w-md mx-auto">
         {isTenantAdmin
-          ? canCreateTeams && isAtTeamLimit
-            ? `You have reached the maximum number of teams (${maxTeams}) for your plan. Please upgrade to create teams.`
-            : 'Create your first team to start organizing your recruitment workflow'
+          ? 'Create your first team to start organizing your recruitment workflow'
           : 'No teams have been created yet. Contact your administrator to create teams.'}
       </p>
-      {isTenantAdmin && !(canCreateTeams && isAtTeamLimit) && (
+      {isTenantAdmin && canCreateTeams && (
         <button
           onClick={onCreateTeam}
           className="inline-flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition-all"

@@ -7,8 +7,9 @@ interface FeatureItem {
   feature_key: string;
   feature_name: string;
   feature_category: string;
+  quota_key: string | null;  // Non-null = metered feature; check quotas[quota_key].status
   is_enabled: boolean;
-  source: 'PLAN' | 'GLOBAL' | 'OVERRIDE';
+  source: 'SUBSCRIPTION' | 'PLAN' | 'GLOBAL' | 'OVERRIDE' | 'NONE';
 }
 
 interface QuotaData {
