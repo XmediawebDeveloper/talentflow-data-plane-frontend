@@ -36,32 +36,27 @@ function hasActiveQuota(quotaInfo?: { subscription?: { limit: number | string } 
   return limit > 0;
 }
 
-// Normalize a single string to lowercase snake_case
-function toSnakeCase(str: string): string {
-  return str
-    .replace(/([a-z])([A-Z])/g, '$1_$2')
-    .replace(/[-\s]+/g, '_')
-    .toLowerCase();
-}
+// Maps API feature_key values to PlanFeatureKey where they differ
+const API_KEY_TO_PLAN_KEY: Partial<Record<string, PlanFeatureKey>> = {
+  sso_integration: 'sso',
+};
 
-// Extract all feature keys from the API features array
-// The API may return: strings, or objects with feature_key/feature_name/name
-function extractFeatureKeys(features: any[]): Set<string> {
-  const keys = new Set<string>();
+// Extract enabled PlanFeatureKeys from the top-level features array in the Quota Status API.
+// Rules per the API contract:
+//   - is_enabled: true  → feature is available
+//   - is_enabled: false → feature is force-disabled (OVERRIDE), block access
+//   - key absent       → tenant does not have access
+function extractFeatureKeys(features: { feature_key: string; is_enabled: boolean }[]): Set<PlanFeatureKey> {
+  const keys = new Set<PlanFeatureKey>();
   for (const f of features) {
-    if (typeof f === 'string') {
-      keys.add(toSnakeCase(f));
-    } else if (typeof f === 'object' && f !== null) {
-      if (f.is_enabled === false) continue;
-      if (f.feature_key) keys.add(toSnakeCase(f.feature_key));
-      if (f.feature_name) keys.add(toSnakeCase(f.feature_name));
-      if (f.name) keys.add(toSnakeCase(f.name));
-    }
+    if (!f.is_enabled) continue;
+    const planKey = (API_KEY_TO_PLAN_KEY[f.feature_key] ?? f.feature_key) as PlanFeatureKey;
+    keys.add(planKey);
   }
   return keys;
 }
 
-// Boolean features available per plan tier (mirrors backend PLAN_FEATURES)
+// Boolean features available per plan tier — used only when the API features array is absent.
 // Quota-based features (resume_upload, resume_scoring, assessment, ai_interview)
 // are determined from quota data, NOT from this map.
 const TIER_BOOLEAN_FEATURES: Record<string, PlanFeatureKey[]> = {
@@ -91,11 +86,12 @@ export function PlanFeaturesProvider({ children }: { children: React.ReactNode }
 
     const quotas = quotaData.quotas || {};
 
-    // 1. Try to get boolean features from plan_info.features (Admin API)
-    const rawFeatures = quotaData.plan_info?.features || [];
-    const planFeatures = extractFeatureKeys(rawFeatures);
+    // 1. Use the top-level features array from the Quota Status API (primary source)
+    const planFeatures = quotaData.features
+      ? extractFeatureKeys(quotaData.features)
+      : new Set<PlanFeatureKey>();
 
-    // 2. Fallback: derive boolean features from plan_tier if features array is empty
+    // 2. Fallback: derive boolean features from plan_tier if features array is absent
     if (planFeatures.size === 0 && quotaData.plan_info?.plan_tier) {
       const tier = quotaData.plan_info.plan_tier.toLowerCase();
       const tierFeatures = TIER_BOOLEAN_FEATURES[tier] || [];
@@ -108,7 +104,7 @@ export function PlanFeaturesProvider({ children }: { children: React.ReactNode }
     }
 
     // Debug logging
-    console.log('[PlanFeatures] Raw API features:', rawFeatures);
+    console.log('[PlanFeatures] Raw API features:', quotaData.features);
     console.log('[PlanFeatures] Plan tier:', quotaData.plan_info?.plan_tier);
     console.log('[PlanFeatures] Resolved feature keys:', [...planFeatures]);
 

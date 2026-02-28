@@ -3,6 +3,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import api, { handleUnauthorized } from '@/lib/services/api';
 
+interface FeatureItem {
+  feature_key: string;
+  feature_name: string;
+  feature_category: string;
+  is_enabled: boolean;
+  source: 'PLAN' | 'GLOBAL' | 'OVERRIDE';
+}
+
 interface QuotaData {
   tenant_id?: string;
   is_trial?: boolean;
@@ -45,6 +53,7 @@ interface QuotaData {
   plan_expiry_date?: string;
   subscription_status?: string;
   isolation_type?: 'SCHEMA' | 'DATABASE' | 'DEDICATED' | string | null;
+  features?: FeatureItem[];  // Top-level features array from the Quota Status API
 }
 
 interface QuotaInfo {

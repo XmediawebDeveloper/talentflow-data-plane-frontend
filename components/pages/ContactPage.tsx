@@ -19,6 +19,7 @@ interface ContactPageProps {
 
 export default function ContactPage({ onNavigate }: ContactPageProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -30,11 +31,15 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+    const checkScreen = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 640);
+      setIsTablet(w >= 640 && w < 1024);
+    };
+    checkScreen();
+    window.addEventListener('resize', checkScreen);
     setIsDark(document.documentElement.classList.contains('dark'));
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkScreen);
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -51,12 +56,12 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   const containerStyle: React.CSSProperties = {
     maxWidth: '1400px',
     margin: '0 auto',
-    padding: '80px 24px',
+    padding: isMobile ? '40px 16px' : isTablet ? '60px 20px' : '80px 24px',
   };
 
   const headerStyle: React.CSSProperties = {
     textAlign: 'center',
-    marginBottom: '64px',
+    marginBottom: isMobile ? '32px' : isTablet ? '48px' : '64px',
   };
 
   const badgeStyle: React.CSSProperties = {
@@ -73,7 +78,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   };
 
   const titleStyle: React.CSSProperties = {
-    fontSize: isMobile ? '36px' : '56px',
+    fontSize: isMobile ? '28px' : isTablet ? '40px' : '56px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
     marginBottom: '16px',
@@ -81,7 +86,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   };
 
   const subtitleStyle: React.CSSProperties = {
-    fontSize: '20px',
+    fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
     color: isDark ? '#94A3B8' : '#6B7280',
     maxWidth: '672px',
     margin: '0 auto',
@@ -91,8 +96,8 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-    gap: '64px',
-    marginBottom: '80px',
+    gap: isMobile ? '32px' : isTablet ? '40px' : '64px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const contactInfoStyle: React.CSSProperties = {
@@ -141,8 +146,8 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   };
 
   const formStyle: React.CSSProperties = {
-    padding: '32px',
-    borderRadius: '24px',
+    padding: isMobile ? '20px' : '32px',
+    borderRadius: isMobile ? '16px' : '24px',
     border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
     backgroundColor: isDark ? '#1E293B' : '#ffffff',
   };
@@ -223,13 +228,13 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
 
   const officesGridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-    gap: '24px',
-    marginBottom: '80px',
+    gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+    gap: isMobile ? '16px' : '24px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const officeCardStyle: React.CSSProperties = {
-    padding: '32px',
+    padding: isMobile ? '20px' : '32px',
     borderRadius: '16px',
     border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
     backgroundColor: isDark ? '#1E293B' : '#ffffff',
@@ -260,8 +265,8 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   };
 
   const faqSectionStyle: React.CSSProperties = {
-    padding: '60px 40px',
-    borderRadius: '24px',
+    padding: isMobile ? '32px 20px' : isTablet ? '48px 32px' : '60px 40px',
+    borderRadius: isMobile ? '16px' : '24px',
     backgroundColor: isDark ? '#1E293B' : '#F9FAFB',
     textAlign: 'center',
   };

@@ -17,14 +17,19 @@ interface AboutPageProps {
 
 export default function AboutPage({ onNavigate }: AboutPageProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+    const checkScreen = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 640);
+      setIsTablet(w >= 640 && w < 1024);
+    };
+    checkScreen();
+    window.addEventListener('resize', checkScreen);
     setIsDark(document.documentElement.classList.contains('dark'));
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkScreen);
   }, []);
 
   const pageStyle: React.CSSProperties = {
@@ -36,12 +41,12 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   const containerStyle: React.CSSProperties = {
     maxWidth: '1400px',
     margin: '0 auto',
-    padding: '80px 24px',
+    padding: isMobile ? '40px 16px' : isTablet ? '60px 20px' : '80px 24px',
   };
 
   const headerStyle: React.CSSProperties = {
     textAlign: 'center',
-    marginBottom: '80px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const badgeStyle: React.CSSProperties = {
@@ -58,7 +63,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   };
 
   const titleStyle: React.CSSProperties = {
-    fontSize: isMobile ? '36px' : '56px',
+    fontSize: isMobile ? '28px' : isTablet ? '40px' : '56px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
     marginBottom: '16px',
@@ -66,7 +71,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   };
 
   const subtitleStyle: React.CSSProperties = {
-    fontSize: '20px',
+    fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
     color: isDark ? '#94A3B8' : '#6B7280',
     maxWidth: '672px',
     margin: '0 auto',
@@ -74,11 +79,11 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   };
 
   const sectionStyle: React.CSSProperties = {
-    marginBottom: '80px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const sectionTitleStyle: React.CSSProperties = {
-    fontSize: '32px',
+    fontSize: isMobile ? '24px' : isTablet ? '28px' : '32px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
     marginBottom: '24px',
@@ -88,13 +93,13 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   const storyGridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
-    gap: '48px',
+    gap: isMobile ? '24px' : '48px',
     alignItems: 'center',
-    marginBottom: '80px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const storyTextStyle: React.CSSProperties = {
-    fontSize: '18px',
+    fontSize: isMobile ? '15px' : isTablet ? '16px' : '18px',
     color: isDark ? '#CBD5E1' : '#4B5563',
     lineHeight: 1.8,
   };
@@ -111,13 +116,13 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
 
   const valuesGridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-    gap: '32px',
-    marginBottom: '80px',
+    gridTemplateColumns: isMobile ? '1fr' : isTablet ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+    gap: isMobile ? '16px' : '32px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const valueCardStyle: React.CSSProperties = {
-    padding: '32px',
+    padding: isMobile ? '20px' : '32px',
     borderRadius: '16px',
     border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
     backgroundColor: isDark ? '#1E293B' : '#ffffff',
@@ -149,9 +154,9 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
 
   const teamGridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)',
-    gap: '32px',
-    marginBottom: '80px',
+    gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+    gap: isMobile ? '20px' : '32px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const teamCardStyle: React.CSSProperties = {
@@ -205,11 +210,11 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   const statsGridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-    gap: '24px',
-    padding: '48px',
-    borderRadius: '24px',
+    gap: isMobile ? '16px' : '24px',
+    padding: isMobile ? '24px' : isTablet ? '36px' : '48px',
+    borderRadius: isMobile ? '16px' : '24px',
     background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
-    marginBottom: '80px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const statStyle: React.CSSProperties = {
@@ -217,7 +222,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   };
 
   const statNumberStyle: React.CSSProperties = {
-    fontSize: '48px',
+    fontSize: isMobile ? '32px' : isTablet ? '40px' : '48px',
     fontWeight: 700,
     color: '#ffffff',
     marginBottom: '8px',
@@ -230,13 +235,13 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
 
   const ctaSectionStyle: React.CSSProperties = {
     textAlign: 'center',
-    padding: '60px 40px',
-    borderRadius: '24px',
+    padding: isMobile ? '32px 20px' : isTablet ? '48px 32px' : '60px 40px',
+    borderRadius: isMobile ? '16px' : '24px',
     backgroundColor: isDark ? '#1E293B' : '#F9FAFB',
   };
 
   const ctaTitleStyle: React.CSSProperties = {
-    fontSize: isMobile ? '28px' : '36px',
+    fontSize: isMobile ? '22px' : isTablet ? '28px' : '36px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
     marginBottom: '16px',
@@ -246,8 +251,8 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
-    padding: '16px 32px',
-    fontSize: '18px',
+    padding: isMobile ? '12px 24px' : '16px 32px',
+    fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
     borderRadius: '12px',
     background: 'linear-gradient(135deg, #667EEA, #764BA2)',

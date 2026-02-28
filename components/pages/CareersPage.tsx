@@ -20,15 +20,20 @@ interface CareersPageProps {
 
 export default function CareersPage({ onNavigate }: CareersPageProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [selectedDepartment, setSelectedDepartment] = useState("All");
 
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
+    const checkScreen = () => {
+      const w = window.innerWidth;
+      setIsMobile(w < 640);
+      setIsTablet(w >= 640 && w < 1024);
+    };
+    checkScreen();
+    window.addEventListener('resize', checkScreen);
     setIsDark(document.documentElement.classList.contains('dark'));
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkScreen);
   }, []);
 
   const pageStyle: React.CSSProperties = {
@@ -40,12 +45,12 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
   const containerStyle: React.CSSProperties = {
     maxWidth: '1400px',
     margin: '0 auto',
-    padding: '80px 24px',
+    padding: isMobile ? '40px 16px' : isTablet ? '60px 20px' : '80px 24px',
   };
 
   const headerStyle: React.CSSProperties = {
     textAlign: 'center',
-    marginBottom: '80px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const badgeStyle: React.CSSProperties = {
@@ -62,7 +67,7 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
   };
 
   const titleStyle: React.CSSProperties = {
-    fontSize: isMobile ? '36px' : '56px',
+    fontSize: isMobile ? '28px' : isTablet ? '40px' : '56px',
     fontWeight: 700,
     color: isDark ? '#ffffff' : '#111827',
     marginBottom: '16px',
@@ -70,7 +75,7 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
   };
 
   const subtitleStyle: React.CSSProperties = {
-    fontSize: '20px',
+    fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
     color: isDark ? '#94A3B8' : '#6B7280',
     maxWidth: '672px',
     margin: '0 auto',
@@ -79,13 +84,13 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
 
   const benefitsGridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
-    gap: '24px',
-    marginBottom: '80px',
+    gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : isTablet ? 'repeat(3, 1fr)' : 'repeat(4, 1fr)',
+    gap: isMobile ? '12px' : '24px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const benefitCardStyle: React.CSSProperties = {
-    padding: '24px',
+    padding: isMobile ? '16px' : '24px',
     borderRadius: '16px',
     border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
     backgroundColor: isDark ? '#1E293B' : '#ffffff',
@@ -140,12 +145,12 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
   const jobsContainerStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
-    marginBottom: '80px',
+    gap: isMobile ? '12px' : '16px',
+    marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
   const jobCardStyle: React.CSSProperties = {
-    padding: '24px',
+    padding: isMobile ? '16px' : '24px',
     borderRadius: '16px',
     border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
     backgroundColor: isDark ? '#1E293B' : '#ffffff',
@@ -185,32 +190,34 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
-    padding: '12px 24px',
-    fontSize: '14px',
+    padding: isMobile ? '10px 16px' : '12px 24px',
+    fontSize: isMobile ? '13px' : '14px',
     fontWeight: 500,
     borderRadius: '10px',
     background: 'linear-gradient(135deg, #667EEA, #764BA2)',
     color: '#ffffff',
     border: 'none',
     cursor: 'pointer',
+    width: isMobile ? '100%' : 'auto',
+    justifyContent: 'center',
   };
 
   const ctaSectionStyle: React.CSSProperties = {
     textAlign: 'center',
-    padding: '80px 40px',
-    borderRadius: '24px',
+    padding: isMobile ? '40px 20px' : isTablet ? '60px 32px' : '80px 40px',
+    borderRadius: isMobile ? '16px' : '24px',
     background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
   };
 
   const ctaTitleStyle: React.CSSProperties = {
-    fontSize: isMobile ? '32px' : '48px',
+    fontSize: isMobile ? '24px' : isTablet ? '36px' : '48px',
     fontWeight: 700,
     color: '#ffffff',
     marginBottom: '16px',
   };
 
   const ctaSubtitleStyle: React.CSSProperties = {
-    fontSize: '20px',
+    fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
     color: 'rgba(255,255,255,0.9)',
     marginBottom: '32px',
     maxWidth: '600px',
@@ -221,8 +228,8 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
-    padding: '16px 32px',
-    fontSize: '18px',
+    padding: isMobile ? '12px 24px' : '16px 32px',
+    fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
     borderRadius: '12px',
     backgroundColor: '#ffffff',
