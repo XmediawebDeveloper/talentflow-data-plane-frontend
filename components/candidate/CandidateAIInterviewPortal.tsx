@@ -529,209 +529,193 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     };
 
     const checkBorder = (status: string) => {
-      if (status === 'checking') return 'border-gray-200';
-      if (status === 'granted' || status === 'stable' || status === 'ready' || status === 'good' || status === 'normal') return 'border-gray-300 bg-gray-50';
-      if (status === 'low') return 'border-gray-300 bg-gray-50'; // warning — still passes
-      return 'border-gray-300 bg-gray-100';
+      if (status === 'checking') return 'bg-gray-50';
+      if (status === 'granted' || status === 'stable' || status === 'ready' || status === 'good' || status === 'normal') return 'bg-gray-50';
+      if (status === 'low') return 'bg-amber-50';
+      return 'bg-red-50';
     };
 
     return (
-      <div className="min-h-screen overflow-y-auto bg-gray-50">
-        {/* Header */}
-        <div className="bg-gray-900 px-8 py-5">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">
-              <Video className="w-6 h-6 text-gray-300" />
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        {/* Sticky Header */}
+        <div className="sticky top-0 z-50 bg-gray-900 px-8 py-5 shadow-lg">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-3 mb-1">
+              <Video className="w-5 h-5 text-gray-300" />
+              <h1 className="text-white text-lg font-semibold">Pre-Interview System Check</h1>
             </div>
-            <div>
-              <h1 className="text-white text-lg font-semibold">AI Interview Session</h1>
-              <p className="text-gray-400 text-sm">
-                {interview.candidate_name} &bull; {interview.position}
-              </p>
-            </div>
+            <p className="text-gray-400 text-sm">
+              {interview.candidate_name} &bull; {interview.position}
+            </p>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="px-8 py-8 space-y-8">
-          <div className="border border-gray-200 rounded-lg p-5 bg-white">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                <Info className="w-5 h-5 text-gray-600" />
-              </div>
-              <div>
-                <h2 className="font-semibold text-gray-900">Pre-Interview System Check</h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  Please ensure your camera and microphone are working properly before starting the interview.
-                </p>
-              </div>
+        {/* Content — full-width sections */}
+        <div className="flex-1 bg-white">
+
+          {/* Section 1: Info Banner */}
+          <div className="px-8 py-5 bg-gray-50 border-b border-gray-200">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-gray-600">
+                Please ensure your camera and microphone are working properly before starting the interview.
+              </p>
             </div>
           </div>
 
-          {/* Video Preview */}
-          <div>
+          {/* Section 2: Video Preview */}
+          <div className="px-8 py-6 border-b border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <Video className="w-5 h-5 text-gray-500" />
               <h2 className="font-semibold text-gray-900">Video Preview</h2>
             </div>
             <div className="flex justify-start">
-            <div className="relative bg-gray-900 rounded-lg overflow-hidden w-64" style={{ aspectRatio: '4/3' }}>
-              <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-              {cameraStatus === 'checking' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <Loader2 className="w-10 h-10 text-gray-500 animate-spin mb-3" />
-                  <p className="text-gray-400 text-sm">Requesting camera access...</p>
-                </div>
-              )}
-              {cameraStatus === 'denied' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <Camera className="w-10 h-10 text-gray-600 mb-3" />
-                  <p className="text-gray-400 text-sm">Camera access denied. Please allow camera permissions.</p>
-                </div>
-              )}
-              {cameraStatus !== 'granted' && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-                  <p className="text-gray-500 text-sm">Camera Preview</p>
-                </div>
-              )}
-            </div>
+              <div className="relative bg-gray-900 rounded-lg overflow-hidden w-64" style={{ aspectRatio: '4/3' }}>
+                <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                {cameraStatus === 'checking' && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <Loader2 className="w-10 h-10 text-gray-500 animate-spin mb-3" />
+                    <p className="text-gray-400 text-sm">Requesting camera access...</p>
+                  </div>
+                )}
+                {cameraStatus === 'denied' && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <Camera className="w-10 h-10 text-gray-600 mb-3" />
+                    <p className="text-gray-400 text-sm">Camera access denied. Please allow camera permissions.</p>
+                  </div>
+                )}
+                {cameraStatus !== 'granted' && (
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                    <p className="text-gray-500 text-sm">Camera Preview</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* System Checks */}
-          <div>
+          {/* Section 3: System Checks */}
+          <div className="px-8 py-6 border-b border-gray-200">
             <div className="flex items-center gap-2 mb-4">
               <CheckCircle className="w-5 h-5 text-gray-500" />
               <h2 className="font-semibold text-gray-900">System Checks</h2>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Camera Access */}
-              <div className={`border rounded-lg p-4 ${checkBorder(cameraStatus)}`}>
-                <div className="flex items-center gap-3">
-                  <StatusIcon status={cameraStatus} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900 text-sm">Camera Access</div>
-                    <div className="text-xs text-gray-500">{statusLabel(cameraStatus)}</div>
-                  </div>
+              <div className={`flex items-center gap-3 p-3 rounded-lg ${checkBorder(cameraStatus)}`}>
+                <StatusIcon status={cameraStatus} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-900 text-sm">Camera Access</div>
+                  <div className="text-xs text-gray-500">{statusLabel(cameraStatus)}</div>
                 </div>
               </div>
               {/* Microphone + Audio Level */}
-              <div className={`border rounded-lg p-4 ${checkBorder(micStatus)}`}>
-                <div className="flex items-center gap-3">
-                  <StatusIcon status={micQuality === 'good' ? 'granted' : micStatus} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900 text-sm">Microphone</div>
-                    <div className="text-xs text-gray-500">
-                      {micStatus === 'checking' ? 'Checking...' :
-                       micStatus === 'denied' ? 'Denied' :
-                       micQuality === 'good' ? 'Good Quality' :
-                       'Speak now to test...'}
-                    </div>
-                    {micStatus === 'granted' && (
-                      <>
-                        <div className="mt-1.5 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-100 ${micQuality === 'good' ? 'bg-green-500' : 'bg-gray-600'}`}
-                            style={{ width: `${Math.min(100, (audioLevel / 128) * 100)}%` }}
-                          />
-                        </div>
-                        {micQuality !== 'good' && (
-                          <div className="mt-1 flex items-center gap-1">
-                            <Mic className="w-3 h-3 text-gray-400 animate-pulse" />
-                            <span className="text-[10px] text-gray-400">Say something to verify your mic</span>
-                          </div>
-                        )}
-                      </>
-                    )}
+              <div className={`flex items-center gap-3 p-3 rounded-lg ${checkBorder(micStatus)}`}>
+                <StatusIcon status={micQuality === 'good' ? 'granted' : micStatus} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-900 text-sm">Microphone</div>
+                  <div className="text-xs text-gray-500">
+                    {micStatus === 'checking' ? 'Checking...' :
+                     micStatus === 'denied' ? 'Denied' :
+                     micQuality === 'good' ? 'Good Quality' :
+                     'Speak now to test...'}
                   </div>
+                  {micStatus === 'granted' && (
+                    <>
+                      <div className="mt-1.5 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-100 ${micQuality === 'good' ? 'bg-green-500' : 'bg-gray-600'}`}
+                          style={{ width: `${Math.min(100, (audioLevel / 128) * 100)}%` }}
+                        />
+                      </div>
+                      {micQuality !== 'good' && (
+                        <div className="mt-1 flex items-center gap-1">
+                          <Mic className="w-3 h-3 text-gray-400 animate-pulse" />
+                          <span className="text-[10px] text-gray-400">Say something to verify your mic</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
               {/* Network */}
-              <div className={`border rounded-lg p-4 ${checkBorder(networkStatus)}`}>
-                <div className="flex items-center gap-3">
-                  <StatusIcon status={networkStatus} />
-                  <div>
-                    <div className="font-medium text-gray-900 text-sm">Network Connection</div>
-                    <div className="text-xs text-gray-500">
-                      {networkStatus === 'checking' ? 'Pinging...' :
-                       networkStatus === 'stable' && networkLatency !== null ? `Stable (${networkLatency}ms)` :
-                       networkStatus === 'unstable' && networkLatency !== null ? `Unstable (${networkLatency}ms)` :
-                       statusLabel(networkStatus)}
-                    </div>
+              <div className={`flex items-center gap-3 p-3 rounded-lg ${checkBorder(networkStatus)}`}>
+                <StatusIcon status={networkStatus} />
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">Network Connection</div>
+                  <div className="text-xs text-gray-500">
+                    {networkStatus === 'checking' ? 'Pinging...' :
+                     networkStatus === 'stable' && networkLatency !== null ? `Stable (${networkLatency}ms)` :
+                     networkStatus === 'unstable' && networkLatency !== null ? `Unstable (${networkLatency}ms)` :
+                     statusLabel(networkStatus)}
                   </div>
                 </div>
               </div>
               {/* AI Engine */}
-              <div className={`border rounded-lg p-4 ${checkBorder(aiEngineStatus)}`}>
-                <div className="flex items-center gap-3">
-                  <StatusIcon status={aiEngineStatus} />
-                  <div>
-                    <div className="font-medium text-gray-900 text-sm">AI Engine</div>
-                    <div className="text-xs text-gray-500">
-                      {aiEngineStatus === 'checking' ? 'Checking...' :
-                       aiEngineStatus === 'ready' && aiEngineLatency !== null ? `Ready (${aiEngineLatency}ms)` :
-                       aiEngineStatus === 'error' ? 'AI engine unavailable' :
-                       statusLabel(aiEngineStatus)}
-                    </div>
+              <div className={`flex items-center gap-3 p-3 rounded-lg ${checkBorder(aiEngineStatus)}`}>
+                <StatusIcon status={aiEngineStatus} />
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">AI Engine</div>
+                  <div className="text-xs text-gray-500">
+                    {aiEngineStatus === 'checking' ? 'Checking...' :
+                     aiEngineStatus === 'ready' && aiEngineLatency !== null ? `Ready (${aiEngineLatency}ms)` :
+                     aiEngineStatus === 'error' ? 'AI engine unavailable' :
+                     statusLabel(aiEngineStatus)}
                   </div>
                 </div>
               </div>
               {/* Lighting */}
-              <div className={`border rounded-lg p-4 ${checkBorder(lightingStatus)}`}>
-                <div className="flex items-center gap-3">
-                  <StatusIcon status={lightingStatus} />
-                  <div>
-                    <div className="font-medium text-gray-900 text-sm">Lighting Quality</div>
-                    <div className="text-xs text-gray-500">
-                      {lightingStatus === 'checking' ? 'Analyzing...' : lightingStatus === 'good' ? 'Good' : 'Too Dark'}
-                    </div>
+              <div className={`flex items-center gap-3 p-3 rounded-lg ${checkBorder(lightingStatus)}`}>
+                <StatusIcon status={lightingStatus} />
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">Lighting Quality</div>
+                  <div className="text-xs text-gray-500">
+                    {lightingStatus === 'checking' ? 'Analyzing...' : lightingStatus === 'good' ? 'Good' : 'Too Dark'}
                   </div>
                 </div>
               </div>
               {/* Ambient Noise */}
-              <div className={`border rounded-lg p-4 ${checkBorder(noiseStatus)}`}>
-                <div className="flex items-center gap-3">
-                  <StatusIcon status={noiseStatus} />
-                  <div>
-                    <div className="font-medium text-gray-900 text-sm">Ambient Noise</div>
-                    <div className="text-xs text-gray-500">
-                      {noiseStatus === 'checking' ? 'Measuring...' : noiseStatus === 'normal' ? 'Normal' : 'Too Noisy'}
-                    </div>
+              <div className={`flex items-center gap-3 p-3 rounded-lg ${checkBorder(noiseStatus)}`}>
+                <StatusIcon status={noiseStatus} />
+                <div>
+                  <div className="font-medium text-gray-900 text-sm">Ambient Noise</div>
+                  <div className="text-xs text-gray-500">
+                    {noiseStatus === 'checking' ? 'Measuring...' : noiseStatus === 'normal' ? 'Normal' : 'Too Noisy'}
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Interview Details */}
-          <div>
+          {/* Section 4: Interview Details */}
+          <div className="px-8 py-6 bg-gray-50">
             <div className="flex items-center gap-2 mb-4">
               <FileText className="w-5 h-5 text-gray-500" />
               <h2 className="font-semibold text-gray-900">Interview Details</h2>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="border border-gray-200 rounded-lg p-4 bg-white">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-lg bg-white border border-gray-100">
                 <div className="text-xs text-gray-500 mb-1">Interview Type</div>
                 <div className="font-medium text-gray-900 capitalize">{interview.interview_type.replace('_', ' ')}</div>
               </div>
-              <div className="border border-gray-200 rounded-lg p-4 bg-white">
+              <div className="p-3 rounded-lg bg-white border border-gray-100">
                 <div className="text-xs text-gray-500 mb-1">Duration</div>
                 <div className="font-medium text-gray-900">{interview.duration_minutes} min</div>
               </div>
-              <div className="border border-gray-200 rounded-lg p-4 bg-white">
+              <div className="p-3 rounded-lg bg-white border border-gray-100">
                 <div className="text-xs text-gray-500 mb-1">Total Questions</div>
                 <div className="font-medium text-gray-900">{interview.total_questions}</div>
               </div>
-              <div className="border border-gray-200 rounded-lg p-4 bg-white">
+              <div className="p-3 rounded-lg bg-white border border-gray-100">
                 <div className="text-xs text-gray-500 mb-1">Recording</div>
                 <div className="font-medium text-gray-900">Enabled</div>
               </div>
             </div>
           </div>
+
         </div>
 
         {/* Sticky Footer */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-4">
+        <div className="sticky bottom-0 z-40 bg-white border-t border-gray-200 px-8 py-4 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 text-sm text-gray-500">
