@@ -22,6 +22,7 @@ import React, {
   forwardRef,
   useState,
 } from "react";
+import * as THREE from "three";
 
 export interface TalkingHeadHandle {
   streamStart(sampleRate: number, onAudioEnd: () => void): void;
@@ -76,6 +77,71 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           });
 
           if (!mounted) return;
+
+          // ── Professional HR outfit recoloring ─────────────────────────
+          // Traverse the loaded armature and change clothing material colors
+          // to look like a professional businesswoman (dark navy blazer etc.)
+          try {
+            const armature = head.armature;
+            if (armature) {
+              const meshNames: string[] = [];
+              armature.traverse((child: any) => {
+                if (!child.isMesh) return;
+                const name = (child.name || "").toLowerCase();
+                meshNames.push(child.name);
+
+                // Outfit top → dark charcoal blazer (near-black formal suit)
+                if (name.includes("outfit_top") || (name.includes("top") && name.includes("outfit"))) {
+                  const mat = child.material as THREE.MeshStandardMaterial;
+                  if (mat?.isMeshStandardMaterial) {
+                    child.material = mat.clone();
+                    const m = child.material as THREE.MeshStandardMaterial;
+                    m.map = null;
+                    m.normalMap = null;
+                    m.color.set(0x2a2a2e);     // Dark charcoal blazer
+                    m.roughness = 0.7;          // Matte formal fabric
+                    m.metalness = 0.0;
+                    m.needsUpdate = true;
+                  }
+                }
+
+                // Outfit bottom → black formal trousers
+                if (name.includes("outfit_bottom") || (name.includes("bottom") && name.includes("outfit"))) {
+                  const mat = child.material as THREE.MeshStandardMaterial;
+                  if (mat?.isMeshStandardMaterial) {
+                    child.material = mat.clone();
+                    const m = child.material as THREE.MeshStandardMaterial;
+                    m.map = null;
+                    m.normalMap = null;
+                    m.color.set(0x1e1e22);     // Black trousers
+                    m.roughness = 0.65;
+                    m.metalness = 0.0;
+                    m.needsUpdate = true;
+                  }
+                }
+
+                // Footwear → black formal heels
+                if (name.includes("footwear") || name.includes("shoe")) {
+                  const mat = child.material as THREE.MeshStandardMaterial;
+                  if (mat?.isMeshStandardMaterial) {
+                    child.material = mat.clone();
+                    const m = child.material as THREE.MeshStandardMaterial;
+                    m.map = null;
+                    m.normalMap = null;
+                    m.color.set(0x0a0a0c);     // Black
+                    m.roughness = 0.25;         // Polished leather heels
+                    m.metalness = 0.08;
+                    m.needsUpdate = true;
+                  }
+                }
+              });
+              console.log("[TalkingHead] Mesh names:", meshNames.join(", "));
+              console.log("[TalkingHead] Professional outfit applied");
+            }
+          } catch (err) {
+            console.warn("[TalkingHead] Could not recolor outfit:", err);
+          }
+
           headRef.current = head;
           setStatus("ready");
           console.log("[TalkingHead] Avatar ready");

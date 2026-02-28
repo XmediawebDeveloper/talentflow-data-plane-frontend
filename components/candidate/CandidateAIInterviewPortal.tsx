@@ -771,158 +771,162 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== CONSENT ==========
   if (step === 'consent' && interview) {
     return (
-      <div className="min-h-screen overflow-y-auto bg-gray-50">
-        {/* Header */}
-        <div className="bg-gray-900 px-8 py-5">
-          <div className="flex items-center gap-4">
-            <Video className="w-6 h-6 text-gray-300" />
-            <div>
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        {/* Sticky Header */}
+        <div className="sticky top-0 z-50 bg-gray-900 px-8 py-5 shadow-lg">
+          <div className="max-w-3xl mx-auto text-center">
+            <div className="flex items-center justify-center gap-3 mb-1">
+              <Video className="w-5 h-5 text-gray-300" />
               <h1 className="text-white text-lg font-semibold">AI Video Interview - Consent Required</h1>
-              <p className="text-gray-400 text-sm">
-                Position: <span className="text-gray-200 font-medium">{interview.position}</span> &bull; Duration: {interview.duration_minutes} min
-              </p>
             </div>
+            <p className="text-gray-400 text-sm">
+              Position: <span className="text-gray-200 font-medium">{interview.position}</span> &bull; Duration: {interview.duration_minutes} min
+            </p>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="px-8 py-8 space-y-8">
-          {/* Special Category Data Warning */}
-          <div className="border border-gray-300 rounded-lg p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <AlertTriangle className="w-5 h-5 text-gray-700 mt-0.5 flex-shrink-0" />
-              <div>
-                <h2 className="font-semibold text-gray-900">Special Category Data (GDPR Article 9 + DPDP Act Section 6)</h2>
-                <p className="text-sm text-gray-600 mt-1">
-                  This interview uses <strong>AI facial analysis</strong>, which is considered <strong>biometric data</strong> under GDPR. Your <strong>explicit consent</strong> is required by law.
-                </p>
+        {/* Content — full-width sections */}
+        <div className="flex-1 bg-white">
+
+            {/* Section 1: Special Category Data Warning */}
+            <div className="px-8 py-6 bg-gray-50 border-b border-gray-200">
+              <div className="flex items-start gap-3 mb-4">
+                <AlertTriangle className="w-5 h-5 text-gray-700 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h2 className="font-semibold text-gray-900">Special Category Data (GDPR Article 9 + DPDP Act Section 6)</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    This interview uses <strong>AI facial analysis</strong>, which is considered <strong>biometric data</strong> under GDPR. Your <strong>explicit consent</strong> is required by law.
+                  </p>
+                </div>
+              </div>
+              <div className="bg-white rounded-lg p-4 border border-gray-100">
+                <p className="text-sm text-gray-700 font-medium mb-3">What will be recorded and analyzed:</p>
+                <ul className="space-y-2 text-sm text-gray-600">
+                  <li><strong>Video:</strong> Your full video interview will be recorded</li>
+                  <li><strong>Audio:</strong> All spoken responses will be recorded and transcribed</li>
+                  <li><strong>Biometric Analysis:</strong> AI will analyze facial expressions, eye contact, emotions, and body language</li>
+                  <li><strong>Retention:</strong> Recordings will be stored for 90 days, then automatically deleted</li>
+                  <li><strong>Your Rights:</strong> You can withdraw consent and request deletion at any time</li>
+                </ul>
               </div>
             </div>
-            <div className="bg-gray-100 rounded-lg p-4">
-              <p className="text-sm text-gray-700 font-medium mb-3">What will be recorded and analyzed:</p>
+
+            {/* Section 2: Data Collection During Interview */}
+            <div className="px-8 py-6 border-b border-gray-200">
+              <div className="flex items-center gap-2 mb-4">
+                <Info className="w-5 h-5 text-gray-500" />
+                <h2 className="font-semibold text-gray-900">Data Collection During Interview</h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+                  <Video className="w-5 h-5 text-gray-600 flex-shrink-0" />
+                  <div>
+                    <span className="font-medium text-gray-900 text-sm">Video Recording</span>
+                    <p className="text-xs text-gray-500">Full interview video captured</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+                  <Mic className="w-5 h-5 text-gray-600 flex-shrink-0" />
+                  <div>
+                    <span className="font-medium text-gray-900 text-sm">Audio Recording</span>
+                    <p className="text-xs text-gray-500">Voice responses recorded</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+                  <Eye className="w-5 h-5 text-gray-600 flex-shrink-0" />
+                  <div>
+                    <span className="font-medium text-gray-900 text-sm">Facial Analysis</span>
+                    <p className="text-xs text-gray-500">Biometric data (GDPR Art. 9)</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 3: Data Retention & Deletion */}
+            <div className="px-8 py-6 border-b border-gray-200">
+              <div className="flex items-center gap-2 mb-3">
+                <FileText className="w-5 h-5 text-gray-500" />
+                <h2 className="font-semibold text-gray-900">Data Retention & Deletion</h2>
+              </div>
               <ul className="space-y-2 text-sm text-gray-600">
-                <li><strong>Video:</strong> Your full video interview will be recorded</li>
-                <li><strong>Audio:</strong> All spoken responses will be recorded and transcribed</li>
-                <li><strong>Biometric Analysis:</strong> AI will analyze facial expressions, eye contact, emotions, and body language</li>
-                <li><strong>Retention:</strong> Recordings will be stored for 90 days, then automatically deleted</li>
-                <li><strong>Your Rights:</strong> You can withdraw consent and request deletion at any time</li>
+                <li>Recordings stored for <strong>90 days</strong> from interview date</li>
+                <li><strong>Automatic deletion</strong> after 90 days (no manual action needed)</li>
+                <li>You can <strong>request early deletion</strong> at any time via email to privacy@talentflow.com</li>
+                <li>Deletion processed within <strong>48 hours</strong> of request</li>
+                <li>Anonymized analytics may be retained longer (with no personal identifiers)</li>
               </ul>
             </div>
-          </div>
 
-          {/* Data Collection During Interview */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Info className="w-5 h-5 text-gray-500" />
-              <h2 className="font-semibold text-gray-900">Data Collection During Interview</h2>
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="border border-gray-200 rounded-lg p-4 bg-white">
-                <div className="flex items-center gap-3 mb-1">
-                  <Video className="w-5 h-5 text-gray-600" />
-                  <span className="font-medium text-gray-900 text-sm">Video Recording</span>
-                </div>
-                <p className="text-xs text-gray-500 ml-8">Full interview video captured</p>
+            {/* Section 4: Consent Checkboxes */}
+            <div className="px-8 py-6 border-b border-gray-200">
+              <h2 className="font-semibold text-gray-900 mb-4">Please confirm your consent:</h2>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
+                  <input type="checkbox" checked={consentVideo} onChange={(e) => setConsentVideo(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
+                  <span className="text-sm text-gray-700">
+                    I consent to <strong>video recording</strong> of this interview
+                  </span>
+                </label>
+                <label className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
+                  <input type="checkbox" checked={consentAudio} onChange={(e) => setConsentAudio(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
+                  <span className="text-sm text-gray-700">
+                    I consent to <strong>audio recording</strong> of my responses
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors">
+                  <input type="checkbox" checked={consentBiometric} onChange={(e) => setConsentBiometric(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500 mt-0.5" />
+                  <span className="text-sm text-gray-700">
+                    I consent to <strong>biometric data processing</strong> (facial analysis, emotion detection, eye tracking) - <span className="font-semibold text-gray-900">GDPR Article 9 Special Category Data</span>
+                  </span>
+                </label>
+                <label className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
+                  <input type="checkbox" checked={consentAI} onChange={(e) => setConsentAI(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
+                  <span className="text-sm text-gray-700">
+                    I consent to <strong>AI analysis</strong> of my interview performance, responses, and behavior
+                  </span>
+                </label>
+                <label className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
+                  <input type="checkbox" checked={consentTerms} onChange={(e) => setConsentTerms(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
+                  <span className="text-sm text-gray-700">
+                    I have read and agree to the <a href="/privacy" className="underline font-medium text-gray-900 hover:text-black">Privacy Policy</a> and <a href="/terms" className="underline font-medium text-gray-900 hover:text-black">Terms & Conditions</a>
+                  </span>
+                </label>
               </div>
-              <div className="border border-gray-200 rounded-lg p-4 bg-white">
-                <div className="flex items-center gap-3 mb-1">
-                  <Mic className="w-5 h-5 text-gray-600" />
-                  <span className="font-medium text-gray-900 text-sm">Audio Recording</span>
+            </div>
+
+            {/* Section 5: Your Rights + Recording Indicator (combined footer section) */}
+            <div className="px-8 py-6 bg-gray-50">
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-4 h-4 text-gray-600" />
+                    <h3 className="font-semibold text-gray-900 text-sm">Your Rights</h3>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    You can withdraw your consent at any time by contacting us at <a href="mailto:privacy@talentflow.com" className="underline font-medium text-gray-900">privacy@talentflow.com</a>. Upon withdrawal, your interview recording will be <strong>deleted within 48 hours</strong>.
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 ml-8">Voice responses recorded</p>
-              </div>
-              <div className="border border-gray-200 rounded-lg p-4 bg-white">
-                <div className="flex items-center gap-3 mb-1">
-                  <Eye className="w-5 h-5 text-gray-600" />
-                  <span className="font-medium text-gray-900 text-sm">Facial Analysis</span>
+                <div className="border-t border-gray-200 pt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-3 h-3 rounded-full bg-gray-800 inline-block" />
+                    <h3 className="font-semibold text-gray-900 text-sm">Recording Indicator</h3>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    A <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-800 inline-block" /> <strong>RECORDING</strong></span> indicator will be displayed throughout your interview to remind you that the session is being recorded and analyzed.
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500 ml-8">Biometric data (GDPR Art. 9)</p>
               </div>
             </div>
-          </div>
 
-          {/* Data Retention & Deletion */}
-          <div className="border border-gray-200 rounded-lg p-6 bg-white">
-            <div className="flex items-center gap-2 mb-3">
-              <FileText className="w-5 h-5 text-gray-500" />
-              <h2 className="font-semibold text-gray-900">Data Retention & Deletion</h2>
-            </div>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li>Recordings stored for <strong>90 days</strong> from interview date</li>
-              <li><strong>Automatic deletion</strong> after 90 days (no manual action needed)</li>
-              <li>You can <strong>request early deletion</strong> at any time via email to privacy@talentflow.com</li>
-              <li>Deletion processed within <strong>48 hours</strong> of request</li>
-              <li>Anonymized analytics may be retained longer (with no personal identifiers)</li>
-            </ul>
-          </div>
-
-          {/* Consent Checkboxes */}
-          <div>
-            <h2 className="font-semibold text-gray-900 mb-4">Please confirm your consent:</h2>
-            <div className="space-y-3">
-              <label className="flex items-center gap-3 border border-gray-200 rounded-lg p-4 bg-white cursor-pointer hover:border-gray-300 transition-colors">
-                <input type="checkbox" checked={consentVideo} onChange={(e) => setConsentVideo(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
-                <span className="text-sm text-gray-700">
-                  I consent to <strong>video recording</strong> of this interview
-                </span>
-              </label>
-              <label className="flex items-center gap-3 border border-gray-200 rounded-lg p-4 bg-white cursor-pointer hover:border-gray-300 transition-colors">
-                <input type="checkbox" checked={consentAudio} onChange={(e) => setConsentAudio(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
-                <span className="text-sm text-gray-700">
-                  I consent to <strong>audio recording</strong> of my responses
-                </span>
-              </label>
-              <label className="flex items-start gap-3 border border-gray-300 rounded-lg p-4 bg-gray-50 cursor-pointer hover:border-gray-400 transition-colors">
-                <input type="checkbox" checked={consentBiometric} onChange={(e) => setConsentBiometric(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500 mt-0.5" />
-                <span className="text-sm text-gray-700">
-                  I consent to <strong>biometric data processing</strong> (facial analysis, emotion detection, eye tracking) - <span className="font-semibold text-gray-900">GDPR Article 9 Special Category Data</span>
-                </span>
-              </label>
-              <label className="flex items-center gap-3 border border-gray-200 rounded-lg p-4 bg-white cursor-pointer hover:border-gray-300 transition-colors">
-                <input type="checkbox" checked={consentAI} onChange={(e) => setConsentAI(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
-                <span className="text-sm text-gray-700">
-                  I consent to <strong>AI analysis</strong> of my interview performance, responses, and behavior
-                </span>
-              </label>
-              <label className="flex items-center gap-3 border border-gray-200 rounded-lg p-4 bg-white cursor-pointer hover:border-gray-300 transition-colors">
-                <input type="checkbox" checked={consentTerms} onChange={(e) => setConsentTerms(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
-                <span className="text-sm text-gray-700">
-                  I have read and agree to the <a href="/privacy" className="underline font-medium text-gray-900 hover:text-black">Privacy Policy</a> and <a href="/terms" className="underline font-medium text-gray-900 hover:text-black">Terms & Conditions</a>
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Your Rights */}
-          <div className="border border-gray-200 rounded-lg p-5 bg-gray-50">
-            <div className="flex items-center gap-2 mb-2">
-              <CheckCircle className="w-4 h-4 text-gray-600" />
-              <h3 className="font-semibold text-gray-900 text-sm">Your Rights</h3>
-            </div>
-            <p className="text-sm text-gray-600">
-              You can withdraw your consent at any time by contacting us at <a href="mailto:privacy@talentflow.com" className="underline font-medium text-gray-900">privacy@talentflow.com</a>. Upon withdrawal, your interview recording will be <strong>deleted within 48 hours</strong>.
-            </p>
-          </div>
-
-          {/* Recording Indicator */}
-          <div className="border border-gray-200 rounded-lg p-5 bg-white">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-3 h-3 rounded-full bg-gray-800 inline-block" />
-              <h3 className="font-semibold text-gray-900 text-sm">Recording Indicator</h3>
-            </div>
-            <p className="text-sm text-gray-600">
-              A <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-gray-800 inline-block" /> <strong>RECORDING</strong></span> indicator will be displayed throughout your interview to remind you that the session is being recorded and analyzed.
-            </p>
-          </div>
         </div>
 
         {/* Sticky Footer */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-4">
+        <div className="sticky bottom-0 z-40 bg-white border-t border-gray-200 px-8 py-4 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
           <div className="flex items-center justify-between">
             {!allConsentsChecked && (
               <span className="text-sm text-gray-500">Please accept all required consents</span>

@@ -44,11 +44,18 @@ function CameraAutoFrame() {
     const cam = camera as THREE.PerspectiveCamera;
     const fovRad = cam.fov * (Math.PI / 180);
 
-    // Calculate distance needed to fit the full height with 15% padding
-    const distance = (size.y / 2) / Math.tan(fovRad / 2) * 1.15;
+    // Frame upper body only (chest up) — raise center to ~70% of height
+    // and use ~45% of total height for the visible portion
+    const upperCenter = new THREE.Vector3(
+      center.x,
+      box.min.y + size.y * 0.7,  // Focus point at 70% up (chest/face area)
+      center.z,
+    );
+    const visibleHeight = size.y * 0.45; // Show ~45% of total body height
+    const distance = (visibleHeight / 2) / Math.tan(fovRad / 2) * 1.15;
 
-    cam.position.set(center.x, center.y, center.z + distance);
-    cam.lookAt(center);
+    cam.position.set(upperCenter.x, upperCenter.y, upperCenter.z + distance);
+    cam.lookAt(upperCenter);
     cam.updateProjectionMatrix();
 
     framed.current = true;

@@ -12,6 +12,9 @@ export interface AIInterviewRoundConfig {
   topic_weights?: Record<string, number>;
   enabled: boolean;
   order: number;
+  // Skills split by source — so the agent knows which came from JD vs custom-added
+  jd_skills?: string[];
+  custom_skills?: string[];
   // Deprecated: kept for backward compat with old "technical" round configs only
   must_have_percentage?: number;
   nice_to_have_percentage?: number;

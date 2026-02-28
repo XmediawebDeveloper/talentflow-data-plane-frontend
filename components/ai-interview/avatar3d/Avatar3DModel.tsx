@@ -46,6 +46,71 @@ export function Avatar3DModel({ stateRef }: Avatar3DModelProps) {
     return c;
   }, [scene]);
 
+  // ── Professional HR outfit material override ─────────────────────────────
+  // Recolors the avatar's clothing meshes to look like a professional
+  // businesswoman (dark navy blazer, matching bottoms, dark shoes).
+  useMemo(() => {
+    clone.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+
+      const name = mesh.name.toLowerCase();
+
+      // Outfit top → dark charcoal blazer
+      if (name.includes("outfit_top") || name.includes("top") && name.includes("outfit")) {
+        const mat = (mesh.material as THREE.MeshStandardMaterial);
+        if (mat?.isMeshStandardMaterial) {
+          mesh.material = mat.clone();
+          const m = mesh.material as THREE.MeshStandardMaterial;
+          m.map = null;
+          m.normalMap = null;
+          m.color.set(0x2a2a2e);       // Dark charcoal blazer
+          m.roughness = 0.7;
+          m.metalness = 0.0;
+          m.needsUpdate = true;
+        }
+      }
+
+      // Outfit bottom → black formal trousers
+      if (name.includes("outfit_bottom") || name.includes("bottom") && name.includes("outfit")) {
+        const mat = (mesh.material as THREE.MeshStandardMaterial);
+        if (mat?.isMeshStandardMaterial) {
+          mesh.material = mat.clone();
+          const m = mesh.material as THREE.MeshStandardMaterial;
+          m.map = null;
+          m.normalMap = null;
+          m.color.set(0x1e1e22);       // Black trousers
+          m.roughness = 0.65;
+          m.metalness = 0.0;
+          m.needsUpdate = true;
+        }
+      }
+
+      // Footwear → black formal heels
+      if (name.includes("footwear") || name.includes("shoe")) {
+        const mat = (mesh.material as THREE.MeshStandardMaterial);
+        if (mat?.isMeshStandardMaterial) {
+          mesh.material = mat.clone();
+          const m = mesh.material as THREE.MeshStandardMaterial;
+          m.map = null;
+          m.normalMap = null;
+          m.color.set(0x0a0a0c);       // Black
+          m.roughness = 0.25;
+          m.metalness = 0.08;
+          m.needsUpdate = true;
+        }
+      }
+    });
+
+    if (process.env.NODE_ENV === "development") {
+      const meshNames: string[] = [];
+      clone.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) meshNames.push(child.name);
+      });
+      console.log("[Avatar3D] Mesh names:", meshNames.join(", "));
+    }
+  }, [clone]);
+
   // Collect skinned meshes with morph targets from our clone
   const morphMeshes = useMemo(() => {
     const meshes: THREE.SkinnedMesh[] = [];

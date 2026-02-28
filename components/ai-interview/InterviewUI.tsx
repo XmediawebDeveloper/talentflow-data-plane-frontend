@@ -99,6 +99,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   // Avatar state controller
   const avatarState = useAvatarState();
+  const avatar3dSenderRef = useRef<ReturnType<typeof createAvatar3DSender> | null>(null);
 
   // BroadcastChannel sender for 3D avatar (created once, cleaned up on unmount)
   useEffect(() => {
@@ -112,6 +113,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   // Push avatar state to 3D scene at ~30fps (uses refs, zero React re-renders)
   const avatarStateRef = useRef(avatarState.currentState);
   avatarStateRef.current = avatarState.currentState;
+  const visemeTimelineRef = useRef<VisemeTimeline>(new VisemeTimeline());
+  const playbackStartTimeRef = useRef(0);
 
   useEffect(() => {
     let lastSend = 0;
@@ -253,7 +256,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
   const talkingHeadRef   = useRef<TalkingHeadHandle>(null);
-  const thStreamActive   = useRef(false); // guard against double streamStart
+  // (thStreamActive removed — no longer sending audio to TalkingHead)
 
   // Real-time amplitude → viseme lip sync
   const analyserRef      = useRef<AnalyserNode | null>(null);
@@ -278,6 +281,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isAiSpeakingRef = useRef(false);
   const isProcessingRef = useRef(false);
+
+  // Callback to execute after speak_text TTS finishes (replaces browser speechSynthesis)
+  const speakTextCallbackRef = useRef<(() => void) | null>(null);
 
   // Stable callback refs — prevent WebSocket reconnection on re-renders
   const queueAudioRef = useRef<(pcmData: ArrayBuffer) => void>(() => {});
@@ -476,6 +482,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const handleAllAudioFinished = useCallback(() => {
     stopVisemeLoop(); // stop mouth animation when audio ends
     isPlayingRef.current = false;
+
+    // If a speak_text callback is pending, fire it and skip normal flow
+    if (speakTextCallbackRef.current) {
+      const cb = speakTextCallbackRef.current;
+      speakTextCallbackRef.current = null;
+      setIsAiSpeaking(false);
+      avatarState.onAiStopSpeaking();
+      cb();
+      return;
+    }
+
     if (audioEndReceivedRef.current) {
       setIsAiSpeaking(false);
       avatarState.onAiStopSpeaking();
@@ -571,14 +588,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       }
     }
 
-    // ── TalkingHead avatar state (speaking pose, hand gestures) ─────────────
-    // Auto-start TalkingHead stream so avatar enters speaking animation state.
-    // Audio is muted (gain:0) — actual playback is via the Web Audio API above.
-    if (!thStreamActive.current && talkingHeadRef.current) {
-      thStreamActive.current = true;
-      talkingHeadRef.current.streamStart(24000, () => {});
-    }
-    talkingHeadRef.current?.streamAudio(pcmData);
+    // NOTE: We do NOT send PCM audio to TalkingHead — its internal audio graph
+    // leaks sound through the analyzerNode → speechGainNode path even with gain:0.
+    // Lip sync is driven entirely by applyVisemeLive() from our real-time amplitude loop.
     // ─────────────────────────────────────────────────────────────────────────
 
     // Load shedding: reduce proctoring frequency when buffers are lagging
@@ -647,19 +659,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         noResponseRetryRef.current = 0; // Reset no-response tracking on new question
         setStatus("Linda is speaking...");
         startRevealingTokens();
-        // Pre-start TalkingHead stream so it's ready when PCM chunks arrive
-        if (!thStreamActive.current && talkingHeadRef.current) {
-          thStreamActive.current = true;
-          talkingHeadRef.current.streamStart(24000, () => {});
-        }
+        // Lip sync handled by applyVisemeLive() — no TalkingHead stream needed
         break;
       case "audio_end":
         setIsProcessing(false);
         audioEndReceivedRef.current = true;
         revealAllTokens();
-        // Stop TalkingHead stream — avatar transitions back to idle
-        thStreamActive.current = false;
-        talkingHeadRef.current?.streamStop();
+        // No TalkingHead stream to stop — lip sync driven by applyVisemeLive()
         // With scheduled playback, pendingBuffersRef tracks in-flight buffers.
         // If nothing is playing/scheduled right now, trigger recording immediately.
         if (pendingBuffersRef.current === 0 && !isPlayingRef.current) {
@@ -911,8 +917,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     setIsProcessing(false);
     setIsAiSpeaking(false);
     shouldDisconnectAfterAudioRef.current = false;
-    thStreamActive.current = false;
-    talkingHeadRef.current?.streamStop();
+    // thStreamActive no longer used
     audioQueueRef.current = [];
     isPlayingRef.current = false;
     pendingBuffersRef.current = 0;
@@ -921,6 +926,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     currentAiTextRef.current = "";
   }, [stopRecording, clearNoResponseTimer, stopVisemeLoop]);
 
+  /**
+   * Send text to backend for TTS synthesis via WebSocket (uses Nova voice).
+   * Falls back to a silent timeout if the WebSocket is not connected.
+   */
+  const speakViaTTS = useCallback((text: string, onDone: () => void) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      speakTextCallbackRef.current = onDone;
+      setIsAiSpeaking(true);
+      avatarState.onAiStartSpeaking();
+      wsRef.current.send(JSON.stringify({ type: "speak_text", text }));
+    } else {
+      // WebSocket not available — fall back to timeout
+      setTimeout(onDone, 3000);
+    }
+  }, [avatarState]);
+
   // No-response handlers
   const handleMicPopupNo = useCallback(() => {
     setShowMicPopup(false);
@@ -928,7 +949,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       clearTimeout(micPopupTimerRef.current);
       micPopupTimerRef.current = null;
     }
-    // End interview with closing message
+    // End interview with closing message — uses Nova TTS via WebSocket
     const closingMsg = "It seems we're having technical difficulties. Thank you for your time. The interview will now end.";
     setMessages(prev => [...prev, {
       id: crypto.randomUUID(),
@@ -938,21 +959,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     setStatus("Interview ending...");
     setIsClosing(true);
 
-    const utterance = new SpeechSynthesisUtterance(closingMsg);
-    utterance.rate = 1.0;
-    utterance.onend = () => {
+    speakViaTTS(closingMsg, () => {
       disconnect();
       onInterviewComplete?.();
-    };
-    try {
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      setTimeout(() => {
-        disconnect();
-        onInterviewComplete?.();
-      }, 3000);
-    }
-  }, [disconnect, onInterviewComplete]);
+    });
+  }, [disconnect, onInterviewComplete, speakViaTTS]);
 
   const handleMicPopupYes = useCallback(async () => {
     setShowMicPopup(false);
@@ -991,35 +1002,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       }]);
 
       setStatus("Linda is speaking...");
-      setIsAiSpeaking(true);
-      avatarState.onAiStartSpeaking();
 
-      const utterance = new SpeechSynthesisUtterance(areYouThereMsg);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.onend = () => {
-        setIsAiSpeaking(false);
-        avatarState.onAiStopSpeaking();
+      speakViaTTS(areYouThereMsg, () => {
         setStatus("Your turn - speak now...");
         setTimeout(() => {
           if (wsRef.current?.readyState === WebSocket.OPEN) {
             startRecordingInternal();
           }
         }, 400);
-      };
-
-      try {
-        window.speechSynthesis.speak(utterance);
-      } catch {
-        setTimeout(() => {
-          setIsAiSpeaking(false);
-          avatarState.onAiStopSpeaking();
-          setStatus("Your turn - speak now...");
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            startRecordingInternal();
-          }
-        }, 1500);
-      }
+      });
     } else {
       // Second timeout: Show mic popup
       stopRecordingSilent();
@@ -1257,28 +1248,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     )}
     <div className="flex flex-col h-screen bg-gray-950 text-white overflow-hidden">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
-        <div>
-          <h1 className="text-base font-bold tracking-tight">AI Interview</h1>
-          <p className="text-xs text-gray-400">{interviewInfo.position}</p>
+      <div className="flex items-center justify-between px-3 md:px-5 py-2 md:py-3 border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm flex-shrink-0">
+        <div className="min-w-0 flex-shrink">
+          <h1 className="text-sm md:text-base font-bold tracking-tight">AI Interview</h1>
+          <p className="text-[10px] md:text-xs text-gray-400 truncate">{interviewInfo.position}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
           {isConnected && !isClosing && (
-            <div className={`text-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-mono ${
+            <div className={`text-xs md:text-sm px-2 md:px-3 py-1 md:py-1.5 rounded-lg flex items-center gap-1 md:gap-1.5 font-mono ${
               remainingSeconds <= 60 ? 'bg-red-500/20 text-red-400 animate-pulse' :
               remainingSeconds <= 300 ? 'bg-orange-500/20 text-orange-400' :
               'bg-blue-500/10 text-blue-300'
             }`}>
-              <Clock className="w-3.5 h-3.5" />
+              <Clock className="w-3 h-3 md:w-3.5 md:h-3.5" />
               <span className="font-medium">{formatTime(remainingSeconds)}</span>
             </div>
           )}
           {isClosing && (
-            <div className="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-sm font-medium animate-pulse">
-              Interview Ending...
+            <div className="px-2 md:px-3 py-1 md:py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-xs md:text-sm font-medium animate-pulse">
+              Ending...
             </div>
           )}
-          <div className={`text-xs px-2.5 py-1 rounded-full ${
+          <div className={`hidden md:block text-xs px-2.5 py-1 rounded-full ${
             isConnected ? 'bg-green-500/15 text-green-400' : 'bg-gray-500/20 text-gray-500'
           }`}>
             {isConnected ? '● Connected' : '○ Disconnected'}
@@ -1286,20 +1277,62 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         </div>
       </div>
 
-      {/* ── Main Body ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* ── Main Body: Avatar (left) | Chat (center) | Camera (right) ──────── */}
+      <div
+        className="flex-1 overflow-hidden relative grid grid-cols-2 grid-rows-[28vh_1fr] md:grid-cols-[30%_1fr_20%] md:grid-rows-[1fr]"
+        style={{ background: 'linear-gradient(135deg, #0a0a1a 0%, #0d1025 30%, #111340 60%, #0a0a1a 100%)' }}
+      >
+        {/* Cosmic glow overlay */}
+        <div className="absolute inset-0 pointer-events-none" style={{
+          background: 'radial-gradient(ellipse at 25% 40%, rgba(59,46,138,0.15) 0%, transparent 60%), radial-gradient(ellipse at 75% 50%, rgba(30,27,75,0.2) 0%, transparent 55%)',
+        }} />
 
-        {/* ── LEFT PANEL: Chat transcript ──────────────────────────────────── */}
-        <div className="w-[340px] flex-shrink-0 flex flex-col border-r border-gray-800 bg-gray-900/60">
-          {/* Panel header */}
-          <div className="px-4 py-2.5 border-b border-gray-800/70 flex items-center gap-2 flex-shrink-0">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-xs text-gray-400 font-medium">Live Conversation</span>
+        {/* ══════ LEFT: Linda Avatar (head-to-waist) ═════════════════════ */}
+        <div className="col-span-1 row-start-1 md:col-start-1 md:row-start-1 relative overflow-hidden z-10 flex items-center justify-center">
+
+          {/* Linda — TalkingHead 3D avatar, head-to-waist crop */}
+          <div className="absolute inset-0 overflow-hidden">
+            <TalkingHeadAvatar
+              ref={talkingHeadRef}
+              avatarUrl="/avatar.glb"
+              className="w-full rounded-none"
+              style={{
+                height: '220%',
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                transform: 'translateX(-50%) translateY(-32%)',
+              }}
+            />
           </div>
 
-          {/* Messages */}
+          {/* Speaking glow */}
+          {isAiSpeaking && (
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute inset-0"
+                style={{
+                  background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.12) 0%, transparent 65%)',
+                  animation: 'pulse 2s infinite',
+                }}
+              />
+            </div>
+          )}
+
+          {/* Linda name badge */}
+          <div className="absolute bottom-2 left-2 md:bottom-3 md:left-3">
+            <div className="px-2 py-0.5 md:px-2.5 md:py-1 bg-black/50 backdrop-blur-md rounded-full flex items-center gap-1.5 border border-white/10">
+              <div className={`w-2 h-2 rounded-full ${isAiSpeaking ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`} />
+              <span className="text-[10px] md:text-xs font-semibold text-white">Linda</span>
+              <span className="hidden md:inline text-[10px] text-gray-400">AI Interviewer</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ══════ CENTER: Chat ════════════════════════════════════════════ */}
+        <div className="col-span-2 row-start-2 md:col-span-1 md:col-start-2 md:row-start-1 flex flex-col relative z-10 min-h-0">
+          {/* Chat messages — floating over transparent bg */}
           <div
-            className="flex-1 overflow-y-auto px-3 py-4 space-y-4"
+            className="flex-1 overflow-y-auto px-3 md:px-5 py-3 md:py-4 space-y-3 md:space-y-4"
             style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}
           >
             {messages.length === 0 && !currentAiText && (
@@ -1318,26 +1351,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
                     </div>
                   </div>
                 ) : msg.role === "user" ? (
-                  /* You — right */
+                  /* User — right aligned, teal/green bubble */
                   <div className="flex justify-end">
-                    <div className="max-w-[85%]">
-                      <p className="text-[10px] text-gray-500 mb-1 text-right">You</p>
-                      <div className="bg-blue-600 rounded-2xl rounded-br-sm px-3 py-2 shadow-md shadow-blue-900/20">
+                    <div className="max-w-[75%]">
+                      <div className="bg-teal-600/80 backdrop-blur-sm rounded-2xl rounded-br-sm px-4 py-2.5 shadow-lg shadow-teal-900/20">
                         <p className="text-sm leading-relaxed text-white">{msg.content}</p>
                       </div>
+                      <p className="text-[10px] text-gray-500/60 mt-1 text-right">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                   </div>
                 ) : (
-                  /* Linda — left */
+                  /* Linda — left aligned with small avatar */
                   <div className="flex items-start gap-2">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
-                      <span className="text-[10px] font-bold text-white">L</span>
+                    <img
+                      src="/avatar.glb"
+                      alt=""
+                      className="hidden"
+                    />
+                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 mt-0.5 shadow-lg ring-1 ring-violet-500/30 bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center">
+                      <span className="text-[9px] font-bold text-white">L</span>
                     </div>
-                    <div className="max-w-[85%]">
-                      <p className="text-[10px] text-gray-500 mb-1">Linda</p>
-                      <div className="bg-gray-800 border border-gray-700/50 rounded-2xl rounded-tl-sm px-3 py-2 shadow">
+                    <div className="max-w-[80%]">
+                      <p className="text-[10px] text-gray-400/80 mb-1 font-medium">Linda</p>
+                      <div className="bg-gray-800/60 backdrop-blur-md border border-white/5 rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-lg">
                         <p className="text-sm leading-relaxed text-gray-100">{msg.content}</p>
                       </div>
+                      <p className="text-[10px] text-gray-500/60 mt-1">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                   </div>
                 )}
@@ -1347,9 +1386,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
             {/* Live speech transcript */}
             {currentTranscript && (
               <div className="flex justify-end">
-                <div className="max-w-[85%]">
-                  <p className="text-[10px] text-gray-500 mb-1 text-right">You</p>
-                  <div className="bg-blue-600/30 border border-blue-500/40 rounded-2xl rounded-br-sm px-3 py-2">
+                <div className="max-w-[75%]">
+                  <div className="bg-teal-600/30 backdrop-blur-sm border border-teal-500/30 rounded-2xl rounded-br-sm px-4 py-2.5">
                     <div className="flex items-center gap-1 mb-1">
                       <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
                       <span className="text-[10px] text-red-300">speaking...</span>
@@ -1363,17 +1401,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
             {/* Live Linda response */}
             {currentAiText && (
               <div className="flex items-start gap-2">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
-                  <span className="text-[10px] font-bold text-white">L</span>
+                <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 mt-0.5 shadow-lg ring-1 ring-violet-500/30 bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center">
+                  <span className="text-[9px] font-bold text-white">L</span>
                 </div>
-                <div className="max-w-[85%]">
+                <div className="max-w-[80%]">
                   <div className="flex items-center gap-1.5 mb-1">
-                    <p className="text-[10px] text-gray-500">Linda</p>
+                    <p className="text-[10px] text-gray-400/80 font-medium">Linda</p>
                     <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '0ms' }} />
                     <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '150ms' }} />
                     <span className="w-1 h-1 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '300ms' }} />
                   </div>
-                  <div className="bg-gray-800 border border-violet-500/25 rounded-2xl rounded-tl-sm px-3 py-2 shadow">
+                  <div className="bg-gray-800/60 backdrop-blur-md border border-white/5 rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-lg">
                     <p className="text-sm leading-relaxed text-gray-100">{currentAiText}</p>
                   </div>
                 </div>
@@ -1383,12 +1421,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
             {/* Thinking dots */}
             {isProcessing && !currentAiText && (
               <div className="flex items-start gap-2">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5 shadow">
-                  <span className="text-[10px] font-bold text-white">L</span>
+                <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 mt-0.5 shadow-lg ring-1 ring-violet-500/30 bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center">
+                  <span className="text-[9px] font-bold text-white">L</span>
                 </div>
                 <div>
-                  <p className="text-[10px] text-gray-500 mb-1">Linda</p>
-                  <div className="bg-gray-800 border border-gray-700/50 rounded-2xl rounded-tl-sm px-4 py-3">
+                  <p className="text-[10px] text-gray-400/80 mb-1 font-medium">Linda</p>
+                  <div className="bg-gray-800/60 backdrop-blur-md border border-white/5 rounded-2xl rounded-tl-sm px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '0ms' }} />
                       <span className="w-2 h-2 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -1402,8 +1440,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
             <div ref={messagesEndRef} />
           </div>
 
-          {/* ── Text input (manual typing) ───────────────────────────────── */}
-          <div className="flex-shrink-0 p-3 border-t border-gray-800 bg-gray-900/80">
+          {/* Pill-shaped text input — bottom center, floating */}
+          <div className="flex-shrink-0 px-3 md:px-6 pb-3 md:pb-4 pt-2">
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1412,7 +1450,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
                   setTextInput("");
                 }
               }}
-              className="flex gap-2"
+              className="flex items-center gap-2 bg-gray-800/40 backdrop-blur-md border border-white/10 rounded-full px-4 py-2 shadow-xl shadow-black/20"
             >
               <input
                 type="text"
@@ -1421,98 +1459,78 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
                 placeholder={
                   isAiSpeaking ? "Wait for Linda to finish..." :
                   isProcessing ? "Processing..." :
-                  "Type your response..."
+                  "Type your interview..."
                 }
                 disabled={isAiSpeaking || isProcessing || !isConnected}
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
               />
               <button
                 type="submit"
                 disabled={!textInput.trim() || isAiSpeaking || isProcessing || !isConnected}
-                className="px-3 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-sm font-medium transition-colors"
+                className="px-5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-full text-sm font-semibold transition-colors flex-shrink-0"
               >
                 Send
               </button>
+              <button
+                type="button"
+                onClick={() => { if (window.confirm("End interview?")) { wsRef.current?.send(JSON.stringify({ type: "end_interview" })); } }}
+                disabled={!isConnected}
+                className="text-gray-500 hover:text-red-400 disabled:opacity-40 transition-colors flex-shrink-0 p-1"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
             </form>
-            {/* Voice status */}
-            <div className="flex items-center gap-1.5 mt-2">
-              <div className={`w-1.5 h-1.5 rounded-full ${
-                isRecording ? 'bg-red-500 animate-pulse' :
-                isAiSpeaking ? 'bg-violet-400 animate-pulse' :
-                isProcessing ? 'bg-yellow-400 animate-pulse' : 'bg-gray-600'
-              }`} />
-              <span className={`text-[11px] ${
-                isRecording ? 'text-red-400' :
-                isAiSpeaking ? 'text-violet-400' :
-                isProcessing ? 'text-yellow-400' : 'text-gray-500'
-              }`}>{status}</span>
-              {isConnected && isRecording && (
-                <button
-                  onClick={stopRecording}
-                  className="ml-auto text-[10px] px-2 py-0.5 bg-yellow-600/20 text-yellow-400 border border-yellow-600/30 rounded-md hover:bg-yellow-600/30 transition-colors"
-                >
-                  Skip
-                </button>
-              )}
-            </div>
           </div>
         </div>
 
-        {/* ── RIGHT: Linda big screen + webcam PiP ─────────────────────────── */}
-        <div className="flex-1 relative bg-gradient-to-b from-gray-900 to-gray-950 flex items-center justify-center overflow-hidden">
+        {/* ══════ RIGHT: Webcam + Status ══════════════════════════════════ */}
+        <div className="col-span-1 col-start-2 row-start-1 md:col-start-3 md:row-start-1 flex flex-col relative z-10 p-2 md:p-3">
 
-          {/* Linda — TalkingHead 3D avatar, portrait centered in panel */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <TalkingHeadAvatar
-              ref={talkingHeadRef}
-              avatarUrl="/avatar.glb"
-              className="h-full rounded-none"
-              style={{ aspectRatio: "9/16", maxHeight: "100%", maxWidth: "100%" }}
-            />
-          </div>
-
-          {/* Speaking glow ring when Linda is talking */}
-          {isAiSpeaking && (
-            <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute inset-0 rounded-none"
-                style={{
-                  background: 'radial-gradient(ellipse at center, rgba(139,92,246,0.08) 0%, transparent 70%)',
-                  animation: 'pulse 2s infinite',
-                }}
-              />
-            </div>
-          )}
-
-          {/* Linda name + status — bottom left of main screen */}
-          <div className="absolute bottom-4 left-4 flex items-center gap-2">
-            <div className="px-3 py-1.5 bg-black/60 backdrop-blur-md rounded-xl flex items-center gap-2 border border-white/10">
-              <div className={`w-2 h-2 rounded-full ${isAiSpeaking ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`} />
-              <span className="text-sm font-semibold text-white">Linda</span>
-              <span className="text-xs text-gray-400">AI Interviewer</span>
-            </div>
-            {handDetection.isHandRaised && (
-              <div className="px-3 py-1.5 bg-orange-500/20 backdrop-blur-md rounded-xl border border-orange-500/30">
-                <span className="text-xs text-orange-400 font-bold animate-pulse">✋ HAND RAISED</span>
-              </div>
-            )}
-          </div>
-
-          {/* Candidate webcam — PiP bottom right */}
-          <div className="absolute bottom-4 right-4 w-44 rounded-2xl overflow-hidden border-2 border-gray-700/80 shadow-2xl bg-gray-900">
+          {/* User webcam */}
+          <div className="relative rounded-xl overflow-hidden shadow-2xl shadow-black/40" style={{ aspectRatio: '4/3' }}>
             <Webcam
               ref={webcamRef}
-              className="w-full aspect-video"
+              className="w-full h-full object-cover"
               onVideoReady={handleVideoReady}
               onStream={handleStream}
               showHandIndicator={false}
               isHandRaised={handDetection.isHandRaised}
             />
-            <div className="absolute bottom-0 left-0 right-0 px-2 py-1 bg-black/60 backdrop-blur-sm flex items-center gap-1.5">
-              <span className="text-[10px] text-gray-300 truncate">{interviewInfo.candidate_name}</span>
-              {isRecording && <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse ml-auto flex-shrink-0" />}
+            {/* Candidate name overlay */}
+            <div className="absolute bottom-1 left-1 md:bottom-1.5 md:left-1.5">
+              <div className="px-1.5 md:px-2 py-0.5 bg-black/70 backdrop-blur-md rounded-md flex items-center gap-1">
+                <span className="text-[9px] md:text-[11px] font-medium text-white truncate">{interviewInfo.candidate_name}</span>
+                {isRecording && <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse flex-shrink-0" />}
+              </div>
             </div>
+            {handDetection.isHandRaised && (
+              <div className="absolute top-1 left-1 md:top-1.5 md:left-1.5 px-1.5 md:px-2 py-0.5 bg-orange-500/30 backdrop-blur-md rounded-md">
+                <span className="text-[9px] md:text-[10px] text-orange-400 font-bold animate-pulse">HAND RAISED</span>
+              </div>
+            )}
           </div>
 
+          {/* Voice status */}
+          <div className="flex items-center gap-1 md:gap-1.5 mt-2 md:mt-3 px-1">
+            <div className={`w-1.5 h-1.5 rounded-full ${
+              isRecording ? 'bg-red-500 animate-pulse' :
+              isAiSpeaking ? 'bg-violet-400 animate-pulse' :
+              isProcessing ? 'bg-yellow-400 animate-pulse' : 'bg-gray-600'
+            }`} />
+            <span className={`text-[9px] md:text-[11px] ${
+              isRecording ? 'text-red-400' :
+              isAiSpeaking ? 'text-violet-400' :
+              isProcessing ? 'text-yellow-400' : 'text-gray-500'
+            }`}>{status}</span>
+            {isConnected && isRecording && (
+              <button
+                onClick={stopRecording}
+                className="ml-auto text-[9px] md:text-[10px] px-1.5 md:px-2 py-0.5 bg-yellow-600/20 text-yellow-400 border border-yellow-600/30 rounded-md hover:bg-yellow-600/30 transition-colors"
+              >
+                Skip
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -337,29 +337,54 @@ export default function AIInterviewConfig() {
   const getRoundInfo = (type: string) => ROUND_TYPES.find(rt => rt.value === type);
   const availableRoundTypes = ROUND_TYPES.filter(rt => !rounds.some(r => r.type === rt.value));
 
+  // Helper: split a round's skills into JD-sourced vs custom-added
+  const splitSkills = (round: RoundConfig) => {
+    const jdSkillsSet = new Set(
+      round.type === 'must_have_skills'
+        ? (selectedJd?.must_have_skills || []).map(s => s.toLowerCase())
+        : round.type === 'nice_to_have_skills'
+          ? (selectedJd?.nice_to_have_skills || []).map(s => s.toLowerCase())
+          : []
+    );
+    return {
+      jd_skills: round.skills.filter(s => jdSkillsSet.has(s.toLowerCase())),
+      custom_skills: round.skills.filter(s => !jdSkillsSet.has(s.toLowerCase())),
+    };
+  };
+
   const buildRoundsConfig = (): AIInterviewRoundConfig[] => {
-    return enabledRounds.map(r => ({
-      type: r.type,
-      percentage: r.percentage,
-      duration_minutes: getRoundDuration(r.percentage),
-      topics: r.topics,
-      topic_weights: r.topics.length > 0 ? r.topicWeights : undefined,
-      enabled: true,
-      order: r.order,
-    }));
+    return enabledRounds.map(r => {
+      const { jd_skills, custom_skills } = splitSkills(r);
+      return {
+        type: r.type,
+        percentage: r.percentage,
+        duration_minutes: getRoundDuration(r.percentage),
+        topics: r.topics,
+        topic_weights: r.topics.length > 0 ? r.topicWeights : undefined,
+        enabled: true,
+        order: r.order,
+        jd_skills: jd_skills.length > 0 ? jd_skills : undefined,
+        custom_skills: custom_skills.length > 0 ? custom_skills : undefined,
+      };
+    });
   };
 
   // Build rounds config for draft (no strict validation)
   const buildDraftRoundsConfig = (): AIInterviewRoundConfig[] => {
-    return enabledRounds.map(r => ({
-      type: r.type,
-      percentage: r.percentage,
-      duration_minutes: Math.max(0, getRoundDuration(r.percentage)),
-      topics: r.topics,
-      topic_weights: r.topics.length > 0 ? r.topicWeights : undefined,
-      enabled: true,
-      order: r.order,
-    }));
+    return enabledRounds.map(r => {
+      const { jd_skills, custom_skills } = splitSkills(r);
+      return {
+        type: r.type,
+        percentage: r.percentage,
+        duration_minutes: Math.max(0, getRoundDuration(r.percentage)),
+        topics: r.topics,
+        topic_weights: r.topics.length > 0 ? r.topicWeights : undefined,
+        enabled: true,
+        order: r.order,
+        jd_skills: jd_skills.length > 0 ? jd_skills : undefined,
+        custom_skills: custom_skills.length > 0 ? custom_skills : undefined,
+      };
+    });
   };
 
   // Core draft save function (used by button, auto-save, and dialog)
@@ -580,17 +605,48 @@ export default function AIInterviewConfig() {
                               </div>
                             </div>
 
-                            {/* Editable Skills from JD for must-have / nice-to-have rounds */}
-                            {(round.type === 'must_have_skills' || round.type === 'nice_to_have_skills') && (
-                              <div className="mb-3">
-                                <label className="text-xs text-gray-500 mb-1.5 block">Skills from JD</label>
-                                <div className="flex flex-wrap gap-1.5 mb-2">
-                                  {round.skills.map(skill => {
-                                    const colorClass = round.type === 'must_have_skills'
-                                      ? 'bg-purple-50 text-purple-700 border-purple-200'
-                                      : 'bg-indigo-50 text-indigo-700 border-indigo-200';
-                                    return (
-                                      <span key={skill} className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full border ${colorClass}`}>
+                            {/* Skills for must-have / nice-to-have rounds */}
+                            {(round.type === 'must_have_skills' || round.type === 'nice_to_have_skills') && (() => {
+                              // Identify which skills came from JD vs custom-added
+                              const jdSkillsSet = new Set(
+                                round.type === 'must_have_skills'
+                                  ? (selectedJd?.must_have_skills || []).map(s => s.toLowerCase())
+                                  : (selectedJd?.nice_to_have_skills || []).map(s => s.toLowerCase())
+                              );
+                              const jdSkills = round.skills.filter(s => jdSkillsSet.has(s.toLowerCase()));
+                              const customSkills = round.skills.filter(s => !jdSkillsSet.has(s.toLowerCase()));
+
+                              return (
+                                <div className="mb-3">
+                                  {/* JD Skills */}
+                                  <label className="text-xs text-gray-500 mb-1.5 block">Skills from JD</label>
+                                  <div className="flex flex-wrap gap-1.5 mb-3">
+                                    {jdSkills.map(skill => {
+                                      const colorClass = round.type === 'must_have_skills'
+                                        ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                                      return (
+                                        <span key={skill} className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full border ${colorClass}`}>
+                                          {skill}
+                                          <button
+                                            onClick={() => handleRemoveSkill(index, skill)}
+                                            className="hover:opacity-70 transition-opacity"
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </button>
+                                        </span>
+                                      );
+                                    })}
+                                    {jdSkills.length === 0 && (
+                                      <span className="text-xs text-gray-400 italic">No JD skills</span>
+                                    )}
+                                  </div>
+
+                                  {/* Custom Skills */}
+                                  <label className="text-xs text-gray-500 mb-1.5 block">Custom Skills</label>
+                                  <div className="flex flex-wrap gap-1.5 mb-2">
+                                    {customSkills.map(skill => (
+                                      <span key={skill} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
                                         {skill}
                                         <button
                                           onClick={() => handleRemoveSkill(index, skill)}
@@ -599,125 +655,26 @@ export default function AIInterviewConfig() {
                                           <X className="w-3 h-3" />
                                         </button>
                                       </span>
-                                    );
-                                  })}
-                                  {round.skills.length === 0 && (
-                                    <span className="text-xs text-gray-400 italic">No skills added yet</span>
-                                  )}
-                                </div>
-                                <input
-                                  type="text"
-                                  placeholder="Type a skill and press Enter to add..."
-                                  className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400"
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter') {
-                                      e.preventDefault();
-                                      handleAddSkill(index, (e.target as HTMLInputElement).value);
-                                      (e.target as HTMLInputElement).value = '';
-                                    }
-                                  }}
-                                />
-                              </div>
-                            )}
-
-                            {/* Topics */}
-                            <div>
-                              <div className="flex items-center justify-between mb-1.5">
-                                <label className="text-xs text-gray-500">Topics</label>
-                                <button
-                                  onClick={() => handleSuggestTopics(index)}
-                                  disabled={suggestingTopics === round.type}
-                                  className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 transition-colors"
-                                >
-                                  {suggestingTopics === round.type ? (
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    <Sparkles className="w-3 h-3" />
-                                  )}
-                                  Suggest from JD
-                                </button>
-                              </div>
-
-                              {/* Topic chips with weights */}
-                              {round.topics.length > 0 && (
-                                <div className="space-y-1.5 mb-2">
-                                  {round.topics.map(topic => (
-                                    <div key={topic} className="flex items-center gap-2">
-                                      <span className="flex-1 inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full truncate">
-                                        {topic}
-                                      </span>
-                                      <div className="flex items-center shrink-0">
-                                        <input
-                                          type="number"
-                                          min={0}
-                                          max={100}
-                                          value={round.topicWeights[topic] ?? 0}
-                                          onChange={e => {
-                                            const v = parseInt(e.target.value);
-                                            if (!isNaN(v) && v >= 0 && v <= 100) handleTopicWeight(index, topic, v);
-                                          }}
-                                          className="w-10 px-1 py-0.5 border border-gray-300 rounded text-center text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-400"
-                                        />
-                                        <span className="text-xs text-gray-400 ml-0.5">%</span>
-                                      </div>
-                                      <button onClick={() => handleRemoveTopic(index, topic)} className="text-gray-400 hover:text-red-500 shrink-0">
-                                        <X className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  ))}
-                                  {(() => {
-                                    const total = round.topics.reduce((sum, t) => sum + (round.topicWeights[t] ?? 0), 0);
-                                    return total !== 100 && round.topics.length > 0 ? (
-                                      <div className="text-xs text-red-500 mt-1">Topic weights total {total}% (should be 100%)</div>
-                                    ) : null;
-                                  })()}
-                                </div>
-                              )}
-
-                              {/* Suggested topics */}
-                              {round.suggestedTopics.filter(st => !round.topics.includes(st)).length > 0 && (
-                                <div className="mb-2">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <div className="text-xs text-gray-400">Suggestions (click to add):</div>
-                                    <button
-                                      onClick={() => setRounds(prev => prev.map((r, i) =>
-                                        i === index ? { ...r, suggestedTopics: [] } : r
-                                      ))}
-                                      className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
-                                    >
-                                      <X className="w-3 h-3" />
-                                      Clear
-                                    </button>
+                                    ))}
+                                    {customSkills.length === 0 && (
+                                      <span className="text-xs text-gray-400 italic">No custom skills added</span>
+                                    )}
                                   </div>
-                                  <div className="flex flex-wrap gap-1">
-                                    {round.suggestedTopics
-                                      .filter(st => !round.topics.includes(st))
-                                      .map(st => (
-                                        <button
-                                          key={st}
-                                          onClick={() => handleAddTopic(index, st)}
-                                          className="px-2 py-0.5 text-xs bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100 transition-colors border border-blue-200"
-                                        >
-                                          + {st}
-                                        </button>
-                                      ))}
-                                  </div>
+                                  <input
+                                    type="text"
+                                    placeholder="Type a custom skill and press Enter to add..."
+                                    className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddSkill(index, (e.target as HTMLInputElement).value);
+                                        (e.target as HTMLInputElement).value = '';
+                                      }
+                                    }}
+                                  />
                                 </div>
-                              )}
-
-                              {/* Add topic input */}
-                              <input
-                                type="text"
-                                placeholder="Type a topic and press Enter..."
-                                className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400"
-                                onKeyDown={e => {
-                                  if (e.key === 'Enter') {
-                                    handleAddTopic(index, (e.target as HTMLInputElement).value);
-                                    (e.target as HTMLInputElement).value = '';
-                                  }
-                                }}
-                              />
-                            </div>
+                              );
+                            })()}
                           </>
                         )}
                       </div>
