@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import webpack from "webpack";
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -11,13 +12,31 @@ const nextConfig: NextConfig = {
   ],
   reactStrictMode: false,
 
-  webpack(config) {
+  webpack(config, { isServer }) {
     // Allow .mjs ESM files from node_modules (TalkingHead uses ESM modules)
     config.module.rules.push({
       test: /\.mjs$/,
       include: /node_modules/,
       type: 'javascript/auto',
     });
+
+    // face-api.js references the Node.js built-in 'fs' — stub it out in the browser bundle.
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+      };
+    }
+
+    // node-fetch optionally requires 'encoding' (an npm package, not a Node core module).
+    // resolve.fallback doesn't cover npm packages, so use IgnorePlugin instead.
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^encoding$/,
+        contextRegExp: /node-fetch/,
+      })
+    );
+
     return config;
   },
 

@@ -27,6 +27,15 @@ const PlanFeaturesContext = createContext<PlanFeaturesContextType>({
   loading: true,
 });
 
+// Normalizes API feature_key values to the PlanFeatureKey used in the frontend.
+// Needed because the control plane API uses different key names for some features.
+const API_KEY_NORMALIZE: Record<string, string> = {
+  assessments: 'assessment',
+  ai_interviews: 'ai_interview',
+  'sso_(single_sign-on)': 'sso',
+  sso_integration: 'sso',
+};
+
 // Resolve which features are enabled using the features[] array from /quota-status.
 //
 // Decision logic per API contract:
@@ -43,7 +52,8 @@ function resolveEnabledFeatures(
   for (const f of features) {
     if (!f.is_enabled) continue;
     if (f.quota_key !== null && quotas[f.quota_key]?.status === 'EXCEEDED') continue;
-    enabled.add(f.feature_key);
+    const key = API_KEY_NORMALIZE[f.feature_key] ?? f.feature_key;
+    enabled.add(key);
   }
   return enabled;
 }
