@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
-  Loader2, RefreshCw, Briefcase, Globe, ChevronRight,
+  Loader2, RefreshCw, Briefcase, Globe, ChevronRight, Brain, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -324,24 +324,42 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {enabledRounds.map((round, idx) => (
                       <div key={idx} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between mb-1">
                           <span className="font-medium text-gray-900">
                             {ROUND_LABELS[round.type] || round.type}
                           </span>
-                          <span className="text-sm text-gray-500">{round.percentage}%</span>
+                          <span className="text-sm font-semibold text-gray-700">{round.percentage}%</span>
                         </div>
-                        <div className="text-sm text-gray-500 mb-2">
-                          {round.duration_minutes} min
+                        <div className="text-xs text-gray-400 mb-2">
+                          {round.duration_minutes > 0 ? `${round.duration_minutes} min` : 'Flexible'}
                         </div>
+                        {/* Skills */}
+                        {(() => {
+                          const skills = [...(round.jd_skills || []), ...(round.custom_skills || [])];
+                          if (skills.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {skills.slice(0, 5).map((s: string) => (
+                                <span key={s} className="px-2 py-0.5 bg-gray-50 text-gray-600 text-xs rounded-full border border-gray-200">
+                                  {s}
+                                </span>
+                              ))}
+                              {skills.length > 5 && (
+                                <span className="text-xs text-gray-400 self-center">+{skills.length - 5} more</span>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        {/* Clusters (topics) */}
                         {round.topics && round.topics.length > 0 && (
                           <div className="flex flex-wrap gap-1">
-                            {round.topics.slice(0, 4).map((topic: string) => (
-                              <span key={topic} className="px-2 py-0.5 bg-gray-50 text-gray-500 text-xs rounded-full border border-gray-200">
+                            {round.topics.slice(0, 3).map((topic: string) => (
+                              <span key={topic} className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full border border-blue-200">
                                 {topic}
                               </span>
                             ))}
-                            {round.topics.length > 4 && (
-                              <span className="text-xs text-gray-400">+{round.topics.length - 4}</span>
+                            {round.topics.length > 3 && (
+                              <span className="text-xs text-gray-400 self-center">+{round.topics.length - 3} clusters</span>
                             )}
                           </div>
                         )}
@@ -351,19 +369,82 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                 </div>
               )}
 
-              {/* JD Skills */}
-              {config.jd_must_have_skills && config.jd_must_have_skills.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-3">Required Skills</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {config.jd_must_have_skills.map((skill: string) => (
-                      <span key={skill} className="px-3 py-1 bg-gray-50 text-gray-700 text-sm rounded-full border border-gray-200">
-                        {skill}
-                      </span>
-                    ))}
+              {/* Configured Skills — MTH and NTH from rounds_config */}
+              {(() => {
+                const mthRound = enabledRounds.find(r => r.type === 'must_have_skills');
+                const nthRound = enabledRounds.find(r => r.type === 'nice_to_have_skills');
+
+                // Build skill lists: prefer rounds_config skills, fall back to JD fields
+                const mthSkills: string[] = mthRound
+                  ? [...(mthRound.jd_skills || []), ...(mthRound.custom_skills || [])]
+                  : (config.jd_must_have_skills || []);
+                const nthSkills: string[] = nthRound
+                  ? [...(nthRound.jd_skills || []), ...(nthRound.custom_skills || [])]
+                  : (config.jd_nice_to_have_skills || []);
+
+                const hasSkills = mthSkills.length > 0 || nthSkills.length > 0;
+                if (!hasSkills) return null;
+
+                return (
+                  <div className="space-y-4">
+                    {mthSkills.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Brain className="w-4 h-4 text-purple-600" />
+                          <h3 className="text-sm font-medium text-gray-900">Must-To-Have Skills</h3>
+                          <span className="text-xs text-gray-400">({mthSkills.length})</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {mthSkills.map((skill: string) => {
+                            const isCustom = mthRound?.custom_skills?.includes(skill);
+                            return (
+                              <span
+                                key={skill}
+                                className={`px-3 py-1 text-sm rounded-full border ${
+                                  isCustom
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-purple-50 text-purple-700 border-purple-200'
+                                }`}
+                              >
+                                {skill}
+                                {isCustom && <span className="ml-1 text-[10px] opacity-60">custom</span>}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {nthSkills.length > 0 && (
+                      <div>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Sparkles className="w-4 h-4 text-indigo-500" />
+                          <h3 className="text-sm font-medium text-gray-900">Nice-To-Have Skills</h3>
+                          <span className="text-xs text-gray-400">({nthSkills.length})</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {nthSkills.map((skill: string) => {
+                            const isCustom = nthRound?.custom_skills?.includes(skill);
+                            return (
+                              <span
+                                key={skill}
+                                className={`px-3 py-1 text-sm rounded-full border ${
+                                  isCustom
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                }`}
+                              >
+                                {skill}
+                                {isCustom && <span className="ml-1 text-[10px] opacity-60">custom</span>}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Invitation Stats */}
               <div>
