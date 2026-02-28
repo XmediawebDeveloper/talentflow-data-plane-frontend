@@ -40,8 +40,9 @@ const getWebSocketBaseUrl = () => {
 
 const WS_BASE_URL = getWebSocketBaseUrl();
 const RECONNECT_DELAY = 3000; // 3 seconds
-const PING_INTERVAL = 30000; // 30 seconds
-const MAX_RECONNECT_ATTEMPTS = 5;
+const PING_INTERVAL = 20000; // 20 seconds — keep alive inside typical 30–60s proxy timeouts
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECOVERY_DELAY = 60000; // 60 seconds before resetting attempts after exhaustion
 
 export function useNotificationWebSocket({
   token,
@@ -56,6 +57,7 @@ export function useNotificationWebSocket({
   const wsRef = useRef<WebSocket | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const recoveryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const isConnectingRef = useRef(false);
   const isCleaningUpRef = useRef(false);
@@ -148,8 +150,17 @@ export function useNotificationWebSocket({
           console.log('[WebSocket] ✅ Connected successfully — readyState:', ws.readyState, '(1=OPEN)');
           setIsConnected(true);
           setConnectionError(null);
-          reconnectAttemptsRef.current = 0;
           isConnectingRef.current = false;
+
+          // If this is a reconnect (not the initial connect), refresh permissions immediately.
+          // Any permissions_updated push sent while the socket was down was never received,
+          // so we pull the latest permissions now to avoid stale state.
+          if (reconnectAttemptsRef.current > 0 && onPermissionsUpdatedRef.current) {
+            console.log('[WebSocket] Reconnected after drop — refreshing permissions to catch missed pushes');
+            onPermissionsUpdatedRef.current();
+          }
+
+          reconnectAttemptsRef.current = 0;
 
           // Start ping/pong for keepalive
           pingIntervalRef.current = setInterval(() => {
@@ -235,8 +246,18 @@ export function useNotificationWebSocket({
             reconnectTimeoutRef.current = setTimeout(() => {
               connect();
             }, delay);
-          } else if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-            setConnectionError('Max reconnection attempts reached. Falling back to polling.');
+          } else if (event.code !== 1000 && reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
+            console.log(`[WebSocket] Max reconnect attempts reached. Will retry in ${RECOVERY_DELAY / 1000}s...`);
+            setConnectionError('Connection lost. Retrying in 60 seconds...');
+            // Schedule a recovery attempt after a longer delay instead of giving up permanently
+            recoveryTimeoutRef.current = setTimeout(() => {
+              if (!isCleaningUpRef.current) {
+                console.log('[WebSocket] Recovery attempt — resetting reconnect counter and reconnecting');
+                reconnectAttemptsRef.current = 0;
+                setConnectionError(null);
+                connect();
+              }
+            }, RECOVERY_DELAY);
           }
         };
       } catch (error) {
@@ -260,6 +281,10 @@ export function useNotificationWebSocket({
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
+      }
+      if (recoveryTimeoutRef.current) {
+        clearTimeout(recoveryTimeoutRef.current);
+        recoveryTimeoutRef.current = null;
       }
       if (wsRef.current) {
         wsRef.current.close(1000, 'Component unmounting');

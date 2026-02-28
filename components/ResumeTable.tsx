@@ -638,8 +638,8 @@ export default function ResumeTable({
                                 Archive Resume
                               </button>
                               <div className="border-t border-gray-100 my-1"></div>
-                              {/* ✅ PERMISSION FIX: Only show Delete button if user has canDeleteResumes permission */}
-                              {resumePerms.canDelete && (
+                              {/* Delete: requires canDeleteResumes permission AND the parent page must pass onDelete (admins only in internal DB) */}
+                              {resumePerms.canDelete && !!onDelete && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();

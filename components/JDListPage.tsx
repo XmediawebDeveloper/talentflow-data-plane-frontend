@@ -738,8 +738,8 @@ export default function JDListPage() {
                               Publish
                             </button>
                           )}
-                          {/* JD04: Disable action for published JDs */}
-                          {jd.status === 'published' && (
+                          {/* JD04: Disable action — only for users with disable permission */}
+                          {jdPerms.canDisable && jd.status === 'published' && (
                             <button
                               onClick={() => {
                                 setConfirmDialog({
@@ -756,8 +756,8 @@ export default function JDListPage() {
                               Disable Job
                             </button>
                           )}
-                          {/* Archive action */}
-                          {jd.status !== 'archived' && (
+                          {/* Archive action — only for users with archive permission */}
+                          {jdPerms.canArchive && jd.status !== 'archived' && (
                             <button
                               onClick={() => {
                                 setConfirmDialog({

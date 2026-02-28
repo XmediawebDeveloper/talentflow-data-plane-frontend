@@ -540,9 +540,22 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
                   </span>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                  <span className="text-sm sm:text-base font-medium text-gray-800">Total ({totalSeats} seats)</span>
-                  <span className="text-xl sm:text-2xl font-bold text-gray-900">
+                  <span className="text-xs sm:text-sm text-gray-600">Subtotal ({totalSeats} seats)</span>
+                  <span className="text-sm sm:text-base font-medium text-gray-900">
                     {getCurrencySymbol(currency)}{totalPrice}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs sm:text-sm text-gray-600">GST (18%)</span>
+                  <span className="text-sm sm:text-base font-medium text-gray-900">
+                    {getCurrencySymbol(currency)}{(parseFloat(totalPrice) * 0.18).toFixed(2)}
+                  </span>
+                </div>
+                <div className="h-px bg-gray-300 my-2" />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm sm:text-base font-medium text-gray-800">Total</span>
+                  <span className="text-xl sm:text-2xl font-bold text-gray-900">
+                    {getCurrencySymbol(currency)}{(parseFloat(totalPrice) * 1.18).toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -585,7 +598,7 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
                   ) : (
                     <>
                       <ShoppingCart className="w-4 h-4" />
-                      Pay & Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
+                      Pay {getCurrencySymbol(currency)}{(parseFloat(totalPrice) * 1.18).toFixed(2)} & Add {totalSeats} Seat{totalSeats !== 1 ? 's' : ''}
                     </>
                   )}
                 </button>

@@ -686,12 +686,33 @@ export default function CreateRoleForm() {
               {/* Direct Actions (no subcategories) */}
               {category.actions && (
                 <div className="flex flex-wrap gap-2 items-center">
-                  {/* View badge - shown when any action is selected */}
-                  {category.viewCode && selectedPermissionCodes.has(category.viewCode) && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-100 text-green-700 border border-green-200">
-                      <Check className="w-3.5 h-3.5" />
+                  {/* View button - always shown, clickable to grant standalone view access */}
+                  {category.viewCode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const vc = category.viewCode!;
+                        setSelectedPermissionCodes(prev => {
+                          const s = new Set(prev);
+                          if (s.has(vc)) {
+                            // Only remove if no actions in this category are selected
+                            const hasActions = (category.actions || []).some(a => s.has(a.code));
+                            if (!hasActions) s.delete(vc);
+                          } else {
+                            s.add(vc);
+                          }
+                          return s;
+                        });
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
+                        selectedPermissionCodes.has(category.viewCode)
+                          ? 'bg-green-100 text-green-700 border-green-200'
+                          : 'bg-white text-gray-400 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {selectedPermissionCodes.has(category.viewCode) && <Check className="w-3.5 h-3.5" />}
                       <span className="text-sm font-medium">View</span>
-                    </div>
+                    </button>
                   )}
                   {category.actions.map(action => {
                     const isSelected = selectedPermissionCodes.has(action.code);
@@ -731,12 +752,33 @@ export default function CreateRoleForm() {
                         {subCategory.name}
                       </div>
                       <div className="flex flex-wrap gap-2 items-center">
-                        {/* View badge - shown when any action in this subcategory is selected */}
-                        {subCategory.viewCode && selectedPermissionCodes.has(subCategory.viewCode) && (
-                          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-100 text-green-700 border border-green-200">
-                            <Check className="w-3.5 h-3.5" />
+                        {/* View button - always shown, clickable to grant standalone view access */}
+                        {subCategory.viewCode && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const vc = subCategory.viewCode!;
+                              setSelectedPermissionCodes(prev => {
+                                const s = new Set(prev);
+                                if (s.has(vc)) {
+                                  // Only remove if no actions in this subcategory are selected
+                                  const hasActions = subCategory.actions.some(a => s.has(a.code));
+                                  if (!hasActions) s.delete(vc);
+                                } else {
+                                  s.add(vc);
+                                }
+                                return s;
+                              });
+                            }}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-colors ${
+                              selectedPermissionCodes.has(subCategory.viewCode)
+                                ? 'bg-green-100 text-green-700 border-green-200'
+                                : 'bg-white text-gray-400 border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            {selectedPermissionCodes.has(subCategory.viewCode) && <Check className="w-3.5 h-3.5" />}
                             <span className="text-sm font-medium">View</span>
-                          </div>
+                          </button>
                         )}
                         {subCategory.actions.map(action => {
                           const isSelected = selectedPermissionCodes.has(action.code);

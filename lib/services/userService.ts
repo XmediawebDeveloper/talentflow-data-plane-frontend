@@ -58,6 +58,33 @@ export interface UserPermissions {
   can_view_invoices: boolean;
   can_view_usage: boolean;
 
+  // Granular billing section view permissions
+  can_view_current_plan?: boolean;
+  can_view_payment_methods?: boolean;
+  can_view_billing_history?: boolean;
+  can_view_refund_history?: boolean;
+  can_view_dispute_history?: boolean;
+
+  // Granular settings section view permissions
+  can_view_general_settings?: boolean;
+  can_view_permissions_roles?: boolean;
+  can_view_api_management?: boolean;
+  can_view_branding?: boolean;
+  can_view_security_settings?: boolean;
+
+  // Granular Action Permissions — Billing
+  can_upgrade_plan?: boolean;
+  can_export_usage?: boolean;
+  can_add_payment_method?: boolean;
+  can_edit_payment_method?: boolean;
+  can_delete_payment_method?: boolean;
+
+  // Granular Action Permissions — Settings
+  can_manage_permissions_roles?: boolean;
+  can_manage_api_management?: boolean;
+  can_manage_branding?: boolean;
+  can_manage_security_settings?: boolean;
+
   // Feature Permissions
   can_view_scoring: boolean;  // View scoring results
   can_run_scoring: boolean;
@@ -112,6 +139,36 @@ export interface UpdateUserRequest {
   can_access_internal_db?: boolean;
   can_create_assessments?: boolean;
   can_view_analytics?: boolean;
+  // Feature flags
+  can_view_scoring?: boolean;
+  can_run_scoring?: boolean;
+  can_run_ai_interviews?: boolean;
+  can_view_ai_match?: boolean;
+  can_run_ai_match?: boolean;
+  can_bulk_operations?: boolean;
+  can_export?: boolean;
+  can_api_access?: boolean;
+  // Granular View Permissions — Billing & Settings sidebar visibility
+  can_view_current_plan?: boolean;
+  can_view_payment_methods?: boolean;
+  can_view_billing_history?: boolean;
+  can_view_refund_history?: boolean;
+  can_view_dispute_history?: boolean;
+  can_view_permissions_roles?: boolean;
+  can_view_api_management?: boolean;
+  can_view_branding?: boolean;
+  can_view_security_settings?: boolean;
+  // Granular Action Permissions — Billing
+  can_upgrade_plan?: boolean;
+  can_export_usage?: boolean;
+  can_add_payment_method?: boolean;
+  can_edit_payment_method?: boolean;
+  can_delete_payment_method?: boolean;
+  // Granular Action Permissions — Settings
+  can_manage_permissions_roles?: boolean;
+  can_manage_api_management?: boolean;
+  can_manage_branding?: boolean;
+  can_manage_security_settings?: boolean;
 }
 
 export interface AvailableRole {

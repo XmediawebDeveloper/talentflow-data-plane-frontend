@@ -3,6 +3,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import api, { handleUnauthorized } from '@/lib/services/api';
 
+interface FeatureItem {
+  feature_key: string;
+  feature_name: string;
+  feature_category: string;
+  is_enabled: boolean;
+  source: 'PLAN' | 'GLOBAL' | 'OVERRIDE';
+}
+
 interface QuotaData {
   tenant_id?: string;
   is_trial?: boolean;
@@ -20,9 +28,8 @@ interface QuotaData {
     plan_name?: string;
     plan_tier?: string;
     subscribed_price?: number;  // Tenant-specific: what this tenant actually pays
-    billing_period?: string;    // MONTHLY or ANNUAL
-    billing_interval?: string;
-    allocated_quotas?: Record<string, number>;  // Tenant-specific: quotas allocated to this tenant
+    billing_period?: string;    // MONTHLY or ANNUAL (billing_interval removed from API)
+    allocated_quotas?: Record<string, number | string>;  // Tenant-specific: quotas allocated to this tenant (string for "unlimited")
     isolation_type?: 'SCHEMA' | 'DATABASE' | 'DEDICATED' | string | null;
     features?: string[];  // Boolean plan features (api_access, sso, etc.)
   };
@@ -46,21 +53,24 @@ interface QuotaData {
   plan_expiry_date?: string;
   subscription_status?: string;
   isolation_type?: 'SCHEMA' | 'DATABASE' | 'DEDICATED' | string | null;
+  features?: FeatureItem[];  // Top-level features array from the Quota Status API
 }
 
 interface QuotaInfo {
   subscription?: {
     limit: number | string;
     used: number;
-    remaining: number | string;
-    percentage: number;
   };
   addon?: {
     total_purchased: number;
     total_consumed: number;
-    remaining: number;
+    status?: string;
+    expires_on?: string | null;
+    days_until_expiry?: number;
   };
   total_remaining?: number | string;
+  percentage?: number;
+  remain_percentage?: number;
   status?: string;
 }
 

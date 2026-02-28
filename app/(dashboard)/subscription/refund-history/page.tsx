@@ -3,6 +3,8 @@
 import { RotateCcw, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Filter, Calendar } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import { generateRefundReceiptPDF } from '@/lib/utils/pdfInvoice';
+import { toast } from 'sonner';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -41,6 +43,13 @@ interface RefundInvoice {
   line_items: LineItem[];
   metadata: RefundMetadata;
   created_at: string;
+  payment_method?: string;
+  payment_status?: string;
+  razorpay_payment_id?: string;
+  razorpay_order_id?: string;
+  payment_amount?: number;
+  payment_currency?: string;
+  paid_at?: string;
 }
 
 interface RefundStats {
@@ -66,6 +75,7 @@ export default function RefundHistoryPage() {
   const [stats, setStats] = useState<RefundStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedRefund, setSelectedRefund] = useState<RefundInvoice | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   // New filter states
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -89,7 +99,7 @@ export default function RefundHistoryPage() {
       }
 
       // Fetch refund invoices from backend proxy (which calls Admin API)
-      const refundResponse = await fetch(`${API_URL}/billing/invoices/refunds?skip=0&limit=100`, {
+      const refundResponse = await fetch(`${API_URL}/billing/invoices/refunds`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
@@ -210,37 +220,16 @@ export default function RefundHistoryPage() {
     }
   };
 
-  const handleDownloadRefund = (inv: RefundInvoice) => {
-    const refundContent = `
-REFUND RECEIPT
-==============================
-Refund Number: ${inv.invoice_number}
-Issue Date: ${formatDate(inv.issue_date)}
--------------------------------
-Original Invoice: ${inv.metadata?.original_invoice_number || '-'}
-Reason: ${inv.metadata?.reason || 'Refund'}
-Refund Method: ${inv.metadata?.refund_method || '-'}
-Processed By: ${inv.metadata?.processed_by || '-'}
--------------------------------
-Description: ${inv.line_items?.[0]?.description || '-'}
--------------------------------
-Refund Amount: ${formatAmount(Math.abs(inv.total_amount_inr))}
--------------------------------
-Status: ${inv.status.toUpperCase()}
-${inv.metadata?.notes ? `Notes: ${inv.metadata.notes}` : ''}
-==============================
-Refund processed successfully.
-    `.trim();
-
-    const blob = new Blob([refundContent], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${inv.invoice_number}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleDownloadRefund = async (inv: RefundInvoice) => {
+    setDownloadingId(inv.id);
+    try {
+      await generateRefundReceiptPDF(inv);
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      toast.error('Failed to generate PDF. Please try again.');
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   // Export filtered data to CSV
@@ -514,10 +503,11 @@ Refund processed successfully.
                           </button>
                           <button
                             onClick={() => handleDownloadRefund(refund)}
-                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                            disabled={downloadingId === refund.id}
+                            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Download Receipt"
                           >
-                            <Download className="w-3.5 h-3.5" />
+                            {downloadingId === refund.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                           </button>
                         </div>
                       </td>
@@ -566,6 +556,18 @@ Refund processed successfully.
                     <p className="text-xs text-gray-500 uppercase">Refund Method</p>
                     <p className="text-sm font-medium text-gray-900">{selectedRefund.metadata?.refund_method || '-'}</p>
                   </div>
+                  {selectedRefund.payment_method && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Payment Method</p>
+                      <p className="text-sm font-medium text-gray-900 capitalize">{selectedRefund.payment_method}</p>
+                    </div>
+                  )}
+                  {selectedRefund.paid_at && (
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase">Paid At</p>
+                      <p className="text-sm font-medium text-gray-900">{formatDate(selectedRefund.paid_at)}</p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="border border-gray-200 rounded-lg overflow-hidden mb-6">
@@ -622,10 +624,14 @@ Refund processed successfully.
                 <div className="flex gap-3">
                   <button
                     onClick={() => handleDownloadRefund(selectedRefund)}
-                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+                    disabled={downloadingId === selectedRefund.id}
+                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <Download className="w-4 h-4" />
-                    Download Receipt
+                    {downloadingId === selectedRefund.id ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating PDF...</>
+                    ) : (
+                      <><Download className="w-4 h-4" /> Download Receipt</>
+                    )}
                   </button>
                   <button
                     onClick={() => setSelectedRefund(null)}

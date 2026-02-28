@@ -283,9 +283,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         const isActivePlan = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
 
         if (quotas?.AS) {
-          const subLimit = quotas.AS.subscription?.limit;
-          const addonRemaining = quotas.AS.addon?.remaining || 0;
-          const used = quotas.AS.subscription?.used || 0;
+          const sub = quotas.AS.subscription || {};
+          const addon = quotas.AS.addon || {};
+          const subLimit = sub.limit;
+          const used = sub.used || 0;
+          // addon.remaining removed from API — derive from total_purchased - total_consumed
+          const addonPurchased = typeof addon.total_purchased === 'number' ? addon.total_purchased : 0;
+          const addonConsumed = typeof addon.total_consumed === 'number' ? addon.total_consumed : 0;
+          const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
 
           // Check if unlimited
           const unlimited = subLimit === -1 || subLimit === 'unlimited';
@@ -296,20 +301,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setAvailableUnits(-1);
             setQuotaPercentage(0);
           } else if (typeof subLimit === 'number' && subLimit > 0) {
-            // Valid quota limit from API
-            const totalLimit = subLimit + addonRemaining;
+            // Valid quota limit from API — totalLimit includes all purchased addon credits
+            const totalLimit = subLimit + addonPurchased;
             setTotalUnits(totalLimit);
 
-            const remaining = quotas.AS.total_remaining ?? (totalLimit - used);
+            const subRemaining = Math.max(0, subLimit - used);
+            const remaining = typeof quotas.AS.total_remaining === 'number'
+              ? Math.max(0, quotas.AS.total_remaining)
+              : Math.max(0, subRemaining + addonRemaining);
             setAvailableUnits(remaining);
 
             const percentage = totalLimit > 0 ? (used / totalLimit) * 100 : 0;
             setQuotaPercentage(percentage);
           } else if (isActivePlan) {
             // Active plan but limit is 0/null — use fallback
-            const totalLimit = 10 + addonRemaining;
+            const totalLimit = 10 + addonPurchased;
             setTotalUnits(totalLimit);
-            const remaining = quotas.AS.total_remaining ?? (totalLimit - used);
+            const subRemaining = Math.max(0, 10 - used);
+            const remaining = typeof quotas.AS.total_remaining === 'number'
+              ? Math.max(0, quotas.AS.total_remaining)
+              : Math.max(0, subRemaining + addonRemaining);
             setAvailableUnits(remaining);
           } else {
             // Inactive/expired plan with 0 or null limit — don't set quota values
@@ -476,9 +487,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const isActivePlan = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
 
       if (quotas?.AS) {
-        const subLimit = quotas.AS.subscription?.limit;
-        const addonRemaining = quotas.AS.addon?.remaining || 0;
-        const used = quotas.AS.subscription?.used || 0;
+        const sub = quotas.AS.subscription || {};
+        const addon = quotas.AS.addon || {};
+        const subLimit = sub.limit;
+        const used = sub.used || 0;
+        // addon.remaining removed from API — derive from total_purchased - total_consumed
+        const addonPurchased = typeof addon.total_purchased === 'number' ? addon.total_purchased : 0;
+        const addonConsumed = typeof addon.total_consumed === 'number' ? addon.total_consumed : 0;
+        const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
 
         const unlimited = subLimit === -1 || subLimit === 'unlimited';
         setIsUnlimited(unlimited);
@@ -488,16 +504,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           setAvailableUnits(-1);
           setQuotaPercentage(0);
         } else if (typeof subLimit === 'number' && subLimit > 0) {
-          const totalLimit = subLimit + addonRemaining;
+          const totalLimit = subLimit + addonPurchased;
           setTotalUnits(totalLimit);
-          const remaining = quotas.AS.total_remaining ?? (totalLimit - used);
+          const subRemaining = Math.max(0, subLimit - used);
+          const remaining = typeof quotas.AS.total_remaining === 'number'
+            ? Math.max(0, quotas.AS.total_remaining)
+            : Math.max(0, subRemaining + addonRemaining);
           setAvailableUnits(remaining);
           const percentage = totalLimit > 0 ? (used / totalLimit) * 100 : 0;
           setQuotaPercentage(percentage);
         } else if (isActivePlan) {
-          const totalLimit = 10 + addonRemaining;
+          const totalLimit = 10 + addonPurchased;
           setTotalUnits(totalLimit);
-          const remaining = quotas.AS.total_remaining ?? (totalLimit - used);
+          const subRemaining = Math.max(0, 10 - used);
+          const remaining = typeof quotas.AS.total_remaining === 'number'
+            ? Math.max(0, quotas.AS.total_remaining)
+            : Math.max(0, subRemaining + addonRemaining);
           setAvailableUnits(remaining);
         } else {
           // Inactive/expired — reset to avoid false "exhausted" banner
@@ -830,6 +852,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               setSelectedAssessmentForShare(null);
             }}
             assessment={selectedAssessmentForShare}
+            inviteSource="Assessment"
           />
         )}
 
@@ -2477,6 +2500,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setSelectedAssessmentForShare(null);
           }}
           assessment={selectedAssessmentForShare}
+          inviteSource="Assessment"
         />
       )}
       

@@ -4,11 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
-  Building2, User, CheckCircle, Loader2, Phone, ShieldCheck, CreditCard, Check, Sparkles
+  Building2, User, CheckCircle, Loader2, Phone, ShieldCheck, CreditCard, Check, Sparkles,
+  FileText, Shield, X
 } from 'lucide-react';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
+import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import PlanSelectionModal from './PlanSelectionModal';
+import type { TermsAndConditions } from '@/lib/types/terms';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -120,8 +123,57 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const [planLoading, setPlanLoading] = useState(false);
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
   const [createdSubdomain, setCreatedSubdomain] = useState<string | null>(null);
+  const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
+
+  // Terms & Conditions state for signup flow
+  const [acceptedTermsId, setAcceptedTermsId] = useState<string | null>(null);
+  const [showTermsConsentModal, setShowTermsConsentModal] = useState(false);
+  const [termsConsentContent, setTermsConsentContent] = useState<{ terms: TermsAndConditions | null; privacy: TermsAndConditions | null }>({ terms: null, privacy: null });
+  const [termsConsentLoading, setTermsConsentLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
+  const [activeTermsTab, setActiveTermsTab] = useState<'terms' | 'privacy'>('terms');
+  // Tracks which tabs the user has actually opened — checkbox only enabled after viewing
+  const [visitedTabs, setVisitedTabs] = useState<Set<'terms' | 'privacy'>>(new Set(['terms']));
 
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const openTermsConsentModal = async () => {
+    setShowTermsConsentModal(true);
+    setAgreedToTerms(false);
+    setAgreedToPrivacy(false);
+    setActiveTermsTab('terms');
+    setVisitedTabs(new Set(['terms']));
+    setTermsConsentLoading(true);
+    try {
+      const [termsRes, privacyRes] = await Promise.allSettled([
+        fetch(`${API_URL}/public/terms-and-conditions/current?document_type=TERMS_AND_CONDITIONS`),
+        fetch(`${API_URL}/public/terms-and-conditions/current?document_type=PRIVACY_POLICY`),
+      ]);
+      let termsData: TermsAndConditions | null = null;
+      let privacyData: TermsAndConditions | null = null;
+      if (termsRes.status === 'fulfilled' && termsRes.value.ok) {
+        const json = await termsRes.value.json();
+        termsData = json?.data || json;
+      }
+      if (privacyRes.status === 'fulfilled' && privacyRes.value.ok) {
+        const json = await privacyRes.value.json();
+        privacyData = json?.data || json;
+      }
+      setTermsConsentContent({ terms: termsData, privacy: privacyData });
+    } catch {
+      setTermsConsentContent({ terms: null, privacy: null });
+    } finally {
+      setTermsConsentLoading(false);
+    }
+  };
+
+  const handleCreateAccount = async () => {
+    const termsId = termsConsentContent.terms?.id || null;
+    setAcceptedTermsId(termsId);
+    setShowTermsConsentModal(false);
+    await completeRegistration(termsId);
+  };
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -314,6 +366,21 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const { strength: passwordStrength, checks: passwordChecks } = getPasswordStrength(form.password);
   const passwordsMatch = form.password && form.confirmPassword && form.password === form.confirmPassword;
 
+  // All required fields are filled and valid — gates the "View Terms & Conditions" button
+  const isFormComplete =
+    (freeTrialAcknowledged || !!selectedPlanDetails) &&
+    form.companyName.trim().length >= 2 &&
+    !emailError &&
+    otpVerified &&
+    form.adminName.trim().length >= 2 &&
+    /^[0-9+\-\s()]{10,}$/.test(form.phoneNumber.trim()) &&
+    form.password.length >= 8 &&
+    /[A-Z]/.test(form.password) &&
+    /[a-z]/.test(form.password) &&
+    /[0-9]/.test(form.password) &&
+    /[!@#$%^&*(),.?":{}|<>]/.test(form.password) &&
+    form.password === form.confirmPassword;
+
   const validateForm = (): string | null => {
     // Plan selection validation - user must explicitly choose a plan
     if (!freeTrialAcknowledged && !selectedPlanDetails) {
@@ -398,14 +465,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
 
     setError('');
-
-    // Always call complete-registration API when "Create Account" is clicked
-    // Backend handles purchase_intent (trial or paid) based on plan_id
-    await completeRegistration();
+    await openTermsConsentModal();
   };
 
   // Complete registration - calls API with plan_id if selected
-  const completeRegistration = async () => {
+  const completeRegistration = async (overrideTermsId?: string | null) => {
     setIsLoading(true);
 
     try {
@@ -422,6 +486,12 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       if (encodedPlanFromUrl && encodedPlanFromUrl !== 'free_trial' && selectedPlanDetails) {
         requestBody.plan_id = selectedPlanDetails.id;
         requestBody.billing_interval = billingInterval;
+      }
+
+      // Include accepted terms ID if user accepted T&C during signup
+      const termsId = overrideTermsId !== undefined ? overrideTermsId : acceptedTermsId;
+      if (termsId) {
+        requestBody.terms_id = termsId;
       }
 
       // Note: If freeTrialAcknowledged is true and no plan_id, backend handles as trial
@@ -507,7 +577,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
   };
 
-  // Handle payment submission (process payment for paid signup)
+  // Handle payment submission — 3-step Razorpay flow
   const handlePaymentSubmit = async () => {
     if (!createdTenantId || !selectedPlanDetails) {
       setError('Missing tenant or plan information');
@@ -518,23 +588,66 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     setError('');
 
     try {
+      // Step 1: Create Razorpay order
+      const orderRes = await fetch(`${API_URL}/signup/create-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenant_id: createdTenantId,
+          plan_id: selectedPlanDetails.id,
+          billing_interval: billingInterval,
+        }),
+      });
+
+      if (!orderRes.ok) {
+        const errData = await orderRes.json().catch(() => ({}));
+        throw new Error(errData.detail || `Failed to create order: ${orderRes.status}`);
+      }
+
+      const orderData = await orderRes.json();
+      console.log('[Signup] Razorpay order created:', orderData);
+
+      // Step 2: Open Razorpay checkout modal
+      let paymentResponse;
+      try {
+        paymentResponse = await openCheckout({
+          orderId: orderData.order_id,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          planName: selectedPlanDetails.plan_name || 'Plan',
+          userName: form.adminName || '',
+          userEmail: form.adminEmail || '',
+          userPhone: form.phoneNumber || '',
+        });
+      } catch (checkoutErr: any) {
+        setPaymentProcessing(false);
+        if (checkoutErr?.message?.includes('cancelled')) {
+          toast.info('Payment cancelled');
+        } else {
+          toast.error(checkoutErr?.message || 'Payment failed');
+        }
+        return;
+      }
+
+      // Step 3: Verify payment with backend
       const response = await fetch(`${API_URL}/signup/process-payment`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenant_id: createdTenantId,
           plan_id: selectedPlanDetails.id,
           billing_interval: billingInterval,
           user_email: form.adminEmail,
+          razorpay_payment_id: paymentResponse.razorpay_payment_id,
+          razorpay_order_id: paymentResponse.razorpay_order_id,
+          razorpay_signature: paymentResponse.razorpay_signature,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.detail || 'Payment processing failed');
+        throw new Error(data.detail || 'Payment verification failed');
       }
 
       // Payment successful - show success and redirect to org subdomain login
@@ -1058,42 +1171,58 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               </div>
             </div>
 
-            {/* Price Display */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
-              <div>
+            {/* Price Display with GST Breakdown */}
+            <div style={{ padding: '16px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 14, color: '#6B7280' }}>Billing:</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginLeft: 8 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>
                   {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
                 </span>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: 32, fontWeight: 700, color: '#111827' }}>
+              {/* Strikethrough price and Save badge for annual plans */}
+              {billingInterval === 'ANNUAL' && selectedPlanDetails.monthly_price && (selectedPlanDetails.monthly_price * 12) > selectedPlanDetails.base_price && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
+                    {formatCurrency(selectedPlanDetails.monthly_price * 12, selectedPlanDetails.currency)}
+                  </span>
+                  {selectedPlanDetails.discount_percentage && selectedPlanDetails.discount_percentage > 0 && (
+                    <span style={{
+                      display: 'inline-block',
+                      padding: '2px 8px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      backgroundColor: '#DCFCE7',
+                      color: '#15803D',
+                      borderRadius: 12
+                    }}>
+                      Save {Math.round(selectedPlanDetails.discount_percentage)}%
+                    </span>
+                  )}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 14, color: '#6B7280' }}>Plan Price:</span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>
                   {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
                 </span>
-                <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
-                  /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 14, color: '#6B7280' }}>GST (18%):</span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>
+                  {formatCurrency(Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
                 </span>
-                {/* Strikethrough price and Save badge for annual plans */}
-                {billingInterval === 'ANNUAL' && selectedPlanDetails.monthly_price && (selectedPlanDetails.monthly_price * 12) > selectedPlanDetails.base_price && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
-                    <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
-                      {formatCurrency(selectedPlanDetails.monthly_price * 12, selectedPlanDetails.currency)}
-                    </span>
-                    {selectedPlanDetails.discount_percentage && selectedPlanDetails.discount_percentage > 0 && (
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        backgroundColor: '#DCFCE7',
-                        color: '#15803D',
-                        borderRadius: 12
-                      }}>
-                        Save {Math.round(selectedPlanDetails.discount_percentage)}%
-                      </span>
-                    )}
-                  </div>
-                )}
+              </div>
+              <div style={{ height: 1, backgroundColor: '#E5E7EB', marginBottom: 8 }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>Total:</span>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+                    {formatCurrency(selectedPlanDetails.base_price + Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
+                  </span>
+                  <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
+                    /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -1161,14 +1290,14 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           {/* Complete Purchase Button */}
           <button
             onClick={handlePaymentSubmit}
-            disabled={paymentProcessing}
+            disabled={paymentProcessing || razorpayProcessing}
             style={{
               ...submitButtonStyle,
-              opacity: paymentProcessing ? 0.7 : 1,
-              cursor: paymentProcessing ? 'not-allowed' : 'pointer',
+              opacity: (paymentProcessing || razorpayProcessing) ? 0.7 : 1,
+              cursor: (paymentProcessing || razorpayProcessing) ? 'not-allowed' : 'pointer',
             }}
           >
-            {paymentProcessing ? (
+            {paymentProcessing || razorpayProcessing ? (
               <>
                 <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
                 Processing Payment...
@@ -1176,7 +1305,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             ) : (
               <>
                 <CreditCard style={{ width: 20, height: 20 }} />
-                Complete Purchase - {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
+                Pay & Activate - {formatCurrency(selectedPlanDetails.base_price + Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
               </>
             )}
           </button>
@@ -1712,25 +1841,14 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 </div>
               )}
 
-              {/* Terms */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 24 }}>
-                <input type="checkbox" id="terms" required style={{ marginTop: 4 }} />
-                <label htmlFor="terms" style={{ fontSize: 14, color: '#4B5563' }}>
-                  I agree to the{' '}
-                  <button type="button" style={{ color: '#2563EB', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>Terms of Service</button>
-                  {' '}and{' '}
-                  <button type="button" style={{ color: '#2563EB', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14 }}>Privacy Policy</button>
-                </label>
-              </div>
-
               {/* Submit */}
               <button
                 type="submit"
-                disabled={isLoading || !!emailError || !otpVerified}
+                disabled={isLoading || !isFormComplete}
                 style={{
                   ...submitButtonStyle,
-                  opacity: isLoading || emailError || !otpVerified ? 0.5 : 1,
-                  cursor: isLoading || emailError || !otpVerified ? 'not-allowed' : 'pointer',
+                  opacity: isLoading || !isFormComplete ? 0.5 : 1,
+                  cursor: isLoading || !isFormComplete ? 'not-allowed' : 'pointer',
                 }}
               >
                 {isLoading ? (
@@ -1745,8 +1863,8 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                   </>
                 ) : (
                   <>
-                    Create Account
-                    <ArrowRight style={{ width: 20, height: 20 }} />
+                    <FileText style={{ width: 20, height: 20 }} />
+                    View Terms & Conditions
                   </>
                 )}
               </button>
@@ -1770,6 +1888,175 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       </div>
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
+      {/* Terms Consent Modal */}
+      {showTermsConsentModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.65)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ backgroundColor: '#fff', borderRadius: 20, width: '100%', maxWidth: 720, maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}
+          >
+            {/* Header */}
+            <div style={{ padding: '20px 24px', background: 'linear-gradient(135deg, #2563EB, #4338CA)', borderRadius: '20px 20px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 42, height: 42, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileText style={{ width: 20, height: 20, color: '#fff' }} />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: 18, fontWeight: 700, color: '#fff', margin: 0 }}>Review Legal Documents</h2>
+                  <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', margin: 0 }}>Accept both documents to create your account</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTermsConsentModal(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.8)', padding: 6, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <X style={{ width: 20, height: 20 }} />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div style={{ display: 'flex', borderBottom: '1px solid #E5E7EB', backgroundColor: '#F9FAFB', flexShrink: 0 }}>
+              {([
+                { key: 'terms' as const, label: 'Terms & Conditions', Icon: FileText, agreed: agreedToTerms },
+                { key: 'privacy' as const, label: 'Privacy Policy', Icon: Shield, agreed: agreedToPrivacy },
+              ]).map(({ key, label, Icon, agreed }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => { setActiveTermsTab(key); setVisitedTabs(prev => new Set([...prev, key])); }}
+                  style={{
+                    flex: 1,
+                    padding: '13px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    fontSize: 14,
+                    fontWeight: activeTermsTab === key ? 600 : 400,
+                    color: activeTermsTab === key ? '#2563EB' : '#6B7280',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    borderBottom: activeTermsTab === key ? '2px solid #2563EB' : '2px solid transparent',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <Icon style={{ width: 15, height: 15 }} />
+                  {label}
+                  {agreed && <CheckCircle style={{ width: 14, height: 14, color: '#10B981' }} />}
+                </button>
+              ))}
+            </div>
+
+            {/* Document Content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+              {termsConsentLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 16 }}>
+                  <Loader2 style={{ width: 40, height: 40, color: '#2563EB', animation: 'spin 1s linear infinite' }} />
+                  <p style={{ fontSize: 14, color: '#6B7280', margin: 0 }}>Loading documents...</p>
+                </div>
+              ) : activeTermsTab === 'terms' ? (
+                termsConsentContent.terms ? (
+                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.terms.content_html }} style={{ fontSize: 14, color: '#374151', lineHeight: 1.7 }} />
+                ) : (
+                  <p style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', padding: 40 }}>Terms & Conditions content is currently unavailable. You may still proceed.</p>
+                )
+              ) : (
+                termsConsentContent.privacy ? (
+                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.privacy.content_html }} style={{ fontSize: 14, color: '#374151', lineHeight: 1.7 }} />
+                ) : (
+                  <p style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', padding: 40 }}>Privacy Policy content is currently unavailable. You may still proceed.</p>
+                )
+              )}
+            </div>
+
+            {/* Footer — Checkboxes + Create Account */}
+            <div style={{ padding: '20px 24px', borderTop: '2px solid #E5E7EB', backgroundColor: '#F9FAFB', borderRadius: '0 0 20px 20px', flexShrink: 0 }}>
+              {/* Acceptance Checkboxes */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                {/* Terms & Conditions checkbox — always enabled (modal opens on this tab) */}
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '10px 12px', backgroundColor: agreedToTerms ? '#F0FDF4' : '#fff', border: `1px solid ${agreedToTerms ? '#86EFAC' : '#D1D5DB'}`, borderRadius: 10, transition: 'all 0.2s' }}>
+                  <input
+                    type="checkbox"
+                    checked={agreedToTerms}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    style={{ marginTop: 2, width: 17, height: 17, cursor: 'pointer', accentColor: '#2563EB', flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
+                    I have read and agree to the{' '}
+                    <button type="button" onClick={(e) => { e.preventDefault(); setActiveTermsTab('terms'); setVisitedTabs(prev => new Set([...prev, 'terms' as const])); }} style={{ color: '#2563EB', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, textDecoration: 'underline' }}>
+                      Terms & Conditions
+                    </button>
+                  </span>
+                  {agreedToTerms && <CheckCircle style={{ width: 18, height: 18, color: '#10B981', flexShrink: 0, marginLeft: 'auto' }} />}
+                </label>
+
+                {/* Privacy Policy checkbox — disabled until user clicks the Privacy Policy tab */}
+                <label
+                  title={!visitedTabs.has('privacy') ? 'Please read the Privacy Policy tab first' : undefined}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: visitedTabs.has('privacy') ? 'pointer' : 'not-allowed', padding: '10px 12px', backgroundColor: !visitedTabs.has('privacy') ? '#F3F4F6' : agreedToPrivacy ? '#F0FDF4' : '#fff', border: `1px solid ${!visitedTabs.has('privacy') ? '#E5E7EB' : agreedToPrivacy ? '#86EFAC' : '#D1D5DB'}`, borderRadius: 10, transition: 'all 0.2s', opacity: visitedTabs.has('privacy') ? 1 : 0.6 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={agreedToPrivacy}
+                    disabled={!visitedTabs.has('privacy')}
+                    onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                    style={{ marginTop: 2, width: 17, height: 17, cursor: visitedTabs.has('privacy') ? 'pointer' : 'not-allowed', accentColor: '#2563EB', flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: 14, color: visitedTabs.has('privacy') ? '#374151' : '#9CA3AF', lineHeight: 1.5 }}>
+                    I have read and agree to the{' '}
+                    <button type="button" onClick={(e) => { e.preventDefault(); setActiveTermsTab('privacy'); setVisitedTabs(prev => new Set([...prev, 'privacy' as const])); }} style={{ color: '#2563EB', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, textDecoration: 'underline' }}>
+                      Privacy Policy
+                    </button>
+                    {!visitedTabs.has('privacy') && <span style={{ fontSize: 12, color: '#F59E0B', marginLeft: 6, fontWeight: 500 }}>← Read first</span>}
+                  </span>
+                  {agreedToPrivacy && <CheckCircle style={{ width: 18, height: 18, color: '#10B981', flexShrink: 0, marginLeft: 'auto' }} />}
+                </label>
+              </div>
+
+              {/* Create Account Button */}
+              <button
+                type="button"
+                onClick={handleCreateAccount}
+                disabled={!agreedToTerms || !agreedToPrivacy || isLoading}
+                style={{
+                  width: '100%',
+                  padding: '14px 24px',
+                  background: agreedToTerms && agreedToPrivacy ? 'linear-gradient(135deg, #2563EB, #4338CA)' : '#E5E7EB',
+                  color: agreedToTerms && agreedToPrivacy ? '#ffffff' : '#9CA3AF',
+                  fontSize: 16,
+                  fontWeight: 600,
+                  borderRadius: 12,
+                  border: 'none',
+                  cursor: agreedToTerms && agreedToPrivacy && !isLoading ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  transition: 'all 0.3s',
+                  boxShadow: agreedToTerms && agreedToPrivacy ? '0 8px 30px rgba(37, 99, 235, 0.35)' : 'none',
+                }}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
+                    Creating your workspace...
+                  </>
+                ) : (
+                  <>
+                    <ArrowRight style={{ width: 20, height: 20 }} />
+                    Create Account
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

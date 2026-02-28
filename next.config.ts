@@ -30,6 +30,10 @@ const nextConfig: NextConfig = {
             key: 'Cache-Control',
             value: 'no-store, must-revalidate',
           },
+          {
+            key: 'Permissions-Policy',
+            value: 'fullscreen=*',
+          },
         ],
       },
     ];

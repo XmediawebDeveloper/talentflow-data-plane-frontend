@@ -232,12 +232,14 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     subCategories: [
       {
         name: 'Current Plan',
+        viewCode: 'current_plan:read',
         actions: [
           { code: 'billing:upgrade', label: 'Upgrade' },
         ],
       },
       {
         name: 'Usage & Quotas',
+        viewCode: 'usage:read',
         actions: [
           { code: 'usage:upgrade', label: 'Upgrade' },
           { code: 'usage:export', label: 'Export' },
@@ -245,6 +247,7 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       },
       {
         name: 'Payment Methods',
+        viewCode: 'payment_methods:read',
         actions: [
           { code: 'payment_methods:create', label: 'Add' },
           { code: 'payment_methods:update', label: 'Edit' },
@@ -280,26 +283,30 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     subCategories: [
       {
         name: 'General Settings',
+        viewCode: 'general_settings:read',
         actions: [
-          { code: 'settings:general', label: 'Access' },
+          { code: 'settings:general', label: 'Manage' },
         ],
       },
       {
         name: 'Permissions & Roles',
+        viewCode: 'permissions_roles:read',
         actions: [
-          { code: 'settings:permissions_roles', label: 'Access' },
+          { code: 'settings:permissions_roles', label: 'Manage' },
         ],
       },
       {
         name: 'API Management',
+        viewCode: 'api_management:read',
         actions: [
-          { code: 'settings:api_management', label: 'Access' },
+          { code: 'settings:api_management', label: 'Manage' },
         ],
       },
       {
         name: 'Branding & White Label',
+        viewCode: 'branding:read',
         actions: [
-          { code: 'settings:branding', label: 'Access' },
+          { code: 'settings:branding', label: 'Manage' },
         ],
       },
     ],
@@ -313,8 +320,9 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     subCategories: [
       {
         name: 'Security Settings',
+        viewCode: 'security_settings:read',
         actions: [
-          { code: 'support:security_settings', label: 'Access' },
+          { code: 'support:security_settings', label: 'Manage' },
         ],
       },
     ],
@@ -362,6 +370,34 @@ const getPermissionDependencies = (code: string): string[] => {
     }
   }
   return [];
+};
+
+// Helper to get a human-readable display name for a permission code
+const getPermissionDisplayName = (code: string): string => {
+  for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
+    const action = cat.actions?.find(a => a.code === code);
+    if (action) return action.label;
+    for (const sub of cat.subCategories || []) {
+      const subAction = sub.actions.find(a => a.code === code);
+      if (subAction) return `${subAction.label} (${sub.name})`;
+    }
+  }
+  return code;
+};
+
+// Helper to get which currently-enabled permissions block disabling the given code
+const getBlockingPermissions = (code: string, currentCodes: Set<string>): string[] => {
+  const blockers: string[] = [];
+  for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
+    if (cat.dependencies) {
+      for (const [depender, deps] of Object.entries(cat.dependencies)) {
+        if (deps.includes(code) && currentCodes.has(depender)) {
+          blockers.push(getPermissionDisplayName(depender));
+        }
+      }
+    }
+  }
+  return blockers;
 };
 
 // Group permissions by module (original function - kept for backwards compatibility)
@@ -2400,9 +2436,17 @@ export default function UserManagement() {
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
                         // Pure codes-only toggle — no dual-state sync needed
                         const toggleCode = (code: string) => {
-                          setEditSelectedPermissionCodes(prev => {
-                            const next = new Set(prev);
-                            if (next.has(code)) {
+                          if (editSelectedPermissionCodes.has(code)) {
+                            // Disabling — block if another enabled permission depends on this one
+                            const blockers = getBlockingPermissions(code, editSelectedPermissionCodes);
+                            if (blockers.length > 0) {
+                              toast.warning(
+                                `Cannot disable "${getPermissionDisplayName(code)}" — it's required by ${blockers.join(', ')}. Disable that permission first.`
+                              );
+                              return;
+                            }
+                            setEditSelectedPermissionCodes(prev => {
+                              const next = new Set(prev);
                               next.delete(code);
                               // Auto-remove viewCode if no actions remain in category
                               if (category.viewCode) {
@@ -2418,15 +2462,27 @@ export default function UserManagement() {
                                   });
                                 }
                               }
-                            } else {
+                              return next;
+                            });
+                          } else {
+                            // Enabling — collect deps not yet enabled so we can notify
+                            const deps = getPermissionDependencies(code);
+                            const newlyEnabled = deps.filter(dep => !editSelectedPermissionCodes.has(dep));
+                            setEditSelectedPermissionCodes(prev => {
+                              const next = new Set(prev);
                               next.add(code);
                               // Auto-enable viewCode
                               if (category.viewCode) next.add(category.viewCode);
                               // Handle dependencies
-                              getPermissionDependencies(code).forEach(dep => next.add(dep));
+                              deps.forEach(dep => next.add(dep));
+                              return next;
+                            });
+                            // Notify admin which dependencies were auto-enabled
+                            if (newlyEnabled.length > 0) {
+                              const depLabels = newlyEnabled.map(d => getPermissionDisplayName(d)).join(' and ');
+                              toast.info(`"${depLabels}" auto-enabled — required for "${getPermissionDisplayName(code)}"`);
                             }
-                            return next;
-                          });
+                          }
                         };
 
                         const isCategoryActive = category.viewCode
@@ -2599,9 +2655,17 @@ export default function UserManagement() {
                                                 key={action.code}
                                                 type="button"
                                                 onClick={() => {
-                                                  setEditSelectedPermissionCodes(prev => {
-                                                    const next = new Set(prev);
-                                                    if (next.has(action.code)) {
+                                                  if (editSelectedPermissionCodes.has(action.code)) {
+                                                    // Disabling — block if another enabled permission depends on this one
+                                                    const blockers = getBlockingPermissions(action.code, editSelectedPermissionCodes);
+                                                    if (blockers.length > 0) {
+                                                      toast.warning(
+                                                        `Cannot disable "${getPermissionDisplayName(action.code)}" — it's required by ${blockers.join(', ')}. Disable that permission first.`
+                                                      );
+                                                      return;
+                                                    }
+                                                    setEditSelectedPermissionCodes(prev => {
+                                                      const next = new Set(prev);
                                                       next.delete(action.code);
                                                       // Remove sub viewCode if no actions left
                                                       if (sub.viewCode && !sub.actions.some(a => a.code !== action.code && next.has(a.code))) {
@@ -2615,14 +2679,26 @@ export default function UserManagement() {
                                                         ].some(a => a.code !== action.code && next.has(a.code));
                                                         if (!anyLeft) next.delete(category.viewCode);
                                                       }
-                                                    } else {
+                                                      return next;
+                                                    });
+                                                  } else {
+                                                    // Enabling — collect deps not yet enabled so we can notify
+                                                    const deps = getPermissionDependencies(action.code);
+                                                    const newlyEnabled = deps.filter(dep => !editSelectedPermissionCodes.has(dep));
+                                                    setEditSelectedPermissionCodes(prev => {
+                                                      const next = new Set(prev);
                                                       next.add(action.code);
                                                       if (sub.viewCode) next.add(sub.viewCode);
                                                       if (category.viewCode) next.add(category.viewCode);
-                                                      getPermissionDependencies(action.code).forEach(dep => next.add(dep));
+                                                      deps.forEach(dep => next.add(dep));
+                                                      return next;
+                                                    });
+                                                    // Notify admin which dependencies were auto-enabled
+                                                    if (newlyEnabled.length > 0) {
+                                                      const depLabels = newlyEnabled.map(d => getPermissionDisplayName(d)).join(' and ');
+                                                      toast.info(`"${depLabels}" auto-enabled — required for "${getPermissionDisplayName(action.code)}"`);
                                                     }
-                                                    return next;
-                                                  });
+                                                  }
                                                 }}
                                                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                                                   isOn

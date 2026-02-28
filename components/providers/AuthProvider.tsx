@@ -152,6 +152,8 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canCreateJD: apiUser.permissions.can_create_jd,
       canUpdateJD: apiUser.permissions.can_update_jd,
       canDeleteJD: apiUser.permissions.can_delete_jd,
+      canArchiveJD: apiUser.permissions.can_archive_jd,
+      canDisableJD: apiUser.permissions.can_disable_jd,
       canManageJD: apiUser.permissions.can_manage_jd,
       // Resumes - Granular CRUD
       canViewResumes: apiUser.permissions.can_view_resumes,
@@ -178,6 +180,29 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canViewBilling: apiUser.permissions.can_view_billing,
       canViewInvoices: apiUser.permissions.can_view_invoices,
       canViewUsage: apiUser.permissions.can_view_usage,
+      // Granular billing section view permissions
+      canViewCurrentPlan: apiUser.permissions.can_view_current_plan,
+      canViewPaymentMethods: apiUser.permissions.can_view_payment_methods,
+      canViewBillingHistory: apiUser.permissions.can_view_billing_history,
+      canViewRefundHistory: apiUser.permissions.can_view_refund_history,
+      canViewDisputeHistory: apiUser.permissions.can_view_dispute_history,
+      // Granular settings section view permissions
+      canViewGeneralSettings: apiUser.permissions.can_view_general_settings,
+      canViewPermissionsRoles: apiUser.permissions.can_view_permissions_roles,
+      canViewApiManagement: apiUser.permissions.can_view_api_management,
+      canViewBranding: apiUser.permissions.can_view_branding,
+      canViewSecuritySettings: apiUser.permissions.can_view_security_settings,
+      // Granular Action Permissions — Billing
+      canUpgradePlan: apiUser.permissions.can_upgrade_plan,
+      canExportUsage: apiUser.permissions.can_export_usage,
+      canAddPaymentMethod: apiUser.permissions.can_add_payment_method,
+      canEditPaymentMethod: apiUser.permissions.can_edit_payment_method,
+      canDeletePaymentMethod: apiUser.permissions.can_delete_payment_method,
+      // Granular Action Permissions — Settings
+      canManagePermissionsRoles: apiUser.permissions.can_manage_permissions_roles,
+      canManageApiManagement: apiUser.permissions.can_manage_api_management,
+      canManageBranding: apiUser.permissions.can_manage_branding,
+      canManageSecuritySettings: apiUser.permissions.can_manage_security_settings,
       // RBAC06: Feature permissions
       canViewScoring: apiUser.permissions.can_view_scoring,
       canRunScoring: apiUser.permissions.can_run_scoring,
@@ -255,6 +280,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check if user has a specific permission
   const hasPermission = useCallback((permission: keyof Permission): boolean => {
     if (!user || !user.permissions) return false;
+    // tenant_admin bypasses all permission checks — no restrictions
+    if (isTenantAdminRole(user.role)) return true;
     return user.permissions[permission] ?? false;
   }, [user]);
 
@@ -484,17 +511,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.addEventListener('scroll', updateActivity);
     }
 
-    const checkPermissions = async () => {
-      // Skip if tab is not visible
-      if (typeof document !== 'undefined' && document.hidden) {
-        console.debug('[AUTH] Skipping poll - tab not visible');
-        return;
-      }
+    // Activity tracking loop — no API calls, purely local idle detection
+    const checkActivity = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
 
-      // Check if user has been inactive for > 30 minutes
       const inactiveTime = Date.now() - lastActivityTime;
       if (inactiveTime > 30 * 60 * 1000) {
-        console.log('[AUTH] Stopping polling - user inactive for 30+ minutes');
+        console.log('[AUTH] Stopping activity tracking - user inactive for 30+ minutes');
         if (intervalId) clearInterval(intervalId);
         return;
       }
@@ -504,24 +527,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         consecutiveIdleChecks++;
         if (consecutiveIdleChecks > 3 && pollInterval < 10000) {
           pollInterval = Math.min(pollInterval * 2, 10000); // Max 10 seconds
-          console.log(`[AUTH] User idle, increasing poll interval to ${pollInterval/1000}s`);
           restartPolling();
         }
       }
-
-      // Permission updates are now handled instantly via WebSocket push (permissions_updated event).
-      // This polling loop is kept only for activity tracking / idle detection.
-      // See: useNotificationWebSocket → onPermissionsUpdated → refreshUser()
     };
 
     const restartPolling = () => {
       if (intervalId) clearInterval(intervalId);
-      intervalId = setInterval(checkPermissions, pollInterval);
+      intervalId = setInterval(checkActivity, pollInterval);
     };
 
-    // Start polling
+    // Permission updates are pushed instantly via WebSocket (permissions_updated event).
+    // See: Header.tsx → useNotificationWebSocket → onPermissionsUpdated → refreshUser()
+    // On reconnect after a drop, the WebSocket hook also calls refreshUser() automatically.
     restartPolling();
-    console.log(`[AUTH] 🔄 Smart polling started (${pollInterval/1000}s interval)`);
 
     return () => {
       if (intervalId) clearInterval(intervalId);
@@ -531,7 +550,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.removeEventListener('click', updateActivity);
         window.removeEventListener('scroll', updateActivity);
       }
-      console.log('[AUTH] Smart polling stopped');
     };
   }, [user]); // Re-run if user changes (login/logout)
 
