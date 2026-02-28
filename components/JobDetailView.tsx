@@ -939,25 +939,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     <span className="font-medium">Edit & Republish</span>
                   </button>
                 )}
-                {onArchive && (
-                  <button
-                    onClick={handleArchive}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
-                  >
-                    <Archive className="w-4 h-4" />
-                    <span className="font-medium">Archive</span>
-                  </button>
-                )}
-                {onDisable && (
-                  <button
-                    onClick={handleDisable}
-                    className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all flex items-center gap-2"
-                    title="Disable this JD"
-                  >
-                    <Ban className="w-4 h-4" />
-                    <span className="font-medium">Disable</span>
-                  </button>
-                )}
                 {/* Delete button - COMMENTED OUT */}
                 {false && onDelete && (
                   <button
@@ -1503,8 +1484,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           jobId={job.id}
           onClose={() => setShowSelectSourceModal(false)}
           onScoringComplete={() => {
-            // Refresh scored resumes after scoring
+            // Refresh scored resumes after scoring and switch to scored tab
             fetchScoredResumes();
+            setActiveTab('scored-resumes');
           }}
         />
       )}
