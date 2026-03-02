@@ -12,11 +12,15 @@ import { scoringService } from '@/lib/services/scoringService';
 import { QuotaProvider } from '@/contexts/QuotaContext';
 import { PlanFeaturesProvider } from '@/components/providers/PlanFeaturesProvider';
 import { TermsProvider } from '@/components/providers/TermsProvider';
+import { PlanChangeProvider, usePlanChange } from '@/components/providers/PlanChangeProvider';
 import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail } from '@/lib/services/api';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 import TermsReminderBanner from '@/components/terms/TermsReminderBanner';
 import TermsBlockingOverlay from '@/components/terms/TermsBlockingOverlay';
 import TermsAcceptanceModal from '@/components/terms/TermsAcceptanceModal';
+import PlanChangeReviewBanner from '@/components/plan-change/PlanChangeReviewBanner';
+import PlanChangeReviewModal from '@/components/plan-change/PlanChangeReviewModal';
+import PlanChangeSuspendedBlock from '@/components/plan-change/PlanChangeSuspendedBlock';
 
 // Admin-only routes that require tenant_admin role
 const adminRoutes = [
@@ -60,6 +64,16 @@ function SearchParamsErrorHandler() {
   return null;
 }
 
+function PlanChangeSuspendedOverlay() {
+  const { isSuspendedDueToPlanChange } = usePlanChange();
+  if (!isSuspendedDueToPlanChange) return null;
+  return (
+    <div className="fixed inset-0 z-[98]">
+      <PlanChangeSuspendedBlock />
+    </div>
+  );
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -92,7 +106,12 @@ export default function DashboardLayout({
       const isSuspended = status === 'suspended';
       console.log('[DASHBOARD] Tenant subscription status:', status, 'isExpired:', isExpired, 'isSuspended:', isSuspended);
 
-      if (isSuspended) {
+      if (status === 'plan_change_pending') {
+        // Let PlanChangeProvider handle this — don't block the app
+        console.log('[DASHBOARD] Plan change pending - PlanChangeProvider will handle');
+        setAccountSuspended(false);
+        setSubscriptionExpired(false);
+      } else if (isSuspended) {
         // CRITICAL: Suspend accounts immediately - blocks all access except sign out
         console.log('[DASHBOARD] Account SUSPENDED - blocking all access');
         setAccountSuspended(true);
@@ -325,6 +344,7 @@ export default function DashboardLayout({
   return (
     <QuotaProvider>
       <PlanFeaturesProvider>
+        <PlanChangeProvider>
         <TermsProvider>
         <SessionTimeoutProvider skipSettingsLoad={subscriptionExpired !== false}>
           <Suspense fallback={null}>
@@ -367,6 +387,7 @@ export default function DashboardLayout({
               />
 
               <TermsReminderBanner />
+              <PlanChangeReviewBanner />
               <div className="flex-1 overflow-y-auto flex flex-col">
                 {children}
               </div>
@@ -381,6 +402,12 @@ export default function DashboardLayout({
             {/* T&C acceptance modal - z-[90] */}
             <TermsAcceptanceModal />
 
+            {/* Plan change review modal - z-[88] */}
+            <PlanChangeReviewModal />
+
+            {/* Plan change suspended overlay - z-[98], above terms z-[95], below generic suspension z-[100] */}
+            <PlanChangeSuspendedOverlay />
+
             {/* CRITICAL: Full-screen suspension overlay - blocks ALL interaction */}
             {accountSuspended && (
               <div className="fixed inset-0 z-[100]">
@@ -394,6 +421,7 @@ export default function DashboardLayout({
           </div>
         </SessionTimeoutProvider>
         </TermsProvider>
+        </PlanChangeProvider>
       </PlanFeaturesProvider>
     </QuotaProvider>
   );
