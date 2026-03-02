@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface WebSocketMessage {
-  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated';
+  type: 'new_notification' | 'notification_count' | 'connected' | 'pong' | 'permissions_updated' | 'plan_change_pending';
   data?: any;
 }
 
@@ -201,6 +201,11 @@ export function useNotificationWebSocket({
                 if (onPermissionsUpdatedRef.current) {
                   onPermissionsUpdatedRef.current();
                 }
+                break;
+
+              case 'plan_change_pending':
+                console.log('[WebSocket] Plan change pending - dispatching event');
+                window.dispatchEvent(new CustomEvent('plan-change-pending', { detail: message.data }));
                 break;
             }
           } catch (e) {

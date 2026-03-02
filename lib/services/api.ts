@@ -307,6 +307,22 @@ export const dispatchUnitsConsumed = () => {
   }
 };
 
+// Custom event for plan change pending (403 SUSPENDED or WebSocket push)
+export const PLAN_CHANGE_PENDING_EVENT = 'plan-change-pending';
+
+export interface PlanChangePendingDetail {
+  notification_id?: string;
+  change_type?: string;
+  deadline?: string;
+  message?: string;
+}
+
+export const dispatchPlanChangePendingEvent = (detail: PlanChangePendingDetail) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(PLAN_CHANGE_PENDING_EVENT, { detail }));
+  }
+};
+
 // ✅ NEW: Permission version check interceptor - runs BEFORE error handling
 // This checks if permissions have changed on the server and triggers a token refresh
 api.interceptors.response.use(
@@ -434,7 +450,14 @@ api.interceptors.response.use(
 
     // Handle SUBSCRIPTION_INACTIVE error (403 with specific error_code)
     if (error.response?.status === 403) {
-      const detail = error.response.data as { detail?: SubscriptionInactiveDetail };
+      const detail = error.response.data as { detail?: SubscriptionInactiveDetail & { error_type?: string } };
+
+      // Check if suspension is due to plan changes (SUSPENDED error_type)
+      if (detail?.detail?.error_type === 'SUSPENDED') {
+        dispatchPlanChangePendingEvent({ message: detail?.detail?.message });
+        return Promise.reject(error);
+      }
+
       if (detail?.detail?.error_code === 'SUBSCRIPTION_INACTIVE') {
         // Skip modal dispatch if user is already on the subscription page (where they can renew)
         const isOnSubscriptionPage = typeof window !== 'undefined' &&

@@ -13,6 +13,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
+import { usePlanChange } from '@/components/providers/PlanChangeProvider';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -454,6 +455,9 @@ function CurrentPlanContent() {
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
+
+  // Plan change acceptance
+  const { hasPendingChanges, daysRemaining, currentChange, openReviewModal } = usePlanChange();
 
   // Check if user already has dedicated database isolation (cannot be downgraded)
   const hasDedicatedDatabase = sharedQuotaData?.plan_info?.isolation_type?.toUpperCase() === 'DATABASE';
@@ -1476,7 +1480,7 @@ function CurrentPlanContent() {
         try {
           const mod = await import('@/lib/services/auditVerificationService');
           mod.auditVerificationService.storePendingVerification({
-            action: result.queued ? 'plan_upgrade' : 'subscription_upgrade',
+            action: isDowngradePayment ? (result.queued ? 'plan_downgrade' : 'subscription_downgrade') : (result.queued ? 'plan_upgrade' : 'subscription_upgrade'),
             entity_type: 'subscription',
             entity_id: String(planId),
             user_id: user?.id,
@@ -1488,13 +1492,15 @@ function CurrentPlanContent() {
 
         // PS02 Fix: Show toast notification for payment success
         if (result.queued) {
-          toast.success('Payment successful! Upgrade queued.', {
-            description: `Your upgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? new Date(result.auto_apply_date).toLocaleDateString() : 'plan expiry'}.`,
+          toast.success(isDowngradePayment ? 'Payment successful! Downgrade queued.' : 'Payment successful! Upgrade queued.', {
+            description: isDowngradePayment
+              ? `Your downgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? new Date(result.auto_apply_date).toLocaleDateString() : 'plan expiry'}.`
+              : `Your upgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? new Date(result.auto_apply_date).toLocaleDateString() : 'plan expiry'}.`,
             duration: 6000,
           });
         } else {
-          toast.success('Payment successful! Your plan is now active.', {
-            description: `You're now on the ${result.plan_name} plan. All resources have been provisioned.`,
+          toast.success(isDowngradePayment ? 'Plan downgraded successfully.' : 'Payment successful! Your plan is now active.', {
+            description: `You're now on the ${result.plan_name} plan.${isDowngradePayment ? ' Some features may no longer be available.' : ' All resources have been provisioned.'}`,
             duration: 5000,
           });
         }
@@ -1505,9 +1511,9 @@ function CurrentPlanContent() {
           // Refresh queued upgrades list
           await fetchQueuedUpgrades();
         } else {
-          // Plan upgraded successfully - logout and redirect to login
+          // Plan changed successfully - logout and redirect to login
           // This ensures user gets fresh session with new plan data
-          toast.success('Plan upgraded successfully!', {
+          toast.success(isDowngradePayment ? 'Plan downgraded successfully!' : 'Plan upgraded successfully!', {
             description: 'You will be redirected to login to apply your new plan.',
             duration: 3000,
           });
@@ -1518,7 +1524,7 @@ function CurrentPlanContent() {
           // Wait a moment for the toast to show, then logout
           setTimeout(() => {
             logout();
-            router.push('/login?upgraded=true');
+            router.push(isDowngradePayment ? '/login?downgraded=true' : '/login?upgraded=true');
           }, 2000);
           return; // Exit early, no need to update local state
         }
@@ -1801,6 +1807,29 @@ function CurrentPlanContent() {
           <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-8 flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-green-500" />
             <p className="text-green-700">{successMessage}</p>
+          </div>
+        )}
+
+        {hasPendingChanges && currentChange && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-amber-800 font-medium">Plan Changes Pending</p>
+              <p className="text-amber-700 text-sm mt-0.5">
+                {daysRemaining !== null && (
+                  <>{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} remaining to review. </>
+                )}
+                Deadline: {new Date(currentChange.deadline).toLocaleDateString('en-US', {
+                  month: 'long', day: 'numeric', year: 'numeric'
+                })}
+              </p>
+            </div>
+            <button
+              onClick={openReviewModal}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+            >
+              Review Changes
+            </button>
           </div>
         )}
 

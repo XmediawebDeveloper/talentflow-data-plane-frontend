@@ -96,6 +96,22 @@ const QuotaContext = createContext<QuotaContextType>({
 // Cache duration in milliseconds (30 seconds)
 const CACHE_DURATION = 30000;
 
+// Plan tier ordering for upgrade/downgrade detection
+const TIER_ORDER: Record<string, number> = {
+  starter: 1,
+  professional: 2,
+  enterprise: 3,
+};
+
+function detectPlanChangeDirection(oldTier?: string, newTier?: string): 'upgrade' | 'downgrade' | 'changed' {
+  if (!oldTier || !newTier) return 'changed';
+  const oldLevel = TIER_ORDER[oldTier.toLowerCase()] || 0;
+  const newLevel = TIER_ORDER[newTier.toLowerCase()] || 0;
+  if (newLevel > oldLevel) return 'upgrade';
+  if (newLevel < oldLevel) return 'downgrade';
+  return 'changed';
+}
+
 export function QuotaProvider({ children }: { children: React.ReactNode }) {
   const [quotaData, setQuotaData] = useState<QuotaData | null>(null);
   const [loading, setLoading] = useState(true); // Start as true since we fetch on mount
@@ -106,6 +122,9 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
 
   const lastFetchTimeRef = useRef<number | null>(null);
   const quotaDataRef = useRef<QuotaData | null>(null);
+
+  // Track previous plan for change detection
+  const prevPlanRef = useRef<{ name?: string; tier?: string } | null>(null);
 
   // Update refs when state changes
   useEffect(() => {
@@ -140,6 +159,31 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
       console.log('[QuotaContext] Fetching quota-status...');
       const response = await api.get('/usage/quota-status');
       const data = response.data?.data || response.data;
+
+      // Detect plan changes by comparing with previous plan data
+      const newPlanName = data?.plan_info?.plan_name || data?.plan_name;
+      const newPlanTier = data?.plan_info?.plan_tier;
+      const prev = prevPlanRef.current;
+
+      if (prev && newPlanName && prev.name && prev.name !== newPlanName) {
+        const direction = detectPlanChangeDirection(prev.tier, newPlanTier);
+        console.log(`[QuotaContext] Plan change detected: ${prev.name} → ${newPlanName} (${direction})`);
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('planChanged', {
+            detail: {
+              previousPlan: prev.name,
+              newPlan: newPlanName,
+              previousTier: prev.tier,
+              newTier: newPlanTier,
+              direction,
+            },
+          }));
+        }
+      }
+
+      // Update previous plan ref
+      prevPlanRef.current = { name: newPlanName, tier: newPlanTier };
 
       setQuotaData(data);
       setLastFetchTime(Date.now());
