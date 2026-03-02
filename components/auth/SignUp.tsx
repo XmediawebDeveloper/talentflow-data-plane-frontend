@@ -1,5 +1,9 @@
 'use client';
 
+// MIRROR PAGE: This file and app/(auth)/complete-payment/page.tsx share the same
+// plan display logic (quota rendering, feature list, formatQuotaValue, etc.).
+// Any changes made here must also be applied to complete-payment/page.tsx and vice versa.
+
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -556,7 +560,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         });
         // Redirect to org subdomain login after brief success message
         setTimeout(() => {
-          const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+          const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
           const sub = data.subdomain;
           if (sub) {
             window.location.href = `https://${sub}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
@@ -654,7 +658,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       toast.success('Payment successful!', { description: 'Your plan is now active.' });
       setStep('success');
       setTimeout(() => {
-        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
         if (createdSubdomain) {
           window.location.href = `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
         } else {
@@ -675,7 +679,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   // Handle continue to login (skip payment - stay on trial)
   const handleSkipPayment = () => {
     toast.info('Starting with free trial', { description: 'You can upgrade anytime from your dashboard.' });
-    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
     if (createdSubdomain) {
       window.location.href = `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
     } else {
@@ -988,16 +992,14 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         description: `You've chosen the free trial. Complete your signup to get started!`,
       });
     } else {
-      // User selected a paid plan - update URL and reload to trigger plan fetch
-      const newUrl = new URL(window.location.href);
-      newUrl.searchParams.set('plan', planParam);
+      // User selected a paid plan - update URL to trigger plan fetch via useEffect
+      const params = new URLSearchParams(window.location.search);
+      params.set('plan', planParam);
       if (billingInterval) {
-        newUrl.searchParams.set('billing', billingInterval);
+        params.set('billing', billingInterval);
         setBillingInterval(billingInterval);
       }
-      window.history.replaceState({}, '', newUrl.toString());
-      // Force reload to fetch the new plan details
-      window.location.reload();
+      router.replace(`/signup?${params.toString()}`);
     }
   };
 
@@ -1126,10 +1128,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     };
 
     // Helper to format quota value
-    const formatQuotaValue = (key: string, value: number | undefined): string => {
+    const formatQuotaValue = (key: string, value: number | string | undefined): string => {
       if (value === undefined || value === null) return 'Unlimited';
       if (value === -1) return 'Unlimited';
-      return value.toLocaleString();
+      if (typeof value === 'string' && value.toLowerCase() === 'unlimited') return 'Unlimited';
+      return Number(value).toLocaleString();
     };
 
     return (
@@ -1242,7 +1245,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   {Object.entries(selectedPlanDetails.quotas)
-                    .filter(([key]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key))
+                    .filter(([key, value]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key) && value !== 0 && value !== null && value !== undefined)
                     .map(([key, value]) => (
                     <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid #E5E7EB' }}>
                       <span style={{ fontSize: 13, color: '#6B7280' }}>{getQuotaLabel(key)}</span>

@@ -19,6 +19,8 @@ const ROUND_LABELS: Record<string, string> = {
   culture_fit: 'Culture Fit',
   leadership: 'Leadership',
   problem_solving: 'Problem Solving',
+  must_have_skills: 'Must-Have Skills',
+  nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
 type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'processing' | 'audit' | 'consent' | 'settings';
@@ -497,8 +499,8 @@ export default function AIInterview() {
               className="flex items-center gap-2 bg-gray-800 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg hover:bg-gray-900 transition-colors text-xs sm:text-sm"
             >
               <Settings className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-              <span className="hidden sm:inline">AI Interview Configuration</span>
-              <span className="sm:hidden">Configure</span>
+              <span className="hidden sm:inline">Browse Roles</span>
+              <span className="sm:hidden">Browse Roles</span>
             </button>
           </div>
         </div>
@@ -609,7 +611,7 @@ export default function AIInterview() {
                         className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
                       >
                         <Settings className="w-4 h-4" />
-                        AI Interview Configuration
+                        Browse Roles
                       </button>
                     </>
                   )}
@@ -665,7 +667,7 @@ export default function AIInterview() {
                               )}
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
-                                {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at {new Date(config.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                               </span>
                               {config.created_by_name && (
                                 <span className="text-xs text-gray-400">

@@ -280,7 +280,7 @@ export default function TeamUsagePage() {
       const days = TIME_RANGE_DAYS[timeRange] ?? 30;
       const res = await unitPoolService.getConsumptionHistory({
         start_date: toDateParam(days),
-        limit: 1000,
+        limit: 500,
       });
       const entries: ConsumptionLogEntry[] = Array.isArray(res)
         ? res

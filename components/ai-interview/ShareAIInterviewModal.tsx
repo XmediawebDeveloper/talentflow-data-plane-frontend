@@ -48,6 +48,8 @@ const ROUND_LABELS: Record<string, string> = {
   culture_fit: 'Culture Fit',
   leadership: 'Leadership',
   problem_solving: 'Problem Solving',
+  must_have_skills: 'Must-Have Skills',
+  nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
 export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent }: ShareAIInterviewModalProps) {
@@ -66,7 +68,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   // Email message
   const [customMessage, setCustomMessage] = useState(
-    `You have been invited to an AI-powered interview:\n\nImportant Instructions:\n• Ensure you have a stable internet connection\n• Find a quiet place with good lighting\n• Your camera and microphone will be required\n• The AI interviewer will guide you through the session\n• Complete the interview in one sitting\n\nGood luck!`
+    `Subject: Invitation to Complete Your AI Interview\n\nYou've been invited to complete an AI-powered interview as part of your application process.\n\nThis interview will take approximately 20–30 minutes and must be completed in one sitting.\n\nBefore You Begin:\n\n• Ensure you have a stable internet connection\n• Find a quiet place with good lighting\n• Your camera and microphone will be required\n• Use a laptop or desktop for the best experience\n\nDuring the session, our AI interviewer will guide you through each question step-by-step.\n\nPlease complete the interview by [deadline date].\n\nIf you experience any technical issues, contact us at support@talentflow.com.\n\nWe wish you the best of luck and look forward to learning more about you!`
   );
   const [expiryDays, setExpiryDays] = useState(7);
   const [sendCopy, setSendCopy] = useState(true);
@@ -239,7 +241,12 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           candidate_name: candidate.name.trim(),
           candidate_email: candidate.email.trim(),
           // scheduled_at,  // Commented out - schedule feature disabled for now
-          custom_message: customMessage || undefined,
+          custom_message: customMessage
+            ? customMessage.replace('[deadline date]', expiryDays > 0
+                ? new Date(Date.now() + expiryDays * 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                : 'no specific deadline'
+              )
+            : undefined,
           expiry_days: expiryDays,
           base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
         });
@@ -734,7 +741,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               <div className="p-8">
                 {/* Greeting and Message */}
                 <div className="mb-6 text-gray-700 text-base leading-relaxed whitespace-pre-line">
-                  {customMessage.replace('[Candidate Name]', candidates[0]?.name || '[Candidate Name]')}
+                  {customMessage
+                    .replace('[Candidate Name]', candidates[0]?.name || '[Candidate Name]')
+                    .replace('[deadline date]', expiryDays > 0
+                      ? new Date(Date.now() + expiryDays * 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                      : 'no specific deadline'
+                    )
+                  }
                 </div>
 
                 {/* Interview Title Box */}

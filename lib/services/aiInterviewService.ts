@@ -9,8 +9,13 @@ export interface AIInterviewRoundConfig {
   percentage: number;
   duration_minutes: number;
   topics: string[];
+  topic_weights?: Record<string, number>;
   enabled: boolean;
   order: number;
+  // Skills split by source — so the agent knows which came from JD vs custom-added
+  jd_skills?: string[];
+  custom_skills?: string[];
+  // Deprecated: kept for backward compat with old "technical" round configs only
   must_have_percentage?: number;
   nice_to_have_percentage?: number;
 }
@@ -71,6 +76,7 @@ export interface PublishedJD {
   nice_to_have_skills: string[];
   experience_min?: number;
   experience_max?: number;
+  education_requirements?: Record<string, any>;
   coding_required?: boolean;
   created_at?: string;
   published_at?: string;
@@ -125,6 +131,8 @@ export interface AIInterviewResponse {
   special_instructions?: string;
   score?: number;
   ai_evaluation?: Record<string, any>;
+  conversation_transcript?: Record<string, any>[];
+  recording_file_path?: string;
   invitation_sent: boolean;
   created_by: string;
   created_by_name?: string;
@@ -594,5 +602,13 @@ export const aiInterviewService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * Get recording URL for an interview
+   */
+  getRecordingUrl(interviewId: string): string {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+    return `${baseUrl}/ai-interview/${interviewId}/recording`;
   },
 };
