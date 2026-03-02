@@ -10,6 +10,7 @@ import notificationService, { Notification } from '@/lib/services/notificationSe
 import { useRouter } from 'next/navigation';
 import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { toast } from 'sonner';
 
 interface HeaderProps {
   onLogout: () => void;
@@ -43,11 +44,34 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
 
   // Listen for plan changes and unit consumption to refresh quota data
   useEffect(() => {
-    const handlePlanChange = () => {
+    const handlePlanChange = (event: Event) => {
       console.log('[Header] Plan changed, refreshing quota and notifications...');
       fetchQuotaStatus();
       // Refresh notification count after a delay to pick up backend-created notifications
       setTimeout(() => fetchNotificationCount(), 2000);
+
+      // Show toast notification if plan change details are available
+      // (dispatched by QuotaContext when it detects a plan change from the API)
+      const detail = (event as CustomEvent)?.detail;
+      if (detail?.previousPlan && detail?.newPlan) {
+        const { previousPlan, newPlan, direction } = detail;
+        if (direction === 'downgrade') {
+          toast.warning('Plan Downgraded', {
+            description: `Your plan has been changed from ${previousPlan} to ${newPlan}. Some features may no longer be available.`,
+            duration: 8000,
+          });
+        } else if (direction === 'upgrade') {
+          toast.success('Plan Upgraded', {
+            description: `Your plan has been upgraded from ${previousPlan} to ${newPlan}.`,
+            duration: 6000,
+          });
+        } else {
+          toast.info('Plan Changed', {
+            description: `Your plan has been changed from ${previousPlan} to ${newPlan}.`,
+            duration: 6000,
+          });
+        }
+      }
     };
 
     // Debounce rapid consecutive events (e.g. scoring 7 resumes fires 7 events).
@@ -178,8 +202,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     onNewNotification: handleNewNotification,
     onCountUpdate: handleCountUpdate,
     onPermissionsUpdated: () => {
-      console.log('[Header] onPermissionsUpdated triggered via WebSocket — calling refreshUser()');
+      console.log('[Header] onPermissionsUpdated triggered via WebSocket — calling refreshUser() + fetchQuotaStatus()');
       refreshUser();
+      // Also refresh quota data to detect plan changes (e.g., admin-initiated downgrade)
+      fetchQuotaStatus();
+      // Refresh notification count after a delay to pick up backend-created notifications
+      setTimeout(() => fetchNotificationCount(), 2000);
     },
     enabled: !!user && !!wsToken,
   });
