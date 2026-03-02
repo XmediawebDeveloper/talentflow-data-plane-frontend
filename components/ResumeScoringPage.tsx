@@ -608,74 +608,91 @@ export default function ResumeScoringPage({
       setProgressData(progressItems);
     };
 
-    // Start scoring resumes
+    // Dispatch all resumes to Celery, then poll for progress
     const scoreResumes = async () => {
-      let completed = alreadyScoredItems.length;
-      let failed = 0;
+      try {
+        console.log(`[ResumeScoringPage] Dispatching ${resumeIds.length} resume(s) to Celery`);
+        const batch = await scoringService.startBulkScoringAsync(jobId, resumeIds);
+        const batchId = batch.batch_id;
+        console.log(`[ResumeScoringPage] Batch created: ${batchId}`);
 
-      for (let i = 0; i < resumeIds.length; i++) {
-        const resumeId = resumeIds[i];
-        const itemId = `${jobId}-${resumeId}`;
+        // Map resumeId → array index for O(1) status updates
+        const resumeIdToIndex = new Map<string, number>(
+          resumeIds.map((id, idx) => [id, idx] as [string, number])
+        );
 
-        // Update item status to processing
-        newItemStatuses[i].status = 'processing';
-        updateBulkProgress();
+        // Poll Celery batch status every 2 seconds
+        let isDone = false;
+        const pollIntervalId = setInterval(async () => {
+          if (isDone) return;
+          try {
+            const status = await scoringService.getBatchStatus(batchId);
 
-        // Update persistent context
-        updateItemStatus(jobId, itemId, 'Scoring in progress');
+            // Merge item statuses into newItemStatuses (only advance, never regress)
+            if (status.items) {
+              for (const item of status.items) {
+                const idx = resumeIdToIndex.get(item.resume_id);
+                if (idx === undefined) continue;
+                const itemId = `${jobId}-${item.resume_id}`;
 
-        try {
-          const result = await scoringService.scoreResume(jobId, resumeId);
-          completed++;
-          console.log(`[ResumeScoringPage] Scored resume ${i + 1}/${resumeIds.length}`);
+                if (item.status === 'completed' && newItemStatuses[idx].status !== 'completed') {
+                  newItemStatuses[idx].status = 'completed';
+                  newItemStatuses[idx].score = item.overall_score ?? 0;
+                  updateItemStatus(jobId, itemId, 'Scored successfully', {
+                    score: item.overall_score ?? 0,
+                    matchResult: convertMatchStatus(item.match_status),
+                    scoredDateTime: new Date().toISOString(),
+                  });
+                } else if (item.status === 'failed' && newItemStatuses[idx].status !== 'failed') {
+                  newItemStatuses[idx].status = 'failed';
+                  newItemStatuses[idx].errorMessage = item.error_message || 'Scoring failed';
+                  updateItemStatus(jobId, itemId, 'Failed', {
+                    errorReason: item.error_message || 'Scoring failed',
+                  });
+                } else if (item.status === 'processing' && newItemStatuses[idx].status === 'queued') {
+                  newItemStatuses[idx].status = 'processing';
+                  updateItemStatus(jobId, itemId, 'Scoring in progress');
+                }
+              }
+            }
 
-          // Update item status to completed with score
-          newItemStatuses[i].status = 'completed';
-          newItemStatuses[i].score = result?.overall_score || result?.score || 0;
+            updateBulkProgress();
 
-          // Update persistent context with success
-          updateItemStatus(jobId, itemId, 'Scored successfully', {
-            score: result?.overall_score || result?.score || 0,
-            matchResult: convertMatchStatus(result?.match_status),
-            scoredDateTime: new Date().toISOString(),
-          });
-        } catch (err) {
-          console.error(`[ResumeScoringPage] Failed to score resume ${resumeId}:`, err);
-          failed++;
+            // All Celery workers finished?
+            if (status.queued === 0 && status.processing === 0 && status.total > 0) {
+              isDone = true;
+              clearInterval(pollIntervalId);
+              updateBulkProgress();
+              console.log(`[ResumeScoringPage] Celery scoring complete`);
 
-          // Update item status to failed
+              if (onRefreshHistory) {
+                console.log('[ResumeScoringPage] Refreshing scored history...');
+                await onRefreshHistory();
+                setShowProgressModal(false);
+                setPendingAutoSelectJdId(jobId);
+                router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
+              } else {
+                setTimeout(() => {
+                  window.location.href = `/recruitment/resume-scoring?jd_id=${jobId}`;
+                }, 2000);
+              }
+            }
+          } catch (pollErr) {
+            console.error(`[ResumeScoringPage] Batch poll error:`, pollErr);
+          }
+        }, 2000);
+      } catch (err) {
+        console.error(`[ResumeScoringPage] Failed to dispatch scoring batch:`, err);
+        toast.error('Failed to start scoring. Please try again.');
+        // Mark all queued items as failed so the modal shows the error
+        for (let i = 0; i < newItemStatuses.length; i++) {
           newItemStatuses[i].status = 'failed';
-          newItemStatuses[i].errorMessage = err instanceof Error ? err.message : 'Scoring failed';
-
-          // Update persistent context with failure
-          updateItemStatus(jobId, itemId, 'Failed', {
-            errorReason: err instanceof Error ? err.message : 'Scoring failed',
+          newItemStatuses[i].errorMessage = err instanceof Error ? err.message : 'Failed to start scoring';
+          updateItemStatus(jobId, `${jobId}-${resumeIds[i]}`, 'Failed', {
+            errorReason: err instanceof Error ? err.message : 'Failed to start scoring',
           });
         }
-
-        // Update progress after scoring
         updateBulkProgress();
-      }
-
-      // Final update - all done
-      updateBulkProgress();
-
-      console.log(`[ResumeScoringPage] Scoring complete: ${completed} succeeded (${alreadyScoredItems.length} already scored), ${failed} failed`);
-
-      // Refresh the scored history to show new results without full page reload
-      if (onRefreshHistory) {
-        console.log('[ResumeScoringPage] Refreshing scored history...');
-        await onRefreshHistory();
-        console.log('[ResumeScoringPage] Scored history refreshed, navigating to results');
-        setShowProgressModal(false);
-        // Trigger auto-navigation to the details view for this JD
-        setPendingAutoSelectJdId(jobId);
-        router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
-      } else {
-        // Fallback: Refresh page after a short delay
-        setTimeout(() => {
-          window.location.href = `/recruitment/resume-scoring?jd_id=${jobId}`;
-        }, 2000);
       }
     };
 

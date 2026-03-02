@@ -50,9 +50,15 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
       setTimeout(() => fetchNotificationCount(), 2000);
     };
 
+    // Debounce rapid consecutive events (e.g. scoring 7 resumes fires 7 events).
+    // Coalesce into a single quota refresh 1.5s after the last event.
+    const debounceRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
     const handleUnitsConsumed = () => {
-      console.log('[Header] Units consumed, refreshing quota...');
-      fetchQuotaStatus();
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        console.log('[Header] Units consumed (debounced), refreshing quota...');
+        fetchQuotaStatus();
+      }, 1500);
     };
 
     window.addEventListener('planChanged', handlePlanChange);
@@ -60,6 +66,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     return () => {
       window.removeEventListener('planChanged', handlePlanChange);
       window.removeEventListener('unitsConsumed', handleUnitsConsumed);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [user]);
 

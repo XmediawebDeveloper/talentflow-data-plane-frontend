@@ -8,7 +8,6 @@ import FeatureGate from '@/components/shared/FeatureGate';
 import teamService, { Team, TeamStats } from '@/lib/services/teamService';
 import authService, { User } from '@/lib/services/authService';
 import userService, { ApiUser } from '@/lib/services/userService';
-import TeamUsageSummary from '@/components/usage/TeamUsageSummary';
 import {
   TeamStatsCards,
   TeamCard,
@@ -19,6 +18,7 @@ import {
   EmptyState,
   TeamFormData,
   TeamAnalyticsDashboard,
+  TeamUsageAnalytics,
 } from '@/components/teams';
 
 const ITEMS_PER_PAGE = 6;
@@ -384,9 +384,7 @@ export default function TeamManagementPage() {
 
         {/* Usage Tab Content */}
         {activeTab === 'usage' ? (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <TeamUsageSummary userRole={currentUser?.role || 'standard_user'} />
-          </div>
+          <TeamUsageAnalytics />
         ) : activeTab === 'analytics' ? (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <TeamAnalyticsDashboard userRole={currentUser?.role || 'standard_user'} />

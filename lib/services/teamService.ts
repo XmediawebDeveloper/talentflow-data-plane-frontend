@@ -56,6 +56,7 @@ export interface TeamUsageSummary {
   };
   jds_created: number;
   assessments_created: number;
+  seats_used: number;
   note: string;
 }
 
@@ -97,6 +98,7 @@ export interface TeamMemberUsage {
   last_activity: string | null;
   jds_created: number;
   assessments_created: number;
+  seats_used: number;
 }
 
 export interface TeamMembersUsageSummary {
