@@ -8,7 +8,6 @@ import FeatureGate from '@/components/shared/FeatureGate';
 import teamService, { Team, TeamStats } from '@/lib/services/teamService';
 import authService, { User } from '@/lib/services/authService';
 import userService, { ApiUser } from '@/lib/services/userService';
-import TeamUsageSummary from '@/components/usage/TeamUsageSummary';
 import {
   TeamStatsCards,
   TeamCard,
@@ -19,6 +18,7 @@ import {
   EmptyState,
   TeamFormData,
   TeamAnalyticsDashboard,
+  TeamUsageAnalytics,
 } from '@/components/teams';
 
 const ITEMS_PER_PAGE = 6;
@@ -70,8 +70,11 @@ export default function TeamManagementPage() {
 
         if (!isMounted) return;
 
-        // Check permission
-        const hasPermission = userData.role === 'tenant_admin' || userData.permissions?.can_manage_users;
+        // Check permission — tenant_admin full access; recruiters with can_view_teams get read-only view
+        const hasPermission =
+          userData.role === 'tenant_admin' ||
+          userData.permissions?.can_view_teams ||
+          userData.permissions?.can_manage_users;
         if (!hasPermission) {
           toast.error('You do not have permission to access Team Management');
           router.push('/dashboard');
@@ -338,7 +341,7 @@ export default function TeamManagementPage() {
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs — Usage and Analytics are admin-only */}
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => setActiveTab('teams')}
@@ -351,35 +354,37 @@ export default function TeamManagementPage() {
             <Users className="w-4 h-4" />
             Teams
           </button>
-          <button
-            onClick={() => setActiveTab('usage')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-              activeTab === 'usage'
-                ? 'bg-gray-800 text-white'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            Team Usage
-          </button>
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-              activeTab === 'analytics'
-                ? 'bg-gray-800 text-white'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            <TrendingUp className="w-4 h-4" />
-            Analytics
-          </button>
+          {isTenantAdmin && (
+            <>
+              <button
+                onClick={() => setActiveTab('usage')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  activeTab === 'usage'
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Team Usage
+              </button>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  activeTab === 'analytics'
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" />
+                Analytics
+              </button>
+            </>
+          )}
         </div>
 
         {/* Usage Tab Content */}
         {activeTab === 'usage' ? (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <TeamUsageSummary userRole={currentUser?.role || 'standard_user'} />
-          </div>
+          <TeamUsageAnalytics />
         ) : activeTab === 'analytics' ? (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <TeamAnalyticsDashboard userRole={currentUser?.role || 'standard_user'} />
@@ -444,6 +449,7 @@ export default function TeamManagementPage() {
                 <TeamCard
                   key={team.id}
                   team={team}
+                  canManage={isTenantAdmin}
                   onViewDetails={handleViewDetails}
                   onManageTeam={handleManageTeam}
                 />

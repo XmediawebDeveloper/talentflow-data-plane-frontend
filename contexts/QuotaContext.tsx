@@ -153,7 +153,13 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
 
     try {
       fetchingRef.current = true;
-      setLoading(true);
+      // Only set loading=true on initial fetch (no data yet).
+      // Background refreshes (triggered by dispatchUnitsConsumed) should NOT
+      // set loading=true — doing so re-renders every QuotaContext consumer on
+      // every scoring/upload event, causing the page to flicker.
+      if (!quotaDataRef.current) {
+        setLoading(true);
+      }
       setError(null);
 
       console.log('[QuotaContext] Fetching quota-status...');

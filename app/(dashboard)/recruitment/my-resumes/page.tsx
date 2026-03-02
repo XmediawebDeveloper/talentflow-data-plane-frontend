@@ -612,8 +612,23 @@ export default function MyResumesPage() {
     e.stopPropagation();
     setRetryingBatches(prev => new Set(prev).add(batchId));
     try {
-      await resumeService.retryBatchItems(batchId);
-      toast.success('Retrying stuck items. No additional units deducted.');
+      const res = await resumeService.retryBatchItems(batchId);
+      const deducted = res?.units_deducted ?? 0;
+      toast.success(
+        deducted > 0
+          ? `Retrying items. ${deducted} unit(s) deducted for quota-exceeded files.`
+          : 'Retrying stuck items. No additional units deducted.'
+      );
+      // Refresh upload history so items show as "pending" and start polling for progress
+      const batches = await resumeService.listUploadBatches(50);
+      if (batches?.batches) {
+        setUploadHistory(prev => {
+          const otherBatches = prev.filter(r => r.source !== 'my-resumes');
+          const updated = batches.batches.map((b: any) => ({ ...b, source: 'my-resumes', statuses: b.items || [] }));
+          return [...otherBatches, ...updated];
+        });
+      }
+      startBatchPolling(batchId);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to retry batch items');
     } finally {
@@ -647,8 +662,23 @@ export default function MyResumesPage() {
     e.stopPropagation();
     setRetryingItems(prev => new Set(prev).add(itemId));
     try {
-      await resumeService.retryItem(batchId, itemId);
-      toast.success('Retrying file. No additional units deducted.');
+      const res = await resumeService.retryItem(batchId, itemId);
+      const deducted = res?.units_deducted ?? 0;
+      toast.success(
+        deducted > 0
+          ? 'Retrying file. 1 Resume Upload unit deducted.'
+          : 'Retrying file. No additional units deducted.'
+      );
+      // Refresh upload history so the item shows as "pending/queued" and start polling for progress
+      const batches = await resumeService.listUploadBatches(50);
+      if (batches?.batches) {
+        setUploadHistory(prev => {
+          const otherBatches = prev.filter(r => r.source !== 'my-resumes');
+          const updated = batches.batches.map((b: any) => ({ ...b, source: 'my-resumes', statuses: b.items || [] }));
+          return [...otherBatches, ...updated];
+        });
+      }
+      startBatchPolling(batchId);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to retry file');
     } finally {
@@ -679,6 +709,54 @@ export default function MyResumesPage() {
 
   // Ref to store active polling intervals for cleanup
   const pollingIntervalsRef = useRef<Set<NodeJS.Timeout>>(new Set());
+
+  // Start (or restart) polling for a batch — used after retry so items progress in real-time
+  const startBatchPolling = (batchId: string) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await resumeService.getBatchStatus(batchId);
+        setUploadHistory(prev => prev.map(record =>
+          record.id === batchId
+            ? {
+                ...record,
+                completed: status.completed,
+                pending: status.pending,
+                duplicated: status.duplicates,
+                versioned: status.versions,
+                errors: status.errors,
+                status: status.status,
+                statuses: status.items?.map((item: any) => ({
+                  id: item.id,
+                  fileName: item.file_name,
+                  status: item.status,
+                  errorMessage: item.error_message,
+                  candidateName: item.candidate_name,
+                  resumeId: item.resume_id,
+                })) || [],
+              }
+            : record
+        ));
+        const hasActiveItems = status.items?.some((item: any) =>
+          item.status === 'pending' || item.status === 'processing'
+        ) ?? false;
+        if (status.status === 'completed' || !hasActiveItems) {
+          clearInterval(pollInterval);
+          pollingIntervalsRef.current.delete(pollInterval);
+          fetchUploadHistory();
+          fetchData();
+        }
+      } catch {
+        clearInterval(pollInterval);
+        pollingIntervalsRef.current.delete(pollInterval);
+      }
+    }, 3000);
+    pollingIntervalsRef.current.add(pollInterval);
+    // Safety: stop polling after 10 minutes regardless
+    setTimeout(() => {
+      clearInterval(pollInterval);
+      pollingIntervalsRef.current.delete(pollInterval);
+    }, 600000);
+  };
 
   const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean) => {
     console.log('[FETCH] fetchData called', {

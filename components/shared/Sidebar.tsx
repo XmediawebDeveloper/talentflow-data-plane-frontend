@@ -341,16 +341,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       ]
     },
 
-    // REPORTS & ANALYTICS
-    {
-      id: 'reports',
-      label: 'REPORTS & ANALYTICS',
-      items: [
-        { id: 'team-usage', label: 'Team Usage Analytics', icon: Activity, href: '/reports/team-usage', permission: 'canViewAnalytics' },
-        // { id: 'performance-reports', label: 'Performance Reports', icon: TrendingUp, href: '/reports/performance-reports', permission: 'canViewAnalytics' },
-      ]
-    },
-
     // AUDITS & TRAIL - Tenant Admin Only
     {
       id: 'audits',

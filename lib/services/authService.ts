@@ -101,6 +101,8 @@ export interface User {
     can_view_billing?: boolean;
     can_view_invoices?: boolean;
     can_view_usage?: boolean;
+    // Teams
+    can_view_teams?: boolean;
     // RBAC06: Feature flags permissions - GRANULAR (VIEW + RUN)
     can_view_scoring?: boolean;      // NEW: View resume scoring page/results
     can_run_scoring?: boolean;       // Run scoring operations
