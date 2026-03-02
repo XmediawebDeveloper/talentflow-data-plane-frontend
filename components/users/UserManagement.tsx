@@ -327,6 +327,14 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       },
     ],
   },
+  {
+    id: 'teams',
+    name: 'Teams',
+    description: 'Team visibility permissions',
+    isMenuToggle: true,
+    viewCode: 'teams:view',
+    actions: [],
+  },
 ];
 
 // Helper to get all permission codes from custom categories
@@ -1525,6 +1533,7 @@ export default function UserManagement() {
         if (perm.code === 'bulk_operations:execute' && freshUserData.permissions.can_bulk_operations) hasPermission = true;
         if (perm.code === 'export:execute' && freshUserData.permissions.can_export) hasPermission = true;
         if (perm.code === 'api:access' && freshUserData.permissions.can_api_access) hasPermission = true;
+        if (perm.code === 'teams:view' && freshUserData.permissions.can_view_teams) hasPermission = true;
 
         if (hasPermission) {
           currentPermissionIds.add(perm.id);

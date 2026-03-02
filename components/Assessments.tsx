@@ -17,7 +17,7 @@ import { assessmentService } from '@/lib/services';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Send } from 'lucide-react';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import VersionBadge from './VersionBadge';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -115,6 +115,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     completed: 0,
     failed: 0,
   });
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [newEmailValue, setNewEmailValue] = useState('');
+  const [isSendingChangeEmail, setIsSendingChangeEmail] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
@@ -746,10 +749,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       // Calculate stats
       const stats = {
         total: invitations.length,
-        sent: invitations.filter((inv: any) => inv.status === 'sent' || inv.status === 'pending').length,
-        started: invitations.filter((inv: any) => inv.status === 'in_progress' || inv.started_at).length,
-        completed: invitations.filter((inv: any) => inv.status === 'completed').length,
-        failed: invitations.filter((inv: any) => inv.status === 'expired' || inv.status === 'failed').length,
+        sent: invitations.filter((inv: any) => inv.status === 'sent' || inv.status === 'pending' || inv.status === 'opened').length,
+        started: invitations.filter((inv: any) => inv.status === 'started' || (inv.started_at && inv.status !== 'completed')).length,
+        completed: invitations.filter((inv: any) => inv.status === 'completed' || inv.completed_at).length,
+        failed: invitations.filter((inv: any) => ['expired', 'failed', 'bounced', 'abandoned'].includes(inv.status)).length,
       };
       setInvitationStats(stats);
     } catch (error) {
@@ -760,20 +763,46 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  // Resend invitation
+  const isValidInviteEmail = (email: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  // Resend invitation to same candidate (uses resend endpoint, not invite — preserves same invitation record)
   const handleResendInvitation = async (invitation: any) => {
     try {
-      // Re-invite the candidate
-      await assessmentService.invite(selectedAssessmentForTracking.id, {
-        candidate_name: invitation.candidate_name,
-        candidate_email: invitation.candidate_email,
-      });
+      await api.post(
+        `/assessments/${selectedAssessmentForTracking.id}/invitations/${invitation.id}/resend`
+      );
       toast.success('Invitation resent successfully!');
-      // Reload invitations
       handleTrackInvites(selectedAssessmentForTracking);
     } catch (error) {
       console.error('Failed to resend invitation:', error);
       toast.error('Failed to resend invitation. Please try again.');
+    }
+  };
+
+  // Change email and resend for bounced invitations
+  const handleUpdateEmail = async (invitation: any) => {
+    if (!isValidInviteEmail(newEmailValue)) return;
+    setIsSendingChangeEmail(true);
+    try {
+      await api.patch(
+        `/assessments/${selectedAssessmentForTracking.id}/invitations/${invitation.id}/update-email`,
+        { new_email: newEmailValue.trim() }
+      );
+      setEditingEmailId(null);
+      setNewEmailValue('');
+      toast.success('Email updated and invitation resent!');
+      handleTrackInvites(selectedAssessmentForTracking);
+    } catch (error: any) {
+      console.error('Failed to update email:', error);
+      const msg =
+        error?.response?.data?.detail?.message ||
+        error?.response?.data?.message ||
+        (typeof error?.response?.data?.detail === 'string' ? error.response.data.detail : null) ||
+        'Failed to update email. Please try again.';
+      toast.error(msg);
+    } finally {
+      setIsSendingChangeEmail(false);
     }
   };
 
@@ -2551,6 +2580,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   setShowTrackInvitesModal(false);
                   setSelectedAssessmentForTracking(null);
                   setTrackingInvitations([]);
+                  setEditingEmailId(null);
+                  setNewEmailValue('');
                 }}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
@@ -2634,29 +2665,31 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <tbody className="divide-y divide-gray-100">
                     {trackingInvitations.map((invitation: any) => {
                       const getStatusBadge = (inv: any) => {
-                        // Status priority: completed > started > opened > sent > expired > failed > pending
-                        if (inv.status === 'completed') {
+                        const s = inv.status;
+                        if (s === 'completed' || inv.completed_at) {
                           return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Completed</span>;
                         }
-                        if (inv.status === 'started' || (inv.started_at && inv.status !== 'completed')) {
-                          return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> Started</span>;
-                        }
-                        if (inv.status === 'opened') {
-                          return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Link Opened</span>;
-                        }
-                        if (inv.status === 'sent' || inv.sent_at) {
-                          return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
-                        }
-                        if (inv.status === 'expired') {
-                          return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
-                        }
-                        if (inv.status === 'failed') {
+                        if (s === 'failed') {
                           return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Failed</span>;
                         }
-                        if (inv.status === 'abandoned') {
+                        if (s === 'bounced' || inv.bounced_at) {
+                          return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Bounced</span>;
+                        }
+                        if (s === 'expired') {
+                          return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
+                        }
+                        if (s === 'abandoned') {
                           return <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Abandoned</span>;
                         }
-                        // Default: pending
+                        if (s === 'started' || inv.started_at) {
+                          return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> Started</span>;
+                        }
+                        if (s === 'opened' || inv.opened_at) {
+                          return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Link Opened</span>;
+                        }
+                        if (s === 'sent' || inv.sent_at) {
+                          return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
+                        }
                         return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
                       };
 
@@ -2692,7 +2725,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </div>
                           </td>
                           <td className="py-3 px-4">
-                            {getStatusBadge(invitation)}
+                            <div>
+                              {getStatusBadge(invitation)}
+                              {invitation.status === 'failed' && (
+                                <p className="text-xs text-red-500 mt-1">Incorrect Email</p>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-4 text-xs text-gray-500">
                             <div className="space-y-1">
@@ -2700,6 +2738,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <div className="flex items-center gap-2">
                                   <Mail className="w-3 h-3 text-gray-500" />
                                   <span>Sent: {formatDate(invitation.sent_at)}</span>
+                                </div>
+                              )}
+                              {invitation.bounced_at && (
+                                <div className="flex items-center gap-2">
+                                  <RefreshCw className="w-3 h-3 text-red-500" />
+                                  <span className="text-red-600">Bounced: {formatDate(invitation.bounced_at)}</span>
                                 </div>
                               )}
                               {invitation.started_at && (
@@ -2771,7 +2815,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             )}
                           </td>
                           <td className="py-3 px-4">
-                            {invitation.status === 'completed' ? (
+                            {(invitation.status === 'completed' || invitation.completed_at) ? (
                               <button
                                 onClick={() => router.push(`/recruitment/assessments/${selectedAssessmentForTracking.id}/results`)}
                                 className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
@@ -2779,6 +2823,43 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <Eye className="w-3.5 h-3.5" />
                                 View Results
                               </button>
+                            ) : invitation.status === 'bounced' ? (
+                              editingEmailId === invitation.id ? (
+                                <div className="flex flex-col gap-1.5 min-w-[190px]">
+                                  <input
+                                    type="email"
+                                    value={newEmailValue}
+                                    onChange={e => setNewEmailValue(e.target.value)}
+                                    placeholder="new@email.com"
+                                    className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => handleUpdateEmail(invitation)}
+                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail}
+                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      {isSendingChangeEmail ? 'Sending…' : 'Send'}
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
+                                      className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
+                                  className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-400 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors whitespace-nowrap"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  Change Email
+                                </button>
+                              )
                             ) : invitation.status === 'failed' ? (
                               <button
                                 onClick={() => handleResendInvitation(invitation)}
@@ -2807,6 +2888,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   setShowTrackInvitesModal(false);
                   setSelectedAssessmentForTracking(null);
                   setTrackingInvitations([]);
+                  setEditingEmailId(null);
+                  setNewEmailValue('');
                 }}
                 className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
               >

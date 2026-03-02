@@ -76,6 +76,9 @@ export interface Permission {
   canManageBranding?: boolean;
   canManageSecuritySettings?: boolean;
 
+  // Teams
+  canViewTeams?: boolean;
+
   // RBAC06: Feature flags
   canViewScoring?: boolean;      // NEW: View resume scoring page/results
   canRunScoring?: boolean;       // Run scoring operations

@@ -203,6 +203,8 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canManageApiManagement: apiUser.permissions.can_manage_api_management,
       canManageBranding: apiUser.permissions.can_manage_branding,
       canManageSecuritySettings: apiUser.permissions.can_manage_security_settings,
+      // Teams
+      canViewTeams: apiUser.permissions.can_view_teams,
       // RBAC06: Feature permissions
       canViewScoring: apiUser.permissions.can_view_scoring,
       canRunScoring: apiUser.permissions.can_run_scoring,
