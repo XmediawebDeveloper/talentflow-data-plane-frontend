@@ -17,10 +17,23 @@ import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
 
+interface FaceVerificationHandle {
+  startVerification: (videoElement: HTMLVideoElement) => void;
+  stopVerification: () => void;
+  hasBaseline: () => boolean;
+}
+
+interface VoiceVerificationHandle {
+  verifyVoice: (audioData: Float32Array, sampleRate: number) => void;
+  hasBaseline: () => boolean;
+}
+
 interface InterviewUIProps {
   token: string;
   interviewInfo: CandidateInterviewInfo;
   onInterviewComplete?: () => void;
+  faceVerification?: FaceVerificationHandle;
+  voiceVerification?: VoiceVerificationHandle;
 }
 
 interface Message {
@@ -29,7 +42,7 @@ interface Message {
   content: string;
 }
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVerification, voiceVerification }: InterviewUIProps) {
   // State
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -43,10 +56,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
   // Interview closing state
   const [isClosing, setIsClosing] = useState(false);
+  const isClosingRef = useRef(false);
   const [closingReason, setClosingReason] = useState<string>("");
   const [questionCount, setQuestionCount] = useState(0);
   const [duration, setDuration] = useState(0);
   const shouldDisconnectAfterAudioRef = useRef(false);
+
+  // 5-minute buffer state (MOM: buffer when allocated time expires)
+  const [isInBuffer, setIsInBuffer] = useState(false);
 
   // Figma UI state
   const [waveHeights, setWaveHeights] = useState<number[]>(Array(30).fill(4));
@@ -61,14 +78,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const isUnmountedRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
 
-  // Countdown timer
-  const [remainingSeconds, setRemainingSeconds] = useState(interviewInfo.duration_minutes * 60);
+  // Countdown timer (flexible mode = duration 0 → count UP instead)
+  const isFlexibleMode = interviewInfo.duration_minutes === 0;
+  const [remainingSeconds, setRemainingSeconds] = useState(isFlexibleMode ? 0 : interviewInfo.duration_minutes * 60);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!isConnected || isClosing) return;
     timerIntervalRef.current = setInterval(() => {
       setRemainingSeconds(prev => {
+        if (isFlexibleMode) return prev + 1; // count up
         if (prev <= 1) {
           if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
           return 0;
@@ -79,7 +98,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [isConnected, isClosing]);
+  }, [isConnected, isClosing, isFlexibleMode]);
 
   // Waveform animation — driven by isAiSpeaking
   useEffect(() => {
@@ -110,6 +129,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   // Webcam ref for hand detection
   const webcamRef = useRef<WebcamRef>(null);
   const [webcamReady, setWebcamReady] = useState(false);
+
+  // Avatar ready state — WebSocket connects only after avatar is loaded
+  const [avatarReady, setAvatarReady] = useState(false);
 
   // Video recording refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -224,6 +246,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     emitEvent('gaze_away', { direction });
   }, [emitEvent]);
 
+  // Face verification event handlers (identity check, not just presence)
+  useEffect(() => {
+    if (!faceVerification || !isConnected) return;
+    // The faceVerification hook calls callbacks internally, but we need to wire
+    // them to emitEvent. Since the callbacks are set at hook creation time in the
+    // portal, we handle this via a subscription-like pattern in InterviewUI.
+    // The callbacks are already set up in CandidateAIInterviewPortal if needed.
+    // Here we just ensure cleanup on unmount.
+    return () => {
+      faceVerification.stopVerification();
+    };
+  }, [faceVerification, isConnected]);
+
   const faceDetection = useInterviewFaceDetection({
     enabled: isConnected && webcamReady,
     enableGazeTracking: true,
@@ -271,7 +306,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         }
       }
     }
-  }, [handDetection.setVideoElement, faceDetection.setVideoElement]);
+    // Start face verification if baseline is registered
+    if (faceVerification?.hasBaseline()) {
+      faceVerification.startVerification(video);
+    }
+  }, [handDetection.setVideoElement, faceDetection.setVideoElement, faceVerification]);
 
   // TalkingHead avatar ref — visual lip-sync (audio played by Web Audio API separately)
   const talkingHeadRef   = useRef<TalkingHeadHandle>(null);
@@ -288,6 +327,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<ScriptProcessorNode | null>(null);
   const recordingContextRef = useRef<AudioContext | null>(null);
+  const voiceVerifBufferRef = useRef<Float32Array[]>([]);
   const audioQueueRef = useRef<AudioBuffer[]>([]); // kept for proctoring load-shedding count only
   const isPlayingRef = useRef(false);
   // Scheduled playback — gapless audio via Web Audio API clock
@@ -706,8 +746,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         revealedCharsRef.current = 0;
         stopRevealingTokens();
         break;
+      case "buffer_started":
+        // MOM: 5-minute buffer when allocated time expires
+        setIsInBuffer(true);
+        setRemainingSeconds((data.buffer_minutes ?? 5) * 60);
+        setStatus(`Buffer time: ${data.buffer_minutes ?? 5} minutes remaining`);
+        break;
       case "interview_closing":
-        setIsClosing(true);
+        setIsClosing(true); isClosingRef.current = true;
         setClosingReason(data.reason);
         setQuestionCount(data.question_count);
         setDuration(data.duration_minutes);
@@ -716,6 +762,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       case "interview_ended":
         setStatus("Linda is saying goodbye...");
         shouldDisconnectAfterAudioRef.current = true;
+        break;
+      case "interview_complete":
+        // Server-side forced completion (e.g., post-closing turn limit)
+        setIsClosing(true); isClosingRef.current = true;
+        shouldDisconnectAfterAudioRef.current = true;
+        setStatus("Interview completed. Thank you!");
+        disconnect();
         break;
       case "language_error":
         // Stop current recording first (otherwise startRecordingInternal
@@ -780,6 +833,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     stopWebSpeechRecognition();
     clearNoResponseTimer();
 
+    // Voice verification: compare this turn's audio with enrolled baseline
+    if (voiceVerification?.hasBaseline() && voiceVerifBufferRef.current.length > 0) {
+      const chunks = voiceVerifBufferRef.current;
+      const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+      const combined = new Float32Array(totalLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        combined.set(chunk, offset);
+        offset += chunk.length;
+      }
+      const sampleRate = recordingContextRef.current?.sampleRate || 44100;
+      voiceVerification.verifyVoice(combined, sampleRate);
+    }
+    voiceVerifBufferRef.current = [];
+
     setTimeout(() => {
       mediaStreamRef.current?.getTracks().forEach(t => t.stop());
       processorRef.current?.disconnect();
@@ -792,7 +860,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
         wsRef.current.send(JSON.stringify({ type: "end_turn" }));
       }
     }, 100);
-  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer]);
+  }, [avatarState, stopWebSpeechRecognition, clearNoResponseTimer, voiceVerification]);
 
   // Stop recording silently (no end_turn) — used for no-response flow
   const stopRecordingSilent = useCallback(() => {
@@ -872,6 +940,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       processor.onaudioprocess = (e) => {
         if (!isRecordingRef.current) return;
         const input = e.inputBuffer.getChannelData(0);
+
+        // Collect raw audio at native sample rate for voice verification
+        if (voiceVerification?.hasBaseline()) {
+          voiceVerifBufferRef.current.push(new Float32Array(input));
+        }
+
         let sum = 0;
         for (let i = 0; i < input.length; i++) { sum += Math.abs(input[i]); }
         const avgLevel = sum / input.length;
@@ -955,12 +1029,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     }
     setShowMicPopup(false);
     noResponseRetryRef.current = 0;
-    wsRef.current?.close();
+    wsRef.current?.close(1000, "Interview completed");
     setIsConnected(false);
     setIsRecording(false);
     setIsProcessing(false);
     setIsAiSpeaking(false);
-    shouldDisconnectAfterAudioRef.current = false;
     // thStreamActive no longer used
     audioQueueRef.current = [];
     isPlayingRef.current = false;
@@ -1001,7 +1074,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       content: closingMsg,
     }]);
     setStatus("Interview ending...");
-    setIsClosing(true);
+    setIsClosing(true); isClosingRef.current = true;
 
     speakViaTTS(closingMsg, () => {
       disconnect();
@@ -1111,11 +1184,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
     ws.onclose = (event) => {
       setIsConnected(false);
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
-      if (event.code === 1000 || shouldDisconnectAfterAudioRef.current) {
+      if (event.code === 1000 || shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
         setStatus("Interview completed. Thank you!");
         uploadRecording();
         onInterviewComplete?.();
-      } else if (event.code !== 3001 && !isUnmountedRef.current) {
+      } else if (event.code !== 3001 && !isUnmountedRef.current && !isClosingRef.current) {
         // Unexpected disconnection — attempt auto-reconnect (max 3 times)
         const attempt = ++reconnectAttemptsRef.current;
         if (attempt <= 3) {
@@ -1160,10 +1233,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       });
   }, []);
 
-  // Auto-connect once on mount (refs keep handlers fresh without reconnecting)
+  // Connect WebSocket only after avatar is ready (so greeting plays with visible avatar)
   useEffect(() => {
+    if (!avatarReady) return;
     isUnmountedRef.current = false;
-    const timer = setTimeout(() => { connect(); }, 300);
+    const timer = setTimeout(() => { connect(); }, 100);
     return () => {
       isUnmountedRef.current = true;
       clearTimeout(timer);
@@ -1182,7 +1256,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
       processorRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [avatarReady]);
 
   // Auto-scroll
   useEffect(() => {
@@ -1298,15 +1372,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
             {/* Center: Timer + status */}
             <div className="hidden md:flex items-center gap-4 lg:gap-6">
               <div className={`flex items-center gap-2 px-3 lg:px-4 py-1.5 rounded-full border ${
-                remainingSeconds <= 60
+                isFlexibleMode
+                  ? 'bg-white/[0.04] border-white/[0.06]'
+                  : isInBuffer
+                  ? 'bg-amber-500/10 border-amber-500/20'
+                  : remainingSeconds <= 60
                   ? 'bg-[#EF4444]/10 border-[#EF4444]/20'
                   : 'bg-white/[0.04] border-white/[0.06]'
               }`}>
-                <Timer className="w-3.5 h-3.5 text-[#94A3B8]" />
-                <div className={`w-2 h-2 rounded-full animate-pulse ${remainingSeconds <= 60 ? 'bg-[#EF4444]' : 'bg-[#10B981]'}`} />
-                <span className={`tabular-nums ${remainingSeconds <= 60 ? 'text-[#EF4444]' : 'text-white'}`} style={{ fontSize: 14, fontWeight: 600, letterSpacing: 0.5 }}>
+                <Timer className={`w-3.5 h-3.5 ${isFlexibleMode ? 'text-[#94A3B8]' : isInBuffer ? 'text-amber-400' : 'text-[#94A3B8]'}`} />
+                <div className={`w-2 h-2 rounded-full animate-pulse ${isFlexibleMode ? 'bg-[#10B981]' : isInBuffer ? 'bg-amber-400' : remainingSeconds <= 60 ? 'bg-[#EF4444]' : 'bg-[#10B981]'}`} />
+                <span className={`tabular-nums ${isFlexibleMode ? 'text-white' : isInBuffer ? 'text-amber-400' : remainingSeconds <= 60 ? 'text-[#EF4444]' : 'text-white'}`} style={{ fontSize: 14, fontWeight: 600, letterSpacing: 0.5 }}>
                   {formatTime(remainingSeconds)}
                 </span>
+                {isFlexibleMode && (
+                  <span className="text-[#94A3B8] ml-0.5" style={{ fontSize: 10, fontWeight: 600 }}>ELAPSED</span>
+                )}
+                {isInBuffer && !isFlexibleMode && (
+                  <span className="text-amber-400 ml-0.5" style={{ fontSize: 10, fontWeight: 600 }}>BUFFER</span>
+                )}
               </div>
               {isClosing && (
                 <div className="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-sm font-medium animate-pulse">Ending...</div>
@@ -1320,14 +1404,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
 
             {/* Mobile: compact timer */}
             <div className="flex md:hidden items-center gap-2">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06]">
-                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${remainingSeconds <= 60 ? 'bg-[#EF4444]' : 'bg-[#10B981]'}`} />
-                <span className="text-white tabular-nums" style={{ fontSize: 12, fontWeight: 600 }}>{formatTime(remainingSeconds)}</span>
+              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${isInBuffer && !isFlexibleMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-white/[0.04] border-white/[0.06]'}`}>
+                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isFlexibleMode ? 'bg-[#10B981]' : isInBuffer ? 'bg-amber-400' : remainingSeconds <= 60 ? 'bg-[#EF4444]' : 'bg-[#10B981]'}`} />
+                <span className={`tabular-nums ${isInBuffer && !isFlexibleMode ? 'text-amber-400' : 'text-white'}`} style={{ fontSize: 12, fontWeight: 600 }}>{formatTime(remainingSeconds)}</span>
               </div>
             </div>
 
-            {/* Right: End interview */}
+            {/* Right: Identity badge + End interview */}
             <div className="flex items-center gap-1.5 lg:gap-2">
+              {/* Identity Verification badge */}
+              {(faceVerification || voiceVerification) && (
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#10B981]/10 border border-[#10B981]/15">
+                  <ShieldCheck className="w-3 h-3 text-[#10B981]" />
+                  <span className="text-[#10B981]" style={{ fontSize: 10, fontWeight: 600 }}>ID VERIFIED</span>
+                </div>
+              )}
               <button
                 onClick={() => setShowEndConfirm(true)}
                 disabled={!isConnected}
@@ -1372,6 +1463,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete }: Inter
                 <TalkingHeadAvatar
                   ref={talkingHeadRef}
                   avatarUrl="/avatar.glb"
+                  onReady={() => setAvatarReady(true)}
                   className="w-full rounded-none"
                   style={{
                     height: '220%',

@@ -275,6 +275,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                 {config.created_by_name && (
                   <span>by {config.created_by_name}</span>
                 )}
+                {config.available_languages && config.available_languages.length > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Globe className="w-3.5 h-3.5" />
+                    {config.available_languages.join(', ')}
+                  </span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">

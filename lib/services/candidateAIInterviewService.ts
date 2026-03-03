@@ -23,6 +23,19 @@ export interface CandidateInterviewInfo {
   status: string;
   consent_accepted_at?: string;
   system_check_passed: boolean;
+  available_languages?: string[];
+  selected_language?: string | null;
+}
+
+export interface AvailableLanguagesResponse {
+  available_languages: string[];
+  selected_language: string | null;
+}
+
+export interface LanguageSelectionResponse {
+  success: boolean;
+  selected_language: string;
+  message: string;
 }
 
 export interface CandidateConsentRequest {
@@ -106,6 +119,21 @@ export const candidateAIInterviewService = {
       `/candidate/ai-interview/${token}/upload-recording`,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return response.data;
+  },
+
+  async getAvailableLanguages(token: string): Promise<AvailableLanguagesResponse> {
+    const response = await candidateApi.get<AvailableLanguagesResponse>(
+      `/candidate/ai-interview/${token}/languages`,
+    );
+    return response.data;
+  },
+
+  async selectLanguage(token: string, language: string): Promise<LanguageSelectionResponse> {
+    const response = await candidateApi.post<LanguageSelectionResponse>(
+      `/candidate/ai-interview/${token}/select-language`,
+      { language },
     );
     return response.data;
   },

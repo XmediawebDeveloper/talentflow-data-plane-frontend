@@ -67,6 +67,10 @@ const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
   face_missing: 8000,
   multiple_faces: 8000,
   gaze_away: 8000,
+  face_mismatch: 10000,
+  face_identity_changed: 15000,
+  voice_mismatch: 10000,
+  voice_identity_changed: 15000,
 };
 
 // Backend batch flush interval

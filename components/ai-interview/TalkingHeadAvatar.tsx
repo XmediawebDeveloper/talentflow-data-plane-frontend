@@ -42,10 +42,11 @@ interface Props {
   avatarUrl: string;
   className?: string;
   style?: React.CSSProperties;
+  onReady?: () => void;
 }
 
 export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
-  function TalkingHeadAvatar({ avatarUrl, className, style }, ref) {
+  function TalkingHeadAvatar({ avatarUrl, className, style, onReady }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const headRef      = useRef<any>(null);
     const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -144,6 +145,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
           headRef.current = head;
           setStatus("ready");
+          onReady?.();
           console.log("[TalkingHead] Avatar ready");
         } catch (err) {
           console.error("[TalkingHead] Failed to load avatar:", err);

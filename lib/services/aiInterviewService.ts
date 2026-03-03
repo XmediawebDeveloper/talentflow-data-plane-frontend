@@ -56,6 +56,8 @@ export interface AIInterviewUpdate {
   custom_questions?: string[];
   special_instructions?: string;
   status?: string;
+  rounds_config?: AIInterviewRoundConfig[];
+  save_as_draft?: boolean;
 }
 
 export interface TopicSuggestionResponse {
@@ -127,6 +129,8 @@ export interface AIInterviewResponse {
   send_email_reminder: boolean;
   enable_ai_analysis: boolean;
   ai_voice_language: string;
+  available_languages?: string[];
+  selected_language?: string;
   custom_questions?: string[];
   special_instructions?: string;
   score?: number;

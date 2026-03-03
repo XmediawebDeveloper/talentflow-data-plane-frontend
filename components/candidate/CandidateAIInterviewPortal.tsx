@@ -1,15 +1,18 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Video, CheckCircle, X, Play, Info, AlertTriangle, FileText, Loader2, Mic, Eye, Monitor, Camera, Wifi, Cpu, Circle, RefreshCw, Sun, Volume2 } from 'lucide-react';
+import { Video, CheckCircle, X, Play, Info, AlertTriangle, FileText, Loader2, Mic, Eye, Monitor, Camera, Wifi, Cpu, Circle, RefreshCw, Sun, Volume2, Globe } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
 import { InterviewUI } from '@/components/ai-interview/InterviewUI';
+import { useInterviewFaceVerification } from '@/components/ai-interview/proctoring/InterviewFaceVerification';
+import { useInterviewVoiceVerification } from '@/components/ai-interview/proctoring/InterviewVoiceVerification';
+import { InterviewEventBus } from '@/components/ai-interview/proctoring/InterviewEventBus';
 import { getUserMedia, requestFullscreen } from '@/lib/utils/browserCompat';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
-type Step = 'loading' | 'consent' | 'system_check' | 'interview' | 'completed' | 'error';
+type Step = 'loading' | 'consent' | 'system_check' | 'language_select' | 'interview' | 'completed' | 'error';
 
 interface Props {
   token: string;
@@ -23,14 +26,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [errorMessage, setErrorMessage] = useState('');
 
   // Consent state
-  const [consentVideo, setConsentVideo] = useState(false);
-  const [consentAudio, setConsentAudio] = useState(false);
-  const [consentBiometric, setConsentBiometric] = useState(false);
-  const [consentAI, setConsentAI] = useState(false);
+  const [consentRecordingAI, setConsentRecordingAI] = useState(false);
   const [consentTerms, setConsentTerms] = useState(false);
   const [consentSubmitting, setConsentSubmitting] = useState(false);
 
-  const allConsentsChecked = consentVideo && consentAudio && consentBiometric && consentAI && consentTerms;
+  const allConsentsChecked = consentRecordingAI && consentTerms;
 
   // System check state
   const [cameraStatus, setCameraStatus] = useState<'checking' | 'granted' | 'denied'>('checking');
@@ -53,6 +53,31 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const micQualityAudioContextRef = useRef<AudioContext | null>(null);
 
+  // Language selection state
+  const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('English');
+  const [languageSubmitting, setLanguageSubmitting] = useState(false);
+
+  // Face & voice verification — callbacks emit events via InterviewEventBus
+  const faceVerification = useInterviewFaceVerification({
+    onFaceMismatch: (distance) => {
+      InterviewEventBus.emit('face_mismatch', { distance: distance.toFixed(3) });
+    },
+    onFaceIdentityChanged: (distance) => {
+      InterviewEventBus.emit('face_identity_changed', { distance: distance.toFixed(3) });
+    },
+  });
+  const voiceVerification = useInterviewVoiceVerification({
+    onVoiceMismatch: (similarity) => {
+      InterviewEventBus.emit('voice_mismatch', { similarity: similarity.toFixed(3) });
+    },
+    onVoiceIdentityChanged: (similarity) => {
+      InterviewEventBus.emit('voice_identity_changed', { similarity: similarity.toFixed(3) });
+    },
+  });
+  const [faceEnrollStatus, setFaceEnrollStatus] = useState<'idle' | 'enrolling' | 'done' | 'failed'>('idle');
+  const [voiceEnrollStatus, setVoiceEnrollStatus] = useState<'idle' | 'enrolling' | 'done' | 'failed'>('idle');
+
   const allChecksReady =
     cameraStatus === 'granted'
     && micStatus === 'granted'
@@ -70,6 +95,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       setStep('loading');
       const info = await candidateAIInterviewService.getInterviewInfo(token);
       setInterview(info);
+
+      // Populate available languages from interview config
+      if (info.available_languages?.length) {
+        setAvailableLanguages(info.available_languages);
+        setSelectedLanguage(info.selected_language || info.available_languages[0]);
+      }
 
       // Determine initial step based on interview status
       if (info.status === 'system_check') {
@@ -318,6 +349,24 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       setCameraStatus('granted');
       setMicStatus('granted');
 
+      // Start face enrollment after a short delay for video to stabilize
+      // Wrapped in try/catch so any failure is graceful and doesn't freeze UI
+      if (videoRef.current) {
+        const videoEl = videoRef.current;
+        setTimeout(() => {
+          setFaceEnrollStatus('enrolling');
+          faceVerification.registerFace(videoEl)
+            .then(ok => setFaceEnrollStatus(ok ? 'done' : 'failed'))
+            .catch(() => setFaceEnrollStatus('failed'));
+        }, 3000); // 3s delay for video + camera to fully stabilize
+      }
+
+      // Start voice enrollment (records 10s of speech)
+      setVoiceEnrollStatus('enrolling');
+      voiceVerification.enrollVoice(stream, 10000)
+        .then(ok => setVoiceEnrollStatus(ok ? 'done' : 'failed'))
+        .catch(() => setVoiceEnrollStatus('failed'));
+
       // Start mic quality measurement
       checkMicrophoneQuality(stream);
 
@@ -348,6 +397,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   useEffect(() => {
     if (step === 'system_check') {
       runSystemChecks();
+      // Preload avatar assets so interview starts instantly after system check
+      // These fetch calls just warm the browser cache — no processing needed
+      fetch('/talkinghead/talkinghead.mjs').catch(() => {});
+      fetch('/avatar.glb').catch(() => {});
     }
     return () => {
       cleanupAllChecks();
@@ -361,10 +414,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     setConsentSubmitting(true);
     try {
       const result = await candidateAIInterviewService.recordConsent(token, {
-        consent_video: consentVideo,
-        consent_audio: consentAudio,
-        consent_biometric: consentBiometric,
-        consent_ai_analysis: consentAI,
+        consent_video: consentRecordingAI,
+        consent_audio: consentRecordingAI,
+        consent_biometric: consentRecordingAI,
+        consent_ai_analysis: consentRecordingAI,
         consent_terms: consentTerms,
       });
       setInterview(result);
@@ -407,6 +460,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
       stopMediaStream();
 
+      // Save selected language (non-blocking if fails — defaults to English on server)
+      try {
+        await candidateAIInterviewService.selectLanguage(token, selectedLanguage);
+      } catch {
+        // Non-blocking — language defaults to English on server
+      }
+
       const result = await candidateAIInterviewService.startInterview(token);
       setInterview(result);
       setStep('interview');
@@ -428,7 +488,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== LOADING ==========
   if (step === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
           <p className="text-sm text-gray-500">Loading interview...</p>
@@ -440,8 +500,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== ERROR ==========
   if (step === 'error') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md text-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="max-w-md w-full text-center">
           <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
             <AlertTriangle className="w-8 h-8 text-gray-500" />
           </div>
@@ -459,6 +519,91 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     );
   }
 
+  // ========== LANGUAGE SELECTION ==========
+  if (step === 'language_select' && interview) {
+    const handleLanguageSubmit = async () => {
+      if (languageSubmitting) return;
+      setLanguageSubmitting(true);
+      try {
+        await candidateAIInterviewService.selectLanguage(token, selectedLanguage);
+        const result = await candidateAIInterviewService.startInterview(token);
+        setInterview(result);
+        setStep('interview');
+      } catch (err: any) {
+        const detail = err?.response?.data?.detail || 'Failed to start interview';
+        if (detail.includes('completed') || detail.includes('cancelled') || detail.includes('expired')) {
+          await loadInterview();
+        } else {
+          setErrorMessage(detail);
+          setStep('error');
+        }
+      } finally {
+        setLanguageSubmitting(false);
+      }
+    };
+
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        {/* Header */}
+        <div className="sticky top-0 z-50 bg-gray-900 px-4 sm:px-8 py-4 sm:py-5 shadow-lg">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2 sm:gap-3 mb-1">
+              <Globe className="w-5 h-5 text-gray-300" />
+              <h1 className="text-white text-base sm:text-lg font-semibold">Select Interview Language</h1>
+            </div>
+            <p className="text-gray-400 text-xs sm:text-sm">
+              {interview.candidate_name} &bull; {interview.position}
+            </p>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 flex items-center justify-center px-4 sm:px-8 py-8 sm:py-12">
+          <div className="max-w-md w-full space-y-6">
+            <div className="text-center">
+              <Globe className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">Choose Your Preferred Language</h2>
+              <p className="text-sm text-gray-600">
+                The AI interviewer will conduct the entire interview in your selected language.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {availableLanguages.map(lang => (
+                <button
+                  key={lang}
+                  onClick={() => setSelectedLanguage(lang)}
+                  className={`w-full text-left px-4 py-3 rounded-lg border transition-colors ${
+                    selectedLanguage === lang
+                      ? 'border-gray-800 bg-gray-50 ring-1 ring-gray-800'
+                      : 'border-gray-200 bg-white hover:border-gray-300'
+                  }`}
+                >
+                  <span className={`text-sm font-medium ${selectedLanguage === lang ? 'text-gray-900' : 'text-gray-700'}`}>
+                    {lang}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={handleLanguageSubmit}
+              disabled={languageSubmitting}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              {languageSubmitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4" />
+              )}
+              {languageSubmitting ? 'Starting Interview...' : `Start Interview in ${selectedLanguage}`}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ========== INTERVIEW (live AI interview) ==========
   if (step === 'interview' && interview) {
     return (
@@ -466,6 +611,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         token={token}
         interviewInfo={interview}
         onInterviewComplete={() => setStep('completed')}
+        faceVerification={faceVerification.hasBaseline() ? faceVerification : undefined}
+        voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
       />
     );
   }
@@ -473,8 +620,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== COMPLETED ==========
   if (step === 'completed') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md text-center">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="max-w-md w-full text-center">
           <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-gray-800" />
           </div>
@@ -538,13 +685,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
         {/* Sticky Header */}
-        <div className="sticky top-0 z-50 bg-gray-900 px-8 py-5 shadow-lg">
+        <div className="sticky top-0 z-50 bg-gray-900 px-4 sm:px-8 py-4 sm:py-5 shadow-lg">
           <div className="text-center">
-            <div className="flex items-center justify-center gap-3 mb-1">
-              <Video className="w-5 h-5 text-gray-300" />
-              <h1 className="text-white text-lg font-semibold">Pre-Interview System Check</h1>
+            <div className="flex items-center justify-center gap-2 sm:gap-3 mb-1">
+              <Video className="w-5 h-5 text-gray-300 hidden sm:block" />
+              <h1 className="text-white text-base sm:text-lg font-semibold">Pre-Interview System Check</h1>
             </div>
-            <p className="text-gray-400 text-sm">
+            <p className="text-gray-400 text-xs sm:text-sm">
               {interview.candidate_name} &bull; {interview.position}
             </p>
           </div>
@@ -554,7 +701,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         <div className="flex-1 bg-white">
 
           {/* Section 1: Info Banner */}
-          <div className="px-8 py-5 bg-gray-50 border-b border-gray-200">
+          <div className="px-4 sm:px-8 py-4 sm:py-5 bg-gray-50 border-b border-gray-200">
             <div className="flex items-start gap-3">
               <Info className="w-5 h-5 text-gray-500 mt-0.5 flex-shrink-0" />
               <p className="text-sm text-gray-600">
@@ -563,43 +710,102 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
           </div>
 
-          {/* Section 2: Video Preview */}
-          <div className="px-8 py-6 border-b border-gray-200">
+          {/* Section 2: Video Preview + Identity Verification */}
+          <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-gray-200">
             <div className="flex items-center gap-2 mb-3">
               <Video className="w-5 h-5 text-gray-500" />
-              <h2 className="font-semibold text-gray-900">Video Preview</h2>
+              <h2 className="font-semibold text-gray-900 text-sm sm:text-base">Video Preview & Identity</h2>
             </div>
-            <div className="flex justify-start">
-              <div className="relative bg-gray-900 rounded-lg overflow-hidden w-64" style={{ aspectRatio: '4/3' }}>
-                <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-                {cameraStatus === 'checking' && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <Loader2 className="w-10 h-10 text-gray-500 animate-spin mb-3" />
-                    <p className="text-gray-400 text-sm">Requesting camera access...</p>
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+              {/* Video */}
+              <div className="flex justify-center sm:justify-start shrink-0">
+                <div className="relative bg-gray-900 rounded-lg overflow-hidden w-full max-w-[16rem] sm:w-64" style={{ aspectRatio: '4/3' }}>
+                  <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                  {cameraStatus === 'checking' && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <Loader2 className="w-10 h-10 text-gray-500 animate-spin mb-3" />
+                      <p className="text-gray-400 text-sm">Requesting camera access...</p>
+                    </div>
+                  )}
+                  {cameraStatus === 'denied' && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <Camera className="w-10 h-10 text-gray-600 mb-3" />
+                      <p className="text-gray-400 text-xs sm:text-sm px-2 text-center">Camera access denied. Please allow camera permissions.</p>
+                    </div>
+                  )}
+                  {cameraStatus !== 'granted' && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                      <p className="text-gray-500 text-sm">Camera Preview</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Identity Verification — next to video */}
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <Eye className="w-4 h-4 text-gray-500" />
+                  <span className="font-medium text-gray-900 text-sm">Identity Verification</span>
+                </div>
+                <p className="text-xs text-gray-500 mb-2">
+                  Look at the camera and speak naturally to register your identity.
+                </p>
+                {/* Face */}
+                <div className={`flex items-center gap-3 p-2.5 rounded-lg ${
+                  faceEnrollStatus === 'failed' ? 'bg-amber-50' : 'bg-gray-50'
+                }`}>
+                  {faceEnrollStatus === 'enrolling' ? (
+                    <Loader2 className="w-4 h-4 text-gray-400 animate-spin shrink-0" />
+                  ) : faceEnrollStatus === 'done' ? (
+                    <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                  ) : faceEnrollStatus === 'failed' ? (
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  ) : (
+                    <Camera className="w-4 h-4 text-gray-400 shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="font-medium text-gray-900 text-xs sm:text-sm">Face Registration</div>
+                    <div className="text-[11px] text-gray-500">
+                      {faceEnrollStatus === 'idle' ? 'Waiting for camera...' :
+                       faceEnrollStatus === 'enrolling' ? 'Registering your face...' :
+                       faceEnrollStatus === 'done' ? 'Face registered' :
+                       'Could not detect face (optional)'}
+                    </div>
                   </div>
-                )}
-                {cameraStatus === 'denied' && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <Camera className="w-10 h-10 text-gray-600 mb-3" />
-                    <p className="text-gray-400 text-sm">Camera access denied. Please allow camera permissions.</p>
+                </div>
+                {/* Voice */}
+                <div className={`flex items-center gap-3 p-2.5 rounded-lg ${
+                  voiceEnrollStatus === 'failed' ? 'bg-amber-50' : 'bg-gray-50'
+                }`}>
+                  {voiceEnrollStatus === 'enrolling' ? (
+                    <Loader2 className="w-4 h-4 text-gray-400 animate-spin shrink-0" />
+                  ) : voiceEnrollStatus === 'done' ? (
+                    <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+                  ) : voiceEnrollStatus === 'failed' ? (
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  ) : (
+                    <Mic className="w-4 h-4 text-gray-400 shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <div className="font-medium text-gray-900 text-xs sm:text-sm">Voice Registration</div>
+                    <div className="text-[11px] text-gray-500">
+                      {voiceEnrollStatus === 'idle' ? 'Waiting for microphone...' :
+                       voiceEnrollStatus === 'enrolling' ? 'Recording voice sample (10s)...' :
+                       voiceEnrollStatus === 'done' ? 'Voice registered' :
+                       'Could not register voice (optional)'}
+                    </div>
                   </div>
-                )}
-                {cameraStatus !== 'granted' && (
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-                    <p className="text-gray-500 text-sm">Camera Preview</p>
-                  </div>
-                )}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Section 3: System Checks */}
-          <div className="px-8 py-6 border-b border-gray-200">
+          <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-gray-200">
             <div className="flex items-center gap-2 mb-4">
               <CheckCircle className="w-5 h-5 text-gray-500" />
-              <h2 className="font-semibold text-gray-900">System Checks</h2>
+              <h2 className="font-semibold text-gray-900 text-sm sm:text-base">System Checks</h2>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
               {/* Camera Access */}
               <div className={`flex items-center gap-3 p-3 rounded-lg ${checkBorder(cameraStatus)}`}>
                 <StatusIcon status={cameraStatus} />
@@ -686,13 +892,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
           </div>
 
+
           {/* Section 4: Interview Details */}
-          <div className="px-8 py-6 bg-gray-50">
+          <div className="px-4 sm:px-8 py-5 sm:py-6 bg-gray-50">
             <div className="flex items-center gap-2 mb-4">
               <FileText className="w-5 h-5 text-gray-500" />
-              <h2 className="font-semibold text-gray-900">Interview Details</h2>
+              <h2 className="font-semibold text-gray-900 text-sm sm:text-base">Interview Details</h2>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
               <div className="p-3 rounded-lg bg-white border border-gray-100">
                 <div className="text-xs text-gray-500 mb-1">Interview Type</div>
                 <div className="font-medium text-gray-900 capitalize">{interview.interview_type.replace('_', ' ')}</div>
@@ -712,15 +919,43 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
           </div>
 
+          {/* Section 5: Language Selection (only when multiple languages configured) */}
+          {availableLanguages.length > 1 && (
+            <div className="px-4 sm:px-8 py-5 sm:py-6 border-t border-gray-200">
+              <div className="flex items-center gap-2 mb-3">
+                <Globe className="w-5 h-5 text-gray-500" />
+                <h2 className="font-semibold text-gray-900 text-sm sm:text-base">Interview Language</h2>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                Select the language you&apos;d like the AI interviewer to use during the interview.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {availableLanguages.map(lang => (
+                  <button
+                    key={lang}
+                    onClick={() => setSelectedLanguage(lang)}
+                    className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      selectedLanguage === lang
+                        ? 'border-gray-800 bg-gray-900 text-white'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {lang}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
         </div>
 
         {/* Sticky Footer */}
-        <div className="sticky bottom-0 z-40 bg-white border-t border-gray-200 px-8 py-4 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+        <div className="sticky bottom-0 z-40 bg-white border-t border-gray-200 px-4 sm:px-8 py-3 sm:py-4 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-0">
+            <div className="flex items-center justify-between sm:justify-start gap-3">
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <Circle className="w-3 h-3 fill-gray-400 text-gray-400" />
-                Pre-Check
+                <span className="hidden sm:inline">Pre-Check</span>
               </div>
               <button
                 onClick={handleRerunChecks}
@@ -733,7 +968,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             <button
               onClick={handleBeginInterview}
               disabled={!allChecksReady || systemCheckSubmitting}
-              className={`flex items-center gap-2 px-6 py-2.5 text-sm rounded-md transition-colors ${
+              className={`flex items-center justify-center gap-2 px-6 py-2.5 text-sm rounded-md transition-colors w-full sm:w-auto ${
                 allChecksReady && !systemCheckSubmitting
                   ? 'bg-gray-800 text-white hover:bg-gray-900'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'
@@ -744,7 +979,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
               ) : (
                 <Play className="w-4 h-4" />
               )}
-              {systemCheckSubmitting ? 'Starting...' : 'Begin Interview'}
+              {systemCheckSubmitting ? 'Starting...' : availableLanguages.length > 1 ? `Begin Interview in ${selectedLanguage}` : 'Begin Interview'}
             </button>
           </div>
         </div>
@@ -757,13 +992,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
         {/* Sticky Header */}
-        <div className="sticky top-0 z-50 bg-gray-900 px-8 py-5 shadow-lg">
+        <div className="sticky top-0 z-50 bg-gray-900 px-4 sm:px-8 py-4 sm:py-5 shadow-lg">
           <div className="max-w-3xl mx-auto text-center">
-            <div className="flex items-center justify-center gap-3 mb-1">
-              <Video className="w-5 h-5 text-gray-300" />
-              <h1 className="text-white text-lg font-semibold">AI Video Interview - Consent Required</h1>
+            <div className="flex items-center justify-center gap-2 sm:gap-3 mb-1">
+              <Video className="w-5 h-5 text-gray-300 hidden sm:block" />
+              <h1 className="text-white text-sm sm:text-lg font-semibold">AI Video Interview - Consent Required</h1>
             </div>
-            <p className="text-gray-400 text-sm">
+            <p className="text-gray-400 text-xs sm:text-sm">
               Position: <span className="text-gray-200 font-medium">{interview.position}</span> &bull; Duration: {interview.duration_minutes} min
             </p>
           </div>
@@ -773,7 +1008,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         <div className="flex-1 bg-white">
 
             {/* Section 1: Special Category Data Warning */}
-            <div className="px-8 py-6 bg-gray-50 border-b border-gray-200">
+            <div className="px-4 sm:px-8 py-5 sm:py-6 bg-gray-50 border-b border-gray-200">
               <div className="flex items-start gap-3 mb-4">
                 <AlertTriangle className="w-5 h-5 text-gray-700 mt-0.5 flex-shrink-0" />
                 <div>
@@ -796,12 +1031,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
 
             {/* Section 2: Data Collection During Interview */}
-            <div className="px-8 py-6 border-b border-gray-200">
+            <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-gray-200">
               <div className="flex items-center gap-2 mb-4">
                 <Info className="w-5 h-5 text-gray-500" />
-                <h2 className="font-semibold text-gray-900">Data Collection During Interview</h2>
+                <h2 className="font-semibold text-gray-900 text-sm sm:text-base">Data Collection During Interview</h2>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
                   <Video className="w-5 h-5 text-gray-600 flex-shrink-0" />
                   <div>
@@ -827,7 +1062,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
 
             {/* Section 3: Data Retention & Deletion */}
-            <div className="px-8 py-6 border-b border-gray-200">
+            <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-gray-200">
               <div className="flex items-center gap-2 mb-3">
                 <FileText className="w-5 h-5 text-gray-500" />
                 <h2 className="font-semibold text-gray-900">Data Retention & Deletion</h2>
@@ -842,49 +1077,28 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
 
             {/* Section 4: Consent Checkboxes */}
-            <div className="px-8 py-6 border-b border-gray-200">
-              <h2 className="font-semibold text-gray-900 mb-4">Please confirm your consent:</h2>
+            <div className="px-4 sm:px-8 py-5 sm:py-6 border-b border-gray-200">
+              <h2 className="font-semibold text-gray-900 mb-4">Please confirm your consent to proceed:</h2>
               <div className="space-y-3">
-                <label className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
-                  <input type="checkbox" checked={consentVideo} onChange={(e) => setConsentVideo(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
-                  <span className="text-sm text-gray-700">
-                    I consent to <strong>video recording</strong> of this interview
-                  </span>
-                </label>
-                <label className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
-                  <input type="checkbox" checked={consentAudio} onChange={(e) => setConsentAudio(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
-                  <span className="text-sm text-gray-700">
-                    I consent to <strong>audio recording</strong> of my responses
-                  </span>
-                </label>
-                <label className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200 cursor-pointer hover:bg-amber-100 transition-colors">
-                  <input type="checkbox" checked={consentBiometric} onChange={(e) => setConsentBiometric(e.target.checked)}
+                <label className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
+                  <input type="checkbox" checked={consentRecordingAI} onChange={(e) => setConsentRecordingAI(e.target.checked)}
                     className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500 mt-0.5" />
                   <span className="text-sm text-gray-700">
-                    I consent to <strong>biometric data processing</strong> (facial analysis, emotion detection, eye tracking) - <span className="font-semibold text-gray-900">GDPR Article 9 Special Category Data</span>
+                    I agree to the <strong>video and audio recording</strong> of this interview and to <strong>AI-based analysis</strong> of my responses, including facial and behavioral analysis, as described in the <a href="/privacy" className="underline font-medium text-gray-900 hover:text-black">Privacy Policy</a>.
                   </span>
                 </label>
-                <label className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
-                  <input type="checkbox" checked={consentAI} onChange={(e) => setConsentAI(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
-                  <span className="text-sm text-gray-700">
-                    I consent to <strong>AI analysis</strong> of my interview performance, responses, and behavior
-                  </span>
-                </label>
-                <label className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
+                <label className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors">
                   <input type="checkbox" checked={consentTerms} onChange={(e) => setConsentTerms(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500" />
+                    className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500 mt-0.5" />
                   <span className="text-sm text-gray-700">
-                    I have read and agree to the <a href="/privacy" className="underline font-medium text-gray-900 hover:text-black">Privacy Policy</a> and <a href="/terms" className="underline font-medium text-gray-900 hover:text-black">Terms & Conditions</a>
+                    I confirm that I have read and agree to the <a href="/privacy" className="underline font-medium text-gray-900 hover:text-black">Privacy Policy</a> and <a href="/terms" className="underline font-medium text-gray-900 hover:text-black">Terms & Conditions</a>.
                   </span>
                 </label>
               </div>
             </div>
 
             {/* Section 5: Your Rights + Recording Indicator (combined footer section) */}
-            <div className="px-8 py-6 bg-gray-50">
+            <div className="px-4 sm:px-8 py-5 sm:py-6 bg-gray-50">
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
@@ -910,16 +1124,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         </div>
 
         {/* Sticky Footer */}
-        <div className="sticky bottom-0 z-40 bg-white border-t border-gray-200 px-8 py-4 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
-          <div className="flex items-center justify-between">
+        <div className="sticky bottom-0 z-40 bg-white border-t border-gray-200 px-4 sm:px-8 py-3 sm:py-4 shadow-[0_-2px_8px_rgba(0,0,0,0.06)]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-0">
             {!allConsentsChecked && (
-              <span className="text-sm text-gray-500">Please accept all required consents</span>
+              <span className="text-xs sm:text-sm text-gray-500 text-center sm:text-left">Please accept all required consents</span>
             )}
             {allConsentsChecked && <span />}
             <button
               onClick={handleConsentSubmit}
               disabled={!allConsentsChecked || consentSubmitting}
-              className={`flex items-center gap-2 px-6 py-2.5 text-sm rounded-md transition-colors ${
+              className={`flex items-center justify-center gap-2 px-6 py-2.5 text-sm rounded-md transition-colors w-full sm:w-auto ${
                 allConsentsChecked && !consentSubmitting
                   ? 'bg-gray-800 text-white hover:bg-gray-900'
                   : 'bg-gray-200 text-gray-400 cursor-not-allowed'

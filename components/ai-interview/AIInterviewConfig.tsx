@@ -8,7 +8,7 @@ import {
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
-import type { PublishedJD, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
+import type { PublishedJD, AIInterviewRoundConfig, AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -43,6 +43,17 @@ interface CategoryConfig {
 
 const FIXED_TIME = { mth: 20, nth: 7, hr: 3 } as const;   // minutes (MOM §5)
 const DEFAULT_PCT = { mth: 70, nth: 20, hr: 10 } as const; // scoring weights (MOM §default)
+
+const SUPPORTED_LANGUAGES = [
+  'Afrikaans', 'Arabic', 'Armenian', 'Azerbaijani', 'Belarusian', 'Bosnian', 'Bulgarian',
+  'Catalan', 'Chinese', 'Croatian', 'Czech', 'Danish', 'Dutch', 'English', 'Estonian',
+  'Finnish', 'French', 'Galician', 'German', 'Greek', 'Hebrew', 'Hindi', 'Hungarian',
+  'Icelandic', 'Indonesian', 'Italian', 'Japanese', 'Kannada', 'Kazakh', 'Korean',
+  'Latvian', 'Lithuanian', 'Macedonian', 'Malay', 'Malayalam', 'Marathi', 'Maori',
+  'Nepali', 'Norwegian', 'Persian', 'Polish', 'Portuguese', 'Romanian', 'Russian',
+  'Serbian', 'Slovak', 'Slovenian', 'Spanish', 'Swahili', 'Swedish', 'Tamil', 'Telugu',
+  'Thai', 'Turkish', 'Ukrainian', 'Urdu', 'Vietnamese', 'Welsh',
+];
 
 const PRIORITY_LABELS: Record<number, { label: string; color: string }> = {
   5: { label: 'P5 – Critical',   color: 'bg-red-100 text-red-700 border-red-200' },
@@ -171,7 +182,6 @@ interface SkillSectionProps {
 
 function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinutes, onChange }: SkillSectionProps) {
   const [customInput, setCustomInput] = useState('');
-  const [showClusters, setShowClusters] = useState(true);
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
 
   const jdSet = new Set(jdSkillNames.map(s => s.toLowerCase()));
@@ -191,31 +201,12 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
   };
 
   const removeSkill = (name: string) => {
-    onChange({
-      skills: config.skills.filter(s => s.name !== name),
-      // also remove from any cluster
-      clusters: config.clusters.map(c => ({ ...c, skills: c.skills.filter(cs => cs !== name) })),
-    });
+    onChange({ skills: config.skills.filter(s => s.name !== name) });
   };
 
   const updateComment = (name: string, comment: string) => {
     onChange({ skills: config.skills.map(s => s.name === name ? { ...s, comment } : s) });
   };
-
-  const addCluster = () => {
-    const c: Cluster = { id: uid(), name: '', priority: 3, skills: [] };
-    onChange({ clusters: [...config.clusters, c] });
-  };
-
-  const updateCluster = (id: string, updated: Cluster) => {
-    onChange({ clusters: config.clusters.map(c => c.id === id ? updated : c) });
-  };
-
-  const removeCluster = (id: string) => {
-    onChange({ clusters: config.clusters.filter(c => c.id !== id) });
-  };
-
-  const allSkillNames = config.skills.map(s => s.name);
 
   return (
     <div className="border border-gray-200 rounded-lg bg-white">
@@ -332,45 +323,6 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
           </p>
         </div>
 
-        {/* Clusters */}
-        <div>
-          <button
-            onClick={() => setShowClusters(!showClusters)}
-            className="flex items-center gap-2 w-full text-left mb-2"
-          >
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Skill Clusters</span>
-            <span className="text-xs text-gray-400">({config.clusters.length})</span>
-            <span className="ml-auto text-gray-400">
-              {showClusters ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </span>
-          </button>
-
-          {showClusters && (
-            <div className="space-y-2">
-              {config.clusters.length === 0 && (
-                <p className="text-xs text-gray-400 italic">
-                  Group skills into clusters and set priority (1–5). Higher priority clusters get more questions.
-                </p>
-              )}
-              {config.clusters.map(c => (
-                <ClusterCard
-                  key={c.id}
-                  cluster={c}
-                  allSkillNames={allSkillNames}
-                  onChange={updated => updateCluster(c.id, updated)}
-                  onRemove={() => removeCluster(c.id)}
-                />
-              ))}
-              <button
-                onClick={addCluster}
-                className="flex items-center gap-1.5 w-full px-3 py-2 text-xs border border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-gray-400 hover:bg-gray-50 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add Cluster
-              </button>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -473,6 +425,8 @@ export default function AIInterviewConfig() {
 
   const [selectedJd, setSelectedJd] = useState<PublishedJD | null>(null);
   const [loadingJd, setLoadingJd] = useState(true);
+  const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* Interview mode */
   const [mode, setMode] = useState<InterviewMode>('fixed');
@@ -484,11 +438,13 @@ export default function AIInterviewConfig() {
   const [nth, setNth] = useState<CategoryConfig>({
     skills: [], clusters: [], percentage: DEFAULT_PCT.nth, enabled: true,
   });
-  const [hrPct, setHrPct] = useState(DEFAULT_PCT.hr);
+  const [hrPct, setHrPct] = useState<number>(DEFAULT_PCT.hr);
   const [hrEnabled, setHrEnabled] = useState(true);
 
   /* Other settings */
   const [recordingEnabled, setRecordingEnabled] = useState(true);
+  const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
+  const [languageInput, setLanguageInput] = useState('');
 
   /* Action states */
   const [publishing, setPublishing] = useState(false);
@@ -498,20 +454,106 @@ export default function AIInterviewConfig() {
   const isNavigatingRef = useRef(false);
   const isPublishedRef = useRef(false);
 
-  /* ── Load JD ── */
+  /* ── Load JD + restore draft if one exists ── */
   useEffect(() => {
     if (!jdId) { router.replace('/recruitment/ai-interviews/jd-selection'); return; }
     const loadJD = async () => {
       try {
         setLoadingJd(true);
-        const result = await aiInterviewService.getPublishedJDs();
-        const jd = result.items.find(j => j.id === jdId);
-        if (jd) {
-          setSelectedJd(jd);
-        } else {
+
+        // Load JD and check for existing draft in parallel
+        const [jdResult, draftResult] = await Promise.all([
+          aiInterviewService.getPublishedJDs(),
+          aiInterviewService.listConfigs({ status: 'draft', page_size: 50 }).catch(() => null),
+        ]);
+
+        const jd = jdResult.items.find(j => j.id === jdId);
+        if (!jd) {
           toast.error('Job description not found');
           router.replace('/recruitment/ai-interviews/jd-selection');
+          return;
         }
+        setSelectedJd(jd);
+
+        // Look for a draft config saved for this JD
+        const existingDraft = draftResult?.items?.find(
+          (c: AIInterviewResponse) => c.jd_id === jdId && c.status === 'draft'
+        );
+
+        if (existingDraft?.rounds_config?.length) {
+          // Restore state from saved draft
+          existingDraftIdRef.current = existingDraft.id;
+
+          const mthRound = existingDraft.rounds_config.find((r: AIInterviewRoundConfig) => r.type === 'must_have_skills');
+          const nthRound = existingDraft.rounds_config.find((r: AIInterviewRoundConfig) => r.type === 'nice_to_have_skills');
+          const hrRound  = existingDraft.rounds_config.find((r: AIInterviewRoundConfig) => r.type === 'hr');
+
+          const toSkillEntries = (skills: string[] = []) =>
+            skills.map(s => ({ name: s, comment: '' }));
+
+          if (mthRound) {
+            const draftSkills = [...(mthRound.jd_skills || []), ...(mthRound.custom_skills || [])];
+            setMth({
+              skills: draftSkills.length > 0
+                ? toSkillEntries(draftSkills)
+                : (jd.must_have_skills?.map(s => ({ name: s, comment: '' })) ?? []),
+              clusters: [],
+              percentage: mthRound.percentage ?? DEFAULT_PCT.mth,
+              enabled: true,
+            });
+          } else {
+            setMth(prev => ({
+              ...prev,
+              skills: jd.must_have_skills?.map(s => ({ name: s, comment: '' })) ?? [],
+            }));
+          }
+
+          if (nthRound) {
+            const draftSkills = [...(nthRound.jd_skills || []), ...(nthRound.custom_skills || [])];
+            setNth({
+              skills: draftSkills.length > 0
+                ? toSkillEntries(draftSkills)
+                : (jd.nice_to_have_skills?.map(s => ({ name: s, comment: '' })) ?? []),
+              clusters: [],
+              percentage: nthRound.percentage ?? DEFAULT_PCT.nth,
+              enabled: true,
+            });
+          } else {
+            setNth(prev => ({
+              ...prev,
+              enabled: false,
+              skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '' })) ?? [],
+            }));
+          }
+
+          if (hrRound) {
+            setHrEnabled(true);
+            setHrPct(hrRound.percentage ?? DEFAULT_PCT.hr);
+          } else {
+            setHrEnabled(false);
+          }
+
+          // Detect mode from stored duration (0 = flexible)
+          const storedDuration = existingDraft.duration_minutes ?? 30;
+          setMode(storedDuration === 0 ? 'flexible' : 'fixed');
+
+          // Restore available languages
+          if ((existingDraft as any).available_languages?.length) {
+            setAvailableLanguages((existingDraft as any).available_languages);
+          }
+
+        } else {
+          // No draft — populate from JD
+          setMth(prev => ({
+            ...prev,
+            skills: jd.must_have_skills?.map(s => ({ name: s, comment: '' })) ?? [],
+          }));
+          setNth(prev => ({
+            ...prev,
+            skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '' })) ?? [],
+          }));
+        }
+
       } catch {
         toast.error('Failed to load job description');
         router.replace('/recruitment/ai-interviews/jd-selection');
@@ -520,25 +562,8 @@ export default function AIInterviewConfig() {
       }
     };
     loadJD();
-  }, [jdId, router]);
-
-  /* ── Auto-populate skills from JD ── */
-  useEffect(() => {
-    if (!selectedJd) return;
-    if (mth.skills.length === 0 && selectedJd.must_have_skills?.length) {
-      setMth(prev => ({
-        ...prev,
-        skills: selectedJd.must_have_skills.map(s => ({ name: s, comment: '' })),
-      }));
-    }
-    if (nth.skills.length === 0 && selectedJd.nice_to_have_skills?.length) {
-      setNth(prev => ({
-        ...prev,
-        skills: selectedJd.nice_to_have_skills.map(s => ({ name: s, comment: '' })),
-      }));
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedJd]);
+  }, [jdId]);
 
   /* ── Navigation guards ── */
   useEffect(() => {
@@ -570,6 +595,46 @@ export default function AIInterviewConfig() {
     document.addEventListener('click', handleClick, true);
     return () => document.removeEventListener('click', handleClick, true);
   }, [selectedJd]);
+
+  /* ── Auto-save draft (debounced 2s) whenever config changes ── */
+  useEffect(() => {
+    if (!selectedJd || isPublishedRef.current || loadingJd) return;
+
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+
+    autoSaveTimerRef.current = setTimeout(async () => {
+      try {
+        const rounds = buildRounds(true);
+        const payload = {
+          position: selectedJd.title,
+          jd_id: selectedJd.id,
+          duration_minutes: mode === 'fixed' ? (FIXED_TIME.mth + (nth.enabled ? FIXED_TIME.nth : 0) + (hrEnabled ? FIXED_TIME.hr : 0)) : 0,
+          rounds_config: rounds,
+          recording_enabled: recordingEnabled,
+          available_languages: availableLanguages,
+          title: `${selectedJd.title} - AI Interview`,
+          save_as_draft: true,
+          special_instructions: buildClusterJson(),
+        };
+
+        if (existingDraftIdRef.current) {
+          // Update existing draft
+          await aiInterviewService.update(existingDraftIdRef.current, payload);
+        } else {
+          // Create new draft and remember its id
+          const created = await aiInterviewService.create(payload);
+          existingDraftIdRef.current = created.id;
+        }
+      } catch {
+        // Silent — don't toast on auto-save failures
+      }
+    }, 2000);
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mth, nth, hrPct, hrEnabled, mode, recordingEnabled, availableLanguages, selectedJd, loadingJd]);
 
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
@@ -613,7 +678,7 @@ export default function AIInterviewConfig() {
         topics,
         topic_weights: topics.length > 0 ? topicWeights : undefined,
         enabled: true,
-        order: 1,
+        order: 2,
         jd_skills: jdSkills.length > 0 ? jdSkills : undefined,
         custom_skills: customSkills.length > 0 ? customSkills : undefined,
       });
@@ -635,13 +700,13 @@ export default function AIInterviewConfig() {
         topics,
         topic_weights: topics.length > 0 ? topicWeights : undefined,
         enabled: true,
-        order: 2,
+        order: 3,
         jd_skills: jdSkills.length > 0 ? jdSkills : undefined,
         custom_skills: customSkills.length > 0 ? customSkills : undefined,
       });
     }
 
-    // HR round
+    // HR round — always first (introduction, background, cultural fit)
     if (hrEnabled) {
       rounds.push({
         type: 'hr',
@@ -649,7 +714,7 @@ export default function AIInterviewConfig() {
         duration_minutes: dur('hr'),
         topics: ['Behavioural', 'Cultural Fit', 'Situational'],
         enabled: true,
-        order: 3,
+        order: 1,
       });
     }
 
@@ -672,16 +737,23 @@ export default function AIInterviewConfig() {
     if (!selectedJd) return false;
     setSavingDraft(true);
     try {
-      await aiInterviewService.create({
+      const payload = {
         position: selectedJd.title,
         jd_id: selectedJd.id,
         duration_minutes: mode === 'fixed' ? totalFixed : 0,
         rounds_config: buildRounds(true),
         recording_enabled: recordingEnabled,
+        available_languages: availableLanguages,
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
         special_instructions: buildClusterJson(),
-      });
+      };
+      if (existingDraftIdRef.current) {
+        await aiInterviewService.update(existingDraftIdRef.current, payload);
+      } else {
+        const created = await aiInterviewService.create(payload);
+        existingDraftIdRef.current = created.id;
+      }
       if (!silent) toast.success('Draft saved!');
       return true;
     } catch {
@@ -701,16 +773,26 @@ export default function AIInterviewConfig() {
     if (!selectedJd || !pctValid) return;
     setPublishing(true);
     try {
-      const interview = await aiInterviewService.create({
+      const payload = {
         position: selectedJd.title,
         jd_id: selectedJd.id,
         duration_minutes: mode === 'fixed' ? totalFixed : 0,
         rounds_config: buildRounds(false),
         recording_enabled: recordingEnabled,
+        available_languages: availableLanguages,
         title: `${selectedJd.title} - AI Interview`,
         special_instructions: buildClusterJson(),
-      });
-      await aiInterviewService.publishConfig(interview.id);
+      };
+      let interviewId: string;
+      if (existingDraftIdRef.current) {
+        await aiInterviewService.update(existingDraftIdRef.current, payload);
+        interviewId = existingDraftIdRef.current;
+      } else {
+        const created = await aiInterviewService.create(payload);
+        existingDraftIdRef.current = created.id;
+        interviewId = created.id;
+      }
+      await aiInterviewService.publishConfig(interviewId);
       isPublishedRef.current = true;
       toast.success('AI Interview configuration published!');
       router.push('/recruitment/ai-interviews');
@@ -827,9 +909,9 @@ export default function AIInterviewConfig() {
                     Candidate response time is capped. AI narration excluded.
                   </p>
                   <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'fixed' ? 'text-gray-400' : 'text-gray-400'}`}>
-                    <div>MTH → {fixedMthMin} min</div>
-                    {nth.enabled && <div>NTH → {fixedNthMin} min</div>}
-                    {hrEnabled && <div>HR → {fixedHrMin} min</div>}
+                    {hrEnabled && <div>HR Round → {fixedHrMin} min</div>}
+                    <div>Must-to-Have → {fixedMthMin} min</div>
+                    {nth.enabled && <div>Nice-to-Have → {fixedNthMin} min</div>}
                   </div>
                 </button>
 
@@ -853,7 +935,7 @@ export default function AIInterviewConfig() {
 
             {/* ── MTH ── */}
             <SkillSection
-              title="Must-To-Have Skills (MTH)"
+              title="Must-To-Have Skills"
               category="mth"
               config={mth}
               jdSkillNames={selectedJd.must_have_skills || []}
@@ -871,9 +953,9 @@ export default function AIInterviewConfig() {
                     <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gray-800 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
                   </label>
                   <Sparkles className="w-4 h-4 text-indigo-600" />
-                  <span className="font-semibold text-gray-900 text-sm">Nice-To-Have Skills (NTH)</span>
+                  <span className="font-semibold text-gray-900 text-sm">Nice-To-Have Skills</span>
                   {!nth.enabled && mode === 'fixed' && (
-                    <span className="text-[11px] text-gray-400 italic">Disabled — MTH gets full 30 min</span>
+                    <span className="text-[11px] text-gray-400 italic">Disabled — Must-to-Have gets full 30 min</span>
                   )}
                 </div>
               </div>
@@ -912,6 +994,57 @@ export default function AIInterviewConfig() {
               />
               <span className="text-sm text-gray-700">Auto-record interview sessions</span>
             </label>
+
+            {/* Candidate Languages */}
+            <div className="px-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Candidate Languages</span>
+              </div>
+              <p className="text-xs text-gray-500">
+                Select which languages the candidate can choose for the interview. The AI will conduct the interview in their chosen language.
+              </p>
+
+              {/* Selected languages */}
+              <div className="flex flex-wrap gap-1.5">
+                {availableLanguages.map(lang => (
+                  <span
+                    key={lang}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-700 border border-gray-200"
+                  >
+                    {lang}
+                    {lang !== 'English' && (
+                      <button
+                        onClick={() => setAvailableLanguages(prev => prev.filter(l => l !== lang))}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+
+              {/* Add language */}
+              <div className="relative">
+                <select
+                  value={languageInput}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val && !availableLanguages.includes(val)) {
+                      setAvailableLanguages(prev => [...prev, val].sort());
+                    }
+                    setLanguageInput('');
+                  }}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white text-gray-700"
+                >
+                  <option value="">Add a language...</option>
+                  {SUPPORTED_LANGUAGES.filter(l => !availableLanguages.includes(l)).map(lang => (
+                    <option key={lang} value={lang}>{lang}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* ── Right: Summary sidebar ── */}
@@ -930,9 +1063,9 @@ export default function AIInterviewConfig() {
                   </span>
                 </div>
                 {[
-                  { label: 'MTH', pct: mth.percentage, color: 'bg-purple-500' },
-                  ...(nth.enabled ? [{ label: 'NTH', pct: nth.percentage, color: 'bg-indigo-400' }] : []),
-                  ...(hrEnabled ? [{ label: 'HR', pct: hrPct, color: 'bg-blue-400' }] : []),
+                  { label: 'Must-to-Have', pct: mth.percentage, color: 'bg-purple-500' },
+                  ...(nth.enabled ? [{ label: 'Nice-to-Have', pct: nth.percentage, color: 'bg-indigo-400' }] : []),
+                  ...(hrEnabled ? [{ label: 'HR Round', pct: hrPct, color: 'bg-blue-400' }] : []),
                 ].map(({ label, pct, color }) => (
                   <div key={label}>
                     <div className="flex items-center justify-between text-xs mb-0.5">
@@ -949,7 +1082,7 @@ export default function AIInterviewConfig() {
               {!pctValid && (
                 <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100 mb-4">
                   <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-red-600">Weights must total 100%. Adjust MTH, NTH, or HR percentages.</p>
+                  <p className="text-[11px] text-red-600">Weights must total 100%. Adjust Must-to-Have, Nice-to-Have, or HR percentages.</p>
                 </div>
               )}
 
@@ -961,23 +1094,23 @@ export default function AIInterviewConfig() {
                   </div>
                   <table className="w-full text-xs">
                     <tbody>
+                      {hrEnabled && (
+                        <tr className="border-b border-gray-50">
+                          <td className="px-3 py-2 text-gray-600">HR Round</td>
+                          <td className="px-3 py-2 text-gray-400">{hrPct}%</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin} min</td>
+                        </tr>
+                      )}
                       <tr className="border-b border-gray-50">
-                        <td className="px-3 py-2 text-gray-600">MTH</td>
-                        <td className="px-3 py-2 text-gray-400">70%</td>
+                        <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                        <td className="px-3 py-2 text-gray-400">{mth.percentage}%</td>
                         <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin} min</td>
                       </tr>
                       {nth.enabled && (
-                        <tr className="border-b border-gray-50">
-                          <td className="px-3 py-2 text-gray-600">NTH</td>
-                          <td className="px-3 py-2 text-gray-400">20%</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin} min</td>
-                        </tr>
-                      )}
-                      {hrEnabled && (
                         <tr>
-                          <td className="px-3 py-2 text-gray-600">HR</td>
-                          <td className="px-3 py-2 text-gray-400">10%</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin} min</td>
+                          <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                          <td className="px-3 py-2 text-gray-400">{nth.percentage}%</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin} min</td>
                         </tr>
                       )}
                     </tbody>
@@ -993,24 +1126,6 @@ export default function AIInterviewConfig() {
                   </p>
                 </div>
               )}
-
-              {/* Clusters summary */}
-              <div className="space-y-1.5 mb-4">
-                <p className="text-xs font-medium text-gray-500 mb-2">Clusters</p>
-                {[...mth.clusters, ...nth.clusters].length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">No clusters configured yet</p>
-                ) : (
-                  [...mth.clusters.map(c => ({ ...c, cat: 'MTH' })), ...nth.clusters.map(c => ({ ...c, cat: 'NTH' }))].map(c => (
-                    <div key={c.id} className="flex items-center justify-between text-xs">
-                      <span className="text-gray-700 truncate mr-2">{c.name || <span className="italic text-gray-400">Unnamed</span>}</span>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="text-gray-400">{c.cat}</span>
-                        <PriorityBadge p={c.priority} />
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
 
               {/* Actions */}
               <div className="space-y-2">
