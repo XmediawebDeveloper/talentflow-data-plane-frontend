@@ -1,7 +1,7 @@
 'use client';
 
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { ArrowLeft, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
 import { toast } from 'sonner';
@@ -168,6 +168,45 @@ export default function CandidateResultDetails({
 
     fetchDetailedResults();
   }, [assessmentId, candidateId]);
+
+  // Poll for scoring completion when AI evaluation is still running
+  useEffect(() => {
+    if (!detailedResult || detailedResult.scoring_status !== 'processing') return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const details = await assessmentService.getResultDetails(assessmentId, candidateId);
+        if (details.scoring_status !== 'processing') {
+          // Scoring done — update all state and stop polling
+          setDetailedResult(details);
+          let status: 'Completed' | 'In Progress' | 'Pending' = 'In Progress';
+          if (details.scoring_status === 'completed') status = 'Completed';
+          else if (details.scoring_status === 'pending') status = 'Pending';
+          const sections = details.round_scores.map(round => {
+            const roundQuestions = details.question_evaluations.filter(q => q.round_type === round.round_type);
+            const totalMarks = roundQuestions.reduce((sum, q) => sum + (q.points_possible || 10), 0);
+            const obtainedMarks = roundQuestions.reduce((sum, q) => sum + (q.points_earned || 0), 0);
+            const percentage = Math.min(Math.round(round.raw_score ?? 0), 100);
+            return {
+              name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
+              score: Math.round(obtainedMarks * 10) / 10,
+              totalScore: totalMarks,
+              percentage,
+            };
+          });
+          setCandidateData(prev => prev ? ({
+            ...prev,
+            status,
+            percentage: details.overall_score ?? 0,
+            sections,
+          }) : prev);
+          clearInterval(pollInterval);
+        }
+      } catch { /* ignore poll errors */ }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [detailedResult?.scoring_status, assessmentId, candidateId]);
 
   // Fetch proctoring events when violations tab is opened
   useEffect(() => {
@@ -1325,35 +1364,61 @@ export default function CandidateResultDetails({
                         <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
-                      {/* Video Violations - HIDDEN as per user request */}
-                      {false && (
-                        <div className={`rounded-xl p-3 sm:p-5 border-2 ${
-                          detailedResult.proctoring_stats.video_violation_count > 0
-                            ? 'bg-purple-50 border-purple-200'
-                            : 'bg-gray-50 border-gray-200'
+                      {/* Camera Obstructed */}
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                        (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
+                          ? 'bg-purple-50 border-purple-200'
+                          : 'bg-gray-50 border-gray-200'
+                      }`}>
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                          (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
+                            ? 'bg-purple-100'
+                            : 'bg-gray-100'
                         }`}>
-                          <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
-                            detailedResult.proctoring_stats.video_violation_count > 0
-                              ? 'bg-purple-100'
-                              : 'bg-gray-100'
-                          }`}>
-                            <Eye className={`w-6 h-6 ${
-                              detailedResult.proctoring_stats.video_violation_count > 0
-                                ? 'text-purple-600'
-                                : 'text-gray-400'
-                            }`} />
-                          </div>
-                          <div className="text-sm text-gray-600 mb-1">Video Violations</div>
-                          <div className={`text-3xl font-bold ${
-                            detailedResult.proctoring_stats.video_violation_count > 0
+                          <Eye className={`w-6 h-6 ${
+                            (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
                               ? 'text-purple-600'
                               : 'text-gray-400'
-                          }`}>
-                            {detailedResult.proctoring_stats.video_violation_count}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">occurrences</div>
+                          }`} />
                         </div>
-                      )}
+                        <div className="text-sm text-gray-600 mb-1">Camera Obstructed</div>
+                        <div className={`text-3xl font-bold ${
+                          (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
+                            ? 'text-purple-600'
+                            : 'text-gray-400'
+                        }`}>
+                          {detailedResult.proctoring_stats.camera_obstructed_count || 0}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">times</div>
+                      </div>
+
+                      {/* Face Not Visible */}
+                      <div className={`rounded-xl p-3 sm:p-5 border-2 ${
+                        (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-gray-50 border-gray-200'
+                      }`}>
+                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-3 ${
+                          (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
+                            ? 'bg-red-100'
+                            : 'bg-gray-100'
+                        }`}>
+                          <UserX className={`w-6 h-6 ${
+                            (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
+                              ? 'text-red-600'
+                              : 'text-gray-400'
+                          }`} />
+                        </div>
+                        <div className="text-sm text-gray-600 mb-1">Face Not Visible</div>
+                        <div className={`text-3xl font-bold ${
+                          (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
+                            ? 'text-red-600'
+                            : 'text-gray-400'
+                        }`}>
+                          {detailedResult.proctoring_stats.face_not_visible_count || 0}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">detections</div>
+                      </div>
 
                       {/* Voice Violations */}
                       <div className={`rounded-xl p-3 sm:p-5 border-2 ${
@@ -1560,6 +1625,7 @@ export default function CandidateResultDetails({
                                   case 'voice_detected':           return { label: 'Voice Detected',           icon: <Volume2 className="w-4 h-4" />,      color: 'text-pink-600',   bg: 'bg-pink-50',    severity: 'medium' };
                                   case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-pink-600',   bg: 'bg-pink-50',    severity: 'high'   };
                                   case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-violet-600', bg: 'bg-violet-50',  severity: 'critical' };
+                                  case 'face_missing':             return { label: 'Face Not Visible',         icon: <UserX className="w-4 h-4" />,        color: 'text-red-600',    bg: 'bg-red-50',     severity: 'high'   };
                                   case 'screenshot_attempt':       return { label: 'Screenshot Attempt',       icon: <Maximize className="w-4 h-4" />,     color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'high'   };
                                   case 'screen_recording_attempt': return { label: 'Screen Recording',         icon: <Monitor className="w-4 h-4" />,      color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'critical' };
                                   case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-blue-600',   bg: 'bg-blue-50',    severity: 'medium'   };

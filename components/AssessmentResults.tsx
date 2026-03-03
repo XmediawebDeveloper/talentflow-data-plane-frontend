@@ -34,6 +34,7 @@ interface CandidateResult {
   coding_score?: number; // Coding round score percentage
   hr_score?: number; // HR round score percentage
   status: 'Completed' | 'In Progress' | 'Pending';
+  scoring_status?: string;  // "pending", "processing", "completed", "error"
   completedDate: string;
   duration: string;
   sent_at?: string;
@@ -269,21 +270,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         if (response?.items) {
           // Map API response to component format
           const mapped: CandidateResult[] = response.items.map((item: any, index: number) => {
-            // Determine status - mark as "In Progress" or "Completed"
+            // Determine status: attempt status + scoring status
+            const scoringStatus: string = item.scoring_status || 'pending';
             let status: 'Completed' | 'In Progress' | 'Pending' = 'Completed';
             if (item.status === 'pending') {
               status = 'Pending';
             } else if (item.status === 'in_progress') {
               status = 'In Progress';
             } else if (item.status === 'completed') {
-              status = 'Completed';
+              // Attempt done — but only show Completed once AI scoring is also done
+              status = scoringStatus === 'completed' ? 'Completed' : 'In Progress';
             }
 
-            // Calculate scores using the formula: (total_marks_in_round / total_marks_of_round) * 100
-            // The API returns scores as percentages already, so we use them directly
-            const tech_score = item.technical_score != null ? Math.round(Number(item.technical_score)) : undefined;
-            const coding_score = item.coding_score != null ? Math.round(Number(item.coding_score)) : undefined;
-            const hr_score = item.hr_score != null ? Math.round(Number(item.hr_score)) : undefined;
+            // Hide scores while AI scoring is still running
+            const scoringDone = scoringStatus === 'completed';
+            const tech_score = scoringDone && item.technical_score != null ? Math.round(Number(item.technical_score)) : undefined;
+            const coding_score = scoringDone && item.coding_score != null ? Math.round(Number(item.coding_score)) : undefined;
+            const hr_score = scoringDone && item.hr_score != null ? Math.round(Number(item.hr_score)) : undefined;
 
             // Format duration properly
             let duration = '-';
@@ -309,13 +312,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               email: item.candidate_email || '',
               phone: item.candidate_phone || '',
               inviteSource: item.invite_source || 'Manual',
-              score: Math.round(Number(item.overall_score) || 0),
+              score: scoringDone ? Math.round(Number(item.overall_score) || 0) : 0,
               totalScore: 100,
-              percentage: Math.round(Number(item.overall_score) || 0),
+              percentage: scoringDone ? Math.round(Number(item.overall_score) || 0) : 0,
               tech_score,
               coding_score,
               hr_score,
               status,
+              scoring_status: scoringStatus,
               sent_at: item.sent_at || undefined,
               started_at: item.started_at || undefined,
               completed_at: item.completed_at || undefined,
@@ -358,11 +362,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           // Set total from server for pagination
           setTotalItems(response.total || mapped.length);
 
-          // Set stats from API
+          // Set stats from mapped data so "processing" attempts show as In Progress
           setApiStats({
-            completed_count: response.completed_count || mapped.filter((c: CandidateResult) => c.status === 'Completed').length,
-            in_progress_count: response.in_progress_count || mapped.filter((c: CandidateResult) => c.status === 'In Progress').length,
-            pending_count: response.pending_count || mapped.filter((c: CandidateResult) => c.status === 'Pending').length,
+            completed_count: mapped.filter((c: CandidateResult) => c.status === 'Completed').length,
+            in_progress_count: mapped.filter((c: CandidateResult) => c.status === 'In Progress').length,
+            pending_count: mapped.filter((c: CandidateResult) => c.status === 'Pending').length,
             average_score: response.average_score ? Math.round(Number(response.average_score)) : null
           });
         }
