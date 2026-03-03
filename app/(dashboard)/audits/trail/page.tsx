@@ -39,7 +39,6 @@ import {
   REFUND_FLAG_COLORS,
   MODULE_TYPE_LABELS,
   formatSessionDuration,
-  isSessionModule,
   getBillingImpact,
   type ErrorOrigin,
 } from '@/lib/types/auditSession';
@@ -183,9 +182,6 @@ export default function AuditTrailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // View mode: 'all' | 'system' | 'usage' | 'sessions'
-  const [viewMode, setViewMode] = useState<'all' | 'system' | 'usage' | 'sessions'>('all');
-
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState('');
@@ -221,7 +217,7 @@ export default function AuditTrailPage() {
 
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
-  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, viewMode, errorOriginFilter, candidateEmailFilter, jdIdFilter });
+  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, errorOriginFilter, candidateEmailFilter, jdIdFilter });
 
   // Valid backend enum values (actions the API accepts as filters)
   const validBackendActions = [
@@ -257,12 +253,9 @@ export default function AuditTrailPage() {
 
     try {
       const token = localStorage.getItem('accessToken');
-      // When using view mode filters (usage/system), fetch more items from backend
-      // since client-side filtering will reduce the visible count
-      const fetchSize = viewMode === 'all' ? pageSize : pageSize * 5;
       const params = new URLSearchParams({
         page: page.toString(),
-        page_size: fetchSize.toString(),
+        page_size: pageSize.toString(),
       });
 
       // Only send filter to API if it's a valid backend enum value
@@ -324,7 +317,7 @@ export default function AuditTrailPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, actionFilter, entityFilter, dateRange, viewMode, candidateEmailFilter, jdIdFilter]);
+  }, [page, pageSize, actionFilter, entityFilter, dateRange, candidateEmailFilter, jdIdFilter]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -426,17 +419,16 @@ export default function AuditTrailPage() {
       prev.actionFilter !== actionFilter ||
       prev.entityFilter !== entityFilter ||
       prev.dateRange !== dateRange ||
-      prev.viewMode !== viewMode ||
       prev.errorOriginFilter !== errorOriginFilter ||
       prev.candidateEmailFilter !== candidateEmailFilter ||
       prev.jdIdFilter !== jdIdFilter;
 
     if (filtersChanged && hasFetched.current) {
-      prevFilters.current = { page, actionFilter, entityFilter, dateRange, viewMode, errorOriginFilter, candidateEmailFilter, jdIdFilter };
+      prevFilters.current = { page, actionFilter, entityFilter, dateRange, errorOriginFilter, candidateEmailFilter, jdIdFilter };
       fetchAuditLogs();
       fetchStats();
     }
-  }, [page, actionFilter, entityFilter, dateRange, viewMode, errorOriginFilter, candidateEmailFilter, jdIdFilter]);
+  }, [page, actionFilter, entityFilter, dateRange, errorOriginFilter, candidateEmailFilter, jdIdFilter]);
 
   // Fetch AI generation audit data when an assessment-related log is selected
   useEffect(() => {
@@ -479,18 +471,6 @@ export default function AuditTrailPage() {
 
     fetchAiAudit();
   }, [selectedLog]);
-
-  // Handle view mode change - reset filters and update view mode together
-  const handleViewModeChange = (newMode: 'all' | 'system' | 'usage' | 'sessions') => {
-    if (newMode === viewMode) return;
-    setActionFilter('');
-    setEntityFilter('');
-    setErrorOriginFilter('');
-    setCandidateEmailFilter('');
-    setJdIdFilter('');
-    setPage(1);
-    setViewMode(newMode);
-  };
 
   const getActionColor = (action: string): string => {
     if (action.includes('addon') || action.includes('purchase')) return actionColors.addon;
@@ -671,99 +651,9 @@ export default function AuditTrailPage() {
     URL.revokeObjectURL(url);
   };
 
-  // Usage/billing related actions and entity types (must match backend enums)
-  const usageActions = [
-    'addon_purchase',
-    'addon_approve',
-    'addon_reject',
-    'seats_purchase',
-    'usage_recorded',
-    'unit_consume',
-    'resume_upload',
-    'resume_bulk_uploaded',
-    'resume_upload_failed',
-    'scoring_complete',
-    'scoring_failed',
-    'assessment_complete',
-    'user_create',
-    'user_limit_exceeded',
-    'quota_exhausted',
-    'subscription_upgrade',
-    'subscription_downgrade',
-    'subscription_cancel',
-    'subscription_activation',
-    'plan_upgrade',
-    'plan_downgrade',
-    'plan_selection',
-    'tenant_signup',
-    'payment_confirmed',
-    'invoice_generated',
-    'session_start',
-    'session_complete',
-    'session_interrupted',
-  ];
-  const usageEntityTypes = [
-    'addon',
-    'subscription',
-    'billing',
-    'quota',
-    'unit_pool',
-    'payment',
-    'invoice',
-    'seats',
-    'plan',
-  ];
-
-  // Session-based actions for the Sessions view tab
-  const sessionActions = [
-    'assessment_start', 'assessment_complete', 'assessment_exit', 'assessment_error',
-    'ai_interview_start', 'ai_interview_complete', 'ai_interview_exit', 'ai_interview_error',
-    'session_start', 'session_complete', 'session_interrupted',
-  ];
-
-  // Filter available actions and entities based on view mode
-  const filteredAvailableActions = viewMode === 'all'
-    ? availableActions
-    : viewMode === 'usage'
-      ? availableActions.filter(action => usageActions.includes(action.value))
-      : viewMode === 'sessions'
-        ? availableActions.filter(action => sessionActions.includes(action.value))
-        : availableActions.filter(action => !usageActions.includes(action.value));
-
-  const filteredAvailableEntities = viewMode === 'all'
-    ? availableEntities
-    : viewMode === 'usage'
-      ? availableEntities.filter(entity => usageEntityTypes.includes(entity.value))
-      : viewMode === 'sessions'
-        ? availableEntities.filter(entity => ['assessment', 'session', 'ai_interview'].includes(entity.value))
-        : availableEntities.filter(entity => !usageEntityTypes.includes(entity.value));
-
   const filteredLogs = auditLogs.filter(log => {
-    // First filter by view mode
-    const isUsageLog = usageActions.includes(log.action) ||
-                       usageEntityTypes.includes(log.entity_type || '') ||
-                       (log.units_consumed && log.units_consumed > 0);
-    const isSessionLog = sessionActions.includes(log.action) ||
-                         isSessionModule(log.module_type) ||
-                         log.session_start_time !== null;
-
-    if (viewMode === 'usage' && !isUsageLog) return false;
-    if (viewMode === 'system' && isUsageLog) return false;
-    if (viewMode === 'sessions' && !isSessionLog) return false;
-    // 'all' shows everything
-
-    // Error origin filter (works across all view modes)
+    // Error origin filter
     if (errorOriginFilter && log.error_origin !== errorOriginFilter) return false;
-
-    // Client-side filter by action (for usage-related actions not supported by backend)
-    if (actionFilter && !validBackendActions.includes(actionFilter)) {
-      if (log.action !== actionFilter) return false;
-    }
-
-    // Client-side filter by entity (for usage-related entities not supported by backend)
-    if (entityFilter && !validBackendEntities.includes(entityFilter)) {
-      if (log.entity_type !== entityFilter) return false;
-    }
 
     // Then filter by search query
     if (!searchQuery) return true;
@@ -773,7 +663,7 @@ export default function AuditTrailPage() {
       (log.action_label && log.action_label.toLowerCase().includes(search)) ||
       (log.entity_type && log.entity_type.toLowerCase().includes(search)) ||
       (log.ip_address && log.ip_address.includes(search)) ||
-      (log.user_email && log.user_email.toLowerCase().includes(search)) ||
+      (log.actor_role && log.actor_role.toLowerCase().includes(search)) ||
       (log.error_code && (ERROR_CODE_LABELS[log.error_code] || log.error_code).toLowerCase().includes(search))
     );
   });
@@ -880,56 +770,11 @@ export default function AuditTrailPage() {
 
         {/* Combined Audit Log Card - Tabs, Filters & Table */}
         <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          {/* View Mode Tabs */}
+          {/* Record Count */}
           <div className="px-3 sm:px-4 md:px-5 pt-3 sm:pt-4 md:pt-5 pb-3 sm:pb-4 border-b border-gray-100">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
-              <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-100 p-0.5 sm:p-1 rounded-lg sm:rounded-xl overflow-x-auto scrollbar-hide">
-                <button
-                  onClick={() => handleViewModeChange('all')}
-                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg font-medium transition-all whitespace-nowrap ${
-                    viewMode === 'all'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Activity className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="text-[10px] sm:text-xs md:text-sm">All</span>
-                </button>
-                <button
-                  onClick={() => handleViewModeChange('system')}
-                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg font-medium transition-all whitespace-nowrap ${
-                    viewMode === 'system'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Settings className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="text-[10px] sm:text-xs md:text-sm">System</span>
-                </button>
-                <button
-                  onClick={() => handleViewModeChange('usage')}
-                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg font-medium transition-all whitespace-nowrap ${
-                    viewMode === 'usage'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <CreditCard className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="text-[10px] sm:text-xs md:text-sm">Usage</span>
-                </button>
-                <button
-                  onClick={() => handleViewModeChange('sessions')}
-                  className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 rounded-md sm:rounded-lg font-medium transition-all whitespace-nowrap ${
-                    viewMode === 'sessions'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <Clock className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="text-[10px] sm:text-xs md:text-sm">Sessions</span>
-                </button>
-              </div>
-              <span className="text-[10px] sm:text-xs md:text-sm text-gray-600 bg-gray-100 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-medium self-start sm:self-auto flex-shrink-0">{filteredLogs.length} records</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs sm:text-sm font-medium text-gray-700">Audit Records</span>
+              <span className="text-[10px] sm:text-xs md:text-sm text-gray-600 bg-gray-100 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-medium">{total} records</span>
             </div>
           </div>
 
@@ -956,7 +801,7 @@ export default function AuditTrailPage() {
                     className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900"
                   >
                     <option value="">All Actions</option>
-                    {filteredAvailableActions.map(action => (
+                    {availableActions.map(action => (
                       <option key={action.value} value={action.value}>{action.label}</option>
                     ))}
                   </select>
@@ -969,7 +814,7 @@ export default function AuditTrailPage() {
                     className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white border border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900"
                   >
                     <option value="">All Entities</option>
-                    {filteredAvailableEntities.map(entity => (
+                    {availableEntities.map(entity => (
                       <option key={entity.value} value={entity.value}>{entity.label}</option>
                     ))}
                   </select>
@@ -1116,44 +961,33 @@ export default function AuditTrailPage() {
               <table className="w-full">
                 <thead>
                   <tr className="bg-gray-50/80">
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Details</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Impact</th>
-                    {viewMode === 'sessions' && (
-                      <>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Error Origin</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Error Code</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Duration</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Refund</th>
-                      </>
-                    )}
-                    {(viewMode === 'all' || viewMode === 'usage') && (
-                      <>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Units Impact</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Available</th>
-                      </>
-                    )}
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"></th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Details</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Impact</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Error Origin</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Error Code</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Duration</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Refund</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Units</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredLogs.map((log) => {
                     const actionStatus = getActionStatus(log.action, log.error_origin);
                     const impact = getImpactText(log);
-                    const balanceBefore = log.balance_before ?? log.details?.balance_before;
-                    const balanceAfter = log.balance_after ?? log.details?.balance_after;
                     return (
                       <tr key={log.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2 text-sm text-gray-600">
                             <Clock className="w-4 h-4 text-gray-400" />
                             <span>{formatDate(log.created_at)}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center text-xs font-semibold shadow-md shadow-gray-200">
                               {(log.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
@@ -1166,25 +1000,22 @@ export default function AuditTrailPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-3 py-1.5 rounded-lg text-xs font-semibold ${getActionColor(log.action)}`}>
                             {log.action_label}
                           </span>
                         </td>
-                        {/* Details */}
-                        <td className="px-6 py-4">
-                          <span className="text-sm text-gray-700 max-w-[200px] truncate block" title={getDetailsSummary(log)}>
+                        <td className="px-4 py-4">
+                          <span className="text-sm text-gray-700 max-w-[180px] truncate block" title={getDetailsSummary(log)}>
                             {getDetailsSummary(log)}
                           </span>
                         </td>
-                        {/* Status (derived from action) */}
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${actionStatus.color}`}>
                             {actionStatus.label}
                           </span>
                         </td>
-                        {/* Impact (severity level) */}
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
                           {(() => {
                             const impactLevel = getImpactLevel(log);
                             return (
@@ -1194,74 +1025,52 @@ export default function AuditTrailPage() {
                             );
                           })()}
                         </td>
-                        {viewMode === 'sessions' && (
-                          <>
-                            {/* Error Origin */}
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {log.error_origin ? (
-                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_ORIGIN_COLORS[log.error_origin as ErrorOrigin]}`}>
-                                  {ERROR_ORIGIN_LABELS[log.error_origin as ErrorOrigin]}
-                                </span>
-                              ) : (
-                                <span className="text-sm text-gray-400">—</span>
-                              )}
-                            </td>
-                            {/* Error Code */}
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {log.error_code ? (
-                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_CODE_COLORS[log.error_code] || 'bg-gray-50 text-gray-600'}`}>
-                                  {ERROR_CODE_LABELS[log.error_code] || log.error_code}
-                                </span>
-                              ) : (
-                                <span className="text-sm text-gray-400">—</span>
-                              )}
-                            </td>
-                            {/* Duration */}
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-sm text-gray-700 font-medium">
-                                {formatSessionDuration(log.total_session_duration)}
-                              </span>
-                            </td>
-                            {/* Refund */}
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {log.refund_flag ? (
-                                <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${REFUND_FLAG_COLORS[log.refund_flag as 'YES' | 'NO']}`}>
-                                  {log.refund_flag}
-                                </span>
-                              ) : (
-                                <span className="text-sm text-gray-400">—</span>
-                              )}
-                            </td>
-                          </>
-                        )}
-                        {(viewMode === 'all' || viewMode === 'usage') && (
-                          <>
-                            {/* Units Impact */}
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {impact.text !== '—' ? (
-                                <span className={`inline-flex items-center gap-1 text-sm font-semibold ${impact.negative ? 'text-red-700' : impact.positive ? 'text-green-600' : 'text-gray-500'}`}>
-                                  {impact.negative && <Zap className="w-3.5 h-3.5" />}
-                                  {impact.text}
-                                </span>
-                              ) : (
-                                <span className="text-sm text-gray-400">—</span>
-                              )}
-                            </td>
-                            {/* Available Units (Balance Before -> After) */}
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {balanceBefore != null ? (
-                                <div className="text-sm">
-                                  <span className="text-gray-600">{balanceBefore}</span>
-                                  <span className="text-gray-400 mx-1">→</span>
-                                  <span className="font-medium text-gray-800">{balanceAfter ?? 0}</span>
-                                </div>
-                              ) : (
-                                <span className="text-sm text-gray-400">—</span>
-                              )}
-                            </td>
-                          </>
-                        )}
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {log.error_origin && log.error_origin !== 'NONE' ? (
+                            <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_ORIGIN_COLORS[log.error_origin as ErrorOrigin]}`}>
+                              {ERROR_ORIGIN_LABELS[log.error_origin as ErrorOrigin]}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {log.error_code ? (
+                            <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_CODE_COLORS[log.error_code] || 'bg-gray-50 text-gray-600'}`}>
+                              {ERROR_CODE_LABELS[log.error_code] || log.error_code}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {log.total_session_duration != null ? (
+                            <span className="text-sm text-gray-700 font-medium">
+                              {formatSessionDuration(log.total_session_duration)}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {log.refund_flag && log.refund_flag !== 'NO' ? (
+                            <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${REFUND_FLAG_COLORS[log.refund_flag as 'YES' | 'NO']}`}>
+                              {log.refund_flag}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {impact.text !== '—' ? (
+                            <span className={`inline-flex items-center gap-1 text-sm font-semibold ${impact.negative ? 'text-red-700' : impact.positive ? 'text-green-600' : 'text-gray-500'}`}>
+                              {impact.text}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <button
                             onClick={() => setSelectedLog(log)}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
@@ -1286,11 +1095,6 @@ export default function AuditTrailPage() {
                 <p className="text-[10px] sm:text-xs md:text-sm text-gray-600">
                   Showing <span className="font-semibold text-gray-900">{Math.min((page - 1) * pageSize + 1, total)}</span>–<span className="font-semibold text-gray-900">{Math.min(page * pageSize, total)}</span> of <span className="font-semibold text-gray-900">{total}</span>
                 </p>
-                {viewMode !== 'all' && (
-                  <span className="text-[10px] sm:text-xs text-gray-500">
-                    ({filteredLogs.length} {viewMode === 'usage' ? 'usage' : viewMode === 'sessions' ? 'sessions' : 'system'})
-                  </span>
-                )}
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
                 <button
