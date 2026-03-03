@@ -75,8 +75,9 @@ interface AuditLog {
   error_code: string | null;
   // Refund tracking (Section 6)
   refund_flag: 'YES' | 'NO' | null;
-  // Module type for session-based actions
+  // Module type and actor role
   module_type: string | null;
+  actor_role: string | null;
   created_at: string;
 }
 
@@ -224,7 +225,7 @@ export default function AuditTrailPage() {
 
   // Valid backend enum values (actions the API accepts as filters)
   const validBackendActions = [
-    'login', 'logout', 'login_failed', 'password_change', 'password_reset',
+    'login', 'logout', 'login_failed', 'activate_login', 'password_change', 'password_reset',
     'user_create', 'user_update', 'user_delete', 'user_activate', 'user_deactivate', 'user_invite', 'user_role_change',
     'role_create', 'role_update', 'role_delete', 'permission_update',
     'jd_create', 'jd_update', 'jd_delete', 'jd_publish', 'jd_archive',
@@ -233,17 +234,21 @@ export default function AuditTrailPage() {
     'resume_upload_failed', 'resume_move_failed', 'search_failed',
     'folder_create', 'folder_update', 'folder_delete',
     'folder_create_failed', 'folder_update_failed', 'folder_delete_failed',
-    'scoring_submit', 'scoring_complete', 'ai_match_run', 'ai_match_failed',
-    'assessment_create', 'assessment_update', 'assessment_delete', 'assessment_publish', 'assessment_invite', 'assessment_start', 'assessment_complete', 'assessment_error',
+    'scoring_submit', 'scoring_complete', 'scoring_failed', 'bulk_score', 'ai_match_run', 'ai_match_failed',
+    'assessment_create', 'assessment_update', 'assessment_delete', 'assessment_publish', 'assessment_invite', 'assessment_start', 'assessment_complete', 'assessment_exit', 'assessment_error',
+    'ai_interview_create', 'ai_interview_invite', 'ai_interview_start', 'ai_interview_complete', 'ai_interview_exit', 'ai_interview_error',
     'master_create', 'master_update', 'master_delete',
     'settings_update', 'company_settings_update',
-    'subscription_upgrade', 'subscription_downgrade', 'subscription_cancel', 'payment_method_add', 'payment_method_remove',
+    'subscription_activation', 'subscription_upgrade', 'subscription_downgrade', 'subscription_cancel', 'payment_method_add', 'payment_method_remove',
+    'tenant_signup', 'plan_selection', 'payment_confirmation', 'resource_provisioning', 'activation_failure',
+    'addon_purchase', 'seats_purchase', 'unit_consume', 'usage_recorded',
+    'embedding_generated', 'embedding_failed', 'embedding_updated',
     'export_excel', 'export_pdf', 'export_csv',
     'session_start', 'session_complete', 'session_interrupted',
   ];
 
   const validBackendEntities = [
-    'user', 'job_description', 'resume', 'resume_batch', 'folder', 'assessment', 'role', 'permission', 'master_data', 'settings', 'subscription', 'session',
+    'user', 'job_description', 'resume', 'resume_batch', 'folder', 'assessment', 'role', 'permission', 'master_data', 'settings', 'subscription', 'session', 'scoring_batch',
   ];
 
   const fetchAuditLogs = useCallback(async () => {
@@ -621,7 +626,7 @@ export default function AuditTrailPage() {
 
   const convertToCSV = (logs: AuditLog[]): string => {
     const headers = [
-      'Timestamp', 'User', 'Action', 'Entity Type', 'Entity ID', 'Status', 'Details', 'Impact',
+      'Timestamp', 'User', 'Role', 'Action', 'Module', 'Entity Type', 'Entity ID', 'Status', 'Details', 'Impact',
       'Unit Type', 'Units Impact', 'Available Before', 'Available After',
       'Error Origin', 'Error Code', 'Session Start', 'Session End', 'Duration (s)', 'Refund',
       'IP Address',
@@ -632,7 +637,9 @@ export default function AuditTrailPage() {
       return [
         log.created_at,
         log.user_name,
+        log.actor_role || '',
         log.action_label,
+        log.module_type || '',
         log.entity_type || '',
         log.entity_id || '',
         status.label,
@@ -709,7 +716,8 @@ export default function AuditTrailPage() {
 
   // Session-based actions for the Sessions view tab
   const sessionActions = [
-    'assessment_start', 'assessment_complete', 'assessment_error',
+    'assessment_start', 'assessment_complete', 'assessment_exit', 'assessment_error',
+    'ai_interview_start', 'ai_interview_complete', 'ai_interview_exit', 'ai_interview_error',
     'session_start', 'session_complete', 'session_interrupted',
   ];
 
@@ -727,7 +735,7 @@ export default function AuditTrailPage() {
     : viewMode === 'usage'
       ? availableEntities.filter(entity => usageEntityTypes.includes(entity.value))
       : viewMode === 'sessions'
-        ? availableEntities.filter(entity => ['assessment', 'session'].includes(entity.value))
+        ? availableEntities.filter(entity => ['assessment', 'session', 'ai_interview'].includes(entity.value))
         : availableEntities.filter(entity => !usageEntityTypes.includes(entity.value));
 
   const filteredLogs = auditLogs.filter(log => {
@@ -1152,8 +1160,8 @@ export default function AuditTrailPage() {
                             </div>
                             <div>
                               <p className="text-sm font-medium text-gray-900">{log.user_name || 'Unknown'}</p>
-                              {log.user_email && (
-                                <p className="text-xs text-gray-500">{log.user_email}</p>
+                              {log.actor_role && (
+                                <p className="text-xs text-gray-500 capitalize">{log.actor_role.replace(/_/g, ' ').toLowerCase()}</p>
                               )}
                             </div>
                           </div>
@@ -1342,8 +1350,8 @@ export default function AuditTrailPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-xs sm:text-sm md:text-base text-gray-900">{selectedLog.user_name || 'Unknown User'}</p>
-                  {selectedLog.user_email && (
-                    <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate">{selectedLog.user_email}</p>
+                  {selectedLog.actor_role && (
+                    <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 truncate capitalize">{selectedLog.actor_role.replace(/_/g, ' ').toLowerCase()}</p>
                   )}
                 </div>
                 <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold flex-shrink-0 ${getActionColor(selectedLog.action)}`}>
