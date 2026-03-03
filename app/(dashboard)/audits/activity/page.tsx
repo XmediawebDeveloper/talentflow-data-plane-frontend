@@ -53,6 +53,7 @@ interface AuditLog {
   error_code: string | null;
   refund_flag: 'YES' | 'NO' | null;
   module_type: string | null;
+  actor_role: string | null;
   created_at: string;
 }
 
@@ -294,6 +295,9 @@ export default function ActivityLogsPage() {
                               <div>
                                 <p className="text-sm text-gray-900">
                                   <span className="font-medium">{log.user_name}</span>
+                                  {log.actor_role && (
+                                    <span className="text-xs text-gray-400 ml-1 capitalize">({log.actor_role.replace(/_/g, ' ').toLowerCase()})</span>
+                                  )}
                                   {' '}
                                   <span className="text-gray-600">{log.action_label.toLowerCase()}</span>
                                   {log.entity_type && (
