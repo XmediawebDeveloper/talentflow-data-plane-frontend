@@ -166,8 +166,9 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           // Keep interval running for the level bar visualization
         }
       }, 100);
-    } catch {
-      setMicQuality('good'); // graceful degradation
+    } catch (err) {
+      console.error('[SystemCheck] Microphone quality check failed:', err);
+      setMicQuality('silent');
     }
   }, []);
 
@@ -400,7 +401,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       // Preload avatar assets so interview starts instantly after system check
       // These fetch calls just warm the browser cache — no processing needed
       fetch('/talkinghead/talkinghead.mjs').catch(() => {});
-      fetch('/avatar.glb').catch(() => {});
+      fetch('/models/rpm-recruiter.glb').catch(() => {});
     }
     return () => {
       cleanupAllChecks();
@@ -434,12 +435,18 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     if (!allChecksReady || systemCheckSubmitting) return;
     setSystemCheckSubmitting(true);
 
-    // Request fullscreen immediately — must be in the user gesture (click) context
+    // CRITICAL: Create AudioContext FIRST — must happen in the synchronous
+    // user gesture (click) context BEFORE any awaits, otherwise browsers block it.
+    // sampleRate: 24000 must match backend TTS output (OpenAI PCM 24kHz).
     try {
-      await requestFullscreen();
-    } catch {
-      // Continue even if fullscreen fails
+      const ctx = new AudioContext({ sampleRate: 24000 });
+      (window as any).__interviewAudioContext = ctx;
+      console.log("[Portal] AudioContext created at 24kHz from user gesture, state:", ctx.state);
+    } catch (e) {
+      console.warn("[Portal] Failed to pre-create AudioContext:", e);
     }
+
+    // Fullscreen disabled — no popup
 
     try {
       // Record system check results (fire-and-forget is fine, don't block start)
