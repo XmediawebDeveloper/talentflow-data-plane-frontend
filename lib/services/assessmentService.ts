@@ -182,11 +182,13 @@ export interface ProctoringStats {
   paste_count: number;
   window_blur_count: number;
   video_violation_count: number;
+  camera_obstructed_count?: number;  // Subset of video_violations, camera specifically obstructed
   voice_violation_count: number;
   multiple_faces_count: number;
+  face_not_visible_count?: number;   // face_missing events (separate from multiple_faces)
   fullscreen_exit_count: number;
-  screen_capture_count?: number; // screenshot_attempt + screen_recording_attempt combined
-  other_violation_count?: number; // Uncategorized events
+  screen_capture_count?: number;     // screenshot_attempt + screen_recording_attempt combined
+  other_violation_count?: number;    // Uncategorized events
   total_violations: number;
   integrity_status: 'clean' | 'flagged' | 'suspicious';
   proctoring_score?: number;

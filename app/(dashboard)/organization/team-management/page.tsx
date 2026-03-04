@@ -8,7 +8,6 @@ import FeatureGate from '@/components/shared/FeatureGate';
 import teamService, { Team, TeamStats } from '@/lib/services/teamService';
 import authService, { User } from '@/lib/services/authService';
 import userService, { ApiUser } from '@/lib/services/userService';
-import TeamUsageSummary from '@/components/usage/TeamUsageSummary';
 import {
   TeamStatsCards,
   TeamCard,
@@ -19,6 +18,7 @@ import {
   EmptyState,
   TeamFormData,
   TeamAnalyticsDashboard,
+  TeamUsageAnalytics,
 } from '@/components/teams';
 
 const ITEMS_PER_PAGE = 6;
@@ -47,11 +47,6 @@ export default function TeamManagementPage() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // RBAC02 Task #15: Team limit state
-  const [maxTeams, setMaxTeams] = useState<number>(-1);
-  const [teamsEnabled, setTeamsEnabled] = useState<boolean>(true);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
-
   // Tab state
   const [activeTab, setActiveTab] = useState<'teams' | 'usage' | 'analytics'>('teams');
 
@@ -67,17 +62,19 @@ export default function TeamManagementPage() {
     const initializePage = async () => {
       setIsLoading(true);
       try {
-        const [userData, teamsData, statsData, teamConfig] = await Promise.all([
+        const [userData, teamsData, statsData] = await Promise.all([
           authService.getCurrentUser(),
           teamService.getTeams(),
           teamService.getTeamStats(),
-          teamService.getTeamConfig(),
         ]);
 
         if (!isMounted) return;
 
-        // Check permission
-        const hasPermission = userData.role === 'tenant_admin' || userData.permissions?.can_manage_users;
+        // Check permission — tenant_admin full access; recruiters with can_view_teams get read-only view
+        const hasPermission =
+          userData.role === 'tenant_admin' ||
+          userData.permissions?.can_view_teams ||
+          userData.permissions?.can_manage_users;
         if (!hasPermission) {
           toast.error('You do not have permission to access Team Management');
           router.push('/dashboard');
@@ -87,8 +84,6 @@ export default function TeamManagementPage() {
         setCurrentUser(userData);
         setTeams(teamsData);
         setStats(statsData);
-        setTeamsEnabled(teamConfig.teams_enabled);
-        setMaxTeams(teamConfig.max_teams);
       } catch (error: any) {
         console.error('Error fetching data:', error);
         if (!isMounted) return;
@@ -174,16 +169,6 @@ export default function TeamManagementPage() {
   const handleOpenCreateModal = async () => {
     if (currentUser?.role !== 'tenant_admin') {
       toast.error('Only tenant administrators can create teams');
-      return;
-    }
-
-    if (!teamsEnabled) {
-      setShowUpgradeModal(true);
-      return;
-    }
-
-    if (isAtTeamLimit) {
-      toast.error(`You have reached the maximum number of teams (${maxTeams}) for your plan.`);
       return;
     }
 
@@ -307,8 +292,7 @@ export default function TeamManagementPage() {
 
   // Computed values
   const isTenantAdmin = currentUser?.role === 'tenant_admin';
-  const canCreateTeams = isTenantAdmin && teamsEnabled;
-  const isAtTeamLimit = maxTeams !== -1 && stats.total_teams >= maxTeams;
+  const canCreateTeams = isTenantAdmin;
 
   if (isLoading) {
     return (
@@ -346,31 +330,18 @@ export default function TeamManagementPage() {
               <p className="text-gray-600">Manage teams, members, and view usage</p>
             </div>
             {isTenantAdmin && (
-              <div className="flex flex-col items-end gap-2">
-                <button
-                  onClick={handleOpenCreateModal}
-                  disabled={canCreateTeams && isAtTeamLimit}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-xl transition-all shadow-lg ${
-                    canCreateTeams && isAtTeamLimit
-                      ? 'bg-gray-400 text-white cursor-not-allowed'
-                      : 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-xl'
-                  }`}
-                  title={!teamsEnabled ? 'Upgrade to create teams' : isAtTeamLimit ? `Team limit reached` : 'Create a new team'}
-                >
-                  <Plus className="w-5 h-5" />
-                  Create Team
-                </button>
-                {teamsEnabled && maxTeams !== -1 && (
-                  <p className={`text-sm ${isAtTeamLimit ? 'text-red-600 font-medium' : 'text-gray-600'}`}>
-                    {stats.total_teams}/{maxTeams} teams used
-                  </p>
-                )}
-              </div>
+              <button
+                onClick={handleOpenCreateModal}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl transition-all shadow-lg bg-gray-800 text-white hover:bg-gray-900 hover:shadow-xl"
+              >
+                <Plus className="w-5 h-5" />
+                Create Team
+              </button>
             )}
           </div>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs — Usage and Analytics are admin-only */}
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => setActiveTab('teams')}
@@ -383,35 +354,37 @@ export default function TeamManagementPage() {
             <Users className="w-4 h-4" />
             Teams
           </button>
-          <button
-            onClick={() => setActiveTab('usage')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-              activeTab === 'usage'
-                ? 'bg-gray-800 text-white'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            Team Usage
-          </button>
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-              activeTab === 'analytics'
-                ? 'bg-gray-800 text-white'
-                : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-            }`}
-          >
-            <TrendingUp className="w-4 h-4" />
-            Analytics
-          </button>
+          {isTenantAdmin && (
+            <>
+              <button
+                onClick={() => setActiveTab('usage')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  activeTab === 'usage'
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Team Usage
+              </button>
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  activeTab === 'analytics'
+                    ? 'bg-gray-800 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" />
+                Analytics
+              </button>
+            </>
+          )}
         </div>
 
         {/* Usage Tab Content */}
         {activeTab === 'usage' ? (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <TeamUsageSummary userRole={currentUser?.role || 'standard_user'} />
-          </div>
+          <TeamUsageAnalytics />
         ) : activeTab === 'analytics' ? (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <TeamAnalyticsDashboard userRole={currentUser?.role || 'standard_user'} />
@@ -476,6 +449,7 @@ export default function TeamManagementPage() {
                 <TeamCard
                   key={team.id}
                   team={team}
+                  canManage={isTenantAdmin}
                   onViewDetails={handleViewDetails}
                   onManageTeam={handleManageTeam}
                 />
@@ -486,8 +460,6 @@ export default function TeamManagementPage() {
                 <EmptyState
                   isTenantAdmin={isTenantAdmin}
                   canCreateTeams={canCreateTeams}
-                  isAtTeamLimit={isAtTeamLimit}
-                  maxTeams={maxTeams}
                   onCreateTeam={handleOpenCreateModal}
                 />
               )}
@@ -617,59 +589,6 @@ export default function TeamManagementPage() {
         isDeleting={isDeleting}
       />
 
-      {/* Upgrade Plan Modal */}
-      {showUpgradeModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-            <div className="bg-gradient-to-r from-gray-800 to-gray-900 px-6 py-8 text-center">
-              <div className="w-16 h-16 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Users className="w-8 h-8 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Upgrade Your Plan</h2>
-              <p className="text-gray-300 text-sm">Unlock team collaboration features</p>
-            </div>
-            <div className="p-6">
-              <div className="text-center mb-6">
-                <p className="text-gray-700 mb-4">
-                  Team Management is available on <span className="font-semibold text-gray-900">Professional</span> and <span className="font-semibold text-gray-900">Enterprise</span> plans.
-                </p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-4 mb-6">
-                <h4 className="font-medium text-gray-900 mb-3">With Teams you can:</h4>
-                <ul className="space-y-2 text-sm text-gray-600">
-                  {['Create and manage multiple teams', 'Assign team leads and members', 'Track team-level usage and analytics', 'Collaborate on job descriptions and resumes'].map((item) => (
-                    <li key={item} className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center">
-                        <svg className="w-3 h-3 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-            <div className="px-6 pb-6 space-y-3">
-              <button
-                onClick={() => {
-                  setShowUpgradeModal(false);
-                  router.push('/subscription/current-plan');
-                }}
-                className="w-full px-4 py-3 bg-gradient-to-r from-gray-800 to-gray-900 text-white rounded-xl hover:from-gray-900 hover:to-black transition-all font-medium shadow-lg"
-              >
-                View Upgrade Options
-              </button>
-              <button
-                onClick={() => setShowUpgradeModal(false)}
-                className="w-full px-4 py-2.5 text-gray-600 hover:text-gray-900 transition-colors font-medium"
-              >
-                Maybe Later
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </main>
     </FeatureGate>
   );

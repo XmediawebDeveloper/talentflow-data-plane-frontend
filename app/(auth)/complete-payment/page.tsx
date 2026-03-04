@@ -1,5 +1,9 @@
 'use client';
 
+// MIRROR PAGE: This file and components/auth/SignUp.tsx share the same
+// plan display logic (quota rendering, feature list, formatQuotaValue, etc.).
+// Any changes made here must also be applied to SignUp.tsx and vice versa.
+
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -270,10 +274,11 @@ function CompletePaymentContent() {
   };
 
   // Helper to format quota value
-  const formatQuotaValue = (key: string, value: number | undefined): string => {
+  const formatQuotaValue = (key: string, value: number | string | undefined): string => {
     if (value === undefined || value === null) return 'Unlimited';
     if (value === -1) return 'Unlimited';
-    return value.toLocaleString();
+    if (typeof value === 'string' && value.toLowerCase() === 'unlimited') return 'Unlimited';
+    return Number(value).toLocaleString();
   };
 
   // --- Styles (matching SignUp.tsx payment step) ---
@@ -452,7 +457,7 @@ function CompletePaymentContent() {
             <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {Object.entries(planDetails.quotas)
-                  .filter(([key]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key))
+                  .filter(([key, value]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key) && value !== 0 && value !== null && value !== undefined)
                   .map(([key, value]) => (
                   <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid #E5E7EB' }}>
                     <span style={{ fontSize: 13, color: '#6B7280' }}>{getQuotaLabel(key)}</span>

@@ -1,9 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Users, BarChart3 } from 'lucide-react';
+import { X, Users } from 'lucide-react';
 import { Team } from '@/lib/services/teamService';
-import TeamMemberUsage from './TeamMemberUsage';
 
 interface TeamDetailsModalProps {
   isOpen: boolean;
@@ -12,10 +10,7 @@ interface TeamDetailsModalProps {
   userRole?: string;
 }
 
-export default function TeamDetailsModal({ isOpen, onClose, team, userRole = 'standard_user' }: TeamDetailsModalProps) {
-  const [activeTab, setActiveTab] = useState<'details' | 'usage'>('details');
-  const isTenantAdmin = userRole === 'tenant_admin' || userRole === 'owner' || userRole === 'admin';
-
+export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsModalProps) {
   if (!isOpen || !team) return null;
 
   return (
@@ -23,7 +18,7 @@ export default function TeamDetailsModal({ isOpen, onClose, team, userRole = 'st
       <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
         {/* Modal Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-gray-900">Team Details</h2>
             <button
               onClick={onClose}
@@ -33,42 +28,10 @@ export default function TeamDetailsModal({ isOpen, onClose, team, userRole = 'st
               <X className="w-5 h-5 text-gray-500" />
             </button>
           </div>
-
-          {/* Tabs */}
-          {isTenantAdmin && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => setActiveTab('details')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                  activeTab === 'details'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                Details
-              </button>
-              <button
-                onClick={() => setActiveTab('usage')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
-                  activeTab === 'usage'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                <BarChart3 className="w-4 h-4" />
-                Member Usage
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Modal Body */}
         <div className="p-6 space-y-6">
-          {activeTab === 'usage' && isTenantAdmin ? (
-            <TeamMemberUsage team={team} userRole={userRole} />
-          ) : (
-            <>
           {/* Team Info */}
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{team.name}</h3>
@@ -160,8 +123,6 @@ export default function TeamDetailsModal({ isOpen, onClose, team, userRole = 'st
               </div>
             </div>
           </div>
-            </>
-          )}
         </div>
 
         {/* Modal Footer */}

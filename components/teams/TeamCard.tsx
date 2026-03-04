@@ -8,9 +8,10 @@ interface TeamCardProps {
   team: Team;
   onViewDetails: (teamId: string) => void;
   onManageTeam: (teamId: string) => void;
+  canManage?: boolean;
 }
 
-export function TeamCard({ team, onViewDetails, onManageTeam }: TeamCardProps) {
+export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false }: TeamCardProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow">
       {/* Team Header */}
@@ -75,12 +76,14 @@ export function TeamCard({ team, onViewDetails, onManageTeam }: TeamCardProps) {
           >
             View Details
           </button>
-          <button
-            onClick={() => onManageTeam(team.id)}
-            className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all font-medium"
-          >
-            Manage Team
-          </button>
+          {canManage && (
+            <button
+              onClick={() => onManageTeam(team.id)}
+              className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all font-medium"
+            >
+              Manage Team
+            </button>
+          )}
         </div>
       </div>
     </div>

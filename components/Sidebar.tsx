@@ -177,17 +177,16 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
       ]
     },
 
-    // User Management - Admin only
+    // User Management
     {
       id: 'user-management-section',
       label: 'User Management',
       icon: UserCog,
-      adminOnly: true,
       children: [
         { id: 'user-management', label: 'Users', icon: Users, adminOnly: true },
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, adminOnly: true },
-        { id: 'team-management', label: 'Teams', icon: Users, adminOnly: true },
-        { id: 'team-chat', label: 'Chat', icon: MessageCircle },  // ✅ Available to ALL users (bypass permission check)
+        { id: 'team-management', label: 'Teams', icon: Users, permission: 'canViewTeams' },
+        { id: 'team-chat', label: 'Chat', icon: MessageCircle },  // ✅ Available to ALL users
       ]
     },
 
