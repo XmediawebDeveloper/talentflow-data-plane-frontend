@@ -97,6 +97,9 @@ interface DisplayPlan {
   gradient: string;
   popular: boolean;
   features: string[];
+  // Separate features for monthly and annual billing periods
+  monthlyFeatures?: string[];
+  annualFeatures?: string[];
   quotas?: PlanQuotas;
   // Separate quotas for monthly and annual - from API directly
   monthlyQuotas?: PlanQuotas;
@@ -867,9 +870,13 @@ function CurrentPlanContent() {
           if (!monthly?.is_active && !annual?.is_active) return null;
           if (!monthly?.is_public && !annual?.is_public) return null;
 
-          const featureNames = basePlan.features
+          const monthlyFeatureNames = monthly?.features
             ?.filter(f => f.is_enabled)
             ?.map(f => f.feature_name) || [];
+          const annualFeatureNames = annual?.features
+            ?.filter(f => f.is_enabled)
+            ?.map(f => f.feature_name) || [];
+          const featureNames = monthlyFeatureNames.length > 0 ? monthlyFeatureNames : annualFeatureNames;
 
           // Check if monthly or annual plan is the current plan
           // Use quota-status API as single source of truth for plan info
@@ -896,6 +903,8 @@ function CurrentPlanContent() {
             gradient: getGradientForPlan(groupedPlan.plan_name, groupedPlan.plan_tier),
             popular: basePlan.is_featured || false,
             features: featureNames,
+            monthlyFeatures: monthlyFeatureNames,
+            annualFeatures: annualFeatureNames,
             quotas: basePlan.quotas,
             // Store separate quotas for monthly and annual from API
             monthlyQuotas: monthly?.quotas,
@@ -2580,31 +2589,36 @@ function CurrentPlanContent() {
                     })()}
 
                     {/* Features Section - Expand on hover */}
-                    {plan.features.length > 0 && (
-                      <div className="mb-6">
-                        <ul className="space-y-2.5">
-                          {plan.features.slice(0, expandedFeaturesPlan === plan.id ? undefined : 4).map((feature, idx) => (
-                            <li key={idx} className="flex items-start gap-2.5">
-                              <Check className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
-                              <span className="text-gray-700 text-sm">{feature}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        {plan.features.length > 4 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setExpandedFeaturesPlan(expandedFeaturesPlan === plan.id ? null : plan.id);
-                            }}
-                            className="text-gray-400 hover:text-gray-600 text-sm mt-2 pl-6 text-left"
-                          >
-                            {expandedFeaturesPlan === plan.id
-                              ? 'Show less'
-                              : `+${plan.features.length - 4} more features`}
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    {(() => {
+                      const displayFeatures = isYearly
+                        ? (plan.annualFeatures?.length ? plan.annualFeatures : plan.features)
+                        : (plan.monthlyFeatures?.length ? plan.monthlyFeatures : plan.features);
+                      return displayFeatures.length > 0 && (
+                        <div className="mb-6">
+                          <ul className="space-y-2.5">
+                            {displayFeatures.slice(0, expandedFeaturesPlan === plan.id ? undefined : 4).map((feature, idx) => (
+                              <li key={idx} className="flex items-start gap-2.5">
+                                <Check className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
+                                <span className="text-gray-700 text-sm">{feature}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          {displayFeatures.length > 4 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedFeaturesPlan(expandedFeaturesPlan === plan.id ? null : plan.id);
+                              }}
+                              className="text-gray-400 hover:text-gray-600 text-sm mt-2 pl-6 text-left"
+                            >
+                              {expandedFeaturesPlan === plan.id
+                                ? 'Show less'
+                                : `+${displayFeatures.length - 4} more features`}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Spacer to push button to bottom */}
                     <div className="flex-grow" />
