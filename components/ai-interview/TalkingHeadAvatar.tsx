@@ -69,6 +69,16 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
           const head = new TalkingHead(containerRef.current!, {
             lipsyncModules: ["en"],
+            cameraView: "full",
+            cameraRotateEnable: false,
+            cameraPanEnable: false,
+            cameraZoomEnable: false,
+            avatarMood: "neutral",
+            avatarIdleEyeContact: 0.7,
+            avatarIdleHeadMove: 0.15,
+            avatarSpeakingEyeContact: 0.8,
+            avatarSpeakingHeadMove: 0.2,
+            modelMovementFactor: 0.5,
           });
 
           await head.showAvatar({
@@ -76,6 +86,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             body: "F",
             lipsyncLang: "en",
           });
+
 
           if (!mounted) return;
 

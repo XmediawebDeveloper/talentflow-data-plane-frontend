@@ -1233,11 +1233,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       });
   }, []);
 
-  // Connect WebSocket only after avatar is ready (so greeting plays with visible avatar)
+  // Auto-connect on mount
   useEffect(() => {
-    if (!avatarReady) return;
     isUnmountedRef.current = false;
-    const timer = setTimeout(() => { connect(); }, 100);
+    const timer = setTimeout(() => { connect(); }, 300);
     return () => {
       isUnmountedRef.current = true;
       clearTimeout(timer);
