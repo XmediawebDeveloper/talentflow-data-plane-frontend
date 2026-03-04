@@ -1,5 +1,5 @@
 import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
 import { toast } from 'sonner';
@@ -79,6 +79,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
+  const initialLoadDone = useRef(false);
   const [apiStats, setApiStats] = useState<{ completed_count: number; in_progress_count: number; pending_count: number; average_score: number | null }>({ completed_count: 0, in_progress_count: 0, pending_count: 0, average_score: null });
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
@@ -238,7 +240,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Fetch results from API with server-side pagination and filters
   useEffect(() => {
     const fetchResults = async () => {
-      setIsLoading(true);
+      if (!initialLoadDone.current) {
+        setIsLoading(true);
+      } else {
+        setIsFetching(true);
+      }
       try {
         // Build server-side filter parameters
         const params: any = {
@@ -262,9 +268,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           params.passed = false;
         }
 
-        // Date range filter
-        if (dateFrom) params.date_from = dateFrom;
-        if (dateTo) params.date_to = dateTo;
+        // Date range filter — append time so FastAPI parses as valid datetime
+        if (dateFrom) params.date_from = `${dateFrom}T00:00:00`;
+        if (dateTo) params.date_to = `${dateTo}T23:59:59`;
 
         const response = await assessmentService.listResults(assessmentId, params);
         if (response?.items) {
@@ -377,11 +383,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         setTotalItems(0);
       } finally {
         setIsLoading(false);
+        setIsFetching(false);
+        initialLoadDone.current = true;
       }
     };
 
     fetchResults();
-  }, [assessmentId, currentPage, pageSize, searchQuery, statusFilter, passFailFilter]);
+  }, [assessmentId, currentPage, pageSize, searchQuery, statusFilter, passFailFilter, dateFrom, dateTo]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -1079,7 +1087,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         {/* Candidates Results Table */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-            <h2 className="text-sm sm:text-base font-medium text-gray-900">Candidate Results</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-medium text-gray-900">Candidate Results</h2>
+              {isFetching && (
+                <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+              )}
+            </div>
             <div className="text-xs sm:text-sm text-gray-500">
               {selectedRows.length > 0 && `${selectedRows.length} selected`}
             </div>

@@ -1616,7 +1616,7 @@ export default function CandidateResultDetails({
                               const cfg = (() => {
                                 switch (row.event_type) {
                                   case 'tab_switch':               return { label: 'Tab Switch',               icon: <Monitor className="w-4 h-4" />,      color: 'text-orange-600', bg: 'bg-orange-50',  severity: 'medium' };
-                                  case 'window_blur':              return { label: 'Window Blur / Focus Lost', icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',    bg: 'bg-red-50',     severity: 'high'   };
+                                  case 'window_blur':              return { label: 'Mouse Movement',           icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',    bg: 'bg-red-50',     severity: 'high'   };
                                   case 'copy_attempt':             return { label: 'Copy Attempt',             icon: <Clipboard className="w-4 h-4" />,    color: 'text-yellow-600', bg: 'bg-yellow-50',  severity: 'medium' };
                                   case 'paste_attempt':            return { label: 'Paste Attempt',            icon: <MousePointer className="w-4 h-4" />, color: 'text-yellow-600', bg: 'bg-yellow-50',  severity: 'medium' };
                                   case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-gray-600',   bg: 'bg-gray-50',    severity: 'low'    };
