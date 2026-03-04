@@ -21,6 +21,7 @@ import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
+import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
 import { toast } from 'sonner';
@@ -192,6 +193,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
 
+  // AI Talent Match state
+  const [aiMatchSessions, setAiMatchSessions] = useState<AIMatchSessionResponse[]>([]);
+  const [aiMatchResults, setAiMatchResults] = useState<AIMatchResultItem[]>([]);
+  const [loadingAiMatch, setLoadingAiMatch] = useState(false);
+
   // ✅ PERMISSIONS: Permission checking function
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
@@ -243,6 +249,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   useEffect(() => {
     if (job.id && hasPlanFeature('assessment')) {
       fetchAssessmentResults();
+    }
+  }, [job.id, hasPlanFeature]);
+
+  // Fetch AI match data on component mount (only if plan includes ai_talent_match)
+  useEffect(() => {
+    if (job.id && hasPlanFeature('ai_talent_match')) {
+      fetchAiMatchData();
     }
   }, [job.id, hasPlanFeature]);
 
@@ -322,6 +335,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
         return {
           id: item.id,
+          resume_id: item.resume_id || '',
           candidateName: item.candidate_name || 'Unknown',
           email: item.candidate_email || '',
           phone: item.phone || '',
@@ -496,7 +510,28 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results'>('overview');
+  // Fetch AI match sessions for this JD
+  const fetchAiMatchData = async () => {
+    setLoadingAiMatch(true);
+    try {
+      const response = await aiMatchService.listSessions({ jd_id: job.id, page_size: 100 });
+      const sessions = response.items || [];
+      setAiMatchSessions(sessions);
+      const allResults: AIMatchResultItem[] = [];
+      sessions.forEach(session => {
+        (session.results || []).forEach(result => allResults.push(result));
+      });
+      setAiMatchResults(allResults);
+    } catch (error) {
+      console.error('Failed to fetch AI match data:', error);
+      setAiMatchSessions([]);
+      setAiMatchResults([]);
+    } finally {
+      setLoadingAiMatch(false);
+    }
+  };
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match'>('overview');
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -923,30 +958,24 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* Action Buttons - Only for Published jobs */}
             {job.status === 'Published' && (
               <div className="flex items-center gap-2">
-                {/* JD13: Edit Button - COMMENTED OUT */}
-                {false && onEdit && (
+                {onDisable && (
                   <button
-                    onClick={handleEdit}
-                    disabled={job.usageStatus?.is_used}
-                    className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                      job.usageStatus?.is_used
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-gray-700 text-white hover:bg-gray-800'
-                    }`}
-                    title={job.usageStatus?.is_used ? job.usageStatus.edit_restriction_reason : 'Edit this job description'}
+                    onClick={handleDisable}
+                    className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-all flex items-center gap-2"
+                    title="Disable this job description"
                   >
-                    <Edit className="w-4 h-4" />
-                    <span className="font-medium">Edit & Republish</span>
+                    <Ban className="w-4 h-4" />
+                    <span className="font-medium">Disable</span>
                   </button>
                 )}
-                {/* Delete button - COMMENTED OUT */}
-                {false && onDelete && (
+                {onArchive && (
                   <button
-                    onClick={handleDelete}
-                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
-                    title="Delete Job"
+                    onClick={handleArchive}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
+                    title="Archive this job description"
                   >
-                    <Trash2 className="w-5 h-5" />
+                    <Archive className="w-4 h-4" />
+                    <span className="font-medium">Archive</span>
                   </button>
                 )}
               </div>
@@ -1062,6 +1091,28 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {assessmentResults.length}
               </span>
               {activeTab === 'assessment-results' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              )}
+            </button>
+          )}
+          {hasPlanFeature('ai_talent_match') && (
+            <button
+              onClick={() => setActiveTab('ai-talent-match')}
+              className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
+                activeTab === 'ai-talent-match'
+                  ? 'text-blue-600 bg-blue-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              AI Talent Match
+              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                activeTab === 'ai-talent-match'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-600'
+              }`}>
+                {aiMatchResults.length}
+              </span>
+              {activeTab === 'ai-talent-match' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
               )}
             </button>
@@ -1456,6 +1507,161 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               }
             }}
           />
+        </div>
+      )}
+
+      {/* AI Talent Match Tab Content */}
+      {activeTab === 'ai-talent-match' && (
+        <div className="mt-0">
+          {loadingAiMatch ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="flex flex-col items-center gap-3">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
+                <p className="text-gray-500 text-sm">Loading AI match results...</p>
+              </div>
+            </div>
+          ) : aiMatchResults.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <Brain className="w-16 h-16 text-gray-300 mb-4" />
+              <h3 className="text-lg font-medium text-gray-700 mb-2">No AI Talent Match Results</h3>
+              <p className="text-sm text-gray-500 max-w-sm">
+                Run an AI Talent Match session to find the best candidates for this role.
+              </p>
+              {permissions.canRunAiMatch && (
+                <button
+                  onClick={() => setShowAIMatchPanel(true)}
+                  className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors flex items-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Run AI Match
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Brain className="w-5 h-5 text-purple-600" />
+                    <h3 className="font-semibold text-gray-900">AI Talent Match Results</h3>
+                    <span className="px-2.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">
+                      {aiMatchResults.length} candidates
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500">
+                      {aiMatchSessions.length} session{aiMatchSessions.length !== 1 ? 's' : ''}
+                    </span>
+                    {permissions.canRunAiMatch && (
+                      <button
+                        onClick={() => setShowAIMatchPanel(true)}
+                        className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs hover:bg-purple-700 transition-colors flex items-center gap-1.5"
+                      >
+                        <Sparkles className="w-3 h-3" />
+                        Run New Match
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Candidate</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Match Score</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Skills</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resume Scored</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {(() => {
+                        const scoredResumeIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
+                        const statusColors: Record<string, string> = {
+                          shortlisted: 'bg-green-100 text-green-700',
+                          rejected: 'bg-red-100 text-red-700',
+                          pending: 'bg-yellow-100 text-yellow-700',
+                          contacted: 'bg-blue-100 text-blue-700',
+                        };
+                        return aiMatchResults.map((result) => {
+                          const matchScore = result.final_score
+                            ? Math.round(result.final_score)
+                            : Math.round((result.similarity_score || 0) * 100);
+                          const isScored = scoredResumeIds.has(result.resume_id);
+                          const statusColor = statusColors[result.status] || 'bg-gray-100 text-gray-600';
+                          return (
+                            <tr key={result.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3">
+                                <span className="w-7 h-7 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center">
+                                  {result.rank}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">{result.candidate_name || 'Unknown'}</p>
+                                  {result.candidate_title && (
+                                    <p className="text-xs text-gray-500">{result.candidate_title}</p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${matchScore >= 70 ? 'bg-green-500' : matchScore >= 45 ? 'bg-yellow-500' : 'bg-red-400'}`}
+                                      style={{ width: `${Math.min(matchScore, 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-sm font-semibold text-gray-900">{matchScore}%</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">
+                                {result.experience_years ? `${result.experience_years} yrs` : '—'}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-wrap gap-1">
+                                  {(result.candidate_skills || []).slice(0, 3).map((skill, i) => (
+                                    <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                  {(result.candidate_skills || []).length > 3 && (
+                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">
+                                      +{(result.candidate_skills || []).length - 3}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${statusColor}`}>
+                                  {result.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                {isScored ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                                    <CheckCircle className="w-3 h-3" />
+                                    Scored
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                                    <XCircle className="w-3 h-3" />
+                                    Not Scored
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
