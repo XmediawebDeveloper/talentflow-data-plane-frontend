@@ -203,6 +203,7 @@ function CompletePaymentContent() {
           tenant_id: tenantId,
           plan_id: planDetails.id,
           billing_interval: billingInterval,
+          payment_method: 'razorpay',
           razorpay_payment_id: razorpayResult.razorpay_payment_id,
           razorpay_order_id: razorpayResult.razorpay_order_id,
           razorpay_signature: razorpayResult.razorpay_signature,
