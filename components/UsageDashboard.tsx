@@ -647,6 +647,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           addon_id: selectedAddon.id,
           quantity: addonQuantity,
           tenant_id: tenantId,
+          payment_method: 'razorpay',
           razorpay_payment_id: paymentResponse.razorpay_payment_id,
           razorpay_order_id: paymentResponse.razorpay_order_id,
           razorpay_signature: paymentResponse.razorpay_signature,

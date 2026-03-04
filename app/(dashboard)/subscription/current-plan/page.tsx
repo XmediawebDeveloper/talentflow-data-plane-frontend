@@ -1390,6 +1390,8 @@ function CurrentPlanContent() {
           body: JSON.stringify({
             plan_id: planId,
             billing_interval: actualBillingInterval,
+            schema_per_tenant: isolationType === 'schema',
+            database_per_tenant: isolationType === 'database',
           }),
         });
 
@@ -1435,6 +1437,7 @@ function CurrentPlanContent() {
         database_per_tenant: isolationType === 'database',
         external_transaction_id: transactionId,
         billing_interval: actualBillingInterval,
+        payment_method: 'razorpay',
         user_id: user?.id,
         user_email: user?.email,
         ...razorpayFields,
@@ -1606,7 +1609,7 @@ function CurrentPlanContent() {
       const response = await api.post<CompanySettings>('/settings/payment-status', {
         payment_status: success ? 'success' : 'failed',
         payment_reference: success ? `PAY-${Date.now()}` : null,
-        payment_method: success ? 'card' : null,
+        payment_method: success ? 'razorpay' : null,
       });
 
       setCompanySettings(response.data);
@@ -2231,9 +2234,9 @@ function CurrentPlanContent() {
             <div className="flex items-start sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
               <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600 flex-shrink-0" />
               <div>
-                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-amber-800">Pending Upgrades</h3>
+                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-amber-800">Pending Plan Changes</h3>
                 <p className="text-xs sm:text-sm text-amber-700">
-                  You have {queuedUpgrades.length} queued upgrade{queuedUpgrades.length > 1 ? 's' : ''} waiting to be applied
+                  You have {queuedUpgrades.length} queued plan change{queuedUpgrades.length > 1 ? 's' : ''} waiting to be applied
                 </p>
               </div>
             </div>
@@ -2335,7 +2338,7 @@ function CurrentPlanContent() {
               </h2>
               {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
                 <p className="text-xs sm:text-sm text-amber-600 text-center mt-2">
-                  You have a pending upgrade queued. Cancel it above or apply it now to select a different plan.
+                  You have a pending plan change queued. Cancel it above or apply it now to select a different plan.
                 </p>
               )}
 
@@ -2465,7 +2468,7 @@ function CurrentPlanContent() {
                                 ? (plan.annualPrice ? '/year' : '/month')
                                 : (plan.monthlyPrice ? '/month' : '/year')}
                             </span>
-                            <span className="text-gray-400 text-xs ml-1">(+18% GST)</span>
+
                           </div>
                           {/* Show strikethrough price and discount badge when viewing yearly and both prices exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (plan.monthlyPrice * 12) > plan.annualPrice && (
@@ -2644,7 +2647,11 @@ function CurrentPlanContent() {
                       ) : isSelectedPending ? (
                         'Pending Payment'
                       ) : queuedUpgrades.length > 0 ? (
-                        'Upgrade Queued'
+                        (() => {
+                          const queuedPlan = plans.find(p => p.name === queuedUpgrades[0]?.new_plan_name);
+                          const queuedDirection = comparePlanTiers(currentPlan?.tier, queuedPlan?.tier);
+                          return queuedDirection === -1 ? 'Downgrade Queued' : 'Upgrade Queued';
+                        })()
                       ) : (!plan.monthlyPrice && !plan.annualPrice) ? (
                         'Contact Sales'
                       ) : (isYearly && !plan.annualPrice && plan.monthlyPrice) ? (
@@ -2947,8 +2954,8 @@ function CurrentPlanContent() {
                       <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Clock className="w-10 h-10 text-amber-600" />
                       </div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">Upgrade Queued!</h3>
-                      <p className="text-gray-600">Your payment was successful. The upgrade will apply automatically.</p>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">{isDowngradePayment ? 'Downgrade Queued!' : 'Upgrade Queued!'}</h3>
+                      <p className="text-gray-600">Your payment was successful. The {isDowngradePayment ? 'downgrade' : 'upgrade'} will apply automatically.</p>
                     </div>
 
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
