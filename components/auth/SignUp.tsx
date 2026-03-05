@@ -642,6 +642,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           plan_id: selectedPlanDetails.id,
           billing_interval: billingInterval,
           user_email: form.adminEmail,
+          payment_method: 'razorpay',
           razorpay_payment_id: paymentResponse.razorpay_payment_id,
           razorpay_order_id: paymentResponse.razorpay_order_id,
           razorpay_signature: paymentResponse.razorpay_signature,
@@ -1099,7 +1100,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
   // Verification step removed - now handled inline in the form
 
-  // Helper function to format currency
+  // Helper function to format currency with up to 2 decimal places
   const formatCurrency = (amount: number, currency: string): string => {
     const currencySymbols: Record<string, string> = {
       'USD': '$',
@@ -1108,7 +1109,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       'GBP': '£',
     };
     const symbol = currencySymbols[currency] || currency + ' ';
-    return `${symbol}${amount.toLocaleString()}`;
+    const formatted = amount % 1 === 0
+      ? amount.toLocaleString()
+      : amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `${symbol}${formatted}`;
   };
 
   // Payment Step UI (shown after account created - user needs to complete payment)
@@ -1212,7 +1216,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ fontSize: 14, color: '#6B7280' }}>GST (18%):</span>
                 <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>
-                  {formatCurrency(Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
+                  {formatCurrency(Math.round(selectedPlanDetails.base_price * 0.18 * 100) / 100, selectedPlanDetails.currency)}
                 </span>
               </div>
               <div style={{ height: 1, backgroundColor: '#E5E7EB', marginBottom: 8 }} />
@@ -1220,7 +1224,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 <span style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>Total:</span>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
-                    {formatCurrency(selectedPlanDetails.base_price + Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
+                    {formatCurrency(Math.round((selectedPlanDetails.base_price * 1.18) * 100) / 100, selectedPlanDetails.currency)}
                   </span>
                   <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
                     /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
@@ -1308,7 +1312,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             ) : (
               <>
                 <CreditCard style={{ width: 20, height: 20 }} />
-                Pay & Activate - {formatCurrency(selectedPlanDetails.base_price + Math.round(selectedPlanDetails.base_price * 0.18), selectedPlanDetails.currency)}
+                Pay & Activate - {formatCurrency(Math.round((selectedPlanDetails.base_price * 1.18) * 100) / 100, selectedPlanDetails.currency)}
               </>
             )}
           </button>

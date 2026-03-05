@@ -194,6 +194,7 @@ export default function AddSeatsModal({
         },
         body: JSON.stringify({
           quantity: totalSeats,
+          payment_method: 'razorpay',
           razorpay_payment_id: paymentResponse.razorpay_payment_id,
           razorpay_order_id: paymentResponse.razorpay_order_id,
           razorpay_signature: paymentResponse.razorpay_signature,
