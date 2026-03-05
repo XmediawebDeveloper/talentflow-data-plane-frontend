@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Briefcase, Clock, Plus, X, Sparkles, CheckCircle2, Loader2, Users, Brain, Shield, TrendingUp, MessageSquare, Lightbulb, Trash2, Save, Globe } from 'lucide-react';
+import { ArrowLeft, Briefcase, Clock, Plus, X, Sparkles, CheckCircle2, Loader2, Users, Brain, Shield, TrendingUp, MessageSquare, Lightbulb, Trash2, Save, Globe, Video, Upload, MessageCircle } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -11,6 +11,8 @@ interface RoundConfig {
   type: string;
   percentage: number;
   topics: string[];
+  topicWeights: Record<string, number>;
+  topicComments: Record<string, string>;
   suggestedTopics: string[];
   enabled: boolean;
   order: number;
@@ -22,18 +24,20 @@ interface AIInterviewCreationProps {
 }
 
 const ROUND_TYPES = [
+  { value: 'must_have_skills', label: 'Must-To-Have', icon: Shield, color: 'bg-red-100 text-red-700' },
+  { value: 'nice_to_have_skills', label: 'Nice-To-Have', icon: Lightbulb, color: 'bg-amber-100 text-amber-700' },
   { value: 'hr', label: 'HR', icon: Users, color: 'bg-blue-100 text-blue-700' },
   { value: 'technical', label: 'Technical', icon: Brain, color: 'bg-purple-100 text-purple-700' },
   { value: 'behavioral', label: 'Behavioral', icon: MessageSquare, color: 'bg-green-100 text-green-700' },
-  { value: 'culture_fit', label: 'Culture Fit', icon: Shield, color: 'bg-yellow-100 text-yellow-700' },
-  { value: 'leadership', label: 'Leadership', icon: TrendingUp, color: 'bg-red-100 text-red-700' },
-  { value: 'problem_solving', label: 'Problem Solving', icon: Lightbulb, color: 'bg-orange-100 text-orange-700' },
+  { value: 'culture_fit', label: 'Culture Fit', icon: TrendingUp, color: 'bg-yellow-100 text-yellow-700' },
+  { value: 'leadership', label: 'Leadership', icon: TrendingUp, color: 'bg-indigo-100 text-indigo-700' },
+  { value: 'problem_solving', label: 'Problem Solving', icon: Brain, color: 'bg-orange-100 text-orange-700' },
 ];
 
 const DEFAULT_ROUNDS: RoundConfig[] = [
-  { type: 'hr', percentage: 20, topics: [], suggestedTopics: [], enabled: true, order: 1 },
-  { type: 'technical', percentage: 50, topics: [], suggestedTopics: [], enabled: true, order: 2 },
-  { type: 'behavioral', percentage: 30, topics: [], suggestedTopics: [], enabled: true, order: 3 },
+  { type: 'must_have_skills', percentage: 70, topics: [], topicWeights: {}, topicComments: {}, suggestedTopics: [], enabled: true, order: 1 },
+  { type: 'nice_to_have_skills', percentage: 20, topics: [], topicWeights: {}, topicComments: {}, suggestedTopics: [], enabled: true, order: 2 },
+  { type: 'hr', percentage: 10, topics: [], topicWeights: {}, topicComments: {}, suggestedTopics: [], enabled: true, order: 3 },
 ];
 
 export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCreationProps) {
@@ -49,6 +53,11 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
   const [totalDuration, setTotalDuration] = useState(30);
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [recordingEnabled, setRecordingEnabled] = useState(true);
+
+  // Introduction video (optional)
+  const [introVideoFile, setIntroVideoFile] = useState<File | null>(null);
+  const [introVideoUrl, setIntroVideoUrl] = useState<string>('');
+  const [uploadingVideo, setUploadingVideo] = useState(false);
 
   const [publishing, setPublishing] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -77,9 +86,49 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
     (jd.department || '').toLowerCase().includes(jdSearch.toLowerCase())
   );
 
+  const distributeWeights = (skills: string[]): Record<string, number> => {
+    if (skills.length === 0) return {};
+    const base = Math.floor(100 / skills.length);
+    const remainder = 100 - base * skills.length;
+    const weights: Record<string, number> = {};
+    skills.forEach((s, i) => { weights[s] = base + (i < remainder ? 1 : 0); });
+    return weights;
+  };
+
   const handleSelectJd = (jd: PublishedJD) => {
     setSelectedJd(jd);
+    setRounds(prev => prev.map(r => {
+      if (r.type === 'must_have_skills') {
+        const skills = jd.must_have_skills || [];
+        return { ...r, topics: skills, topicWeights: distributeWeights(skills), topicComments: {} };
+      }
+      if (r.type === 'nice_to_have_skills') {
+        const skills = jd.nice_to_have_skills || [];
+        return { ...r, topics: skills, topicWeights: distributeWeights(skills), topicComments: {} };
+      }
+      return r;
+    }));
     setStep('configure');
+  };
+
+  const handleVideoUpload = async (file: File) => {
+    setIntroVideoFile(file);
+    setUploadingVideo(true);
+    try {
+      const result = await aiInterviewService.uploadIntroVideo(file);
+      setIntroVideoUrl(result.url || result.file_url || '');
+      toast.success('Video uploaded successfully');
+    } catch {
+      toast.error('Failed to upload video');
+      setIntroVideoFile(null);
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
+  const handleRemoveVideo = () => {
+    setIntroVideoFile(null);
+    setIntroVideoUrl('');
   };
 
   // Round management
@@ -100,19 +149,44 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
 
   const handleAddTopic = (roundIndex: number, topic: string) => {
     if (!topic.trim()) return;
+    const trimmed = topic.trim();
+    setRounds(prev => prev.map((r, i) => {
+      if (i !== roundIndex || r.topics.includes(trimmed)) return r;
+      const newTopics = [...r.topics, trimmed];
+      return { ...r, topics: newTopics, topicWeights: distributeWeights(newTopics) };
+    }));
+  };
+
+  const handleRemoveTopic = (roundIndex: number, topic: string) => {
+    setRounds(prev => prev.map((r, i) => {
+      if (i !== roundIndex) return r;
+      const newTopics = r.topics.filter(t => t !== topic);
+      const { [topic]: _w, ...restWeights } = r.topicWeights;
+      const { [topic]: _c, ...restComments } = r.topicComments;
+      return { ...r, topics: newTopics, topicWeights: distributeWeights(newTopics), topicComments: restComments };
+    }));
+  };
+
+  const handleTopicWeight = (roundIndex: number, topic: string, weight: number) => {
     setRounds(prev => prev.map((r, i) =>
-      i === roundIndex && !r.topics.includes(topic.trim())
-        ? { ...r, topics: [...r.topics, topic.trim()] }
+      i === roundIndex
+        ? { ...r, topicWeights: { ...r.topicWeights, [topic]: Math.max(0, Math.min(100, weight)) } }
         : r
     ));
   };
 
-  const handleRemoveTopic = (roundIndex: number, topic: string) => {
+  const handleTopicComment = (roundIndex: number, topic: string, comment: string) => {
     setRounds(prev => prev.map((r, i) =>
       i === roundIndex
-        ? { ...r, topics: r.topics.filter(t => t !== topic) }
+        ? { ...r, topicComments: { ...r.topicComments, [topic]: comment } }
         : r
     ));
+  };
+
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+  const toggleComment = (roundType: string, topic: string) => {
+    const key = `${roundType}:${topic}`;
+    setExpandedComments(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleSuggestTopics = async (roundIndex: number) => {
@@ -141,6 +215,8 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
       type,
       percentage: 0,
       topics: [],
+      topicWeights: {},
+      topicComments: {},
       suggestedTopics: [],
       enabled: true,
       order: prev.length + 1,
@@ -161,6 +237,10 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
       percentage: r.percentage,
       duration_minutes: getRoundDuration(r.percentage),
       topics: r.topics,
+      topic_weights: Object.keys(r.topicWeights).length > 0 ? r.topicWeights : undefined,
+      topic_comments: Object.keys(r.topicComments).filter(k => r.topicComments[k]).length > 0
+        ? Object.fromEntries(Object.entries(r.topicComments).filter(([, v]) => v))
+        : undefined,
       enabled: true,
       order: r.order,
     }));
@@ -178,6 +258,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
         recording_enabled: recordingEnabled,
         special_instructions: specialInstructions || undefined,
         title: `${selectedJd.title} - AI Interview`,
+        introduction_video_url: introVideoUrl || undefined,
       });
       toast.success('AI Interview configuration saved as draft!');
       onCreated();
@@ -202,6 +283,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
         recording_enabled: recordingEnabled,
         special_instructions: specialInstructions || undefined,
         title: `${selectedJd.title} - AI Interview`,
+        introduction_video_url: introVideoUrl || undefined,
       });
       await aiInterviewService.publishConfig(interview.id);
       toast.success('AI Interview configuration published!');
@@ -425,35 +507,97 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                 </div>
                               </div>
 
-                              {/* Topics */}
+                              {/* Skills / Topics */}
                               <div>
                                 <div className="flex items-center justify-between mb-1.5">
-                                  <label className="text-xs text-gray-500">Topics</label>
-                                  <button
-                                    onClick={() => handleSuggestTopics(index)}
-                                    disabled={suggestingTopics === round.type}
-                                    className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 transition-colors"
-                                  >
-                                    {suggestingTopics === round.type ? (
-                                      <Loader2 className="w-3 h-3 animate-spin" />
-                                    ) : (
-                                      <Sparkles className="w-3 h-3" />
+                                  <label className="text-xs text-gray-500">
+                                    Skills
+                                    {round.topics.length > 0 && (
+                                      <span className="ml-1 text-gray-400">({round.topics.length})</span>
                                     )}
-                                    Suggest from JD
-                                  </button>
+                                  </label>
+                                  <div className="flex items-center gap-3">
+                                    {round.topics.length > 0 && (() => {
+                                      const totalSkillWeight = round.topics.reduce((s, t) => s + (round.topicWeights[t] || 0), 0);
+                                      return (
+                                        <span className={`text-xs font-medium ${totalSkillWeight === 100 ? 'text-green-600' : 'text-amber-600'}`}>
+                                          Skill weights: {totalSkillWeight}%
+                                        </span>
+                                      );
+                                    })()}
+                                    <button
+                                      onClick={() => handleSuggestTopics(index)}
+                                      disabled={suggestingTopics === round.type}
+                                      className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 transition-colors"
+                                    >
+                                      {suggestingTopics === round.type ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Sparkles className="w-3 h-3" />
+                                      )}
+                                      Suggest from JD
+                                    </button>
+                                  </div>
                                 </div>
 
-                                {/* Topic chips */}
-                                <div className="flex flex-wrap gap-1.5 mb-2">
-                                  {round.topics.map(topic => (
-                                    <span key={topic} className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full">
-                                      {topic}
-                                      <button onClick={() => handleRemoveTopic(index, topic)} className="hover:text-red-500">
-                                        <X className="w-3 h-3" />
-                                      </button>
-                                    </span>
-                                  ))}
-                                </div>
+                                {/* Skill rows with weight + comment */}
+                                {round.topics.length > 0 && (
+                                  <div className="border border-gray-200 rounded-lg divide-y divide-gray-100 mb-2">
+                                    {round.topics.map(topic => {
+                                      const commentKey = `${round.type}:${topic}`;
+                                      const isCommentOpen = expandedComments[commentKey];
+                                      const skillWeight = round.topicWeights[topic] || 0;
+                                      const skillTime = round.percentage > 0
+                                        ? ((skillWeight / 100) * getRoundDuration(round.percentage)).toFixed(1)
+                                        : '0.0';
+                                      return (
+                                        <div key={topic} className="px-3 py-2">
+                                          <div className="flex items-center gap-2">
+                                            <span className="text-xs text-gray-700 flex-1 min-w-0 truncate" title={topic}>{topic}</span>
+                                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                                              <input
+                                                type="number"
+                                                min={0}
+                                                max={100}
+                                                value={skillWeight}
+                                                onChange={e => handleTopicWeight(index, topic, parseInt(e.target.value) || 0)}
+                                                className="w-12 px-1.5 py-0.5 text-xs text-center border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                              />
+                                              <span className="text-xs text-gray-400 w-4">%</span>
+                                              <span className="text-xs text-gray-400 w-14 text-right">{skillTime} min</span>
+                                              <button
+                                                onClick={() => toggleComment(round.type, topic)}
+                                                className={`p-0.5 rounded transition-colors ${
+                                                  round.topicComments[topic] ? 'text-blue-500' : 'text-gray-300 hover:text-gray-500'
+                                                }`}
+                                                title="Add comment"
+                                              >
+                                                <MessageCircle className="w-3.5 h-3.5" />
+                                              </button>
+                                              <button
+                                                onClick={() => handleRemoveTopic(index, topic)}
+                                                className="p-0.5 text-gray-300 hover:text-red-500 transition-colors"
+                                              >
+                                                <X className="w-3.5 h-3.5" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                          {isCommentOpen && (
+                                            <div className="mt-1.5">
+                                              <input
+                                                type="text"
+                                                placeholder="Add a note or guidance for this skill..."
+                                                value={round.topicComments[topic] || ''}
+                                                onChange={e => handleTopicComment(index, topic, e.target.value)}
+                                                className="w-full px-2.5 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-300 bg-blue-50/30"
+                                              />
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
 
                                 {/* Suggested topics */}
                                 {round.suggestedTopics.length > 0 && (
@@ -475,10 +619,10 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                   </div>
                                 )}
 
-                                {/* Add topic input */}
+                                {/* Add skill input */}
                                 <input
                                   type="text"
-                                  placeholder="Type a topic and press Enter..."
+                                  placeholder="Type a skill name and press Enter to add..."
                                   className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-gray-400"
                                   onKeyDown={e => {
                                     if (e.key === 'Enter') {
@@ -542,6 +686,52 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 />
                 <span className="text-sm text-gray-700">Auto-record interview</span>
               </label>
+
+              {/* Introduction Video (Optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  <div className="flex items-center gap-2">
+                    <Video className="w-4 h-4" />
+                    Introduction Video
+                    <span className="text-xs text-gray-400 font-normal">(Optional)</span>
+                  </div>
+                </label>
+                {introVideoFile || introVideoUrl ? (
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <Video className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900 truncate">{introVideoFile?.name || 'Uploaded video'}</p>
+                      {introVideoFile && (
+                        <p className="text-xs text-gray-400">{(introVideoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
+                      )}
+                    </div>
+                    {uploadingVideo ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                    ) : (
+                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 transition-colors">
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
+                    <Upload className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm text-gray-500">Click to upload an introduction video</span>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) handleVideoUpload(file);
+                      }}
+                    />
+                  </label>
+                )}
+                <p className="text-xs text-gray-400 mt-1">
+                  Candidates will see this video before the interview starts
+                </p>
+              </div>
             </div>
 
             {/* Right column: Summary sidebar */}
@@ -612,13 +802,33 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   )}
 
                   <div className="border-t border-gray-100 pt-3">
-                    <div className="text-xs text-gray-500 mb-2">Rounds breakdown:</div>
+                    <div className="text-xs text-gray-500 mb-2">Time Allocation:</div>
                     {enabledRounds.map(r => {
                       const info = getRoundInfo(r.type);
+                      const roundMin = getRoundDuration(r.percentage);
                       return (
-                        <div key={r.type} className="flex items-center justify-between py-1">
-                          <span className="text-xs text-gray-600">{info?.label || r.type}</span>
-                          <span className="text-xs text-gray-900">{r.percentage}% / {getRoundDuration(r.percentage)} min</span>
+                        <div key={r.type} className="py-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600">{info?.label || r.type}</span>
+                            <span className="text-xs font-medium text-gray-900">{r.percentage}% &rarr; {roundMin} min</span>
+                          </div>
+                          {r.topics.length > 0 && (
+                            <div className="mt-0.5 ml-2 space-y-0.5">
+                              {r.topics.slice(0, 3).map(t => {
+                                const w = r.topicWeights[t] || 0;
+                                const tMin = ((w / 100) * roundMin).toFixed(1);
+                                return (
+                                  <div key={t} className="flex items-center justify-between text-[10px] text-gray-400">
+                                    <span className="truncate max-w-[120px]">{t}</span>
+                                    <span>{w}% / {tMin}m</span>
+                                  </div>
+                                );
+                              })}
+                              {r.topics.length > 3 && (
+                                <div className="text-[10px] text-gray-400">+{r.topics.length - 3} more skills</div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}

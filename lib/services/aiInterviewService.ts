@@ -10,6 +10,7 @@ export interface AIInterviewRoundConfig {
   duration_minutes: number;
   topics: string[];
   topic_weights?: Record<string, number>;
+  topic_comments?: Record<string, string>;
   enabled: boolean;
   order: number;
   // Skills split by source — so the agent knows which came from JD vs custom-added
@@ -39,6 +40,7 @@ export interface AIInterviewCreate {
   rounds_config?: AIInterviewRoundConfig[];
   title?: string;
   save_as_draft?: boolean;
+  introduction_video_url?: string;
 }
 
 export interface AIInterviewUpdate {
@@ -58,6 +60,7 @@ export interface AIInterviewUpdate {
   status?: string;
   rounds_config?: AIInterviewRoundConfig[];
   save_as_draft?: boolean;
+  introduction_video_url?: string;
 }
 
 export interface TopicSuggestionResponse {
@@ -137,6 +140,7 @@ export interface AIInterviewResponse {
   ai_evaluation?: Record<string, any>;
   conversation_transcript?: Record<string, any>[];
   recording_file_path?: string;
+  introduction_video_url?: string;
   invitation_sent: boolean;
   created_by: string;
   created_by_name?: string;
@@ -602,6 +606,24 @@ export const aiInterviewService = {
   }): Promise<AIInterviewAuditTrailResponse> {
     try {
       const response = await api.get<AIInterviewAuditTrailResponse>('/ai-interview/audit-trail/combined', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Upload introduction video for an AI interview config
+   */
+  async uploadIntroVideo(file: File): Promise<{ url: string; file_url: string; file_name: string; size_bytes: number }> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.post<{ url: string; file_url: string; file_name: string; size_bytes: number }>(
+        '/ai-interview/upload-intro-video',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

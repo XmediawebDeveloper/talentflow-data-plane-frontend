@@ -4,6 +4,7 @@ import {
   ArrowLeft, Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
   MessageSquare, GripVertical, Info, AlertCircle, Timer, Zap,
+  Video, Upload,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -446,6 +447,11 @@ export default function AIInterviewConfig() {
   const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
   const [languageInput, setLanguageInput] = useState('');
 
+  /* Introduction video (optional) */
+  const [introVideoFile, setIntroVideoFile] = useState<File | null>(null);
+  const [introVideoUrl, setIntroVideoUrl] = useState<string>('');
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+
   /* Action states */
   const [publishing, setPublishing] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -542,6 +548,11 @@ export default function AIInterviewConfig() {
             setAvailableLanguages((existingDraft as any).available_languages);
           }
 
+          // Restore introduction video URL
+          if ((existingDraft as any).introduction_video_url) {
+            setIntroVideoUrl((existingDraft as any).introduction_video_url);
+          }
+
         } else {
           // No draft — populate from JD
           setMth(prev => ({
@@ -615,6 +626,7 @@ export default function AIInterviewConfig() {
           title: `${selectedJd.title} - AI Interview`,
           save_as_draft: true,
           special_instructions: buildClusterJson(),
+          introduction_video_url: introVideoUrl || undefined,
         };
 
         if (existingDraftIdRef.current) {
@@ -634,7 +646,7 @@ export default function AIInterviewConfig() {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mth, nth, hrPct, hrEnabled, mode, recordingEnabled, availableLanguages, selectedJd, loadingJd]);
+  }, [mth, nth, hrPct, hrEnabled, mode, recordingEnabled, availableLanguages, introVideoUrl, selectedJd, loadingJd]);
 
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
@@ -647,6 +659,27 @@ export default function AIInterviewConfig() {
 
   const totalPct = mth.percentage + (nth.enabled ? nth.percentage : 0) + (hrEnabled ? hrPct : 0);
   const pctValid = totalPct === 100;
+
+  /* ── Video handlers ── */
+  const handleVideoUpload = async (file: File) => {
+    setIntroVideoFile(file);
+    setUploadingVideo(true);
+    try {
+      const result = await aiInterviewService.uploadIntroVideo(file);
+      setIntroVideoUrl(result.url || result.file_url || '');
+      toast.success('Video uploaded successfully');
+    } catch {
+      toast.error('Failed to upload video');
+      setIntroVideoFile(null);
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
+  const handleRemoveVideo = () => {
+    setIntroVideoFile(null);
+    setIntroVideoUrl('');
+  };
 
   /* ── Build rounds config for API ── */
   const buildRounds = (isDraft = false): AIInterviewRoundConfig[] => {
@@ -747,6 +780,7 @@ export default function AIInterviewConfig() {
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
         special_instructions: buildClusterJson(),
+        introduction_video_url: introVideoUrl || undefined,
       };
       if (existingDraftIdRef.current) {
         await aiInterviewService.update(existingDraftIdRef.current, payload);
@@ -782,6 +816,7 @@ export default function AIInterviewConfig() {
         available_languages: availableLanguages,
         title: `${selectedJd.title} - AI Interview`,
         special_instructions: buildClusterJson(),
+        introduction_video_url: introVideoUrl || undefined,
       };
       let interviewId: string;
       if (existingDraftIdRef.current) {
@@ -994,6 +1029,50 @@ export default function AIInterviewConfig() {
               />
               <span className="text-sm text-gray-700">Auto-record interview sessions</span>
             </label>
+
+            {/* Introduction Video (Optional) */}
+            <div className="px-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <Video className="w-4 h-4 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Introduction Video</span>
+                <span className="text-xs text-gray-400">(Optional)</span>
+              </div>
+              <p className="text-xs text-gray-500">
+                Upload a short video introducing the role. Candidates will see this before the interview starts.
+              </p>
+              {introVideoFile || introVideoUrl ? (
+                <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <Video className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 truncate">{introVideoFile?.name || 'Uploaded video'}</p>
+                    {introVideoFile && (
+                      <p className="text-xs text-gray-400">{(introVideoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
+                    )}
+                  </div>
+                  {uploadingVideo ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                  ) : (
+                    <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 transition-colors">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
+                  <Upload className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-500">Click to upload an introduction video</span>
+                  <input
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) handleVideoUpload(file);
+                    }}
+                  />
+                </label>
+              )}
+            </div>
 
             {/* Candidate Languages */}
             <div className="px-1 space-y-2">
