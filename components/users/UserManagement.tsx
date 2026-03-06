@@ -1396,7 +1396,8 @@ export default function UserManagement() {
       resetCreateModal();
       refreshLimits(); // Refresh user limits count
       setSeatQuotaRefreshTrigger(prev => prev + 1); // Refresh SeatQuotaCard
-      loadUsers();
+      // Small delay to let backend finish RBAC sync before re-fetching
+      setTimeout(() => { loadUsers(); refreshUser(); }, 300);
     } catch (error: any) {
       console.error('Error creating user:', error);
       toast.error(error.message || 'Failed to create user');
@@ -1859,18 +1860,15 @@ export default function UserManagement() {
 
       toast.success('User updated successfully');
 
-      // If the updated user is the current logged-in user, refresh their session
-      // This ensures permission changes take effect immediately without logout/login
-      if (currentUser && editingUser.id === currentUser.id) {
-        console.log('[UserManagement] Updated user is current user, refreshing session...');
-        await refreshUser();
-        console.log('[UserManagement] Current user session refreshed');
-      }
-
       resetEditModal();
 
-      // Also refresh the list from server to ensure consistency
-      loadUsers();
+      // Refresh current user's session unconditionally — handles WebSocket failures
+      // where the permission-updated push never reached the affected user's browser.
+      // Small delay lets the backend finish RBAC sync before we re-fetch.
+      setTimeout(async () => {
+        await refreshUser();
+        loadUsers();
+      }, 300);
     } catch (error: any) {
       console.error('Error updating user:', error);
 
@@ -2809,7 +2807,7 @@ export default function UserManagement() {
           userRole={featurePermissionUser.role as UserRole}
           isOpen={true}
           onClose={() => setFeaturePermissionUser(null)}
-          onUpdate={() => loadUsers()}
+          onUpdate={() => setTimeout(async () => { await refreshUser(); loadUsers(); }, 300)}
         />
       )}
 

@@ -15,11 +15,15 @@
  * Parse a backend datetime string as IST.
  * If the string has no timezone suffix, treats it as IST (+05:30).
  */
-export function parseIST(dateString: string): Date {
+export function parseIST(dateString: unknown): Date {
   if (!dateString) return new Date(NaN);
+  // If already a Date object, return it directly
+  if (dateString instanceof Date) return dateString;
+  // Coerce to string to handle numbers or other primitives
+  const s = String(dateString);
   // If already has timezone info (Z, +HH:MM, -HH:MM) — parse as-is
-  const hasOffset = dateString.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(dateString);
-  return new Date(hasOffset ? dateString : dateString + '+05:30');
+  const hasOffset = s.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(s);
+  return new Date(hasOffset ? s : s + '+05:30');
 }
 
 /**
