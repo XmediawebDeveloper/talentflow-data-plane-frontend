@@ -3,6 +3,7 @@
 import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power, Target } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -377,14 +378,6 @@ export default function JDListPage() {
     );
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
   // JD03: Check if user can create JD
   const canCreateJD = accessCheck?.can_create_jd !== false;
 
@@ -628,17 +621,17 @@ export default function JDListPage() {
                         )}
                         <span className="hidden sm:flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
-                          Created {formatDate(jd.created_at)}
+                          Created {formatISTDate(jd.created_at)}
                         </span>
                         {/* JD04: Last Updated - hidden on mobile */}
                         <span className="hidden md:flex items-center gap-1">
                           <Clock className="w-4 h-4" />
-                          Updated {formatDate(jd.updated_at)}
+                          Updated {formatISTDate(jd.updated_at)}
                         </span>
                         {jd.published_at && (
                           <span className="flex items-center gap-1">
                             <CheckCircle2 className="w-4 h-4 text-green-500" />
-                            Posted {formatDate(jd.published_at)}
+                            Posted {formatISTDate(jd.published_at)}
                           </span>
                         )}
                         {/* Hidden on mobile */}

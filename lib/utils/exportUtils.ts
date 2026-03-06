@@ -2,6 +2,7 @@
  * Export Utilities
  * Functions for exporting data to CSV and PDF
  */
+import { formatIST } from '@/lib/utils/dateUtils';
 
 export interface ExportColumn {
   key: string;
@@ -122,7 +123,7 @@ export function formatMemberUsageForExport(members: any[]): any[] {
     assessments_created: member.assessments_created || 0,
     total_units: member.total_consumed,
     total_actions: member.total_actions,
-    last_activity: member.last_activity || 'Never',
+    last_activity: member.last_activity ? formatIST(member.last_activity) : 'Never',
   }));
 }
 

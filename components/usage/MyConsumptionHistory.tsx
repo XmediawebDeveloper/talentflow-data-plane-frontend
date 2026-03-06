@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { formatIST } from '@/lib/utils/dateUtils';
 import {
   unitPoolService,
   UnitType,
@@ -263,7 +264,7 @@ export default function MyConsumptionHistory() {
                       <td className="px-6 py-4 text-sm text-gray-900">
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-gray-400" />
-                          {new Date(item.created_at).toLocaleString()}
+                          {formatIST(item.created_at)}
                         </div>
                       </td>
                       <td className="px-6 py-4">

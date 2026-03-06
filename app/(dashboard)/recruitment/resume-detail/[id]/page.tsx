@@ -7,6 +7,7 @@ import { Resume, ResumeVersion } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
 import { Resume as ApiResume } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import FeatureGate from '@/components/shared/FeatureGate';
 
 interface ResumeVersion {
@@ -440,11 +441,7 @@ export default function ResumeDetailPage() {
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Upload Date</div>
                     <div className="text-sm text-gray-900">
-                      {new Date(resume.uploadDate).toLocaleDateString('en-US', {
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
+                      {formatISTDate(resume.uploadDate)}
                     </div>
                   </div>
                   <div>
@@ -471,13 +468,7 @@ export default function ResumeDetailPage() {
                     <div className="flex-1">
                       <div className="text-sm text-gray-900">Resume uploaded</div>
                       <div className="text-xs text-gray-500 mt-1">
-                        {new Date(resume.uploadDate).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                        {formatIST(resume.uploadDate)}
                       </div>
                       <div className="text-xs text-gray-500">By {resume.uploadedBy === 'current-user' ? 'You' : resume.uploadedBy}</div>
                     </div>
@@ -539,11 +530,7 @@ export default function ResumeDetailPage() {
                               <div className="flex items-center gap-4 text-xs text-gray-500">
                                 <div className="flex items-center gap-1">
                                   <Clock className="w-3 h-3" />
-                                  {new Date(version.created_at).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric'
-                                  })}
+                                  {formatISTDate(version.created_at)}
                                 </div>
                               </div>
                             </div>
@@ -581,11 +568,7 @@ export default function ResumeDetailPage() {
                           <div className="flex items-center gap-4 text-xs text-gray-500">
                             <div className="flex items-center gap-1">
                               <Clock className="w-3 h-3" />
-                              {new Date(resume.uploadDate).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                              })}
+                              {formatISTDate(resume.uploadDate)}
                             </div>
                             <div>Uploaded by {resume.uploadedBy === 'current-user' ? 'You' : resume.uploadedBy}</div>
                           </div>

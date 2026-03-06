@@ -4,6 +4,7 @@ import { ArrowLeft, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown
 import { useState, useEffect, useRef } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
+import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 
 interface CandidateResultDetailsProps {
@@ -145,14 +146,7 @@ export default function CandidateResultDetails({
           name: details.candidate_name || 'Unknown',
           email: details.candidate_email || '',
           phone: details.candidate_phone || '',
-          completedDate: details.completed_at
-            ? new Date(details.completed_at).toLocaleDateString('en-US', {
-                timeZone: 'Asia/Kolkata',
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-              })
-            : 'N/A',
+          completedDate: details.completed_at ? formatISTDate(details.completed_at) : 'N/A',
           duration: details.time_spent_seconds ? `${Math.round(details.time_spent_seconds / 60)} min` : 'N/A',
           percentage: overallScore,
           status,
@@ -467,16 +461,7 @@ export default function CandidateResultDetails({
               <div>
                 <div className="text-xs sm:text-sm text-gray-600">Start Time</div>
                 <div className="text-sm sm:text-base text-gray-900">
-                  {detailedResult?.started_at
-                    ? new Date(detailedResult.started_at).toLocaleString('en-US', {
-                        timeZone: 'Asia/Kolkata',
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : 'N/A'}
+                  {detailedResult?.started_at ? formatIST(detailedResult.started_at) : 'N/A'}
                 </div>
               </div>
             </div>
@@ -487,16 +472,7 @@ export default function CandidateResultDetails({
               <div>
                 <div className="text-xs sm:text-sm text-gray-600">Submission Time</div>
                 <div className="text-sm sm:text-base text-gray-900">
-                  {detailedResult?.completed_at
-                    ? new Date(detailedResult.completed_at).toLocaleString('en-US', {
-                        timeZone: 'Asia/Kolkata',
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })
-                    : 'N/A'}
+                  {detailedResult?.completed_at ? formatIST(detailedResult.completed_at) : 'N/A'}
                 </div>
               </div>
             </div>
@@ -1644,7 +1620,7 @@ export default function CandidateResultDetails({
                               })();
 
                               const timeStr = row.timestamp
-                                ? new Date(row.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+                                ? formatISTTime(row.timestamp)
                                 : '—';
 
                               return (

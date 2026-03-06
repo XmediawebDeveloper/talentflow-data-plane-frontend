@@ -5,6 +5,7 @@ import DetailedScorecardTab from './DetailedScorecardTab';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { handleUnauthorized } from '@/lib/services/api';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface ScoredResume {
   id: string;  // This is the SCORE ID, not resume ID!
@@ -442,7 +443,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
             </div>
             <div className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
               {fullResumeData.scoredDate && !isNaN(new Date(fullResumeData.scoredDate).getTime())
-                ? new Date(fullResumeData.scoredDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                ? formatISTDate(fullResumeData.scoredDate)
                 : fullResumeData.scoredDate}
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { AlertCircle, Lock, CreditCard, UserX, CheckCircle } from 'lucide-react';
 import { User, Tenant, isSubscriptionActive, hasAvailableUnits, getRemainingUnits } from '@/lib/types/tenant';
 import { toast } from 'sonner';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface PreConditionGuardProps {
   user: User;
@@ -67,7 +68,7 @@ export default function PreConditionGuard({
     errors.push({
       type: 'units',
       title: 'No Units Available',
-      message: `You have used all ${tenant.subscription.limits[requiredUnits]} ${unitNames[requiredUnits]} units in your current plan. Please upgrade your plan or wait for renewal on ${new Date(tenant.subscription.renewalDate).toLocaleDateString()}.`,
+      message: `You have used all ${tenant.subscription.limits[requiredUnits]} ${unitNames[requiredUnits]} units in your current plan. Please upgrade your plan or wait for renewal on ${formatISTDate(tenant.subscription.renewalDate)}.`,
       action: 'Upgrade Plan',
     });
   }

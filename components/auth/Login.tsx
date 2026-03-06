@@ -110,6 +110,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         canCreateAssessments: response.user.permissions.can_create_assessments,
         canUpdateAssessments: response.user.permissions.can_update_assessments,
         canDeleteAssessments: response.user.permissions.can_delete_assessments,
+        canDownloadAssessmentPDF: response.user.permissions.can_download_assessment_pdf,
         // Analytics & Reports
         canViewAnalytics: response.user.permissions.can_view_analytics,
         // Settings & Admin

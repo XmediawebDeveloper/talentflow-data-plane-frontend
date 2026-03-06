@@ -171,6 +171,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canCreateAssessments: apiUser.permissions.can_create_assessments,
       canUpdateAssessments: apiUser.permissions.can_update_assessments,
       canDeleteAssessments: apiUser.permissions.can_delete_assessments,
+      canDownloadAssessmentPDF: apiUser.permissions.can_download_assessment_pdf,
       // Analytics & Reports
       canViewAnalytics: apiUser.permissions.can_view_analytics,
       // Settings & Admin

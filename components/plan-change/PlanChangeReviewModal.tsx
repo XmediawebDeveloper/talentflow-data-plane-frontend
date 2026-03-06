@@ -9,6 +9,7 @@ import {
 import { usePlanChange } from '@/components/providers/PlanChangeProvider';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import type { PlanChangeSummary } from '@/lib/types/planChanges';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 const changeTypeLabels: Record<string, { title: string; icon: React.ElementType; color: string }> = {
   price_increase: { title: 'Price Change', icon: DollarSign, color: 'text-amber-600' },
@@ -246,9 +247,7 @@ export default function PlanChangeReviewModal() {
             <Clock className={`w-4 h-4 ${urgencyColor.icon} flex-shrink-0`} />
             <p className={`text-sm ${urgencyColor.text}`}>
               <span className="font-semibold">{daysRemaining} day{daysRemaining !== 1 ? 's' : ''}</span> remaining to review.
-              {' '}Deadline: {new Date(currentChange.deadline).toLocaleDateString('en-US', {
-                month: 'long', day: 'numeric', year: 'numeric'
-              })}
+              {' '}Deadline: {formatISTDate(currentChange.deadline)}
             </p>
           </div>
         )}

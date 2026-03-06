@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import ResumePreviewModal from '@/components/ResumePreviewModal';
 import { handleUnauthorized } from '@/lib/services/api';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 function ScoredResumeDetailContent() {
   const router = useRouter();
@@ -406,7 +407,7 @@ function ScoredResumeDetailContent() {
                   {resumeData.scoredDate && (
                     <div className="flex items-center gap-2 text-gray-700">
                       <Calendar className="w-4 h-4 text-gray-500" />
-                      Scored: {new Date(resumeData.scoredDate).toLocaleDateString()}
+                      Scored: {formatISTDate(resumeData.scoredDate)}
                     </div>
                   )}
                   {resumeData.scoredBy && (

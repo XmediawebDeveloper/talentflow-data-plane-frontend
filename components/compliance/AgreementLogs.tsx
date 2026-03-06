@@ -23,6 +23,7 @@ import agreementService, {
   AgreementType,
   getAgreementTypeName,
 } from '@/lib/services/agreementService';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 interface AgreementLogsProps {
   compact?: boolean;
@@ -329,7 +330,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                   <div className="flex items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-gray-400" />
                     <span className="text-sm text-gray-600">
-                      {new Date(log.created_at).toLocaleString()}
+                      {formatIST(log.created_at)}
                     </span>
                   </div>
                 </td>
@@ -450,7 +451,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                   <div>
                     <p className="text-sm text-gray-500">Date</p>
                     <p className="font-medium">
-                      {new Date(selectedLog.created_at).toLocaleString()}
+                      {formatIST(selectedLog.created_at)}
                     </p>
                   </div>
                   {selectedLog.agreement_document_url && (
@@ -483,7 +484,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                           <div className="flex items-center justify-between">
                             <span className="font-medium">{audit.action}</span>
                             <span className="text-gray-500">
-                              {new Date(audit.created_at).toLocaleString()}
+                              {formatIST(audit.created_at)}
                             </span>
                           </div>
                           <p className="text-gray-600 mt-1">

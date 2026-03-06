@@ -3,6 +3,8 @@
  * Uses html2pdf.js with the same pattern as JobDetailView.tsx.
  */
 
+import { formatISTDate } from '@/lib/utils/dateUtils';
+
 // ── Types (match the interfaces in the billing pages) ──────────────
 
 interface LineItem {
@@ -165,8 +167,7 @@ async function renderToPDF(html: string, filename: string): Promise<void> {
 
 function fmtDate(dateString: string | null | undefined): string {
   if (!dateString) return '-';
-  const d = new Date(dateString);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return formatISTDate(dateString) || '-';
 }
 
 function fmtAmount(amount: number): string {

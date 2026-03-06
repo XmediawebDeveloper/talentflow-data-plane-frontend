@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag } from 'react-dnd';
 import { Resume, Folder } from '@/lib/types/types';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { EmptyState } from './ui/empty-state';
 import Pagination from './Pagination';
 import { usePagination } from '@/lib/hooks/usePagination';
@@ -167,22 +168,6 @@ export default function ResumeTable({
 
   const allSelected = resumes.length > 0 && resumes.every(r => selectedResumes.includes(r.id));
   const someSelected = selectedResumes.length > 0 && !allSelected;
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '-';
-    try {
-      const date = new Date(dateString);
-      // Always display in IST timezone format
-      return date.toLocaleDateString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      });
-    } catch {
-      return '-';
-    }
-  };
 
   // Handle showing version history - fetch versions from backend
   const handleShowVersionHistory = async (resume: Resume) => {
@@ -468,7 +453,7 @@ export default function ResumeTable({
                 </span>
               </td>
               <td className="px-4 py-4 text-sm text-gray-700">
-                {formatDate(resume.uploadDate)}
+                {formatISTDate(resume.uploadDate)}
               </td>
               <td className="px-4 py-4">
                 <span className="text-sm text-gray-700">{resume.uploadedBy}</span>

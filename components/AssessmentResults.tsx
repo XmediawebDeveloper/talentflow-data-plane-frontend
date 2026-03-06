@@ -1,7 +1,8 @@
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import {
@@ -16,6 +17,7 @@ interface AssessmentResultsProps {
   assessmentId: string;
   assessmentTitle: string;
   jdTitle?: string;
+  canDownloadPDF?: boolean;
 }
 
 interface CandidateResult {
@@ -73,7 +75,7 @@ interface QuestionResult {
   type: 'multiple-choice' | 'text' | 'coding';
 }
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle, canDownloadPDF = false }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
@@ -333,14 +335,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               completedDate: (() => {
                 const dateStr = item.completed_at || item.started_at;
                 if (!dateStr) return status === 'Pending' ? 'Not started' : 'N/A';
-                // Convert UTC to IST and format as date
-                const date = new Date(dateStr);
-                return date.toLocaleDateString('en-US', {
-                  timeZone: 'Asia/Kolkata',
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric'
-                });
+                return formatISTDate(dateStr);
               })(),
               duration,
               sections: [
@@ -402,16 +397,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   const formatTimelineDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
-    const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
-    const date = new Date(dateWithZ);
-    return date.toLocaleString('en-US', {
-      timeZone: 'Asia/Kolkata',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
+    return formatIST(dateStr);
   };
 
   // Handle delete result
@@ -819,8 +805,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </p>
             </div>
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-              {/* AS-26: Bulk PDF Download Button */}
-              {selectedRows.length > 0 && (
+              {/* AS-26: Bulk PDF Download Button — only for users with download_pdf permission */}
+              {canDownloadPDF && selectedRows.length > 0 && (
                 <button
                   onClick={handleDownloadBulkPDFs}
                   disabled={downloadingBulkPDF}
@@ -1389,15 +1375,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.status !== 'Pending' && (
                           <button
                             onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                             title="View Details"
                           >
-                            <Award className="w-3 h-3" />
+                            <Eye className="w-3.5 h-3.5 shrink-0" />
                             View Details
                           </button>
                           )}
-                          {/* AS-25: PDF Download Button */}
-                          {candidate.status === 'Completed' ? (
+                          {/* AS-25: PDF Download Button — only for users with download_pdf permission */}
+                          {canDownloadPDF && candidate.status === 'Completed' ? (
                             <button
                               onClick={() => handleDownloadPDF(candidate.id, candidate.name)}
                               disabled={downloadingPDF === candidate.id}

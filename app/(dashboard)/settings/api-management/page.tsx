@@ -6,6 +6,7 @@ import { apiKeysApi, ApiKey, ApiKeyCreateResponse } from '@/lib/services/setting
 import { toast } from 'sonner';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 export default function ApiManagementPage() {
   const { hasPermission } = useAuth();
@@ -107,15 +108,6 @@ export default function ApiManagementPage() {
     }
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'Never';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
   const formatLastUsed = (dateString?: string) => {
     if (!dateString) return 'Never used';
     const date = new Date(dateString);
@@ -215,11 +207,11 @@ export default function ApiManagementPage() {
                     <div className="flex items-center gap-4 text-sm text-gray-500">
                       <span className="flex items-center gap-1">
                         <Clock className="w-4 h-4" />
-                        Created: {formatDate(apiKey.created_at)}
+                        Created: {formatISTDate(apiKey.created_at)}
                       </span>
                       <span>Last used: {formatLastUsed(apiKey.last_used_at)}</span>
                       {apiKey.expires_at && (
-                        <span>Expires: {formatDate(apiKey.expires_at)}</span>
+                        <span>Expires: {formatISTDate(apiKey.expires_at)}</span>
                       )}
                     </div>
                   </div>

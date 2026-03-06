@@ -1,6 +1,7 @@
 import { X, Search, Clock, CheckCircle, Users, Briefcase, Building2, Calendar, MapPin, User, Monitor, Laptop, Home, Sparkles, PenLine } from 'lucide-react';
 import { useState } from 'react';
 import { Resume, Job } from '@/lib/types/types';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // Work mode configuration
 const workModeConfig: Record<string, { label: string; icon: React.ElementType; bgColor: string; textColor: string }> = {
@@ -31,7 +32,7 @@ const formatRelativeTime = (dateStr: string | undefined): string => {
   if (diffMins < 60) return `${diffMins} minutes ago`;
   if (diffHours < 24) return `${diffHours} hours ago`;
   if (diffDays < 7) return `${diffDays} days ago`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return formatISTDate(dateStr);
 };
 
 interface ApplyToJobModalProps {
@@ -187,13 +188,6 @@ export default function ApplyToJobModal({
                   const workMode = workModeConfig[(job as any).workMode?.toLowerCase() || (job as any).remote_type?.toLowerCase()] || null;
                   const WorkModeIcon = workMode?.icon;
 
-                  // Format date
-                  const formatDate = (dateStr: string | undefined) => {
-                    if (!dateStr) return '';
-                    const date = new Date(dateStr);
-                    return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' });
-                  };
-
                   // Get status badge
                   const getStatusBadge = (status: string) => {
                     const configs: Record<string, { bg: string; text: string; dot: string }> = {
@@ -301,7 +295,7 @@ export default function ApplyToJobModal({
                             {((job as any).postedDate || (job as any).published_at) && (
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-4 h-4" />
-                                Posted {formatDate((job as any).postedDate || (job as any).published_at)}
+                                Posted {formatISTDate((job as any).postedDate || (job as any).published_at)}
                               </span>
                             )}
                             {/* Posted By / Created By */}

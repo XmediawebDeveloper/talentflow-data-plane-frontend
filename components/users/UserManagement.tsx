@@ -29,6 +29,8 @@ import DependencyMatrix from './DependencyMatrix';
 import UserLimits, { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { checkQuotaStatus } from '@/lib/services/usageTrackingService';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // Types
 interface UserPermissions {
@@ -717,6 +719,10 @@ export default function UserManagement() {
   // RBAC01: User limits hook
   const { limits, isAtLimit, canAddUsers, refresh: refreshLimits } = useUserLimits();
 
+  // Quota-gated feature visibility — which features are provisioned in the tenant's plan
+  // Default to all enabled; updated on mount from /usage/quota-status
+  const [enabledQuotas, setEnabledQuotas] = useState<Set<string>>(new Set(['RU', 'RS', 'AS', 'AIU']));
+
   // Refresh trigger for SeatQuotaCard
   const [seatQuotaRefreshTrigger, setSeatQuotaRefreshTrigger] = useState(0);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
@@ -793,6 +799,22 @@ export default function UserManagement() {
       } catch (error) {
         console.warn('Failed to sync users with Admin API:', error);
         // Continue loading users even if sync fails
+      }
+
+      // Load quota status to know which features are provisioned for this tenant
+      try {
+        const quotaResult = await checkQuotaStatus();
+        if (quotaResult.status === 'success' && quotaResult.data?.quotas) {
+          const q = quotaResult.data.quotas;
+          const enabled = new Set<string>();
+          if (q.RU && q.RU.status !== 'NOT_PROVISIONED') enabled.add('RU');
+          if (q.RS && q.RS.status !== 'NOT_PROVISIONED') enabled.add('RS');
+          if (q.AS && q.AS.status !== 'NOT_PROVISIONED') enabled.add('AS');
+          if (q.AIU && q.AIU.status !== 'NOT_PROVISIONED') enabled.add('AIU');
+          setEnabledQuotas(enabled);
+        }
+      } catch (e) {
+        // Keep default (all enabled) if quota check fails
       }
 
       // Then load users and related data
@@ -1374,7 +1396,8 @@ export default function UserManagement() {
       resetCreateModal();
       refreshLimits(); // Refresh user limits count
       setSeatQuotaRefreshTrigger(prev => prev + 1); // Refresh SeatQuotaCard
-      loadUsers();
+      // Small delay to let backend finish RBAC sync before re-fetching
+      setTimeout(() => { loadUsers(); refreshUser(); }, 300);
     } catch (error: any) {
       console.error('Error creating user:', error);
       toast.error(error.message || 'Failed to create user');
@@ -1837,18 +1860,15 @@ export default function UserManagement() {
 
       toast.success('User updated successfully');
 
-      // If the updated user is the current logged-in user, refresh their session
-      // This ensures permission changes take effect immediately without logout/login
-      if (currentUser && editingUser.id === currentUser.id) {
-        console.log('[UserManagement] Updated user is current user, refreshing session...');
-        await refreshUser();
-        console.log('[UserManagement] Current user session refreshed');
-      }
-
       resetEditModal();
 
-      // Also refresh the list from server to ensure consistency
-      loadUsers();
+      // Refresh current user's session unconditionally — handles WebSocket failures
+      // where the permission-updated push never reached the affected user's browser.
+      // Small delay lets the backend finish RBAC sync before we re-fetch.
+      setTimeout(async () => {
+        await refreshUser();
+        loadUsers();
+      }, 300);
     } catch (error: any) {
       console.error('Error updating user:', error);
 
@@ -1865,13 +1885,18 @@ export default function UserManagement() {
     }
   };
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr || dateStr === '-') return '-';
-    try {
-      return new Date(dateStr).toLocaleDateString();
-    } catch {
-      return dateStr;
+
+  // Returns false if a permission category or sub-category is for a feature not in the tenant's plan
+  const isCategoryVisible = (categoryId: string, subCategoryName?: string): boolean => {
+    if (subCategoryName) {
+      if (subCategoryName === 'My Resumes' || subCategoryName === 'Internal Database') return enabledQuotas.has('RU');
+      if (subCategoryName === 'Assessment') return enabledQuotas.has('AS');
+      return true;
     }
+    if (categoryId === 'resume_scoring') return enabledQuotas.has('RS');
+    if (categoryId === 'ai_talent_match') return enabledQuotas.has('AIU');
+    if (categoryId === 'resume_management') return enabledQuotas.has('RU') || enabledQuotas.has('AS');
+    return true;
   };
 
   return (
@@ -2078,7 +2103,7 @@ export default function UserManagement() {
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <Calendar className="w-4 h-4" />
-                      {formatDate(user.last_login)}
+                      {formatISTDate(user.last_login)}
                     </div>
                   </td>
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
@@ -2268,6 +2293,9 @@ export default function UserManagement() {
                   ) : (
                     <div className="space-y-3 max-h-[250px] overflow-y-auto border border-gray-200 rounded-lg p-3 bg-gray-50">
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
+                        // Hide categories for features not in the tenant's plan
+                        if (!isCategoryVisible(category.id)) return null;
+
                         // Check if any permission in this category is selected
                         const hasAnyPermission = () => {
                           if (category.actions) {
@@ -2443,6 +2471,9 @@ export default function UserManagement() {
                   ) : (
                     <div className="space-y-1">
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
+                        // Hide categories for features not in the tenant's plan
+                        if (!isCategoryVisible(category.id)) return null;
+
                         // Pure codes-only toggle — no dual-state sync needed
                         const toggleCode = (code: string) => {
                           if (editSelectedPermissionCodes.has(code)) {
@@ -2598,6 +2629,9 @@ export default function UserManagement() {
 
                                 {/* Sub-categories */}
                                 {category.subCategories?.map(sub => {
+                                  // Hide sub-categories for features not in the tenant's plan
+                                  if (!isCategoryVisible(category.id, sub.name)) return null;
+
                                   const isSubActive = sub.viewCode
                                     ? editSelectedPermissionCodes.has(sub.viewCode) || sub.actions.some(a => editSelectedPermissionCodes.has(a.code))
                                     : sub.actions.some(a => editSelectedPermissionCodes.has(a.code));
@@ -2773,7 +2807,7 @@ export default function UserManagement() {
           userRole={featurePermissionUser.role as UserRole}
           isOpen={true}
           onClose={() => setFeaturePermissionUser(null)}
-          onUpdate={() => loadUsers()}
+          onUpdate={() => setTimeout(async () => { await refreshUser(); loadUsers(); }, 300)}
         />
       )}
 

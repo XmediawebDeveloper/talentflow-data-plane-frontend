@@ -3,6 +3,7 @@
 import { X, FileText, Trash2, RefreshCw, GitBranch, AlertTriangle, Eye, Calendar, FolderOpen, HardDrive, ChevronLeft, ChevronRight, Check, Ban, Loader2 } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { resumeService } from '@/lib/services';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { renderAsync } from 'docx-preview';
 
 // Maximum number of versions allowed per resume
@@ -217,14 +218,6 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
   };
 
   // Check if version limit is reached for the current resume
@@ -445,7 +438,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-gray-400" />
                   <span className="text-gray-600">Upload Date:</span>
-                  <span className="text-gray-900">{formatDate(currentDuplicate.existingResume.upload_date)}</span>
+                  <span className="text-gray-900">{formatISTDate(currentDuplicate.existingResume.upload_date)}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <HardDrive className="w-4 h-4 text-gray-400" />
@@ -487,7 +480,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve }:
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-gray-400" />
                   <span className="text-gray-600">Upload Date:</span>
-                  <span className="text-gray-900">{new Date().toLocaleDateString()}</span>
+                  <span className="text-gray-900">{formatISTDate(new Date().toISOString())}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <HardDrive className="w-4 h-4 text-gray-400" />

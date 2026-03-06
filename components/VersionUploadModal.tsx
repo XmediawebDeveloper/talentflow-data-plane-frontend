@@ -2,6 +2,7 @@
 
 import { X, Upload, File, Trash2, GitBranch, AlertCircle } from 'lucide-react';
 import { useState, useRef } from 'react';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 
@@ -314,7 +315,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
             fileName: file.name,
             candidateName: `Candidate ${index + 1}`,
             newResumeSize: formatFileSize(file.size),
-            newResumeDate: new Date().toLocaleDateString(),
+            newResumeDate: formatISTDate(new Date().toISOString()),
             existingLocation: 'My Resumes / Senior Developers',
             existingResumeDate: '2024-10-15',
             existingResumeSize: '230 KB',
