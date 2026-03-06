@@ -3,6 +3,7 @@
 import { Clock, CheckCircle, RefreshCw, Copy, AlertCircle, ChevronRight, FileText, X, Calendar, Download, GitBranch } from 'lucide-react';
 import { useState } from 'react';
 import UploadStatusDashboard from './UploadStatusDashboard';
+import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 
 interface UploadRecord {
   id: string;
@@ -30,7 +31,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
   const filteredRecords = records.filter(r => r.source === currentSource);
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    const date = parseIST(dateString);
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / 60000);
@@ -42,7 +43,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
     if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
     if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
 
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return formatIST(dateString);
   };
 
   const getSuccessRate = (record: UploadRecord) => {

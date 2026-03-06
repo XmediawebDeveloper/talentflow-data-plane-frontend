@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -1048,7 +1049,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                         {job.postedDate && (
                           <div className="flex items-center gap-2 sm:gap-3 text-sm sm:text-base text-gray-600">
                             <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-                            <span>Posted {new Date(job.postedDate).toLocaleDateString()}</span>
+                            <span>Posted {formatISTDate(job.postedDate)}</span>
                           </div>
                         )}
                         {job.postedBy && (
@@ -1307,7 +1308,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                           {job.postedDate && (
                             <span className="flex items-center gap-1.5 sm:gap-2">
                               <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                              Posted {new Date(job.postedDate).toLocaleDateString()}
+                              Posted {formatISTDate(job.postedDate)}
                             </span>
                           )}
                           {job.postedBy && (

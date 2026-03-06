@@ -4,6 +4,7 @@ import { Shield, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Dow
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -282,15 +283,8 @@ export default function UnitDisputesPage() {
 
   // --- Helpers ---
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  const formatDateTime = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
+  const formatDate = (dateString: string | null) => formatISTDate(dateString ?? undefined);
+  const formatDateTime = (dateString: string | null) => formatIST(dateString ?? undefined);
 
   const truncateId = (id: string) => {
     if (id.length <= 12) return id;

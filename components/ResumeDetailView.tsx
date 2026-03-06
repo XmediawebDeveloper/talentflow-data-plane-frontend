@@ -7,6 +7,7 @@ import { FileText, Clock, History, User, File, HardDrive } from 'lucide-react';
 import ResumeVersionSelector from './ResumeVersionSelector';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 
 interface ResumeDetailViewProps {
   resume: Resume;
@@ -456,13 +457,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                             <div className="flex items-center gap-3 text-xs text-gray-600">
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
-                                {new Date(version.uploadDate).toLocaleDateString('en-US', { 
-                                  month: 'short', 
-                                  day: 'numeric', 
-                                  year: 'numeric',
-                                  hour: '2-digit',
-                                  minute: '2-digit'
-                                })}
+                                {formatIST(version.uploadDate)}
                               </span>
                               <span>•</span>
                               <span>{version.size}</span>
@@ -537,13 +532,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                     <div>
                       <div className="text-xs text-gray-500 mb-1">Upload Date</div>
                       <div className="text-sm text-gray-900">
-                        {new Date(resume.uploadDate).toLocaleDateString('en-US', { 
-                          month: 'long', 
-                          day: 'numeric', 
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                        {formatIST(resume.uploadDate)}
                       </div>
                     </div>
                   </div>
@@ -557,13 +546,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <div className="text-xs text-gray-500 mb-1">Last Modified</div>
                       <div className="text-sm text-gray-900">
                         {resume.lastUpdated 
-                          ? new Date(resume.lastUpdated).toLocaleDateString('en-US', { 
-                              month: 'long', 
-                              day: 'numeric', 
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })
+                          ? formatIST(resume.lastUpdated)
                           : 'Never'}
                       </div>
                     </div>
@@ -658,11 +641,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm text-gray-900">Resume uploaded</span>
                         <span className="text-xs text-gray-500">
-                          {new Date(resume.uploadDate).toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric', 
-                            year: 'numeric'
-                          })}
+                          {formatISTDate(resume.uploadDate)}
                         </span>
                       </div>
                       <div className="text-xs text-gray-600">

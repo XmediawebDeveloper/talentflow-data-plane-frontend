@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 // Helper function to convert backend match_status to frontend format
 const convertMatchStatus = (status: string | undefined): 'Exact Match' | 'Partial Match' | 'No Match' => {
@@ -1132,18 +1133,7 @@ export default function ResumeScoringPage({
                   <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-600">
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
-                      {new Date(selectedHistoryItem.scoredAt).toLocaleDateString('en-US', {
-                        timeZone: 'Asia/Kolkata',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}{' '}
-                      {new Date(selectedHistoryItem.scoredAt).toLocaleTimeString('en-US', {
-                        timeZone: 'Asia/Kolkata',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true
-                      })}
+                      {formatIST(selectedHistoryItem.scoredAt)}
                     </span>
                     <span className="flex items-center gap-1">
                       <FileText className="w-4 h-4" />
@@ -1872,18 +1862,7 @@ export default function ResumeScoringPage({
                           )}
                           <span className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            Scored {new Date(item.scoredAt).toLocaleDateString('en-US', {
-                              timeZone: 'Asia/Kolkata',
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}{', '}
-                            {new Date(item.scoredAt).toLocaleTimeString('en-US', {
-                              timeZone: 'Asia/Kolkata',
-                              hour: 'numeric',
-                              minute: '2-digit',
-                              hour12: true
-                            })}
+                            Scored {formatIST(item.scoredAt)}
                           </span>
                           <span className="flex items-center gap-1">
                             <FileText className="w-4 h-4" />
@@ -1975,16 +1954,7 @@ export default function ResumeScoringPage({
                           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 mb-3">
                             <span className="flex items-center gap-1.5">
                               <Clock className="w-4 h-4" />
-                              Scored {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                              })}{', '}
-                              {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', {
-                                hour: 'numeric',
-                                minute: '2-digit',
-                                hour12: true
-                              })}
+                              Scored {formatIST(item.scoredAt)}
                             </span>
                             <span className="flex items-center gap-1.5">
                               <FileText className="w-4 h-4" />

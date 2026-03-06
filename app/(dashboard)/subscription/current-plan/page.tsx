@@ -14,6 +14,7 @@ import DowngradeWarningModal from '@/components/subscription/DowngradeWarningMod
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { usePlanChange } from '@/components/providers/PlanChangeProvider';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -283,13 +284,6 @@ const formatCurrency = (amount: number | undefined | null, currency: string): st
   return `${symbol}${amount.toLocaleString()}`;
 };
 
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
 
 const getStatusBadge = (status?: string, paymentStatus?: string, trialDays?: number) => {
   if (paymentStatus === 'pending') {
@@ -1506,8 +1500,8 @@ function CurrentPlanContent() {
         if (result.queued) {
           toast.success(isDowngradePayment ? 'Payment successful! Downgrade queued.' : 'Payment successful! Upgrade queued.', {
             description: isDowngradePayment
-              ? `Your downgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? new Date(result.auto_apply_date).toLocaleDateString() : 'plan expiry'}.`
-              : `Your upgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? new Date(result.auto_apply_date).toLocaleDateString() : 'plan expiry'}.`,
+              ? `Your downgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? formatISTDate(result.auto_apply_date) : 'plan expiry'}.`
+              : `Your upgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? formatISTDate(result.auto_apply_date) : 'plan expiry'}.`,
             duration: 6000,
           });
         } else {
@@ -1831,9 +1825,7 @@ function CurrentPlanContent() {
                 {daysRemaining !== null && (
                   <>{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} remaining to review. </>
                 )}
-                Deadline: {new Date(currentChange.deadline).toLocaleDateString('en-US', {
-                  month: 'long', day: 'numeric', year: 'numeric'
-                })}
+                Deadline: {formatISTDate(currentChange.deadline)}
               </p>
             </div>
             <button
@@ -1954,10 +1946,10 @@ function CurrentPlanContent() {
               <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial
                   ? (companySettings?.trial_start_date
-                      ? formatDate(companySettings.trial_start_date)
+                      ? formatISTDate(companySettings.trial_start_date)
                       : '-')
                   : (companySettings?.plan_start_date
-                      ? formatDate(companySettings.plan_start_date)
+                      ? formatISTDate(companySettings.plan_start_date)
                       : '-')
                 }
               </p>
@@ -1969,10 +1961,10 @@ function CurrentPlanContent() {
               <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial
                   ? (companySettings?.trial_end_date
-                      ? formatDate(companySettings.trial_end_date)
+                      ? formatISTDate(companySettings.trial_end_date)
                       : '-')
                   : (companySettings?.plan_expiry_date
-                      ? formatDate(companySettings.plan_expiry_date)
+                      ? formatISTDate(companySettings.plan_expiry_date)
                       : '-')
                 }
               </p>
@@ -2228,7 +2220,7 @@ function CurrentPlanContent() {
                   {companySettings?.last_synced_at && (
                     <div className="p-3 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500 mb-0.5">Last Synced</p>
-                      <p className="text-sm font-medium text-gray-900">{formatDate(companySettings.last_synced_at)}</p>
+                      <p className="text-sm font-medium text-gray-900">{formatISTDate(companySettings.last_synced_at)}</p>
                     </div>
                   )}
                 </div>
@@ -2285,13 +2277,13 @@ function CurrentPlanContent() {
                         <div>
                           <span className="text-gray-500">Auto-applies:</span>
                           <span className="ml-1 font-medium text-gray-900">
-                            {upgrade.auto_apply_date ? formatDate(upgrade.auto_apply_date) : 'On plan expiry'}
+                            {upgrade.auto_apply_date ? formatISTDate(upgrade.auto_apply_date) : 'On plan expiry'}
                           </span>
                         </div>
                         <div>
                           <span className="text-gray-500">Queued on:</span>
                           <span className="ml-1 font-medium text-gray-900">
-                            {upgrade.created_at ? formatDate(upgrade.created_at) : '-'}
+                            {upgrade.created_at ? formatISTDate(upgrade.created_at) : '-'}
                           </span>
                         </div>
                       </div>
@@ -2985,7 +2977,7 @@ function CurrentPlanContent() {
                         <span className="text-gray-600">Auto-applies on:</span>
                         <span className="font-medium text-gray-900">
                           {transactionResult.auto_apply_date
-                            ? formatDate(transactionResult.auto_apply_date)
+                            ? formatISTDate(transactionResult.auto_apply_date)
                             : 'When current plan expires'}
                         </span>
                       </div>
@@ -3358,7 +3350,7 @@ function CurrentPlanContent() {
                   <div className="flex justify-between">
                     <span className="text-gray-500">Scheduled for:</span>
                     <span className="font-medium text-gray-900">
-                      {selectedQueuedUpgrade.auto_apply_date ? formatDate(selectedQueuedUpgrade.auto_apply_date) : 'On plan expiry'}
+                      {selectedQueuedUpgrade.auto_apply_date ? formatISTDate(selectedQueuedUpgrade.auto_apply_date) : 'On plan expiry'}
                     </span>
                   </div>
                   {selectedQueuedUpgrade.days_until_activation !== undefined && (
@@ -3372,7 +3364,7 @@ function CurrentPlanContent() {
                   <div className="flex justify-between">
                     <span className="text-gray-500">Queued on:</span>
                     <span className="font-medium text-gray-900">
-                      {selectedQueuedUpgrade.created_at ? formatDate(selectedQueuedUpgrade.created_at) : '-'}
+                      {selectedQueuedUpgrade.created_at ? formatISTDate(selectedQueuedUpgrade.created_at) : '-'}
                     </span>
                   </div>
                 </div>

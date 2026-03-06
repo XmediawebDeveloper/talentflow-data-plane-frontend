@@ -3,6 +3,7 @@
 import { CheckCircle, RefreshCw, Copy, AlertCircle, X, Download, Eye, ArrowLeft, FileText, GitBranch, Clock, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
+import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from '@/components/ui/enhanced-toast';
 
 // Dynamic import to avoid SSR issues with docx-preview dependency
@@ -99,14 +100,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatIST(dateString);
   };
 
   const getStatusIcon = (status: string) => {
@@ -840,7 +834,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 fileName: v.fileName,
                 candidateName: v.candidateName || 'Unknown Candidate',
                 newResumeSize: '245 KB',
-                newResumeDate: new Date().toLocaleDateString(),
+                newResumeDate: formatIST(new Date().toISOString()),
                 existingLocation: v.existingLocation || 'Unknown Location',
                 existingResumeDate: '2024-11-15',
                 existingResumeSize: '220 KB',
@@ -856,7 +850,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 fileName: d.fileName,
                 candidateName: d.candidateName || 'Unknown Candidate',
                 newResumeSize: '230 KB',
-                newResumeDate: new Date().toLocaleDateString(),
+                newResumeDate: formatIST(new Date().toISOString()),
                 existingLocation: d.existingLocation || 'Unknown Location',
                 existingResumeDate: '2024-10-20',
                 existingResumeSize: '230 KB',

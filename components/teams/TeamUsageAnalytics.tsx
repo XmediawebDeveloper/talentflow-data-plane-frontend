@@ -15,6 +15,7 @@ import {
   UNIT_TYPE_NAMES,
 } from '@/lib/services/unitPoolService';
 import { toast } from '@/components/ui/enhanced-toast';
+import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -67,16 +68,6 @@ function teamTotal(t: TeamUsageSummary) {
 
 function initials(name: string) {
   return (name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return 'Never';
-  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function formatDateTime(iso: string | null) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 // Human-readable labels for all unit types (including system ones)
@@ -146,7 +137,7 @@ function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
                 {e.status.replace(/_/g, ' ')}
               </span>
               <span className="shrink-0 text-xs text-gray-400 whitespace-nowrap">
-                {formatDateTime(e.created_at)}
+                {formatIST(e.created_at)}
               </span>
             </div>
           ))}
@@ -283,7 +274,7 @@ function MemberRow({ member, days }: { member: TeamMemberUsage; days: number }) 
 
         {/* Last active */}
         <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500">
-          {formatDate(member.last_activity)}
+          {member.last_activity ? formatISTDate(member.last_activity) : 'Never'}
         </td>
       </tr>
 

@@ -1,6 +1,7 @@
 import { ArrowLeft, Clock, CheckCircle, XCircle, Loader2, AlertCircle, TrendingUp, Users, Target, Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Resume, Job } from '@/lib/types/types';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 interface ScoringItem {
   id: string;
@@ -424,14 +425,7 @@ export default function BulkScoringProgress({
                   <td className="px-6 py-4 whitespace-nowrap">
                     {item.scoredDate ? (
                       <div className="text-sm text-gray-900">
-                        {new Date(item.scoredDate).toLocaleString('en-US', {
-                          timeZone: 'Asia/Kolkata',
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
+                        {formatIST(item.scoredDate)}
                       </div>
                     ) : (
                       <span className="text-sm text-gray-400">—</span>

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle, FileText, Upload, Trash2, Search } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface SupportTicket {
   id: string;
@@ -236,18 +237,6 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
     ticket.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
-    if (diffInHours < 1) return 'Just now';
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    if (diffInHours < 48) return 'Yesterday';
-    
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -331,7 +320,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                         {getStatusBadge(ticket.status)}
                       </div>
                       <div className="text-sm text-gray-900 mb-1 truncate">{ticket.title}</div>
-                      <div className="text-xs text-gray-600">{formatDate(ticket.updatedAt)}</div>
+                      <div className="text-xs text-gray-600">{formatISTDate(ticket.updatedAt)}</div>
                     </button>
                   ))}
                 </div>
@@ -545,7 +534,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                       <span>•</span>
                       {getPriorityBadge(ticket.priority)}
                       <span>•</span>
-                      <span>{formatDate(ticket.updatedAt)}</span>
+                      <span>{formatISTDate(ticket.updatedAt)}</span>
                     </div>
                   </button>
                 ))}
@@ -585,7 +574,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                   <span className="text-xs text-gray-400">•</span>
                   {getPriorityBadge(selectedTicket.priority)}
                   <span className="text-xs text-gray-400">•</span>
-                  <span className="text-xs text-gray-600">Created {formatDate(selectedTicket.createdAt)}</span>
+                  <span className="text-xs text-gray-600">Created {formatISTDate(selectedTicket.createdAt)}</span>
                 </div>
 
                 {selectedTicket.assignedAgent && (
@@ -620,7 +609,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                         <div className="text-xs text-gray-900">
                           {response.from === 'user' ? 'You' : response.agentName || 'Support Team'}
                         </div>
-                        <div className="text-xs text-gray-500">{formatDate(response.timestamp)}</div>
+                        <div className="text-xs text-gray-500">{formatISTDate(response.timestamp)}</div>
                       </div>
                     </div>
                     <p className="text-sm text-gray-700">{response.message}</p>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ScrollText, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import { termsService } from '@/lib/services/termsService';
+import { formatIST } from '@/lib/utils/dateUtils';
 import type { TermsAcceptanceRecord } from '@/lib/types/terms';
 
 export default function LegalCompliancePage() {
@@ -86,13 +87,7 @@ export default function LegalCompliancePage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      {new Date(record.accepted_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                      {formatIST(record.accepted_at)}
                     </td>
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700">

@@ -95,8 +95,8 @@ export default function RootLayout({
                   <Toaster position="top-right" richColors closeButton />
                   {/* Global subscription inactive modal - catches events from API interceptor */}
                   <SubscriptionInactiveModal />
-                  {/* Global scoring progress indicator - COMMENTED OUT: Now using redirect flow instead of popup */}
-                  {/* <GlobalScoringProgressIndicator /> */}
+                  {/* Global scoring progress indicator - floating bottom-right widget */}
+                  <GlobalScoringProgressIndicator />
                 </ScoringProgressProvider>
               </GlobalDialogProvider>
             </ModalProvider>

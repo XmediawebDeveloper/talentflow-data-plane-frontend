@@ -1,5 +1,6 @@
 'use client';
 
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useState, useEffect, useRef } from 'react';
 import {
   HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
@@ -673,28 +674,6 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     return matchesSearch;
   });
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-
-    if (diffInHours < 1) return 'Just now';
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    if (diffInHours < 48) return 'Yesterday';
-
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  const formatFullDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   // Use stats from API or calculate from tickets
   const openTickets = stats?.open_tickets ?? tickets.filter(t => t.status === 'open').length;
@@ -912,7 +891,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <span className="hidden sm:inline">-</span>
                         {getPriorityBadge(ticket.priority)}
                         <span className="hidden sm:inline">-</span>
-                        <span>{formatDate(ticket.updatedAt)}</span>
+                        <span>{formatISTDate(ticket.updatedAt)}</span>
                       </div>
                     </button>
                   ))}
@@ -1224,7 +1203,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <span className="text-[10px] sm:text-xs text-gray-600">{getCategoryLabel(ticket.category)}</span>
                             </div>
                             {getPriorityBadge(ticket.priority)}
-                            <span className="text-[10px] sm:text-xs text-gray-600">{formatDate(ticket.updatedAt)}</span>
+                            <span className="text-[10px] sm:text-xs text-gray-600">{formatISTDate(ticket.updatedAt)}</span>
                           </div>
                         </button>
                       );
@@ -1269,7 +1248,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 {getStatusBadge(ticket.status)}
                               </td>
                               <td className="px-6 py-4">
-                                <span className="text-sm text-gray-600">{formatDate(ticket.updatedAt)}</span>
+                                <span className="text-sm text-gray-600">{formatISTDate(ticket.updatedAt)}</span>
                               </td>
                               <td className="px-6 py-4">
                                 <button
@@ -1362,7 +1341,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <span className="text-xs sm:text-sm text-gray-900 font-medium truncate">
                                 {response.from === 'user' ? 'You' : response.agentName || 'Support Team'}
                               </span>
-                              <span className="text-[10px] sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatDate(response.timestamp)}</span>
+                              <span className="text-[10px] sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatISTDate(response.timestamp)}</span>
                             </div>
                             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">{response.message}</p>
                           </div>
@@ -1406,12 +1385,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <div className="space-y-3 sm:space-y-4">
                     <div>
                       <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Created</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatFullDate(selectedTicket.createdAt)}</div>
+                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedTicket.createdAt)}</div>
                     </div>
 
                     <div>
                       <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Updated</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatFullDate(selectedTicket.updatedAt)}</div>
+                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedTicket.updatedAt)}</div>
                     </div>
 
                     {selectedTicket.assignedAgent && (
@@ -1702,7 +1681,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <span className="hidden sm:inline">-</span>
                         {getInternalPriorityBadge(ticket.priority)}
                         <span className="hidden sm:inline">-</span>
-                        <span>{formatDate(ticket.updated_at)}</span>
+                        <span>{formatISTDate(ticket.updated_at)}</span>
                       </div>
                     </button>
                   ))}
@@ -1819,7 +1798,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <span className="text-[10px] sm:text-xs text-gray-600">{getInternalCategoryLabel(ticket.category)}</span>
                             </div>
                             {getInternalPriorityBadge(ticket.priority)}
-                            <span className="text-[10px] sm:text-xs text-gray-600">{formatDate(ticket.updated_at)}</span>
+                            <span className="text-[10px] sm:text-xs text-gray-600">{formatISTDate(ticket.updated_at)}</span>
                             {ticket.assigned_to && (
                               <span className="text-[10px] sm:text-xs text-gray-600 truncate max-w-[80px]">{ticket.assigned_to.name}</span>
                             )}
@@ -1884,7 +1863,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 )}
                               </td>
                               <td className="px-6 py-4">
-                                <span className="text-sm text-gray-600">{formatDate(ticket.updated_at)}</span>
+                                <span className="text-sm text-gray-600">{formatISTDate(ticket.updated_at)}</span>
                               </td>
                               <td className="px-6 py-4">
                                 <button
@@ -1986,7 +1965,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">
                                 {response.user_role === 'admin' ? `${response.user_name} (Admin)` : response.user_name}
                               </span>
-                              <span className="text-[10px] sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatDate(response.created_at)}</span>
+                              <span className="text-[10px] sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatISTDate(response.created_at)}</span>
                             </div>
                             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{response.message}</p>
                           </div>
@@ -2030,12 +2009,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <div className="space-y-3 sm:space-y-4">
                     <div>
                       <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Created</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatFullDate(selectedInternalTicket.created_at)}</div>
+                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedInternalTicket.created_at)}</div>
                     </div>
 
                     <div>
                       <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Updated</div>
-                      <div className="text-xs sm:text-sm text-gray-900">{formatFullDate(selectedInternalTicket.updated_at)}</div>
+                      <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedInternalTicket.updated_at)}</div>
                     </div>
 
                     <div>

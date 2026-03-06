@@ -1,5 +1,6 @@
 'use client';
 
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, Target } from 'lucide-react';
 import { useState, useEffect, ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -178,17 +179,6 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
     return `${mins}m ${secs}s`;
   };
 
-  const formatDate = (dateString: string | null): string => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
 
   const getStatusBadge = (status: AssessmentResultItem['status'], passed: boolean | null) => {
     if (status === 'completed') {
@@ -438,7 +428,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-sm text-gray-600">
-                        {formatDate(item.completed_at)}
+                        {formatIST(item.completed_at)}
                       </span>
                     </td>
                   </tr>
@@ -622,7 +612,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-sm text-gray-600">
-                        {item.scored_at ? new Date(item.scored_at).toLocaleDateString() : '-'}
+                        {item.scored_at ? formatISTDate(item.scored_at) : '-'}
                       </span>
                     </td>
                   </tr>
@@ -764,23 +754,6 @@ export default function JDDetailsPage() {
     );
   };
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return 'N/A';
-
-    const date = new Date(dateString);
-
-    // Check if date is valid
-    if (isNaN(date.getTime())) return 'Invalid Date';
-
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
 
   if (loading) {
     return (
@@ -858,7 +831,7 @@ export default function JDDetailsPage() {
                 )}
                 <span className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
-                  Created {formatDate(jd.created_at)}
+                  Created {formatIST(jd.created_at)}
                 </span>
               </div>
             </div>
@@ -1100,19 +1073,7 @@ export default function JDDetailsPage() {
                     <div className="text-gray-900 space-y-1">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-gray-400" />
-                        <span>{new Date(jd.created_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-gray-400" />
-                        <span>{new Date(jd.created_at).toLocaleTimeString('en-US', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: true
-                        })}</span>
+                        <span>{formatIST(jd.created_at)}</span>
                       </div>
                     </div>
                   </div>
@@ -1122,19 +1083,7 @@ export default function JDDetailsPage() {
                       <div className="text-gray-900 space-y-1">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-gray-400" />
-                          <span>{new Date(jd.published_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric'
-                          })}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-gray-400" />
-                          <span>{new Date(jd.published_at).toLocaleTimeString('en-US', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true
-                          })}</span>
+                          <span>{formatIST(jd.published_at)}</span>
                         </div>
                       </div>
                     </div>
@@ -1188,7 +1137,7 @@ export default function JDDetailsPage() {
                           <div className="text-xs text-gray-500 space-y-1">
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
-                              {formatDate(version.published_at)}
+                              {formatIST(version.published_at)}
                             </div>
                             <div className="text-gray-600 mt-1">
                               {version.title}

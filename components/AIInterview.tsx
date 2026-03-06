@@ -11,6 +11,7 @@ import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettings
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
@@ -667,7 +668,7 @@ export default function AIInterview() {
                               )}
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
-                                {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at {new Date(config.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                {formatIST(config.created_at)}
                               </span>
                               {config.created_by_name && (
                                 <span className="text-xs text-gray-400">
@@ -852,7 +853,7 @@ export default function AIInterview() {
                         <span className="text-gray-500">{session.duration_minutes} min</span>
                         {session.started_at && (
                           <span className="text-xs text-gray-400">
-                            Started {new Date(session.started_at).toLocaleString()}
+                            Started {formatIST(session.started_at)}
                           </span>
                         )}
                         <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-yellow-100 text-yellow-700">
@@ -929,7 +930,7 @@ export default function AIInterview() {
                             {activity.actor_name && <span className="truncate">by {activity.actor_name}</span>}
                             {activity.candidate_name && <span className="truncate">{activity.candidate_name}</span>}
                             {activity.score != null && <span>Score: {activity.score}%</span>}
-                            <span className="flex-shrink-0">{new Date(activity.timestamp).toLocaleString()}</span>
+                            <span className="flex-shrink-0">{formatIST(activity.timestamp)}</span>
                           </div>
                         </div>
                       </div>
@@ -1276,7 +1277,7 @@ export default function AIInterview() {
                         </span>
                         {inv.scheduled_at && (
                           <span className="text-[10px] sm:text-xs text-gray-400">
-                            {new Date(inv.scheduled_at).toLocaleString()}
+                            {formatIST(inv.scheduled_at)}
                           </span>
                         )}
                       </div>

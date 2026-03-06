@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -177,7 +178,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 </span>
                 {interview.completed_at && (
                   <span>
-                    Completed {new Date(interview.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    Completed {formatISTDate(interview.completed_at)}
                   </span>
                 )}
               </div>

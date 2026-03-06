@@ -8,6 +8,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { PlanFeatureKey } from '@/lib/types/planFeatures';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // Addon interface
 interface Addon {
@@ -898,7 +899,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               {quotaSummary.billing_period && (
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 bg-gray-50 px-3 sm:px-4 py-2 rounded-lg border border-gray-200 self-start sm:self-auto">
                   <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="truncate">{new Date(quotaSummary.billing_period.start).toLocaleDateString()} - {new Date(quotaSummary.billing_period.end).toLocaleDateString()}</span>
+                  <span className="truncate">{formatISTDate(quotaSummary.billing_period.start)} - {formatISTDate(quotaSummary.billing_period.end)}</span>
                 </div>
               )}
             </div>

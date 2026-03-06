@@ -10,6 +10,7 @@ import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import UploadModal from './UploadModal';
+import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 
 // Progress item interface (internal)
 interface ProgressItem {
@@ -36,6 +37,7 @@ export default function SelectSourceModal({
 }: SelectSourceModalProps) {
   const router = useRouter();
   const { user, tenant } = useAuth();
+  const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
@@ -58,6 +60,12 @@ export default function SelectSourceModal({
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
+
+  // Hide global floating widget while progress modal is open here; show it when modal closes or user navigates
+  useEffect(() => {
+    setMainPanelOpen(showProgressModal);
+    return () => { setMainPanelOpen(false); };
+  }, [showProgressModal, setMainPanelOpen]);
 
   // Fetch resumes and folders on mount and tab change
   useEffect(() => {
@@ -256,6 +264,16 @@ export default function SelectSourceModal({
     setShowProgressModal(true);
     setSubmitting(true);
 
+    // Register with global floating progress widget (persists across navigation)
+    startScoringJob(jobId, jobTitle, initialItems.map(item => ({
+      id: `${jobId}-${item.resumeId}`,
+      resumeId: item.resumeId,
+      candidateName: item.candidateName,
+      jobTitle,
+      jobId,
+      source: 'Internal DB' as const,
+    })));
+
     let completed = 0;
     let failed = 0;
 
@@ -264,6 +282,8 @@ export default function SelectSourceModal({
       const resumeId = resumesToScore[i];
       const resume = resumes.find(r => r.id === resumeId);
       const candidateName = resume?.candidate_name || 'Unknown';
+
+      const itemId = `${jobId}-${resumeId}`;
 
       // Update current item to 'processing'
       setProgressItems(prev => prev.map(item =>
@@ -277,6 +297,7 @@ export default function SelectSourceModal({
         completed,
         failed,
       });
+      updateItemStatus(jobId, itemId, 'Scoring in progress');
 
       try {
         const result = await scoringService.scoreResume(jobId, resumeId);
@@ -294,6 +315,10 @@ export default function SelectSourceModal({
           completed,
           failed,
         });
+        updateItemStatus(jobId, itemId, 'Scored successfully', {
+          score: result.overall_score,
+          scoredDateTime: new Date().toISOString(),
+        });
       } catch (error: any) {
         failed++;
         const errorMsg = error?.message || 'Scoring failed';
@@ -310,6 +335,7 @@ export default function SelectSourceModal({
           completed,
           failed,
         });
+        updateItemStatus(jobId, itemId, 'Failed', { errorReason: errorMsg });
       }
     }
 

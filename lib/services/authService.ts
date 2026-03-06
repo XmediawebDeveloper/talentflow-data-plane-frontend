@@ -127,6 +127,7 @@ export interface User {
     can_view_assessments?: boolean;
     can_update_assessments?: boolean;
     can_delete_assessments?: boolean;
+    can_download_assessment_pdf?: boolean;
   };
   // RBAC06: Feature flags
   feature_flags?: FeatureFlags;

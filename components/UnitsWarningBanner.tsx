@@ -1,5 +1,6 @@
 import { AlertCircle, TrendingUp } from 'lucide-react';
 import { Tenant, getRemainingUnits } from '@/lib/types/tenant';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface UnitsWarningBannerProps {
   tenant: Tenant;
@@ -88,7 +89,7 @@ export default function UnitsWarningBanner({ tenant, onUpgrade }: UnitsWarningBa
               Upgrade Plan
             </button>
             <p className="text-xs text-yellow-700">
-              Renews on {new Date(subscription.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              Renews on {formatISTDate(subscription.renewalDate)}
             </p>
           </div>
         </div>

@@ -30,6 +30,7 @@ import userService, { ApiUser } from '@/lib/services/userService';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useSearchParams } from 'next/navigation';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { formatISTTime } from '@/lib/utils/dateUtils';
 
 export default function TeamChatPage() {
   const searchParams = useSearchParams();
@@ -723,7 +724,7 @@ export default function TeamChatPage() {
                             }`}
                           >
                             <span className="text-[11px] text-gray-400">
-                              {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {formatISTTime(message.created_at)}
                             </span>
                             {message.is_pinned && (
                               <span className="flex items-center gap-0.5 text-[11px] text-amber-500">

@@ -19,56 +19,11 @@ import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
 import { AlertTriangle, RefreshCw, Send } from 'lucide-react';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 
-// Helper function to format dates in IST timezone (matching resume-view implementation)
-const formatDateTimeIST = (dateStr: string | null | undefined, options?: { includeTime?: boolean }) => {
-  if (!dateStr) return '';
-  // Add 'Z' if not present to ensure UTC interpretation
-  const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
-  const date = new Date(dateWithZ);
-
-  const dateOptions: Intl.DateTimeFormatOptions = {
-    timeZone: 'Asia/Kolkata', // IST = UTC+5:30
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  };
-  if (options?.includeTime) {
-    dateOptions.hour = '2-digit';
-    dateOptions.minute = '2-digit';
-    dateOptions.hour12 = true;
-  }
-  return date.toLocaleString('en-IN', dateOptions);
-};
-
-const formatTimeIST = (dateStr: string | null | undefined) => {
-  if (!dateStr) return '';
-  // Add 'Z' if not present to ensure UTC interpretation
-  const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
-  const date = new Date(dateWithZ);
-  return date.toLocaleTimeString('en-IN', {
-    timeZone: 'Asia/Kolkata', // IST = UTC+5:30
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-};
-
-const formatDateOnlyIST = (dateStr: string | null | undefined) => {
-  if (!dateStr) return '';
-  // Add 'Z' if not present to ensure UTC interpretation
-  const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
-  const date = new Date(dateWithZ);
-  return date.toLocaleDateString('en-IN', {
-    timeZone: 'Asia/Kolkata', // IST = UTC+5:30
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
 
 interface AssessmentsProps {
   jobs: Job[];
@@ -88,6 +43,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const canCreateAssessment = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
+  const canDownloadAssessmentPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
 
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
@@ -833,6 +789,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         assessmentId={selectedAssessmentForResults.id}
         assessmentTitle={selectedAssessmentForResults.title}
         jdTitle={selectedAssessmentForResults.job?.title}
+        canDownloadPDF={canDownloadAssessmentPDF}
       />
     );
   }
@@ -1966,11 +1923,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         )}
                         {assessment.created_at && (
                           <span className={assessment.created_by_name ? " ml-1" : ""}>
-                            {assessment.created_by_name ? "• " : ""}Created: {formatDateOnlyIST(assessment.created_at)}
+                            {assessment.created_by_name ? "• " : ""}Created: {formatISTDate(assessment.created_at)}
                           </span>
                         )}
                         {assessment.updated_at && (
-                          <span className="block">Last Updated: {formatDateOnlyIST(assessment.updated_at)}</span>
+                          <span className="block">Last Updated: {formatISTDate(assessment.updated_at)}</span>
                         )}
                       </div>
 
@@ -2234,11 +2191,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             )}
                             {assessment.created_at && (
                               <span className={assessment.created_by_name ? " ml-1" : ""}>
-                                {assessment.created_by_name ? "• " : ""}Created: {formatDateOnlyIST(assessment.created_at)} at {formatTimeIST(assessment.created_at)}
+                                {assessment.created_by_name ? "• " : ""}Created: {formatISTDate(assessment.created_at)} at {formatISTTime(assessment.created_at)}
                               </span>
                             )}
                             {assessment.updated_at && (
-                              <span className="ml-2">Last Updated: {formatDateOnlyIST(assessment.updated_at)} at {formatTimeIST(assessment.updated_at)}</span>
+                              <span className="ml-2">Last Updated: {formatISTDate(assessment.updated_at)} at {formatISTTime(assessment.updated_at)}</span>
                             )}
                           </div>
 
@@ -2693,12 +2650,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
                       };
 
-                      const formatDate = (dateStr: string | null) => {
-                        if (!dateStr) return null;
-                        const formatted = formatDateTimeIST(dateStr, { includeTime: true });
-                        return `${formatted} IST`;
-                      };
-
                       const initials = invitation.candidate_name
                         ?.split(' ')
                         .map((n: string) => n[0])
@@ -2737,31 +2688,31 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               {invitation.sent_at && (
                                 <div className="flex items-center gap-2">
                                   <Mail className="w-3 h-3 text-gray-500" />
-                                  <span>Sent: {formatDate(invitation.sent_at)}</span>
+                                  <span>Sent: {formatIST(invitation.sent_at)}</span>
                                 </div>
                               )}
                               {invitation.bounced_at && (
                                 <div className="flex items-center gap-2">
                                   <RefreshCw className="w-3 h-3 text-red-500" />
-                                  <span className="text-red-600">Bounced: {formatDate(invitation.bounced_at)}</span>
+                                  <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
                                 </div>
                               )}
                               {invitation.started_at && (
                                 <div className="flex items-center gap-2">
                                   <Play className="w-3 h-3 text-gray-500" />
-                                  <span>Started: {formatDate(invitation.started_at)}</span>
+                                  <span>Started: {formatIST(invitation.started_at)}</span>
                                 </div>
                               )}
                               {invitation.completed_at && (
                                 <div className="flex items-center gap-2">
                                   <CheckCircle className="w-3 h-3 text-gray-500" />
-                                  <span>Completed: {formatDate(invitation.completed_at)}</span>
+                                  <span>Completed: {formatIST(invitation.completed_at)}</span>
                                 </div>
                               )}
                               {!invitation.sent_at && !invitation.started_at && (
                                 <div className="flex items-center gap-2">
                                   <Clock className="w-3 h-3 text-gray-400" />
-                                  <span>Created: {formatDate(invitation.created_at)}</span>
+                                  <span>Created: {formatIST(invitation.created_at)}</span>
                                 </div>
                               )}
                             </div>

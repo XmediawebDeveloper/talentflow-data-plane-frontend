@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import {
   unitPoolService,
   UnitType,
@@ -482,7 +483,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                 {!isBillingManager && pool.last_consumption_at && (
                   <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
                     <Clock className="w-3 h-3" />
-                    <span>Last used: {new Date(pool.last_consumption_at).toLocaleDateString()}</span>
+                    <span>Last used: {formatISTDate(pool.last_consumption_at)}</span>
                   </div>
                 )}
               </div>
@@ -524,8 +525,8 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
             <div className="flex-1">
               <p className="text-sm text-gray-600">
                 Billing Cycle: {pools.pools.RS.billing_cycle_start
-                  ? new Date(pools.pools.RS.billing_cycle_start).toLocaleDateString()
-                  : 'N/A'} - {new Date(pools.pools.RS.billing_cycle_end).toLocaleDateString()}
+                  ? formatISTDate(pools.pools.RS.billing_cycle_start)
+                  : 'N/A'} - {formatISTDate(pools.pools.RS.billing_cycle_end)}
               </p>
               <p className="text-xs text-gray-500 mt-0.5">
                 Units will reset at the start of the next billing cycle
@@ -651,7 +652,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                             {entry.user_name || entry.user_email || 'Unknown'}
                           </div>
                           <p className="text-xs text-gray-400 mt-0.5">
-                            {new Date(entry.created_at).toLocaleString()}
+                            {formatIST(entry.created_at)}
                           </p>
                         </div>
                       </div>

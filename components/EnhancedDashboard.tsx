@@ -34,6 +34,7 @@ import { toast } from 'sonner';
 import { User, Tenant } from '@/lib/types/tenant';
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // Module-level cache to prevent duplicate API calls across remounts
 const dashboardCache = {
@@ -705,7 +706,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                         {jd.created_at && (
                           <span className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            {new Date(jd.created_at).toLocaleDateString()}
+                            {formatISTDate(jd.created_at)}
                           </span>
                         )}
                       </div>

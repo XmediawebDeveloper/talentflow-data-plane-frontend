@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface Job {
   id: string;
@@ -869,11 +870,7 @@ export default function AITalentMatchPage({
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600 mt-1">
                   <span className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
-                    {new Date(selectedHistoryItem.matchedAt).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}
+                    {formatISTDate(selectedHistoryItem.matchedAt)}
                   </span>
                   <span className="flex items-center gap-1">
                     <User className="w-4 h-4" />
@@ -1115,11 +1112,7 @@ export default function AITalentMatchPage({
                     {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
                   </td>
                   <td className="px-4 py-4 text-sm text-gray-700">
-                    {candidate.uploadDate ? new Date(candidate.uploadDate).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    }) : <span className="text-gray-400">-</span>}
+                    {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-400">-</span>}
                   </td>
                   <td className="px-4 py-4">
                     <button
@@ -1771,11 +1764,7 @@ export default function AITalentMatchPage({
                         <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                           <span className="flex items-center gap-1.5">
                             <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
-                            {new Date(item.matchedAt).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
+                            {formatISTDate(item.matchedAt)}
                           </span>
                           <span className="flex items-center gap-1.5">
                             <User className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -2196,11 +2185,7 @@ export default function AITalentMatchPage({
                       {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-700">
-                      {candidate.uploadDate ? new Date(candidate.uploadDate).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      }) : <span className="text-gray-400">-</span>}
+                      {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-400">-</span>}
                     </td>
                     <td className="px-4 py-4">
                       <button
