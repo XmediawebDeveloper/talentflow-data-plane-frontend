@@ -151,35 +151,36 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
   const getStatusBadge = (inv: any) => {
     // Normalize to lowercase for case-insensitive comparison (API may return 'BOUNCED' or 'bounced')
     const s = inv.status?.toLowerCase();
+    const base = "px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs flex items-center gap-1 whitespace-nowrap flex-shrink-0";
     // Priority: terminal/negative states first, then progress states, then sent
     if (s === 'completed') {
-      return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Completed</span>;
+      return <span className={`${base} bg-green-100 text-green-700`}><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Done</span>;
     }
     if (s === 'bounced') {
-      return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Bounced</span>;
+      return <span className={`${base} bg-red-100 text-red-700`}><RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Bounced</span>;
     }
     if (s === 'failed') {
-      return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Failed</span>;
+      return <span className={`${base} bg-red-100 text-red-700`}><X className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Failed</span>;
     }
     if (s === 'expired') {
-      return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
+      return <span className={`${base} bg-orange-100 text-orange-700`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Expired</span>;
     }
     if (s === 'abandoned') {
-      return <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Abandoned</span>;
+      return <span className={`${base} bg-gray-100 text-gray-700`}><X className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Left</span>;
     }
     if (s === 'started' || (inv.started_at && s !== 'completed')) {
-      return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> Started</span>;
+      return <span className={`${base} bg-yellow-100 text-yellow-700`}><Play className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Started</span>;
     }
     if (s === 'opened') {
-      return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Link Opened</span>;
+      return <span className={`${base} bg-purple-100 text-purple-700`}><Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Opened</span>;
     }
     if (inv.email_read_at && s === 'sent') {
-      return <span className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Email Read</span>;
+      return <span className={`${base} bg-indigo-100 text-indigo-700`}><Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Read</span>;
     }
     if (s === 'sent' || inv.sent_at) {
-      return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
+      return <span className={`${base} bg-blue-100 text-blue-700`}><Mail className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Sent</span>;
     }
-    return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
+    return <span className={`${base} bg-gray-100 text-gray-600`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Pending</span>;
   };
 
   const formatDate = (dateStr: string | null) => {
@@ -188,72 +189,72 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/30 flex items-end sm:items-center justify-center z-50 sm:p-4">
+      <div className="bg-white rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-5xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
         {/* Modal Header */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
+        <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <Users className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600 flex-shrink-0" />
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+              <h2 className="text-sm sm:text-lg font-semibold text-gray-900 truncate">
                 <span className="hidden sm:inline">Assessment Invitations Status</span>
-                <span className="sm:hidden">Invitations Status</span>
+                <span className="sm:hidden">Invite Status</span>
               </h2>
             </div>
-            <p className="text-xs sm:text-sm text-gray-500 mt-0.5 truncate">{jdTitle}</p>
+            <p className="text-[10px] sm:text-sm text-gray-500 mt-0.5 truncate">{jdTitle}</p>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+            className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 ml-2"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
         {/* Stats Cards */}
-        <div className="px-3 sm:px-6 py-3 sm:py-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
-          <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4">
-            <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-gray-500 text-[10px] sm:text-xs mb-1">
-                <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                <span className="truncate">Total</span>
+        <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-1 sm:gap-4">
+            <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-500 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                <Users className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
+                <span>Total</span>
               </div>
-              <p className="text-lg sm:text-2xl font-bold text-gray-900">{stats.total}</p>
+              <p className="text-sm sm:text-2xl font-bold text-gray-900">{stats.total}</p>
             </div>
-            <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-blue-600 text-[10px] sm:text-xs mb-1">
-                <Mail className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                <span className="truncate">Sent</span>
+            <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-blue-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                <Mail className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
+                <span>Sent</span>
               </div>
-              <p className="text-lg sm:text-2xl font-bold text-blue-600">{stats.sent}</p>
+              <p className="text-sm sm:text-2xl font-bold text-blue-600">{stats.sent}</p>
             </div>
-            <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-red-600 text-[10px] sm:text-xs mb-1">
-                <X className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                <span className="truncate">Failed</span>
+            <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                <X className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
+                <span>Failed</span>
               </div>
-              <p className="text-lg sm:text-2xl font-bold text-red-600">{stats.failed}</p>
+              <p className="text-sm sm:text-2xl font-bold text-red-600">{stats.failed}</p>
             </div>
-            <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-yellow-600 text-[10px] sm:text-xs mb-1">
-                <Play className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                <span className="truncate">In Progress</span>
+            <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-yellow-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                <Play className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
+                <span>Active</span>
               </div>
-              <p className="text-lg sm:text-2xl font-bold text-yellow-600">{stats.started}</p>
+              <p className="text-sm sm:text-2xl font-bold text-yellow-600">{stats.started}</p>
             </div>
-            <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-green-600 text-[10px] sm:text-xs mb-1">
-                <CheckCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                <span className="truncate">Completed</span>
+            <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-green-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                <CheckCircle className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
+                <span>Done</span>
               </div>
-              <p className="text-lg sm:text-2xl font-bold text-green-600">{stats.completed}</p>
+              <p className="text-sm sm:text-2xl font-bold text-green-600">{stats.completed}</p>
             </div>
-            <div className="bg-white rounded-lg p-2 sm:p-3 border border-gray-200">
-              <div className="flex items-center gap-1.5 sm:gap-2 text-purple-600 text-[10px] sm:text-xs mb-1">
-                <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                <span className="truncate">Completion</span>
+            <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-purple-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                <TrendingUp className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 flex-shrink-0 hidden sm:block" />
+                <span>Rate</span>
               </div>
-              <p className="text-lg sm:text-2xl font-bold text-purple-600">
+              <p className="text-sm sm:text-2xl font-bold text-purple-600">
                 {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%
               </p>
             </div>
@@ -261,7 +262,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
         </div>
 
         {/* Invitations Table / Cards */}
-        <div className="px-3 sm:px-6 py-3 sm:py-4 overflow-auto flex-1 min-h-0">
+        <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center py-8 sm:py-12">
               <div className="animate-spin w-6 h-6 sm:w-8 sm:h-8 border-4 border-purple-600 border-t-transparent rounded-full"></div>
@@ -274,7 +275,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
           ) : (
             <>
               {/* Mobile Card View */}
-              <div className="sm:hidden space-y-3">
+              <div className="sm:hidden space-y-2">
                 {invitations.map((invitation: any) => {
                   const initials = invitation.candidate_name
                     ?.split(' ')
@@ -284,45 +285,43 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                     .slice(0, 2) || '??';
 
                   return (
-                    <div key={invitation.id} className="bg-white rounded-lg border border-gray-200 p-3">
-                      {/* Candidate + Status */}
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-medium text-xs flex-shrink-0">
-                            {initials}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium text-gray-900 text-sm truncate">{invitation.candidate_name}</p>
-                            <p className="text-[10px] text-gray-500 truncate">{invitation.candidate_email}</p>
-                          </div>
+                    <div key={invitation.id} className="bg-white rounded-lg border border-gray-200 p-2.5">
+                      {/* Candidate row */}
+                      <div className="flex items-center gap-2 min-w-0 mb-1.5">
+                        <div className="w-7 h-7 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-medium text-[10px] flex-shrink-0">
+                          {initials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 text-xs truncate">{invitation.candidate_name}</p>
+                          <p className="text-[10px] text-gray-500 truncate break-all">{invitation.candidate_email}</p>
                         </div>
                         {getStatusBadge(invitation)}
                       </div>
 
                       {/* CID + Assessment */}
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className="text-[10px] font-mono font-medium text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">
+                      <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+                        <span className="text-[9px] font-mono font-medium text-purple-700 bg-purple-50 px-1 py-0.5 rounded">
                           {invitation.candidate_display_id || '-'}
                         </span>
-                        <span className="text-xs text-gray-600 truncate">{invitation.assessment_title}</span>
+                        <span className="text-[10px] text-gray-600 truncate">{invitation.assessment_title}</span>
                       </div>
 
                       {/* Timeline */}
-                      <div className="text-[10px] text-gray-500 space-y-0.5 mb-2">
+                      <div className="text-[10px] text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5 mb-1.5">
                         {invitation.sent_at && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1">
                             <Mail className="w-2.5 h-2.5 text-blue-500 flex-shrink-0" />
                             <span>Sent: {formatDate(invitation.sent_at)}</span>
                           </div>
                         )}
                         {invitation.started_at && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1">
                             <Play className="w-2.5 h-2.5 text-yellow-500 flex-shrink-0" />
                             <span>Started: {formatDate(invitation.started_at)}</span>
                           </div>
                         )}
                         {invitation.completed_at && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1">
                             <CheckCircle className="w-2.5 h-2.5 text-green-500 flex-shrink-0" />
                             <span>Done: {formatDate(invitation.completed_at)}</span>
                           </div>
@@ -330,50 +329,91 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                       </div>
 
                       {/* Progress + Actions */}
-                      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                        <div>
-                          {invitation.status?.toLowerCase() === 'completed' ? (
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <span className="text-gray-600">Score:</span>
-                              <span className={`font-medium ${invitation.passed ? 'text-green-600' : 'text-red-600'}`}>
-                                {invitation.overall_score != null ? `${invitation.overall_score.toFixed(1)}%` : 'N/A'}
-                              </span>
-                              {invitation.passed !== null && (
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${invitation.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                  {invitation.passed ? 'Pass' : 'Fail'}
+                      <div className="pt-1.5 border-t border-gray-100">
+                        {/* Score/Progress row */}
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div>
+                            {invitation.status?.toLowerCase() === 'completed' ? (
+                              <div className="flex items-center gap-1 text-[10px]">
+                                <span className="text-gray-600">Score:</span>
+                                <span className={`font-medium ${invitation.passed ? 'text-green-600' : 'text-red-600'}`}>
+                                  {invitation.overall_score != null ? `${invitation.overall_score.toFixed(1)}%` : 'N/A'}
                                 </span>
-                              )}
-                            </div>
-                          ) : invitation.started_at ? (
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <span className="text-gray-600">Progress:</span>
-                              <span className="font-medium text-yellow-600">
-                                {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-400">—</span>
-                          )}
-                        </div>
-                        <div>
-                          {invitation.status?.toLowerCase() === 'completed' ? (
+                                {invitation.passed !== null && (
+                                  <span className={`text-[9px] px-1 py-0.5 rounded ${invitation.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    {invitation.passed ? 'Pass' : 'Fail'}
+                                  </span>
+                                )}
+                              </div>
+                            ) : invitation.started_at ? (
+                              <div className="flex items-center gap-1 text-[10px]">
+                                <span className="text-gray-600">Progress:</span>
+                                <span className="font-medium text-yellow-600">
+                                  {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-gray-400">—</span>
+                            )}
+                          </div>
+                          {invitation.status?.toLowerCase() === 'completed' && (
                             <button
                               onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results`)}
-                              className="flex items-center gap-1 px-2 py-1 text-[10px] text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-purple-600 hover:bg-purple-50 rounded transition-colors"
                             >
                               <Eye className="w-3 h-3" />
                               View
                             </button>
-                          ) : (['failed', 'bounced'].includes(invitation.status?.toLowerCase())) ? (
-                            <button
-                              onClick={() => handleResendInvitation(invitation)}
-                              className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-600 text-white hover:bg-red-700 rounded transition-colors"
-                            >
-                              <Mail className="w-3 h-3" />
-                              Resend
-                            </button>
-                          ) : null}
+                          )}
                         </div>
+                        {/* Failed/Bounced actions */}
+                        {(['failed', 'bounced'].includes(invitation.status?.toLowerCase())) && (
+                          editingEmailId === invitation.id ? (
+                            <div className="flex flex-col gap-1.5">
+                              <input
+                                type="email"
+                                value={newEmailValue}
+                                onChange={e => setNewEmailValue(e.target.value)}
+                                placeholder="new@email.com"
+                                className="text-xs text-black placeholder-gray-400 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
+                                autoFocus
+                              />
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => handleUpdateEmail(invitation)}
+                                  disabled={!isValidEmail(newEmailValue) || isSendingEmail}
+                                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                  <Send className="w-3 h-3" />
+                                  {isSendingEmail ? 'Sending…' : 'Send'}
+                                </button>
+                                <button
+                                  onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
+                                  className="px-2 py-1 text-[10px] text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleResendInvitation(invitation)}
+                                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-600 text-white hover:bg-red-700 rounded transition-colors"
+                              >
+                                <Mail className="w-3 h-3" />
+                                Resend
+                              </button>
+                              <button
+                                onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
+                                className="flex items-center gap-1 px-2 py-1 text-[10px] border border-gray-400 text-gray-700 hover:bg-gray-50 rounded transition-colors"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                Edit
+                              </button>
+                            </div>
+                          )
+                        )}
                       </div>
                     </div>
                   );
@@ -507,7 +547,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                     value={newEmailValue}
                                     onChange={e => setNewEmailValue(e.target.value)}
                                     placeholder="new@email.com"
-                                    className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
+                                    className="text-xs text-black placeholder-gray-400 border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
                                     autoFocus
                                   />
                                   <div className="flex gap-1">

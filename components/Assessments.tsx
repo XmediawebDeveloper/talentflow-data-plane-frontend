@@ -1288,44 +1288,45 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <ConsentLogs />
             ) : activeTab === 'settings' ? (
               /* Settings Tab with Sub-tabs */
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {/* Settings Sub-tabs */}
-                <div className="flex gap-4 border-b border-gray-200">
+                <div className="flex gap-2 sm:gap-4 border-b border-gray-200 overflow-x-auto scrollbar-hide">
                   <button
                     onClick={() => setSettingsSubTab('proctoring')}
-                    className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                    className={`pb-2.5 sm:pb-3 text-xs sm:text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                       settingsSubTab === 'proctoring'
                         ? 'border-gray-800 text-gray-800'
                         : 'border-transparent text-gray-500 hover:text-gray-700'
                     }`}
                   >
-                    <Shield className="w-4 h-4" />
-                    Proctoring & Security
+                    <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Proctoring & Security</span>
+                    <span className="sm:hidden">Proctoring</span>
                   </button>
                   <button
                     onClick={() => setSettingsSubTab('topics')}
-                    className={`pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                    className={`pb-2.5 sm:pb-3 text-xs sm:text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
                       settingsSubTab === 'topics'
                         ? 'border-gray-800 text-gray-800'
                         : 'border-transparent text-gray-500 hover:text-gray-700'
                     }`}
                   >
-                    <ClipboardList className="w-4 h-4" />
-                    Assessment Topics
+                    <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    Topics
                   </button>
                 </div>
 
                 {/* Assessment Topics Settings Content */}
                 {settingsSubTab === 'topics' ? (
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                     {/* Header */}
                     <div>
-                      <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                        <ClipboardList className="w-5 h-5" />
+                      <h2 className="text-sm sm:text-lg font-semibold text-gray-900 flex items-center gap-1.5 sm:gap-2">
+                        <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5" />
                         Assessment Topics Settings
                       </h2>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Enable or disable topics for all assessments. Disabled topics will not appear in the section distribution during assessment configuration.
+                      <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
+                        Enable or disable topics for all assessments. Disabled topics will not appear in the section distribution.
                       </p>
                     </div>
 
@@ -1348,21 +1349,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         )}
 
                         {/* Topic Availability Header */}
-                        <div className="bg-gradient-to-r from-blue-600 to-cyan-500 rounded-lg p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                                <ClipboardList className="w-5 h-5 text-white" />
+                        <div className="bg-gradient-to-r from-blue-600 to-cyan-500 rounded-lg p-3 sm:p-4">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 sm:gap-3">
+                              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                                <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                               </div>
                               <div>
-                                <h3 className="text-sm font-medium text-white">Topic Availability</h3>
-                                <p className="text-xs text-white/80">
-                                  Control which topics are available during assessment creation
+                                <h3 className="text-xs sm:text-sm font-medium text-white">Topic Availability</h3>
+                                <p className="text-[10px] sm:text-xs text-white/80">
+                                  Control which topics are available
                                 </p>
                               </div>
                             </div>
                             {isSavingTopics && (
-                              <span className="text-xs text-white/80 flex items-center gap-1">
+                              <span className="text-[10px] sm:text-xs text-white/80 flex items-center gap-1">
                                 <RefreshCw className="w-3 h-3 animate-spin" />
                                 Saving...
                               </span>
@@ -1371,176 +1372,152 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </div>
 
                         {/* HR Section */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-5">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-4">
-                              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                <Users className="w-5 h-5 text-gray-700" />
+                        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-5">
+                          <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                <Users className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-gray-700" />
                               </div>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="text-sm font-medium text-gray-900">HR Section</h4>
-                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                    topicSettings.hr_enabled
-                                      ? 'bg-gray-700 text-white'
-                                      : 'bg-gray-200 text-gray-600'
-                                  }`}>
-                                    {topicSettings.hr_enabled ? 'Enabled' : 'Disabled'}
-                                  </span>
-                                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                                    {topicSettings.hr_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-600">
-                                  HR topics are available for assessments. Includes behavioral questions, cultural fit, and soft skills evaluation.
-                                </p>
+                              <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
+                                <h4 className="text-[11px] sm:text-sm font-medium text-gray-900">HR</h4>
+                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
+                                  topicSettings.hr_enabled
+                                    ? 'bg-gray-700 text-white'
+                                    : 'bg-gray-200 text-gray-600'
+                                }`}>
+                                  {topicSettings.hr_enabled ? 'On' : 'Off'}
+                                </span>
+                                <span className="hidden sm:inline px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                  {topicSettings.hr_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
+                                </span>
                               </div>
                             </div>
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className="text-[10px] sm:text-xs text-gray-500 font-medium">
+                                {topicSettings.hr_enabled ? 'ON' : 'OFF'}
+                              </span>
                               <button
                                 onClick={() => updateTopicSettings({ hr_enabled: !topicSettings.hr_enabled })}
                                 disabled={isSavingTopics}
-                                className={`relative w-14 h-7 rounded-full transition-colors ${
+                                className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.hr_enabled
                                     ? 'bg-gray-700'
                                     : 'bg-gray-300'
                                 } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
-                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                                <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.hr_enabled
-                                    ? 'translate-x-8'
-                                    : 'translate-x-1'
-                                }`}>
-                                  {topicSettings.hr_enabled ? (
-                                    <CheckCircle2 className="w-5 h-5 text-gray-700" />
-                                  ) : (
-                                    <X className="w-5 h-5 text-gray-400" />
-                                  )}
-                                </div>
+                                    ? 'translate-x-4 sm:translate-x-8'
+                                    : 'translate-x-0.5 sm:translate-x-1'
+                                }`} />
                               </button>
-                              <span className="text-xs text-gray-500 font-medium">
-                                {topicSettings.hr_enabled ? 'ON' : 'OFF'}
-                              </span>
                             </div>
                           </div>
+                          <p className="text-[10px] sm:text-sm text-gray-600 pl-9 sm:pl-[52px]">
+                            Behavioral questions, cultural fit, and soft skills evaluation.
+                          </p>
                         </div>
 
                         {/* Technical Section */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-5">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-4">
-                              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                <Brain className="w-5 h-5 text-gray-700" />
+                        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-5">
+                          <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                <Brain className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-gray-700" />
                               </div>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="text-sm font-medium text-gray-900">Technical Section</h4>
-                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                    topicSettings.technical_enabled
-                                      ? 'bg-gray-700 text-white'
-                                      : 'bg-gray-200 text-gray-600'
-                                  }`}>
-                                    {topicSettings.technical_enabled ? 'Enabled' : 'Disabled'}
-                                  </span>
-                                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                                    {topicSettings.technical_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-600">
-                                  Technical topics are available for assessments. Includes domain knowledge, tools, regulations, and technical workflows.
-                                </p>
+                              <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
+                                <h4 className="text-[11px] sm:text-sm font-medium text-gray-900">Technical</h4>
+                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
+                                  topicSettings.technical_enabled
+                                    ? 'bg-gray-700 text-white'
+                                    : 'bg-gray-200 text-gray-600'
+                                }`}>
+                                  {topicSettings.technical_enabled ? 'On' : 'Off'}
+                                </span>
+                                <span className="hidden sm:inline px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                  {topicSettings.technical_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
+                                </span>
                               </div>
                             </div>
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className="text-[10px] sm:text-xs text-gray-500 font-medium">
+                                {topicSettings.technical_enabled ? 'ON' : 'OFF'}
+                              </span>
                               <button
                                 onClick={() => updateTopicSettings({ technical_enabled: !topicSettings.technical_enabled })}
                                 disabled={isSavingTopics}
-                                className={`relative w-14 h-7 rounded-full transition-colors ${
+                                className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.technical_enabled
                                     ? 'bg-gray-700'
                                     : 'bg-gray-300'
                                 } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
-                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                                <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.technical_enabled
-                                    ? 'translate-x-8'
-                                    : 'translate-x-1'
-                                }`}>
-                                  {topicSettings.technical_enabled ? (
-                                    <CheckCircle2 className="w-5 h-5 text-gray-700" />
-                                  ) : (
-                                    <X className="w-5 h-5 text-gray-400" />
-                                  )}
-                                </div>
+                                    ? 'translate-x-4 sm:translate-x-8'
+                                    : 'translate-x-0.5 sm:translate-x-1'
+                                }`} />
                               </button>
-                              <span className="text-xs text-gray-500 font-medium">
-                                {topicSettings.technical_enabled ? 'ON' : 'OFF'}
-                              </span>
                             </div>
                           </div>
+                          <p className="text-[10px] sm:text-sm text-gray-600 pl-9 sm:pl-[52px]">
+                            Domain knowledge, tools, regulations, and workflows.
+                          </p>
                         </div>
 
                         {/* Coding Section */}
-                        <div className="bg-white border border-gray-200 rounded-lg p-5">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-4">
-                              <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                <Code className="w-5 h-5 text-gray-700" />
+                        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-5">
+                          <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                              <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                <Code className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-gray-700" />
                               </div>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <h4 className="text-sm font-medium text-gray-900">Coding Section</h4>
-                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                    topicSettings.coding_enabled
-                                      ? 'bg-gray-700 text-white'
-                                      : 'bg-gray-200 text-gray-600'
-                                  }`}>
-                                    {topicSettings.coding_enabled ? 'Enabled' : 'Disabled'}
-                                  </span>
-                                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                                    {topicSettings.coding_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-600">
-                                  Coding topics are available for assessments. Includes algorithms, data structures, frameworks, and coding patterns.
-                                </p>
+                              <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
+                                <h4 className="text-[11px] sm:text-sm font-medium text-gray-900">Coding</h4>
+                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
+                                  topicSettings.coding_enabled
+                                    ? 'bg-gray-700 text-white'
+                                    : 'bg-gray-200 text-gray-600'
+                                }`}>
+                                  {topicSettings.coding_enabled ? 'On' : 'Off'}
+                                </span>
+                                <span className="hidden sm:inline px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                  {topicSettings.coding_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
+                                </span>
                               </div>
                             </div>
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              <span className="text-[10px] sm:text-xs text-gray-500 font-medium">
+                                {topicSettings.coding_enabled ? 'ON' : 'OFF'}
+                              </span>
                               <button
                                 onClick={() => updateTopicSettings({ coding_enabled: !topicSettings.coding_enabled })}
                                 disabled={isSavingTopics}
-                                className={`relative w-14 h-7 rounded-full transition-colors ${
+                                className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.coding_enabled
                                     ? 'bg-gray-700'
                                     : 'bg-gray-300'
                                 } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
-                                <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
+                                <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.coding_enabled
-                                    ? 'translate-x-8'
-                                    : 'translate-x-1'
-                                }`}>
-                                  {topicSettings.coding_enabled ? (
-                                    <CheckCircle2 className="w-5 h-5 text-gray-700" />
-                                  ) : (
-                                    <X className="w-5 h-5 text-gray-400" />
-                                  )}
-                                </div>
+                                    ? 'translate-x-4 sm:translate-x-8'
+                                    : 'translate-x-0.5 sm:translate-x-1'
+                                }`} />
                               </button>
-                              <span className="text-xs text-gray-500 font-medium">
-                                {topicSettings.coding_enabled ? 'ON' : 'OFF'}
-                              </span>
                             </div>
                           </div>
+                          <p className="text-[10px] sm:text-sm text-gray-600 pl-9 sm:pl-[52px]">
+                            Algorithms, data structures, frameworks, and patterns.
+                          </p>
                         </div>
 
                         {/* Important Notice */}
-                        <div className="flex items-start gap-2 p-4 bg-amber-50 rounded-lg border border-amber-200">
-                          <Info className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-2 p-3 sm:p-4 bg-amber-50 rounded-lg border border-amber-200">
+                          <Info className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-sm text-amber-800">
-                              <span className="font-medium">Important:</span> When a topic is disabled here, it will not be available in the section distribution when creating or configuring assessments. Existing assessments with disabled topics will remain unchanged but cannot be edited to add those topics.
+                            <p className="text-xs sm:text-sm text-amber-800">
+                              <span className="font-medium">Important:</span> Disabled topics won't appear in section distribution when creating assessments. Existing assessments remain unchanged.
                             </p>
                           </div>
                         </div>
@@ -1549,22 +1526,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                 ) : (
                   /* Proctoring Settings Content */
-                  <div className="space-y-6">
+                  <div className="space-y-4 sm:space-y-6">
                 {/* Loading State */}
                 {isLoadingProctoring ? (
-                  <div className="flex items-center justify-center py-12">
+                  <div className="flex items-center justify-center py-8 sm:py-12">
                     <div className="text-center">
                       <div className="w-10 h-10 border-4 border-gray-300 border-t-gray-800 rounded-full animate-spin mx-auto mb-3"></div>
-                      <p className="text-gray-600">Loading proctoring settings...</p>
+                      <p className="text-sm text-gray-600">Loading proctoring settings...</p>
                     </div>
                   </div>
                 ) : proctoringError && !proctoringSettings ? (
-                  <div className="flex flex-col items-center justify-center py-12">
-                    <AlertTriangle className="w-12 h-12 text-red-400 mb-4" />
-                    <p className="text-red-600 mb-4">{proctoringError}</p>
+                  <div className="flex flex-col items-center justify-center py-8 sm:py-12">
+                    <AlertTriangle className="w-10 h-10 sm:w-12 sm:h-12 text-red-400 mb-3 sm:mb-4" />
+                    <p className="text-sm text-red-600 mb-3 sm:mb-4 text-center">{proctoringError}</p>
                     <button
                       onClick={loadProctoringData}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                      className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm"
                     >
                       <RefreshCw className="w-4 h-4" />
                       Retry
@@ -1573,29 +1550,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 ) : proctoringSettings && (
                   <>
                     {/* Settings Header with Status */}
-                    <div className="bg-gradient-to-r from-violet-600 to-purple-500 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                            <Shield className="w-5 h-5 text-white" />
+                    <div className="bg-gradient-to-r from-violet-600 to-purple-500 rounded-lg p-3 sm:p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                            <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                           </div>
                           <div>
-                            <h3 className="text-sm font-medium text-white">Proctoring Settings</h3>
-                            <p className="text-xs text-white/80">
-                              Configure security features for candidate assessments
+                            <h3 className="text-xs sm:text-sm font-medium text-white">Proctoring Settings</h3>
+                            <p className="text-[10px] sm:text-xs text-white/80">
+                              Configure security features
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                           {isSavingProctoring && (
-                            <span className="text-xs text-white/80 flex items-center gap-1">
+                            <span className="text-[10px] sm:text-xs text-white/80 flex items-center gap-1">
                               <RefreshCw className="w-3 h-3 animate-spin" />
-                              Saving...
+                              <span className="hidden sm:inline">Saving...</span>
                             </span>
                           )}
                           {flaggedCount > 0 && (
-                            <span className="px-3 py-1 bg-red-500 text-white rounded-full text-xs font-medium">
-                              {flaggedCount} Flagged Attempts
+                            <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-red-500 text-white rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap">
+                              {flaggedCount} Flagged
                             </span>
                           )}
                         </div>
@@ -1611,16 +1588,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     )}
 
                     {/* Main Proctoring Toggle */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-5">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-4">
-                          <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-                            <Video className="w-5 h-5 text-gray-600" />
-                          </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h4 className="text-sm font-medium text-gray-900">Proctoring Mode</h4>
-                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-5">
+                      <div className="flex flex-col gap-3">
+                        {/* Top row: icon + title + toggle */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                              <Video className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
+                              <h4 className="text-xs sm:text-sm font-medium text-gray-900">Proctoring Mode</h4>
+                              <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
                                 proctoringSettings.proctoring_enabled
                                   ? 'bg-gray-700 text-white'
                                   : 'bg-gray-200 text-gray-600'
@@ -1628,59 +1606,52 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {proctoringSettings.proctoring_enabled ? 'Enabled' : 'Disabled'}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-600 mb-4">
-                              {proctoringSettings.proctoring_enabled
-                                ? 'Advanced monitoring is active. Assessments will include configured security features to ensure test integrity.'
-                                : 'Standard mode active. Assessments will run without advanced monitoring features. Enable proctoring for high-stakes assessments.'
-                              }
-                            </p>
-
-                            {/* Privacy Notice */}
-                            {proctoringSettings.proctoring_enabled && (
-                              <div className="flex items-start gap-2 p-3 bg-gray-100 rounded-lg border border-gray-200">
-                                <Info className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
-                                <p className="text-xs text-gray-700">
-                                  <span className="font-medium">Privacy Notice:</span> Candidates will be informed about monitoring before starting. Recordings are encrypted and stored for {proctoringSettings.recording_retention_days} days.
-                                </p>
-                              </div>
-                            )}
+                          </div>
+                          {/* Toggle Switch */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <span className="text-[10px] sm:text-xs text-gray-500 font-medium">
+                              {proctoringSettings.proctoring_enabled ? 'ON' : 'OFF'}
+                            </span>
+                            <button
+                              onClick={() => updateProctoringSettings({ proctoring_enabled: !proctoringSettings.proctoring_enabled })}
+                              disabled={isSavingProctoring}
+                              className={`relative w-10 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
+                                proctoringSettings.proctoring_enabled
+                                  ? 'bg-gray-700'
+                                  : 'bg-gray-300'
+                              } ${isSavingProctoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
+                                proctoringSettings.proctoring_enabled
+                                  ? 'translate-x-5 sm:translate-x-8'
+                                  : 'translate-x-0.5 sm:translate-x-1'
+                              }`} />
+                            </button>
                           </div>
                         </div>
-
-                        {/* Main Toggle Switch */}
-                        <div className="flex flex-col items-center gap-1">
-                          <button
-                            onClick={() => updateProctoringSettings({ proctoring_enabled: !proctoringSettings.proctoring_enabled })}
-                            disabled={isSavingProctoring}
-                            className={`relative w-14 h-7 rounded-full transition-colors ${
-                              proctoringSettings.proctoring_enabled
-                                ? 'bg-gray-700'
-                                : 'bg-gray-300'
-                            } ${isSavingProctoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          >
-                            <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
-                              proctoringSettings.proctoring_enabled
-                                ? 'translate-x-8'
-                                : 'translate-x-1'
-                            }`}>
-                              {proctoringSettings.proctoring_enabled ? (
-                                <CheckCircle2 className="w-5 h-5 text-gray-700" />
-                              ) : (
-                                <X className="w-5 h-5 text-gray-400" />
-                              )}
-                            </div>
-                          </button>
-                          <span className="text-xs text-gray-500 font-medium">
-                            {proctoringSettings.proctoring_enabled ? 'ON' : 'OFF'}
-                          </span>
-                        </div>
+                        {/* Description */}
+                        <p className="text-[10px] sm:text-sm text-gray-600">
+                          {proctoringSettings.proctoring_enabled
+                            ? 'Advanced monitoring is active for test integrity.'
+                            : 'Standard mode — no advanced monitoring. Enable for high-stakes assessments.'
+                          }
+                        </p>
+                        {/* Privacy Notice */}
+                        {proctoringSettings.proctoring_enabled && (
+                          <div className="flex items-start gap-1.5 sm:gap-2 p-2 sm:p-3 bg-gray-100 rounded-lg border border-gray-200">
+                            <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-[10px] sm:text-xs text-gray-700">
+                              <span className="font-medium">Privacy:</span> Candidates are informed before starting. Recordings stored for {proctoringSettings.recording_retention_days} days.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     {/* Individual Security Features */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-                      <h3 className="text-sm font-medium text-gray-900 mb-4">Security Features</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-6">
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-3 sm:mb-4">Security Features</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                         {[
                           { key: 'webcam_monitoring', name: 'Webcam Monitoring', description: 'Record and analyze candidate video during assessment', icon: Video },
                           { key: 'screen_recording', name: 'Screen Recording', description: 'Capture screen activity throughout the test', icon: Monitor },
@@ -1692,27 +1663,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           const IconComponent = feature.icon;
                           const isEnabled = proctoringSettings[feature.key as keyof ProctoringSettings] as boolean;
                           return (
-                            <div key={feature.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg">
-                              <div className="flex items-start gap-3">
-                                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center flex-shrink-0 border border-gray-200">
-                                  <IconComponent className="w-4 h-4 text-gray-600" />
+                            <div key={feature.key} className="flex items-center justify-between gap-2 p-2.5 sm:p-4 bg-gray-50 rounded-lg">
+                              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg bg-white flex items-center justify-center flex-shrink-0 border border-gray-200">
+                                  <IconComponent className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600" />
                                 </div>
-                                <div>
-                                  <div className="text-sm font-medium text-gray-900">{feature.name}</div>
-                                  <div className="text-xs text-gray-500">{feature.description}</div>
+                                <div className="min-w-0">
+                                  <div className="text-[10px] sm:text-sm font-medium text-gray-900 leading-tight">{feature.name}</div>
+                                  <div className="text-[10px] sm:text-xs text-gray-500 line-clamp-1 sm:line-clamp-2 hidden sm:block">{feature.description}</div>
                                 </div>
                               </div>
                               <button
                                 onClick={() => updateProctoringSettings({ [feature.key]: !isEnabled })}
                                 disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
-                                className={`relative w-11 h-6 rounded-full transition-colors ${
+                                className={`relative w-9 sm:w-11 h-5 sm:h-6 rounded-full transition-colors flex-shrink-0 ${
                                   isEnabled && proctoringSettings.proctoring_enabled
                                     ? 'bg-green-500'
                                     : 'bg-gray-300'
                                 } ${isSavingProctoring || !proctoringSettings.proctoring_enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
-                                <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-transform ${
-                                  isEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                                <div className={`absolute top-0.5 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
+                                  isEnabled ? 'translate-x-4 sm:translate-x-5' : 'translate-x-0.5'
                                 }`} />
                               </button>
                             </div>
@@ -1722,41 +1693,41 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     {/* Threshold Settings */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-                      <h3 className="text-sm font-medium text-gray-900 mb-4">Threshold Settings</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-6">
+                      <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-3 sm:mb-4">Threshold Settings</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
                         <div>
-                          <label className="block text-xs text-gray-600 mb-2">Max Tab Switches Before Warning</label>
+                          <label className="block text-[10px] sm:text-xs text-gray-600 mb-1.5 sm:mb-2">Max Tab Switches Before Warning</label>
                           <input
                             type="number"
                             value={proctoringSettings.max_tab_switches}
                             onChange={(e) => updateProctoringSettings({ max_tab_switches: parseInt(e.target.value) || 3 })}
                             disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            className="w-full px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-black"
                             min="1"
                             max="10"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-2">Max Violations Before Flag</label>
+                          <label className="block text-[10px] sm:text-xs text-gray-600 mb-1.5 sm:mb-2">Max Violations Before Flag</label>
                           <input
                             type="number"
                             value={proctoringSettings.max_violations_before_flag}
                             onChange={(e) => updateProctoringSettings({ max_violations_before_flag: parseInt(e.target.value) || 5 })}
                             disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            className="w-full px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-black"
                             min="1"
                             max="20"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-2">Recording Retention (Days)</label>
+                          <label className="block text-[10px] sm:text-xs text-gray-600 mb-1.5 sm:mb-2">Recording Retention (Days)</label>
                           <input
                             type="number"
                             value={proctoringSettings.recording_retention_days}
                             onChange={(e) => updateProctoringSettings({ recording_retention_days: parseInt(e.target.value) || 90 })}
                             disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            className="w-full px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-black"
                             min="7"
                             max="365"
                           />
@@ -1765,49 +1736,49 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     {/* Recent Proctoring Events */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-medium text-gray-900">Recent Proctoring Events</h3>
-                        <span className="text-xs text-gray-500">{proctoringEventsTotal} total events</span>
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-6">
+                      <div className="flex items-center justify-between mb-3 sm:mb-4">
+                        <h3 className="text-xs sm:text-sm font-medium text-gray-900">Recent Proctoring Events</h3>
+                        <span className="text-[10px] sm:text-xs text-gray-500">{proctoringEventsTotal} total</span>
                       </div>
                       {proctoringEvents.length === 0 ? (
-                        <div className="text-center py-8">
-                          <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                          <p className="text-sm text-gray-500">No proctoring events recorded yet</p>
-                          <p className="text-xs text-gray-400 mt-1">Events will appear here when candidates take proctored assessments</p>
+                        <div className="text-center py-6 sm:py-8">
+                          <Shield className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
+                          <p className="text-xs sm:text-sm text-gray-500">No proctoring events recorded yet</p>
+                          <p className="text-[10px] sm:text-xs text-gray-400 mt-1">Events appear when candidates take proctored assessments</p>
                         </div>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-2 sm:space-y-3">
                           {proctoringEvents.slice(0, 5).map((event) => (
-                            <div key={event.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            <div key={event.id} className="flex items-center justify-between gap-2 p-2.5 sm:p-3 bg-gray-50 rounded-lg">
+                              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                                   event.severity === 'high' ? 'bg-red-100' :
                                   event.severity === 'medium' ? 'bg-yellow-100' : 'bg-gray-100'
                                 }`}>
-                                  <AlertTriangle className={`w-4 h-4 ${
+                                  <AlertTriangle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
                                     event.severity === 'high' ? 'text-red-500' :
                                     event.severity === 'medium' ? 'text-yellow-500' : 'text-gray-400'
                                   }`} />
                                 </div>
-                                <div>
-                                  <div className="text-sm font-medium text-gray-900 capitalize">
+                                <div className="min-w-0">
+                                  <div className="text-xs sm:text-sm font-medium text-gray-900 capitalize truncate">
                                     {event.event_type.replace(/_/g, ' ')}
                                   </div>
-                                  <div className="text-xs text-gray-500">
+                                  <div className="text-[10px] sm:text-xs text-gray-500 truncate">
                                     {event.candidate_name || 'Unknown'} • {event.assessment_title || 'Assessment'}
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
                                   event.severity === 'high' ? 'bg-red-100 text-red-700' :
                                   event.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'
                                 }`}>
                                   {event.severity}
                                 </span>
                                 {event.reviewed ? (
-                                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                  <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" />
                                 ) : (
                                   <span className="w-2 h-2 bg-orange-400 rounded-full" />
                                 )}
@@ -2535,16 +2506,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       {/* Track Invites Modal */}
       {showTrackInvitesModal && selectedAssessmentForTracking && (
-        <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
+        <div className="fixed inset-0 bg-gray-900/30 flex items-end sm:items-center justify-center z-50 sm:p-4">
+          <div className="bg-white rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-5xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-gray-700" />
-                  <h2 className="text-lg font-semibold text-gray-900">Invite Status Tracking</h2>
+            <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700 flex-shrink-0" />
+                  <h2 className="text-sm sm:text-lg font-semibold text-gray-900 truncate">
+                    <span className="hidden sm:inline">Invite Status Tracking</span>
+                    <span className="sm:hidden">Invite Status</span>
+                  </h2>
                 </div>
-                <p className="text-sm text-gray-500 mt-0.5">{selectedAssessmentForTracking.title}</p>
+                <p className="text-[10px] sm:text-sm text-gray-500 mt-0.5 truncate">{selectedAssessmentForTracking.title}</p>
               </div>
               <button
                 onClick={() => {
@@ -2552,118 +2526,93 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   setSelectedAssessmentForTracking(null);
                   setTrackingInvitations([]);
                 }}
-                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 ml-2"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
 
             {/* Stats Cards */}
-            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-              <div className="grid grid-cols-6 gap-4">
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <div className="flex items-center gap-2 text-gray-500 text-xs mb-1">
-                    <Users className="w-3.5 h-3.5" />
-                    Total Invited
+            <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 bg-gray-50 border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-1 sm:gap-4">
+                <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-500 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <Users className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Total</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{invitationStats.total}</p>
+                  <p className="text-sm sm:text-2xl font-bold text-gray-900">{invitationStats.total}</p>
                 </div>
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <div className="flex items-center gap-2 text-gray-600 text-xs mb-1">
-                    <Mail className="w-3.5 h-3.5" />
-                    Sent
+                <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <Mail className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Sent</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-700">{invitationStats.sent}</p>
+                  <p className="text-sm sm:text-2xl font-bold text-gray-700">{invitationStats.sent}</p>
                 </div>
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <div className="flex items-center gap-2 text-red-600 text-xs mb-1">
-                    <X className="w-3.5 h-3.5" />
-                    Failed
+                <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <X className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Failed</span>
                   </div>
-                  <p className="text-2xl font-bold text-red-600">{invitationStats.failed}</p>
+                  <p className="text-sm sm:text-2xl font-bold text-red-600">{invitationStats.failed}</p>
                 </div>
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <div className="flex items-center gap-2 text-gray-600 text-xs mb-1">
-                    <Play className="w-3.5 h-3.5" />
-                    In Progress
+                <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <Play className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Active</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-700">{invitationStats.started}</p>
+                  <p className="text-sm sm:text-2xl font-bold text-gray-700">{invitationStats.started}</p>
                 </div>
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <div className="flex items-center gap-2 text-gray-600 text-xs mb-1">
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    Completed
+                <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <CheckCircle className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Done</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-700">{invitationStats.completed}</p>
+                  <p className="text-sm sm:text-2xl font-bold text-gray-700">{invitationStats.completed}</p>
                 </div>
-                <div className="bg-white rounded-lg p-3 border border-gray-200">
-                  <div className="flex items-center gap-2 text-gray-600 text-xs mb-1">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    Completion
+                <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <TrendingUp className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Rate</span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-700">
+                  <p className="text-sm sm:text-2xl font-bold text-gray-700">
                     {invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Invitations Table */}
-            <div className="px-6 py-4 overflow-auto max-h-[50vh]">
+            {/* Invitations Table / Cards */}
+            <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-auto flex-1 min-h-0">
               {isLoadingInvitations ? (
-                <div className="flex items-center justify-center py-12">
-                  <div className="animate-spin w-8 h-8 border-4 border-gray-700 border-t-transparent rounded-full"></div>
+                <div className="flex items-center justify-center py-8 sm:py-12">
+                  <div className="animate-spin w-6 h-6 sm:w-8 sm:h-8 border-4 border-gray-700 border-t-transparent rounded-full"></div>
                 </div>
               ) : trackingInvitations.length === 0 ? (
-                <div className="text-center py-12 text-gray-500">
-                  <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p>No invitations found for this assessment.</p>
+                <div className="text-center py-8 sm:py-12 text-gray-500">
+                  <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
+                  <p className="text-xs sm:text-sm">No invitations found for this assessment.</p>
                 </div>
               ) : (
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Progress</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
+                <>
+                  {/* Mobile Card View */}
+                  <div className="sm:hidden space-y-2">
                     {trackingInvitations.map((invitation: any) => {
                       const getStatusBadge = (inv: any) => {
-                        // Status priority: completed > started > opened > sent > expired > failed > pending
-                        if (inv.status === 'completed') {
-                          return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Completed</span>;
-                        }
-                        if (inv.status === 'started' || (inv.started_at && inv.status !== 'completed')) {
-                          return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> Started</span>;
-                        }
-                        if (inv.status === 'opened') {
-                          return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Link Opened</span>;
-                        }
-                        if (inv.status === 'sent' || inv.sent_at) {
-                          return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
-                        }
-                        if (inv.status === 'expired') {
-                          return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
-                        }
-                        if (inv.status === 'failed') {
-                          return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Failed</span>;
-                        }
-                        if (inv.status === 'abandoned') {
-                          return <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Abandoned</span>;
-                        }
-                        // Default: pending
-                        return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
+                        const base = "px-1.5 py-0.5 rounded-full text-[10px] flex items-center gap-1 whitespace-nowrap flex-shrink-0";
+                        if (inv.status === 'completed') return <span className={`${base} bg-green-100 text-green-700`}><CheckCircle className="w-2.5 h-2.5" /> Done</span>;
+                        if (inv.status === 'started' || (inv.started_at && inv.status !== 'completed')) return <span className={`${base} bg-yellow-100 text-yellow-700`}><Play className="w-2.5 h-2.5" /> Started</span>;
+                        if (inv.status === 'opened') return <span className={`${base} bg-purple-100 text-purple-700`}><Eye className="w-2.5 h-2.5" /> Opened</span>;
+                        if (inv.status === 'sent' || inv.sent_at) return <span className={`${base} bg-blue-100 text-blue-700`}><Mail className="w-2.5 h-2.5" /> Sent</span>;
+                        if (inv.status === 'expired') return <span className={`${base} bg-orange-100 text-orange-700`}><Clock className="w-2.5 h-2.5" /> Expired</span>;
+                        if (inv.status === 'failed') return <span className={`${base} bg-red-100 text-red-700`}><X className="w-2.5 h-2.5" /> Failed</span>;
+                        if (inv.status === 'abandoned') return <span className={`${base} bg-gray-100 text-gray-700`}><X className="w-2.5 h-2.5" /> Left</span>;
+                        return <span className={`${base} bg-gray-100 text-gray-600`}><Clock className="w-2.5 h-2.5" /> Pending</span>;
                       };
 
                       const formatDate = (dateStr: string | null) => {
                         if (!dateStr) return null;
-                        const formatted = formatDateTimeIST(dateStr, { includeTime: true });
-                        return `${formatted} IST`;
+                        return formatDateTimeIST(dateStr, { includeTime: true });
                       };
 
                       const initials = invitation.candidate_name
@@ -2674,133 +2623,271 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         .slice(0, 2) || '??';
 
                       return (
-                        <tr key={invitation.id} className="hover:bg-gray-50">
-                          <td className="py-3 px-4">
-                            <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                        <div key={invitation.id} className="bg-white rounded-lg border border-gray-200 p-2.5">
+                          {/* Candidate + Status */}
+                          <div className="flex items-center gap-2 min-w-0 mb-1.5">
+                            <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 font-medium text-[10px] flex-shrink-0">
+                              {initials}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-gray-900 text-xs truncate">{invitation.candidate_name}</p>
+                              <p className="text-[10px] text-gray-500 truncate">{invitation.candidate_email}</p>
+                            </div>
+                            {getStatusBadge(invitation)}
+                          </div>
+
+                          {/* CID */}
+                          <div className="mb-1.5">
+                            <span className="text-[9px] font-mono font-medium text-purple-700 bg-purple-50 px-1 py-0.5 rounded">
                               {invitation.candidate_display_id || '-'}
                             </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 font-medium text-sm">
-                                {initials}
+                          </div>
+
+                          {/* Timeline */}
+                          <div className="text-[10px] text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5 mb-1.5">
+                            {invitation.sent_at && (
+                              <div className="flex items-center gap-1">
+                                <Mail className="w-2.5 h-2.5 text-gray-500 flex-shrink-0" />
+                                <span>Sent: {formatDate(invitation.sent_at)}</span>
                               </div>
-                              <div>
-                                <p className="font-medium text-gray-900 text-sm">{invitation.candidate_name}</p>
-                                <p className="text-xs text-gray-500">{invitation.candidate_email}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            {getStatusBadge(invitation)}
-                          </td>
-                          <td className="py-3 px-4 text-xs text-gray-500">
-                            <div className="space-y-1">
-                              {invitation.sent_at && (
-                                <div className="flex items-center gap-2">
-                                  <Mail className="w-3 h-3 text-gray-500" />
-                                  <span>Sent: {formatDate(invitation.sent_at)}</span>
-                                </div>
-                              )}
-                              {invitation.started_at && (
-                                <div className="flex items-center gap-2">
-                                  <Play className="w-3 h-3 text-gray-500" />
-                                  <span>Started: {formatDate(invitation.started_at)}</span>
-                                </div>
-                              )}
-                              {invitation.completed_at && (
-                                <div className="flex items-center gap-2">
-                                  <CheckCircle className="w-3 h-3 text-gray-500" />
-                                  <span>Completed: {formatDate(invitation.completed_at)}</span>
-                                </div>
-                              )}
-                              {!invitation.sent_at && !invitation.started_at && (
-                                <div className="flex items-center gap-2">
-                                  <Clock className="w-3 h-3 text-gray-400" />
-                                  <span>Created: {formatDate(invitation.created_at)}</span>
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            {invitation.status === 'completed' ? (
-                              <div>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-gray-600">Score</span>
-                                  <span className={`font-medium ${invitation.passed ? 'text-gray-800' : 'text-red-600'}`}>
-                                    {invitation.overall_score != null ? `${invitation.overall_score.toFixed(1)}%` : '100%'}
-                                  </span>
-                                  {invitation.passed !== null && (
-                                    <span className={`text-xs px-1.5 py-0.5 rounded ${invitation.passed ? 'bg-gray-700 text-white' : 'bg-red-100 text-red-700'}`}>
-                                      {invitation.passed ? 'Passed' : 'Failed'}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="w-24 h-1.5 bg-gray-200 rounded-full mt-1">
-                                  <div className="h-full bg-gray-700 rounded-full" style={{ width: '100%' }} />
-                                </div>
-                                {invitation.time_spent_minutes != null && (
-                                  <p className="text-xs text-gray-400 mt-1">
-                                    Time: {invitation.time_spent_minutes} min
-                                  </p>
-                                )}
-                              </div>
-                            ) : invitation.started_at ? (
-                              <div>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-gray-600">Progress</span>
-                                  <span className="font-medium text-gray-700">
-                                    {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
-                                  </span>
-                                </div>
-                                <div className="w-24 h-1.5 bg-gray-200 rounded-full mt-1">
-                                  <div
-                                    className="h-full bg-gray-600 rounded-full"
-                                    style={{ width: `${invitation.progress_percent ?? 50}%` }}
-                                  />
-                                </div>
-                                {invitation.current_question != null && invitation.total_questions != null && (
-                                  <p className="text-xs text-gray-400 mt-1">
-                                    Q{invitation.current_question}/{invitation.total_questions}
-                                    {invitation.time_spent_minutes != null && ` • ${invitation.time_spent_minutes} min`}
-                                  </p>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-gray-400">—</span>
                             )}
-                          </td>
-                          <td className="py-3 px-4">
-                            {invitation.status === 'completed' ? (
-                              <button
-                                onClick={() => router.push(`/recruitment/assessments/${selectedAssessmentForTracking.id}/results`)}
-                                className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                View Results
-                              </button>
-                            ) : invitation.status === 'failed' ? (
-                              <button
-                                onClick={() => handleResendInvitation(invitation)}
-                                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
-                              >
-                                <Mail className="w-3.5 h-3.5" />
-                                Resend
-                              </button>
-                            ) : null}
-                          </td>
-                        </tr>
+                            {invitation.started_at && (
+                              <div className="flex items-center gap-1">
+                                <Play className="w-2.5 h-2.5 text-gray-500 flex-shrink-0" />
+                                <span>Started: {formatDate(invitation.started_at)}</span>
+                              </div>
+                            )}
+                            {invitation.completed_at && (
+                              <div className="flex items-center gap-1">
+                                <CheckCircle className="w-2.5 h-2.5 text-gray-500 flex-shrink-0" />
+                                <span>Done: {formatDate(invitation.completed_at)}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Progress + Actions */}
+                          <div className="pt-1.5 border-t border-gray-100">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                {invitation.status === 'completed' ? (
+                                  <div className="flex items-center gap-1 text-[10px]">
+                                    <span className="text-gray-600">Score:</span>
+                                    <span className={`font-medium ${invitation.passed ? 'text-gray-800' : 'text-red-600'}`}>
+                                      {invitation.overall_score != null ? `${invitation.overall_score.toFixed(1)}%` : '100%'}
+                                    </span>
+                                    {invitation.passed !== null && (
+                                      <span className={`text-[9px] px-1 py-0.5 rounded ${invitation.passed ? 'bg-gray-700 text-white' : 'bg-red-100 text-red-700'}`}>
+                                        {invitation.passed ? 'Pass' : 'Fail'}
+                                      </span>
+                                    )}
+                                  </div>
+                                ) : invitation.started_at ? (
+                                  <div className="flex items-center gap-1 text-[10px]">
+                                    <span className="text-gray-600">Progress:</span>
+                                    <span className="font-medium text-gray-700">
+                                      {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-gray-400">—</span>
+                                )}
+                              </div>
+                              <div>
+                                {invitation.status === 'completed' ? (
+                                  <button
+                                    onClick={() => router.push(`/recruitment/assessments/${selectedAssessmentForTracking.id}/results`)}
+                                    className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    View
+                                  </button>
+                                ) : invitation.status === 'failed' ? (
+                                  <button
+                                    onClick={() => handleResendInvitation(invitation)}
+                                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-600 text-white hover:bg-red-700 rounded transition-colors"
+                                  >
+                                    <Mail className="w-3 h-3" />
+                                    Resend
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full min-w-[700px]">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
+                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
+                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Progress</th>
+                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {trackingInvitations.map((invitation: any) => {
+                          const getStatusBadge = (inv: any) => {
+                            const base = "px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs flex items-center gap-1 whitespace-nowrap";
+                            if (inv.status === 'completed') return <span className={`${base} bg-green-100 text-green-700`}><CheckCircle className="w-3 h-3" /> Done</span>;
+                            if (inv.status === 'started' || (inv.started_at && inv.status !== 'completed')) return <span className={`${base} bg-yellow-100 text-yellow-700`}><Play className="w-3 h-3" /> Started</span>;
+                            if (inv.status === 'opened') return <span className={`${base} bg-purple-100 text-purple-700`}><Eye className="w-3 h-3" /> Opened</span>;
+                            if (inv.status === 'sent' || inv.sent_at) return <span className={`${base} bg-blue-100 text-blue-700`}><Mail className="w-3 h-3" /> Sent</span>;
+                            if (inv.status === 'expired') return <span className={`${base} bg-orange-100 text-orange-700`}><Clock className="w-3 h-3" /> Expired</span>;
+                            if (inv.status === 'failed') return <span className={`${base} bg-red-100 text-red-700`}><X className="w-3 h-3" /> Failed</span>;
+                            if (inv.status === 'abandoned') return <span className={`${base} bg-gray-100 text-gray-700`}><X className="w-3 h-3" /> Left</span>;
+                            return <span className={`${base} bg-gray-100 text-gray-600`}><Clock className="w-3 h-3" /> Pending</span>;
+                          };
+
+                          const formatDate = (dateStr: string | null) => {
+                            if (!dateStr) return null;
+                            const formatted = formatDateTimeIST(dateStr, { includeTime: true });
+                            return `${formatted} IST`;
+                          };
+
+                          const initials = invitation.candidate_name
+                            ?.split(' ')
+                            .map((n: string) => n[0])
+                            .join('')
+                            .toUpperCase()
+                            .slice(0, 2) || '??';
+
+                          return (
+                            <tr key={invitation.id} className="hover:bg-gray-50">
+                              <td className="py-3 px-3 lg:px-4">
+                                <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                                  {invitation.candidate_display_id || '-'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 lg:px-4">
+                                <div className="flex items-center gap-2 lg:gap-3">
+                                  <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 font-medium text-xs lg:text-sm flex-shrink-0">
+                                    {initials}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="font-medium text-gray-900 text-sm truncate">{invitation.candidate_name}</p>
+                                    <p className="text-xs text-gray-500 truncate">{invitation.candidate_email}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 lg:px-4">
+                                {getStatusBadge(invitation)}
+                              </td>
+                              <td className="py-3 px-3 lg:px-4 text-xs text-gray-500 hidden md:table-cell">
+                                <div className="space-y-1">
+                                  {invitation.sent_at && (
+                                    <div className="flex items-center gap-2">
+                                      <Mail className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                                      <span>Sent: {formatDate(invitation.sent_at)}</span>
+                                    </div>
+                                  )}
+                                  {invitation.started_at && (
+                                    <div className="flex items-center gap-2">
+                                      <Play className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                                      <span>Started: {formatDate(invitation.started_at)}</span>
+                                    </div>
+                                  )}
+                                  {invitation.completed_at && (
+                                    <div className="flex items-center gap-2">
+                                      <CheckCircle className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                                      <span>Completed: {formatDate(invitation.completed_at)}</span>
+                                    </div>
+                                  )}
+                                  {!invitation.sent_at && !invitation.started_at && (
+                                    <div className="flex items-center gap-2">
+                                      <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                      <span>Created: {formatDate(invitation.created_at)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 lg:px-4">
+                                {invitation.status === 'completed' ? (
+                                  <div>
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <span className="text-gray-600">Score</span>
+                                      <span className={`font-medium ${invitation.passed ? 'text-gray-800' : 'text-red-600'}`}>
+                                        {invitation.overall_score != null ? `${invitation.overall_score.toFixed(1)}%` : '100%'}
+                                      </span>
+                                      {invitation.passed !== null && (
+                                        <span className={`text-xs px-1.5 py-0.5 rounded ${invitation.passed ? 'bg-gray-700 text-white' : 'bg-red-100 text-red-700'}`}>
+                                          {invitation.passed ? 'Passed' : 'Failed'}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="w-16 lg:w-24 h-1.5 bg-gray-200 rounded-full mt-1">
+                                      <div className="h-full bg-gray-700 rounded-full" style={{ width: '100%' }} />
+                                    </div>
+                                    {invitation.time_spent_minutes != null && (
+                                      <p className="text-xs text-gray-400 mt-1">
+                                        Time: {invitation.time_spent_minutes} min
+                                      </p>
+                                    )}
+                                  </div>
+                                ) : invitation.started_at ? (
+                                  <div>
+                                    <div className="flex items-center gap-2 text-sm">
+                                      <span className="text-gray-600">Progress</span>
+                                      <span className="font-medium text-gray-700">
+                                        {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
+                                      </span>
+                                    </div>
+                                    <div className="w-16 lg:w-24 h-1.5 bg-gray-200 rounded-full mt-1">
+                                      <div
+                                        className="h-full bg-gray-600 rounded-full"
+                                        style={{ width: `${invitation.progress_percent ?? 50}%` }}
+                                      />
+                                    </div>
+                                    {invitation.current_question != null && invitation.total_questions != null && (
+                                      <p className="text-xs text-gray-400 mt-1">
+                                        Q{invitation.current_question}/{invitation.total_questions}
+                                        {invitation.time_spent_minutes != null && ` • ${invitation.time_spent_minutes} min`}
+                                      </p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                              <td className="py-3 px-3 lg:px-4">
+                                {invitation.status === 'completed' ? (
+                                  <button
+                                    onClick={() => router.push(`/recruitment/assessments/${selectedAssessmentForTracking.id}/results`)}
+                                    className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 rounded-lg transition-colors whitespace-nowrap"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    View Results
+                                  </button>
+                                ) : invitation.status === 'failed' ? (
+                                  <button
+                                    onClick={() => handleResendInvitation(invitation)}
+                                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors whitespace-nowrap"
+                                  >
+                                    <Mail className="w-3.5 h-3.5" />
+                                    Resend
+                                  </button>
+                                ) : null}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
-              <p className="text-sm text-gray-500">
-                Showing <strong>{trackingInvitations.length}</strong> of <strong>{invitationStats.total}</strong> invites
+            <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50 flex-shrink-0">
+              <p className="text-[10px] sm:text-sm text-gray-500">
+                <strong>{trackingInvitations.length}</strong> of <strong>{invitationStats.total}</strong> invites
               </p>
               <button
                 onClick={() => {
@@ -2808,7 +2895,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   setSelectedAssessmentForTracking(null);
                   setTrackingInvitations([]);
                 }}
-                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
               >
                 Close
               </button>

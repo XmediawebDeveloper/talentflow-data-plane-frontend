@@ -891,9 +891,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
         {/* AS-23: Search and Filter Bar */}
         <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 mb-3 sm:mb-4">
-          <div className="flex flex-col md:flex-row gap-3 sm:gap-4 items-stretch md:items-center">
-            {/* Search Input */}
-            <div className="flex-1 relative">
+          <div className="flex flex-col gap-3 sm:gap-4">
+            {/* Search Input - full width on all screens */}
+            <div className="w-full relative">
               <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
@@ -907,10 +907,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               />
             </div>
 
-            {/* Filters Row - wraps on mobile */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            {/* Filters Row - grid on mobile, flex-wrap on larger */}
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
               {/* Status Filter */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                 <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Status:</label>
                 <select
                   value={statusFilter}
@@ -918,7 +918,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
                     setCurrentPage(1);
                   }}
-                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                 >
                   <option value="all">All</option>
                   <option value="Completed">Completed</option>
@@ -928,7 +928,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </div>
 
               {/* Pass/Fail Filter */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                 <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Result:</label>
                 <select
                   value={passFailFilter}
@@ -936,7 +936,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
                     setCurrentPage(1);
                   }}
-                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                 >
                   <option value="all">All</option>
                   <option value="pass">Pass</option>
@@ -946,7 +946,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
               {/* Round-based Filters */}
               {assessmentDetails?.technical_enabled && (
-                <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                   <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Tech:</label>
                   <select
                     value={roundFilters.technical || 'all'}
@@ -955,7 +955,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
                       setCurrentPage(1);
                     }}
-                    className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                    className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   >
                     <option value="all">All</option>
                     <option value="50-70">50-70%</option>
@@ -966,7 +966,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               )}
 
               {assessmentDetails?.coding_enabled && (
-                <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                   <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Coding:</label>
                   <select
                     value={roundFilters.coding || 'all'}
@@ -975,7 +975,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
                       setCurrentPage(1);
                     }}
-                    className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                    className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   >
                     <option value="all">All</option>
                     <option value="50-70">50-70%</option>
@@ -985,88 +985,105 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </div>
               )}
 
-              {/* Date Range Filter */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Date Range Filter - full width on mobile */}
+              <div className="col-span-2 flex items-center gap-1.5 sm:gap-2 min-w-0">
                 <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                 <input
                   type="date"
                   value={dateFrom}
                   max={dateTo || undefined}
                   onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   title="From date"
                 />
-                <span className="text-xs text-gray-400">–</span>
+                <span className="text-xs text-gray-400 flex-shrink-0">–</span>
                 <input
                   type="date"
                   value={dateTo}
                   min={dateFrom || undefined}
                   onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                  className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
+                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   title="To date"
                 />
               </div>
 
-              {/* Clear Filters Button */}
-              {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all' || passFailFilter !== 'all' || dateFrom || dateTo) && (
-                <button
-                  onClick={() => {
-                    setRoundFilters({});
-                    setSearchQuery('');
-                    setStatusFilter('all');
-                    setPassFailFilter('all');
-                    setDateFrom('');
-                    setDateTo('');
-                    setCurrentPage(1);
-                  }}
-                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm"
-                >
-                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  Clear
-                </button>
-              )}
-
-              {/* AS-24: Customize Columns Button */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowColumnSelector(!showColumnSelector)}
-                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm text-gray-700"
-                >
-                  <Columns3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span className="hidden sm:inline">Columns ({enabledColumnsCount})</span>
-                  <span className="sm:hidden">{enabledColumnsCount}</span>
-                </button>
-
-                {showColumnSelector && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      onClick={() => setShowColumnSelector(false)}
-                    ></div>
-                    <div className="absolute right-0 top-full mt-2 w-56 sm:w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto">
-                      <div className="px-3 sm:px-4 py-2 border-b border-gray-200">
-                        <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
-                        <div className="text-xs text-gray-500 mt-0.5">
-                          {enabledColumnsCount} of {columns.length} selected
-                        </div>
-                      </div>
-                      {columns.map((column) => (
-                        <label
-                          key={column.id}
-                          className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 hover:bg-gray-50 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={column.enabled}
-                            onChange={() => handleToggleColumn(column.id)}
-                            className="w-4 h-4 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
-                          />
-                          <span className="text-xs sm:text-sm text-gray-700">{column.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </>
+              {/* Clear Filters & Columns - full width on mobile */}
+              <div className="col-span-2 sm:col-span-1 flex items-center gap-2 sm:gap-3">
+                {/* Clear Filters Button */}
+                {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all' || passFailFilter !== 'all' || dateFrom || dateTo) && (
+                  <button
+                    onClick={() => {
+                      setRoundFilters({});
+                      setSearchQuery('');
+                      setStatusFilter('all');
+                      setPassFailFilter('all');
+                      setDateFrom('');
+                      setDateTo('');
+                      setCurrentPage(1);
+                    }}
+                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs sm:text-sm"
+                  >
+                    <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    Clear
+                  </button>
                 )}
+
+                {/* AS-24: Customize Columns Button */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowColumnSelector(!showColumnSelector)}
+                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm text-gray-700"
+                  >
+                    <Columns3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Columns ({enabledColumnsCount})</span>
+                    <span className="sm:hidden">{enabledColumnsCount}</span>
+                  </button>
+
+                  {showColumnSelector && (
+                    <>
+                      {/* Backdrop */}
+                      <div
+                        className="fixed inset-0 z-40 sm:z-10 bg-black/30 sm:bg-transparent"
+                        onClick={() => setShowColumnSelector(false)}
+                      ></div>
+                      {/* Mobile: bottom sheet | Desktop: absolute dropdown */}
+                      <div className="fixed inset-x-0 bottom-0 z-50 sm:z-20 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-full sm:w-64 bg-white rounded-t-xl sm:rounded-lg shadow-lg border border-gray-200 py-2 max-h-[60vh] sm:max-h-96 overflow-y-auto">
+                        {/* Drag handle for mobile */}
+                        <div className="flex justify-center py-1.5 sm:hidden">
+                          <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
+                        </div>
+                        <div className="px-4 py-2 border-b border-gray-200 flex items-center justify-between">
+                          <div>
+                            <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              {enabledColumnsCount} of {columns.length} selected
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setShowColumnSelector(false)}
+                            className="sm:hidden p-1 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-5 h-5" />
+                          </button>
+                        </div>
+                        {columns.map((column) => (
+                          <label
+                            key={column.id}
+                            className="flex items-center gap-2.5 sm:gap-3 px-4 py-2.5 sm:py-2.5 hover:bg-gray-50 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={column.enabled}
+                              onChange={() => handleToggleColumn(column.id)}
+                              className="w-4 h-4 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
+                            />
+                            <span className="text-sm text-gray-700">{column.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1367,16 +1384,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                         </td>
                       )}
-                      <td className="px-4 py-4">
-                        <div className="flex items-center justify-center gap-2">
+                      <td className="px-2 sm:px-4 py-4">
+                        <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
                           {candidate.status !== 'Pending' && (
                           <button
                             onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                            className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
                             title="View Details"
                           >
-                            <Award className="w-3 h-3" />
-                            View Details
+                            <Award className="w-3 h-3 flex-shrink-0" />
+                            <span className="hidden sm:inline">View Details</span>
                           </button>
                           )}
                           {/* AS-25: PDF Download Button */}
@@ -1384,29 +1401,29 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <button
                               onClick={() => handleDownloadPDF(candidate.id, candidate.name)}
                               disabled={downloadingPDF === candidate.id}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                               title="Download PDF Report"
                             >
                               {downloadingPDF === candidate.id ? (
-                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
                               ) : (
-                                <Download className="w-3 h-3" />
+                                <Download className="w-3 h-3 flex-shrink-0" />
                               )}
-                              PDF
+                              <span className="hidden sm:inline">PDF</span>
                             </button>
                           ) : null}
                           <button
                             onClick={() => handleDeleteResult(candidate.id, candidate.name)}
                             disabled={isDeleting === candidate.id}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                            className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 whitespace-nowrap"
                             title="Delete"
                           >
                             {isDeleting === candidate.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
                             ) : (
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3 h-3 flex-shrink-0" />
                             )}
-                            Delete
+                            <span className="hidden sm:inline">Delete</span>
                           </button>
                         </div>
                       </td>
