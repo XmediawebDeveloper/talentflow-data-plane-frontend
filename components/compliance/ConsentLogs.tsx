@@ -20,6 +20,7 @@ import {
   Filter,
 } from 'lucide-react';
 import consentService, { ConsentLog, ConsentAuditLog } from '@/lib/services/consentService';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 interface ConsentLogsProps {
   compact?: boolean;
@@ -412,7 +413,7 @@ export default function ConsentLogs({ compact = false }: ConsentLogsProps) {
                   <div>
                     <p className="text-xs sm:text-sm text-gray-500">Date</p>
                     <p className="text-sm sm:text-base font-medium text-gray-900">
-                      {new Date(selectedLog.created_at).toLocaleString()}
+                      {formatIST(selectedLog.created_at)}
                     </p>
                   </div>
                 </div>
@@ -429,7 +430,7 @@ export default function ConsentLogs({ compact = false }: ConsentLogsProps) {
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                           <span className="font-medium text-gray-900">{audit.action}</span>
                           <span className="text-gray-500 text-[10px] sm:text-xs">
-                            {new Date(audit.created_at).toLocaleString()}
+                            {formatIST(audit.created_at)}
                           </span>
                         </div>
                         <p className="text-gray-600 mt-0.5 sm:mt-1 break-all">

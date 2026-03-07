@@ -5,6 +5,7 @@ import {
   Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff
 } from 'lucide-react';
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
+import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
@@ -464,7 +465,7 @@ export default function AssessmentAuditTrail() {
                           <div>
                             <span className="text-gray-500">Timestamp:</span>
                             <span className="ml-1.5 sm:ml-2 text-gray-900">
-                              {new Date(activity.timestamp).toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour12: true })}
+                              {formatIST(activity.timestamp)}
                             </span>
                           </div>
                           {activity.assessment_id && (

@@ -1,5 +1,6 @@
 'use client';
 
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -216,13 +217,6 @@ ${job.certifications?.join(', ') || 'N/A'}
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
 
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { bg: string; text: string; label: string }> = {
@@ -313,7 +307,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 )}
                 <span className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
-                  Created {formatDate(job.created_at)}
+                  Created {formatISTDate(job.created_at)}
                 </span>
               </div>
             </div>

@@ -138,6 +138,18 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
     }
   }, []);
 
+  // Load a CDN script tag (idempotent — skips if already loaded)
+  const loadScript = (src: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+      const s = document.createElement("script");
+      s.src = src;
+      s.crossOrigin = "anonymous";
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error(`Failed to load: ${src}`));
+      document.head.appendChild(s);
+    });
+
   // Initialize MediaPipe Hands (only once)
   useEffect(() => {
     let mounted = true;
@@ -145,8 +157,9 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
 
     const initializeHands = async () => {
       try {
-        // Dynamic import
-        const { Hands } = await import("@mediapipe/hands");
+        // Load from CDN as a global script — @mediapipe legacy packages are not
+        // proper ES modules and break when webpack tries to bundle them.
+        await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js");
 
         if (!mounted) {
           console.log("⚠️ Component unmounted during init");
@@ -155,10 +168,12 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
 
         console.log("✅ MediaPipe module imported");
 
-        const hands = new Hands({
-          locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-          },
+        const HandsClass = (window as any).Hands;
+        if (!HandsClass) throw new Error("Hands global not found after CDN load");
+
+        const hands = new HandsClass({
+          locateFile: (file: string) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
         });
 
         hands.setOptions({

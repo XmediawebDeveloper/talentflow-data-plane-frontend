@@ -48,6 +48,8 @@ export type PermissionAction =
   // Resume Scoring specific actions
   | 'manage_criteria'
   | 'view_analytics'
+  // Assessment specific actions
+  | 'download_pdf'
   // Menu visibility actions
   | 'menu_dashboard'
   | 'menu_jobs'
@@ -355,7 +357,12 @@ export const PERMISSION_MODULES: ModulePermissions[] = [
       {
         action: 'export',
         label: 'Export Assessments',
-        description: 'Export assessment data and results',
+        description: 'Export assessment data and results (CSV/Excel)',
+      },
+      {
+        action: 'download_pdf',
+        label: 'Download PDF Reports',
+        description: 'Download individual and bulk PDF reports for assessment results',
       },
     ],
   },
@@ -740,7 +747,8 @@ export const ROLE_PRESETS: RolePreset[] = [
       'assessments:manage': true,
       'assessments:delete': true,
       'assessments:export': true,
-      
+      'assessments:download_pdf': true,
+
       // AI Interviews
       'ai_interview:view': true,
       'ai_interview:create': true,
@@ -868,7 +876,8 @@ export const ROLE_PRESETS: RolePreset[] = [
       'assessments:manage': true,
       'assessments:delete': false,
       'assessments:export': true,
-      
+      'assessments:download_pdf': true,
+
       // AI Interviews
       'ai_interview:view': true,
       'ai_interview:create': true,
@@ -996,7 +1005,8 @@ export const ROLE_PRESETS: RolePreset[] = [
       'assessments:manage': false,
       'assessments:delete': false,
       'assessments:export': false,
-      
+      'assessments:download_pdf': false,
+
       // AI Interviews
       'ai_interview:view': true,
       'ai_interview:create': false,

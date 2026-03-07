@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -158,7 +159,7 @@ function formatTimeAgo(dateStr: string | null): string {
   if (diffHours < 24) return `${diffHours} hours ago`;
   if (diffDays === 1) return '1 day ago';
   if (diffDays < 7) return `${diffDays} days ago`;
-  return date.toLocaleDateString();
+  return formatISTDate(dateStr);
 }
 
 // Map API status to display status
@@ -330,8 +331,8 @@ export function useUserManagement() {
         status: 'Pending',
         lastActive: 'Never',
         invitationStatus: 'Sent',
-        invitationSentDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        invitationExpiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        invitationSentDate: formatISTDate(new Date().toISOString()),
+        invitationExpiryDate: formatISTDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()),
       };
       setUsers(prev => [...prev, newUser]);
       setCounts(prev => ({ ...prev, total: prev.total + 1, pending: prev.pending + 1 }));
@@ -364,8 +365,8 @@ export function useUserManagement() {
           ? {
               ...u,
               invitationStatus: 'Sent' as const,
-              invitationSentDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-              invitationExpiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+              invitationSentDate: formatISTDate(new Date().toISOString()),
+              invitationExpiryDate: formatISTDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()),
             }
           : u
       ));

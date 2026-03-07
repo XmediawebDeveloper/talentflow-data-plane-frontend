@@ -4,6 +4,7 @@ import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, X
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -140,11 +141,6 @@ export default function BillingHistoryPage() {
     (inv.plan_name && inv.plan_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
     getDescription(inv).toLowerCase().includes(searchQuery.toLowerCase())
   );
-
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
 
   const formatAmount = (amount: number) =>
     `₹${Math.abs(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -319,7 +315,7 @@ export default function BillingHistoryPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-900 whitespace-nowrap">
-                        {formatDate(inv.issue_date)}
+                        {formatISTDate(inv.issue_date)}
                       </td>
                       <td className="px-4 py-4">
                         <div className="text-sm font-medium text-gray-900 truncate" title={getDescription(inv)}>
@@ -331,7 +327,7 @@ export default function BillingHistoryPage() {
                         {inv.subscription_start_date && (
                           <div className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
                             <Calendar className="w-3 h-3 flex-shrink-0" />
-                            {formatDate(inv.subscription_start_date)} – {formatDate(inv.subscription_end_date)}
+                            {formatISTDate(inv.subscription_start_date)} – {formatISTDate(inv.subscription_end_date)}
                           </div>
                         )}
                       </td>
@@ -407,11 +403,11 @@ export default function BillingHistoryPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Issue Date</p>
-                    <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.issue_date)}</p>
+                    <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.issue_date)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Due Date</p>
-                    <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.due_date)}</p>
+                    <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.due_date)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Status</p>
@@ -423,7 +419,7 @@ export default function BillingHistoryPage() {
                   {selectedInvoice.paid_at && (
                     <div>
                       <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Paid At</p>
-                      <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.paid_at)}</p>
+                      <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.paid_at)}</p>
                     </div>
                   )}
                   {selectedInvoice.billing_interval && (
@@ -464,16 +460,16 @@ export default function BillingHistoryPage() {
                     <div className="p-4 grid grid-cols-2 gap-4">
                       <div>
                         <p className="text-xs text-gray-500 mb-0.5">Start</p>
-                        <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.subscription_start_date)}</p>
+                        <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.subscription_start_date)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-0.5">End</p>
-                        <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.subscription_end_date)}</p>
+                        <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.subscription_end_date)}</p>
                       </div>
                       {selectedInvoice.next_billing_date && (
                         <div>
                           <p className="text-xs text-gray-500 mb-0.5">Next Billing</p>
-                          <p className="text-sm font-medium text-gray-900">{formatDate(selectedInvoice.next_billing_date)}</p>
+                          <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedInvoice.next_billing_date)}</p>
                         </div>
                       )}
                     </div>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 // AS-24: localStorage key for column preferences (v2 with new columns)
 const COLUMN_PREFERENCES_KEY = 'assessment_results_jd_column_preferences_v2';
@@ -52,9 +53,10 @@ interface AssessmentResultsTableProps {
   jobTitle: string;
   jobId?: string;
   onViewResultDetail?: (result: AssessmentResult, jobTitle?: string) => void;
+  canDownloadPDF?: boolean;
 }
 
-export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail }: AssessmentResultsTableProps) {
+export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail, canDownloadPDF = false }: AssessmentResultsTableProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const [searchTerm, setSearchTerm] = useState('');
@@ -170,16 +172,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   // Helper: format timeline date
   const formatTimelineDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
-    const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
-    const date = new Date(dateWithZ);
-    return date.toLocaleString('en-US', {
-      timeZone: 'Asia/Kolkata',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
+    return formatIST(dateStr);
   };
 
   // Handle delete result with timeout
@@ -510,18 +503,20 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             {/* Bulk Actions - When items are selected */}
             {selectedResults.length > 0 && (
               <>
-                <button
-                  onClick={handleDownloadBulkPDFs}
-                  disabled={downloadingBulkPDF}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {downloadingBulkPDF ? (
-                    <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
-                  ) : (
-                    <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  )}
-                  {downloadingBulkPDF ? 'Downloading...' : `PDFs (${selectedResults.length})`}
-                </button>
+                {canDownloadPDF && (
+                  <button
+                    onClick={handleDownloadBulkPDFs}
+                    disabled={downloadingBulkPDF}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {downloadingBulkPDF ? (
+                      <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
+                    ) : (
+                      <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    )}
+                    {downloadingBulkPDF ? 'Downloading...' : `PDFs (${selectedResults.length})`}
+                  </button>
+                )}
                 <button
                   onClick={handleExportExcel}
                   className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-1.5 sm:gap-2"
@@ -932,7 +927,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           View Details
                         </button>
                         )}
-                        {getResultStatus(result) === 'Completed' && (
+                        {canDownloadPDF && getResultStatus(result) === 'Completed' && (
                           <button
                             onClick={() => handleDownloadPDF(result.id)}
                             disabled={downloadingPDF === result.id}
@@ -1146,7 +1141,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       View Details
                     </button>
                     )}
-                    {getResultStatus(result) === 'Completed' && (
+                    {canDownloadPDF && getResultStatus(result) === 'Completed' && (
                       <button
                         onClick={() => handleDownloadPDF(result.id)}
                         disabled={downloadingPDF === result.id}

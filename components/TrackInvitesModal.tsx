@@ -4,6 +4,7 @@ import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, P
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/services/api';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 interface TrackInvitesModalProps {
   isOpen: boolean;
@@ -12,26 +13,24 @@ interface TrackInvitesModalProps {
   jdTitle: string;
 }
 
-// Helper function to format date/time in IST timezone
-const formatDateTimeIST = (dateStr: string | null | undefined, options?: { includeTime?: boolean }) => {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const dateOptions: Intl.DateTimeFormatOptions = {
-    timeZone: 'Asia/Kolkata',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  };
-  if (options?.includeTime) {
-    dateOptions.hour = '2-digit';
-    dateOptions.minute = '2-digit';
-    dateOptions.hour12 = true;
-  }
-  return date.toLocaleString('en-US', dateOptions);
-};
 
 const isValidEmail = (email: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+// Derive effective status using both the status field and timestamp signals as fallback.
+// This guards against stale/null status fields in the API response.
+const getEffectiveStatus = (inv: any): string => {
+  const s = inv.status?.toLowerCase();
+  if (s === 'completed' || inv.completed_at) return 'completed';
+  if (s === 'failed') return 'failed';
+  if (s === 'expired') return 'expired';
+  if (s === 'abandoned') return 'abandoned';
+  if (s === 'bounced' || inv.bounced_at) return 'bounced';
+  if (s === 'started' || inv.started_at) return 'started';
+  if (s === 'opened' || inv.opened_at) return 'opened';
+  if (s === 'sent' || inv.sent_at) return 'sent';
+  return 'pending';
+};
 
 export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: TrackInvitesModalProps) {
   const router = useRouter();
@@ -98,13 +97,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
         }
       }
 
-      // Calculate stats
+      // Calculate stats using effective status (timestamp-aware)
       const newStats = {
         total: allInvitations.length,
-        sent: allInvitations.filter(inv => inv.sent_at).length,
-        started: allInvitations.filter(inv => inv.started_at && inv.status?.toLowerCase() !== 'completed').length,
-        completed: allInvitations.filter(inv => inv.status?.toLowerCase() === 'completed').length,
-        failed: allInvitations.filter(inv => ['failed', 'expired'].includes(inv.status?.toLowerCase())).length,
+        sent: allInvitations.filter(inv => ['sent', 'opened', 'pending'].includes(getEffectiveStatus(inv))).length,
+        started: allInvitations.filter(inv => getEffectiveStatus(inv) === 'started').length,
+        completed: allInvitations.filter(inv => getEffectiveStatus(inv) === 'completed').length,
+        failed: allInvitations.filter(inv => ['failed', 'expired', 'abandoned', 'bounced'].includes(getEffectiveStatus(inv))).length,
       };
 
       setInvitations(allInvitations);
@@ -149,43 +148,36 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
   if (!isOpen) return null;
 
   const getStatusBadge = (inv: any) => {
-    // Normalize to lowercase for case-insensitive comparison (API may return 'BOUNCED' or 'bounced')
-    const s = inv.status?.toLowerCase();
+    const effective = getEffectiveStatus(inv);
     const base = "px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs flex items-center gap-1 whitespace-nowrap flex-shrink-0";
-    // Priority: terminal/negative states first, then progress states, then sent
-    if (s === 'completed') {
+    if (effective === 'completed') {
       return <span className={`${base} bg-green-100 text-green-700`}><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Done</span>;
     }
-    if (s === 'bounced') {
+    if (effective === 'failed') {
+      return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Failed</span>;
+    }
+    if (effective === 'bounced') {
       return <span className={`${base} bg-red-100 text-red-700`}><RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Bounced</span>;
     }
-    if (s === 'failed') {
-      return <span className={`${base} bg-red-100 text-red-700`}><X className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Failed</span>;
+    if (effective === 'expired') {
+      return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
     }
-    if (s === 'expired') {
-      return <span className={`${base} bg-orange-100 text-orange-700`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Expired</span>;
-    }
-    if (s === 'abandoned') {
+    if (effective === 'abandoned') {
       return <span className={`${base} bg-gray-100 text-gray-700`}><X className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Left</span>;
     }
-    if (s === 'started' || (inv.started_at && s !== 'completed')) {
+    if (effective === 'started') {
       return <span className={`${base} bg-yellow-100 text-yellow-700`}><Play className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Started</span>;
     }
-    if (s === 'opened') {
+    if (effective === 'opened') {
       return <span className={`${base} bg-purple-100 text-purple-700`}><Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Opened</span>;
     }
-    if (inv.email_read_at && s === 'sent') {
+    if (inv.email_read_at) {
       return <span className={`${base} bg-indigo-100 text-indigo-700`}><Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Read</span>;
     }
-    if (s === 'sent' || inv.sent_at) {
+    if (effective === 'sent') {
       return <span className={`${base} bg-blue-100 text-blue-700`}><Mail className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Sent</span>;
     }
-    return <span className={`${base} bg-gray-100 text-gray-600`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Pending</span>;
-  };
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return null;
-    return formatDateTimeIST(dateStr, { includeTime: true });
+    return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
   };
 
   return (
@@ -311,19 +303,19 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                         {invitation.sent_at && (
                           <div className="flex items-center gap-1">
                             <Mail className="w-2.5 h-2.5 text-blue-500 flex-shrink-0" />
-                            <span>Sent: {formatDate(invitation.sent_at)}</span>
+                            <span>Sent: {formatIST(invitation.sent_at)}</span>
                           </div>
                         )}
                         {invitation.started_at && (
                           <div className="flex items-center gap-1">
                             <Play className="w-2.5 h-2.5 text-yellow-500 flex-shrink-0" />
-                            <span>Started: {formatDate(invitation.started_at)}</span>
+                            <span>Started: {formatIST(invitation.started_at)}</span>
                           </div>
                         )}
                         {invitation.completed_at && (
                           <div className="flex items-center gap-1">
                             <CheckCircle className="w-2.5 h-2.5 text-green-500 flex-shrink-0" />
-                            <span>Done: {formatDate(invitation.completed_at)}</span>
+                            <span>Done: {formatIST(invitation.completed_at)}</span>
                           </div>
                         )}
                       </div>
@@ -333,7 +325,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                         {/* Score/Progress row */}
                         <div className="flex items-center justify-between mb-1.5">
                           <div>
-                            {invitation.status?.toLowerCase() === 'completed' ? (
+                            {getEffectiveStatus(invitation) === 'completed' ? (
                               <div className="flex items-center gap-1 text-[10px]">
                                 <span className="text-gray-600">Score:</span>
                                 <span className={`font-medium ${invitation.passed ? 'text-green-600' : 'text-red-600'}`}>
@@ -345,7 +337,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                   </span>
                                 )}
                               </div>
-                            ) : invitation.started_at ? (
+                            ) : getEffectiveStatus(invitation) === 'started' ? (
                               <div className="flex items-center gap-1 text-[10px]">
                                 <span className="text-gray-600">Progress:</span>
                                 <span className="font-medium text-yellow-600">
@@ -356,7 +348,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                               <span className="text-[10px] text-gray-400">—</span>
                             )}
                           </div>
-                          {invitation.status?.toLowerCase() === 'completed' && (
+                          {getEffectiveStatus(invitation) === 'completed' && (
                             <button
                               onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results`)}
                               className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-purple-600 hover:bg-purple-50 rounded transition-colors"
@@ -367,7 +359,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                           )}
                         </div>
                         {/* Failed/Bounced actions */}
-                        {(['failed', 'bounced'].includes(invitation.status?.toLowerCase())) && (
+                        {(['failed', 'bounced'].includes(getEffectiveStatus(invitation))) && (
                           editingEmailId === invitation.id ? (
                             <div className="flex flex-col gap-1.5">
                               <input
@@ -472,37 +464,37 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                               {invitation.sent_at && (
                                 <div className="flex items-center gap-2">
                                   <Mail className="w-3 h-3 text-blue-500 flex-shrink-0" />
-                                  <span>Sent: {formatDate(invitation.sent_at)}</span>
+                                  <span>Sent: {formatIST(invitation.sent_at)}</span>
                                 </div>
                               )}
                               {invitation.email_read_at && (
                                 <div className="flex items-center gap-2">
                                   <Eye className="w-3 h-3 text-indigo-500 flex-shrink-0" />
-                                  <span>Email Read: {formatDate(invitation.email_read_at)}</span>
+                                  <span>Email Read: {formatIST(invitation.email_read_at)}</span>
                                 </div>
                               )}
                               {invitation.bounced_at && (
                                 <div className="flex items-center gap-2">
                                   <RefreshCw className="w-3 h-3 text-red-500 flex-shrink-0" />
-                                  <span className="text-red-600">Bounced: {formatDate(invitation.bounced_at)}</span>
+                                  <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
                                 </div>
                               )}
                               {invitation.started_at && (
                                 <div className="flex items-center gap-2">
                                   <Play className="w-3 h-3 text-yellow-500 flex-shrink-0" />
-                                  <span>Started: {formatDate(invitation.started_at)}</span>
+                                  <span>Started: {formatIST(invitation.started_at)}</span>
                                 </div>
                               )}
                               {invitation.completed_at && (
                                 <div className="flex items-center gap-2">
                                   <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
-                                  <span>Completed: {formatDate(invitation.completed_at)}</span>
+                                  <span>Completed: {formatIST(invitation.completed_at)}</span>
                                 </div>
                               )}
                             </div>
                           </td>
                           <td className="py-3 px-3 lg:px-4">
-                            {invitation.status?.toLowerCase() === 'completed' ? (
+                            {getEffectiveStatus(invitation) === 'completed' ? (
                               <div>
                                 <div className="flex items-center gap-2 text-sm">
                                   <span className="text-gray-600">Score</span>
@@ -516,7 +508,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                   )}
                                 </div>
                               </div>
-                            ) : invitation.started_at ? (
+                            ) : getEffectiveStatus(invitation) === 'started' ? (
                               <div>
                                 <div className="flex items-center gap-2 text-sm">
                                   <span className="text-gray-600">Progress</span>
@@ -530,7 +522,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                             )}
                           </td>
                           <td className="py-3 px-3 lg:px-4">
-                            {invitation.status?.toLowerCase() === 'completed' ? (
+                            {getEffectiveStatus(invitation) === 'completed' ? (
                               <button
                                 onClick={() => router.push(`/recruitment/assessments/${invitation.assessment_id}/results`)}
                                 className="flex items-center gap-1 px-3 py-1.5 text-xs text-purple-600 hover:bg-purple-50 rounded-lg transition-colors whitespace-nowrap"
@@ -538,7 +530,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                 <Eye className="w-3.5 h-3.5" />
                                 View Results
                               </button>
-                            ) : (['failed', 'bounced'].includes(invitation.status?.toLowerCase())) ? (
+                            ) : (['failed', 'bounced'].includes(getEffectiveStatus(invitation))) ? (
                               editingEmailId === invitation.id ? (
                                 // Inline email editor
                                 <div className="flex flex-col gap-1.5 min-w-[180px]">

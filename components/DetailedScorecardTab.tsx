@@ -1,4 +1,5 @@
 import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp } from 'lucide-react';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 interface DetailedScores {
   titleMatch: number;
@@ -316,7 +317,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         )}
         <span className="text-gray-600">
           {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
-            ? `${new Date(new Date(resume.scoredDate).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, ${new Date(new Date(resume.scoredDate).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+            ? formatIST(resume.scoredDate)
             : 'N/A'}
         </span>
         <span className="text-gray-600">by {resume.scoredBy || 'System'}</span>

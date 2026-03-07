@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { PlanFeatureKey, PLAN_FEATURE_METADATA } from '@/lib/types/planFeatures';
 import FeatureNotAvailablePage from './FeatureNotAvailablePage';
@@ -21,8 +22,18 @@ export default function FeatureGate({
 }: FeatureGateProps) {
   const { available, loading } = usePlanFeature(feature);
 
-  // While loading, show nothing (prevents flash)
-  if (loading) {
+  // Persist last resolved availability across background refreshes.
+  // When quota data reloads (loading briefly flips true), we keep the
+  // last-known value so children are NOT unmounted — preventing the
+  // ResumeScoringPage remount / re-scoring bug.
+  const resolvedRef = useRef<boolean | null>(null);
+  if (!loading) {
+    resolvedRef.current = available;
+  }
+  const effectiveAvailable = resolvedRef.current;
+
+  // Only show spinner on the very first load (before availability is ever known)
+  if (effectiveAvailable === null) {
     if (mode === 'hidden') return null;
     return (
       <div className="flex items-center justify-center p-12">
@@ -32,7 +43,7 @@ export default function FeatureGate({
   }
 
   // Feature is available, render children
-  if (available) {
+  if (effectiveAvailable) {
     return <>{children}</>;
   }
 

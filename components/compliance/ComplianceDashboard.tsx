@@ -27,6 +27,7 @@ import complianceService, {
   getCorrectionTypeName,
   getTableDisplayName,
 } from '@/lib/services/complianceService';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 
 interface ComplianceDashboardProps {
   showFullReport?: boolean;
@@ -375,7 +376,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                         </span>
                       </div>
                       <span className="text-xs text-gray-400">
-                        {new Date(correction.created_at).toLocaleString()}
+                        {formatIST(correction.created_at)}
                       </span>
                     </div>
                     <p className="text-sm text-gray-700">{correction.correction_reason}</p>
@@ -427,8 +428,8 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                   ))}
               </div>
               <div className="mt-4 text-xs text-gray-500">
-                <p>Report Period: {new Date(report.period.start_date).toLocaleDateString()} - {new Date(report.period.end_date).toLocaleDateString()}</p>
-                <p>Generated: {new Date(report.generated_at).toLocaleString()}</p>
+                <p>Report Period: {formatISTDate(report.period.start_date)} - {formatISTDate(report.period.end_date)}</p>
+                <p>Generated: {formatIST(report.generated_at)}</p>
               </div>
             </div>
           )}

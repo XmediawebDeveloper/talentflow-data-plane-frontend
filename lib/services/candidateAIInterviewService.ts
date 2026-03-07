@@ -40,9 +40,29 @@ export interface CandidateSystemCheckRequest {
   ai_engine: string;
   lighting?: string;
   noise?: string;
+  face_detection?: string;
+  face_count?: number;
+  video_resolution?: string;
+  video_brightness?: number;
+  audio_level_db?: number;
+  network_latency_ms?: number;
+  network_latency_variance_ms?: number;
+  ai_engine_latency_ms?: number;
+}
+
+export interface AIHealthResponse {
+  status: 'ready' | 'unavailable';
+  latency_ms: number;
 }
 
 export const candidateAIInterviewService = {
+  async checkAIHealth(token: string): Promise<AIHealthResponse> {
+    const response = await candidateApi.get<AIHealthResponse>(
+      `/candidate/ai-interview/${token}/ai-health`,
+    );
+    return response.data;
+  },
+
   async getInterviewInfo(token: string): Promise<CandidateInterviewInfo> {
     const response = await candidateApi.get<CandidateInterviewInfo>(
       `/candidate/ai-interview/${token}`,

@@ -20,6 +20,7 @@ import {
   formatUnitsConsumed,
   UNIT_TYPE_NAMES,
 } from '@/lib/services/unitPoolService';
+import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 interface UsageTransparencyDashboardProps {
   onBack?: () => void;
@@ -133,8 +134,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
       ];
 
       const rows = exportData.items.map(entry => [
-        new Date(entry.created_at).toLocaleDateString(),
-        new Date(entry.created_at).toLocaleTimeString(),
+        formatISTDate(entry.created_at),
+        formatISTTime(entry.created_at),
         entry.unit_type,
         formatUnitsConsumed(entry.units_consumed),
         getDeductionCategoryName(entry.deduction_category),
@@ -471,17 +472,10 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                   >
                     <td className="py-4 px-4">
                       <div className="text-sm text-gray-900">
-                        {new Date(entry.created_at).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
+                        {formatISTDate(entry.created_at)}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {new Date(entry.created_at).toLocaleTimeString('en-US', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {formatISTTime(entry.created_at)}
                       </div>
                     </td>
                     <td className="py-4 px-4">

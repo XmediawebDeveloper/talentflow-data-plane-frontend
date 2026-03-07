@@ -8,6 +8,7 @@ import {
 } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter, usePathname } from 'next/navigation';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 // Pages where the modal should NOT appear (user needs access to renew)
 const ALLOWED_PATHS = [
@@ -156,14 +157,7 @@ export default function SubscriptionInactiveModal() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               <span>
-                Suspended on {new Date(errorDetails.suspended_at).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })} at {new Date(errorDetails.suspended_at).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
+                Suspended on {formatIST(errorDetails.suspended_at)}
               </span>
             </div>
           )}

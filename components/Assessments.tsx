@@ -17,58 +17,13 @@ import { assessmentService } from '@/lib/services';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Send } from 'lucide-react';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 
-// Helper function to format dates in IST timezone (matching resume-view implementation)
-const formatDateTimeIST = (dateStr: string | null | undefined, options?: { includeTime?: boolean }) => {
-  if (!dateStr) return '';
-  // Add 'Z' if not present to ensure UTC interpretation
-  const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
-  const date = new Date(dateWithZ);
-
-  const dateOptions: Intl.DateTimeFormatOptions = {
-    timeZone: 'Asia/Kolkata', // IST = UTC+5:30
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  };
-  if (options?.includeTime) {
-    dateOptions.hour = '2-digit';
-    dateOptions.minute = '2-digit';
-    dateOptions.hour12 = true;
-  }
-  return date.toLocaleString('en-IN', dateOptions);
-};
-
-const formatTimeIST = (dateStr: string | null | undefined) => {
-  if (!dateStr) return '';
-  // Add 'Z' if not present to ensure UTC interpretation
-  const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
-  const date = new Date(dateWithZ);
-  return date.toLocaleTimeString('en-IN', {
-    timeZone: 'Asia/Kolkata', // IST = UTC+5:30
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-};
-
-const formatDateOnlyIST = (dateStr: string | null | undefined) => {
-  if (!dateStr) return '';
-  // Add 'Z' if not present to ensure UTC interpretation
-  const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
-  const date = new Date(dateWithZ);
-  return date.toLocaleDateString('en-IN', {
-    timeZone: 'Asia/Kolkata', // IST = UTC+5:30
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
 
 interface AssessmentsProps {
   jobs: Job[];
@@ -88,6 +43,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const canCreateAssessment = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
+  const canDownloadAssessmentPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
 
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
@@ -115,6 +71,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     completed: 0,
     failed: 0,
   });
+  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
+  const [newEmailValue, setNewEmailValue] = useState('');
+  const [isSendingChangeEmail, setIsSendingChangeEmail] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
@@ -746,10 +705,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       // Calculate stats
       const stats = {
         total: invitations.length,
-        sent: invitations.filter((inv: any) => inv.status === 'sent' || inv.status === 'pending').length,
-        started: invitations.filter((inv: any) => inv.status === 'in_progress' || inv.started_at).length,
-        completed: invitations.filter((inv: any) => inv.status === 'completed').length,
-        failed: invitations.filter((inv: any) => inv.status === 'expired' || inv.status === 'failed').length,
+        sent: invitations.filter((inv: any) => inv.status === 'sent' || inv.status === 'pending' || inv.status === 'opened').length,
+        started: invitations.filter((inv: any) => inv.status === 'started' || (inv.started_at && inv.status !== 'completed')).length,
+        completed: invitations.filter((inv: any) => inv.status === 'completed' || inv.completed_at).length,
+        failed: invitations.filter((inv: any) => ['expired', 'failed', 'bounced', 'abandoned'].includes(inv.status)).length,
       };
       setInvitationStats(stats);
     } catch (error) {
@@ -760,20 +719,46 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  // Resend invitation
+  const isValidInviteEmail = (email: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  // Resend invitation to same candidate (uses resend endpoint, not invite — preserves same invitation record)
   const handleResendInvitation = async (invitation: any) => {
     try {
-      // Re-invite the candidate
-      await assessmentService.invite(selectedAssessmentForTracking.id, {
-        candidate_name: invitation.candidate_name,
-        candidate_email: invitation.candidate_email,
-      });
+      await api.post(
+        `/assessments/${selectedAssessmentForTracking.id}/invitations/${invitation.id}/resend`
+      );
       toast.success('Invitation resent successfully!');
-      // Reload invitations
       handleTrackInvites(selectedAssessmentForTracking);
     } catch (error) {
       console.error('Failed to resend invitation:', error);
       toast.error('Failed to resend invitation. Please try again.');
+    }
+  };
+
+  // Change email and resend for bounced invitations
+  const handleUpdateEmail = async (invitation: any) => {
+    if (!isValidInviteEmail(newEmailValue)) return;
+    setIsSendingChangeEmail(true);
+    try {
+      await api.patch(
+        `/assessments/${selectedAssessmentForTracking.id}/invitations/${invitation.id}/update-email`,
+        { new_email: newEmailValue.trim() }
+      );
+      setEditingEmailId(null);
+      setNewEmailValue('');
+      toast.success('Email updated and invitation resent!');
+      handleTrackInvites(selectedAssessmentForTracking);
+    } catch (error: any) {
+      console.error('Failed to update email:', error);
+      const msg =
+        error?.response?.data?.detail?.message ||
+        error?.response?.data?.message ||
+        (typeof error?.response?.data?.detail === 'string' ? error.response.data.detail : null) ||
+        'Failed to update email. Please try again.';
+      toast.error(msg);
+    } finally {
+      setIsSendingChangeEmail(false);
     }
   };
 
@@ -804,6 +789,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         assessmentId={selectedAssessmentForResults.id}
         assessmentTitle={selectedAssessmentForResults.title}
         jdTitle={selectedAssessmentForResults.job?.title}
+        canDownloadPDF={canDownloadAssessmentPDF}
       />
     );
   }
@@ -1908,11 +1894,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         )}
                         {assessment.created_at && (
                           <span className={assessment.created_by_name ? " ml-1" : ""}>
-                            {assessment.created_by_name ? "• " : ""}Created: {formatDateOnlyIST(assessment.created_at)}
+                            {assessment.created_by_name ? "• " : ""}Created: {formatISTDate(assessment.created_at)}
                           </span>
                         )}
                         {assessment.updated_at && (
-                          <span className="block">Last Updated: {formatDateOnlyIST(assessment.updated_at)}</span>
+                          <span className="block">Last Updated: {formatISTDate(assessment.updated_at)}</span>
                         )}
                       </div>
 
@@ -2176,11 +2162,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             )}
                             {assessment.created_at && (
                               <span className={assessment.created_by_name ? " ml-1" : ""}>
-                                {assessment.created_by_name ? "• " : ""}Created: {formatDateOnlyIST(assessment.created_at)} at {formatTimeIST(assessment.created_at)}
+                                {assessment.created_by_name ? "• " : ""}Created: {formatISTDate(assessment.created_at)} at {formatISTTime(assessment.created_at)}
                               </span>
                             )}
                             {assessment.updated_at && (
-                              <span className="ml-2">Last Updated: {formatDateOnlyIST(assessment.updated_at)} at {formatTimeIST(assessment.updated_at)}</span>
+                              <span className="ml-2">Last Updated: {formatISTDate(assessment.updated_at)} at {formatISTTime(assessment.updated_at)}</span>
                             )}
                           </div>
 
@@ -2525,6 +2511,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   setShowTrackInvitesModal(false);
                   setSelectedAssessmentForTracking(null);
                   setTrackingInvitations([]);
+                  setEditingEmailId(null);
+                  setNewEmailValue('');
                 }}
                 className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 ml-2"
               >
@@ -2777,32 +2765,43 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </div>
                               </td>
                               <td className="py-3 px-3 lg:px-4">
-                                {getStatusBadge(invitation)}
-                              </td>
+                                <div>
+                              {getStatusBadge(invitation)}
+                                  {invitation.status === 'failed' && (
+                                <p className="text-xs text-red-500 mt-1">Incorrect Email</p>
+                              )}
+                            </div>
+                          </td>
                               <td className="py-3 px-3 lg:px-4 text-xs text-gray-500 hidden md:table-cell">
                                 <div className="space-y-1">
                                   {invitation.sent_at && (
                                     <div className="flex items-center gap-2">
                                       <Mail className="w-3 h-3 text-gray-500 flex-shrink-0" />
-                                      <span>Sent: {formatDate(invitation.sent_at)}</span>
+                                      <span>Sent: {formatIST(invitation.sent_at)}</span>
+                                </div>
+                              )}
+                              {invitation.bounced_at && (
+                                <div className="flex items-center gap-2">
+                                  <RefreshCw className="w-3 h-3 text-red-500" />
+                                  <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
                                     </div>
                                   )}
                                   {invitation.started_at && (
                                     <div className="flex items-center gap-2">
                                       <Play className="w-3 h-3 text-gray-500 flex-shrink-0" />
-                                      <span>Started: {formatDate(invitation.started_at)}</span>
+                                      <span>Started: {formatIST(invitation.started_at)}</span>
                                     </div>
                                   )}
                                   {invitation.completed_at && (
                                     <div className="flex items-center gap-2">
                                       <CheckCircle className="w-3 h-3 text-gray-500 flex-shrink-0" />
-                                      <span>Completed: {formatDate(invitation.completed_at)}</span>
+                                      <span>Completed: {formatIST(invitation.completed_at)}</span>
                                     </div>
                                   )}
                                   {!invitation.sent_at && !invitation.started_at && (
                                     <div className="flex items-center gap-2">
                                       <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                      <span>Created: {formatDate(invitation.created_at)}</span>
+                                      <span>Created: {formatIST(invitation.created_at)}</span>
                                     </div>
                                   )}
                                 </div>
@@ -2856,7 +2855,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 )}
                               </td>
                               <td className="py-3 px-3 lg:px-4">
-                                {invitation.status === 'completed' ? (
+                                {(invitation.status === 'completed' || invitation.completed_at) ? (
                                   <button
                                     onClick={() => router.push(`/recruitment/assessments/${selectedAssessmentForTracking.id}/results`)}
                                     className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-100 rounded-lg transition-colors whitespace-nowrap"
@@ -2864,7 +2863,44 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     <Eye className="w-3.5 h-3.5" />
                                     View Results
                                   </button>
-                                ) : invitation.status === 'failed' ? (
+                                ) : invitation.status === 'bounced' ? (
+                              editingEmailId === invitation.id ? (
+                                <div className="flex flex-col gap-1.5 min-w-[190px]">
+                                  <input
+                                    type="email"
+                                    value={newEmailValue}
+                                    onChange={e => setNewEmailValue(e.target.value)}
+                                    placeholder="new@email.com"
+                                    className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => handleUpdateEmail(invitation)}
+                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail}
+                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      {isSendingChangeEmail ? 'Sending…' : 'Send'}
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
+                                      className="px-2 py-1 text-xs text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
+                                  className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-400 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors whitespace-nowrap"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                  Change Email
+                                </button>
+                              )
+                            ) : invitation.status === 'failed' ? (
                                   <button
                                     onClick={() => handleResendInvitation(invitation)}
                                     className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors whitespace-nowrap"
@@ -2894,6 +2930,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   setShowTrackInvitesModal(false);
                   setSelectedAssessmentForTracking(null);
                   setTrackingInvitations([]);
+                  setEditingEmailId(null);
+                  setNewEmailValue('');
                 }}
                 className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
               >

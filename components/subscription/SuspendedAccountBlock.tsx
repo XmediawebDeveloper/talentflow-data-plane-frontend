@@ -3,6 +3,7 @@
 import { AlertOctagon, Mail, LogOut, ExternalLink } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { formatIST } from '@/lib/utils/dateUtils';
 import { getLoginUrl } from '@/lib/services/authService';
 
 interface SuspendedAccountBlockProps {
@@ -61,13 +62,7 @@ export default function SuspendedAccountBlock({
               </p>
               {suspendedAt && (
                 <p className="text-red-600 text-sm">
-                  Suspended on: {new Date(suspendedAt).toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
+                  Suspended on: {formatIST(suspendedAt)}
                 </p>
               )}
             </div>

@@ -24,6 +24,7 @@ export interface UserPermissions {
   can_create_assessments: boolean;
   can_update_assessments: boolean;
   can_delete_assessments: boolean;
+  can_download_assessment_pdf: boolean;
 
   // Internal DB Permissions (Granular CRUD)
   can_view_internal_db: boolean;

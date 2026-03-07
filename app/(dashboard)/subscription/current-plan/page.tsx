@@ -13,6 +13,8 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
+import { usePlanChange } from '@/components/providers/PlanChangeProvider';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // Use backend API - no direct Admin API calls
 const BILLING_API_URL = process.env.NEXT_PUBLIC_BILLING_API_URL || 'http://localhost:8001';
@@ -96,6 +98,9 @@ interface DisplayPlan {
   gradient: string;
   popular: boolean;
   features: string[];
+  // Separate features for monthly and annual billing periods
+  monthlyFeatures?: string[];
+  annualFeatures?: string[];
   quotas?: PlanQuotas;
   // Separate quotas for monthly and annual - from API directly
   monthlyQuotas?: PlanQuotas;
@@ -279,13 +284,6 @@ const formatCurrency = (amount: number | undefined | null, currency: string): st
   return `${symbol}${amount.toLocaleString()}`;
 };
 
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-};
 
 const getStatusBadge = (status?: string, paymentStatus?: string, trialDays?: number) => {
   if (paymentStatus === 'pending') {
@@ -454,6 +452,9 @@ function CurrentPlanContent() {
 
   // Use shared quota context - prevents duplicate API calls
   const { quotaData: sharedQuotaData, loading: quotaLoading, refetch: refetchQuota } = useQuota();
+
+  // Plan change acceptance
+  const { hasPendingChanges, daysRemaining, currentChange, openReviewModal } = usePlanChange();
 
   // Check if user already has dedicated database isolation (cannot be downgraded)
   const hasDedicatedDatabase = sharedQuotaData?.plan_info?.isolation_type?.toUpperCase() === 'DATABASE';
@@ -863,9 +864,13 @@ function CurrentPlanContent() {
           if (!monthly?.is_active && !annual?.is_active) return null;
           if (!monthly?.is_public && !annual?.is_public) return null;
 
-          const featureNames = basePlan.features
+          const monthlyFeatureNames = monthly?.features
             ?.filter(f => f.is_enabled)
             ?.map(f => f.feature_name) || [];
+          const annualFeatureNames = annual?.features
+            ?.filter(f => f.is_enabled)
+            ?.map(f => f.feature_name) || [];
+          const featureNames = monthlyFeatureNames.length > 0 ? monthlyFeatureNames : annualFeatureNames;
 
           // Check if monthly or annual plan is the current plan
           // Use quota-status API as single source of truth for plan info
@@ -892,6 +897,8 @@ function CurrentPlanContent() {
             gradient: getGradientForPlan(groupedPlan.plan_name, groupedPlan.plan_tier),
             popular: basePlan.is_featured || false,
             features: featureNames,
+            monthlyFeatures: monthlyFeatureNames,
+            annualFeatures: annualFeatureNames,
             quotas: basePlan.quotas,
             // Store separate quotas for monthly and annual from API
             monthlyQuotas: monthly?.quotas,
@@ -1386,6 +1393,8 @@ function CurrentPlanContent() {
           body: JSON.stringify({
             plan_id: planId,
             billing_interval: actualBillingInterval,
+            schema_per_tenant: isolationType === 'schema',
+            database_per_tenant: isolationType === 'database',
           }),
         });
 
@@ -1431,6 +1440,7 @@ function CurrentPlanContent() {
         database_per_tenant: isolationType === 'database',
         external_transaction_id: transactionId,
         billing_interval: actualBillingInterval,
+        payment_method: 'razorpay',
         user_id: user?.id,
         user_email: user?.email,
         ...razorpayFields,
@@ -1476,7 +1486,7 @@ function CurrentPlanContent() {
         try {
           const mod = await import('@/lib/services/auditVerificationService');
           mod.auditVerificationService.storePendingVerification({
-            action: result.queued ? 'plan_upgrade' : 'subscription_upgrade',
+            action: isDowngradePayment ? (result.queued ? 'plan_downgrade' : 'subscription_downgrade') : (result.queued ? 'plan_upgrade' : 'subscription_upgrade'),
             entity_type: 'subscription',
             entity_id: String(planId),
             user_id: user?.id,
@@ -1488,13 +1498,15 @@ function CurrentPlanContent() {
 
         // PS02 Fix: Show toast notification for payment success
         if (result.queued) {
-          toast.success('Payment successful! Upgrade queued.', {
-            description: `Your upgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? new Date(result.auto_apply_date).toLocaleDateString() : 'plan expiry'}.`,
+          toast.success(isDowngradePayment ? 'Payment successful! Downgrade queued.' : 'Payment successful! Upgrade queued.', {
+            description: isDowngradePayment
+              ? `Your downgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? formatISTDate(result.auto_apply_date) : 'plan expiry'}.`
+              : `Your upgrade to ${result.plan_name} will be applied automatically on ${result.auto_apply_date ? formatISTDate(result.auto_apply_date) : 'plan expiry'}.`,
             duration: 6000,
           });
         } else {
-          toast.success('Payment successful! Your plan is now active.', {
-            description: `You're now on the ${result.plan_name} plan. All resources have been provisioned.`,
+          toast.success(isDowngradePayment ? 'Plan downgraded successfully.' : 'Payment successful! Your plan is now active.', {
+            description: `You're now on the ${result.plan_name} plan.${isDowngradePayment ? ' Some features may no longer be available.' : ' All resources have been provisioned.'}`,
             duration: 5000,
           });
         }
@@ -1505,9 +1517,9 @@ function CurrentPlanContent() {
           // Refresh queued upgrades list
           await fetchQueuedUpgrades();
         } else {
-          // Plan upgraded successfully - logout and redirect to login
+          // Plan changed successfully - logout and redirect to login
           // This ensures user gets fresh session with new plan data
-          toast.success('Plan upgraded successfully!', {
+          toast.success(isDowngradePayment ? 'Plan downgraded successfully!' : 'Plan upgraded successfully!', {
             description: 'You will be redirected to login to apply your new plan.',
             duration: 3000,
           });
@@ -1518,7 +1530,7 @@ function CurrentPlanContent() {
           // Wait a moment for the toast to show, then logout
           setTimeout(() => {
             logout();
-            router.push('/login?upgraded=true');
+            router.push(isDowngradePayment ? '/login?downgraded=true' : '/login?upgraded=true');
           }, 2000);
           return; // Exit early, no need to update local state
         }
@@ -1600,7 +1612,7 @@ function CurrentPlanContent() {
       const response = await api.post<CompanySettings>('/settings/payment-status', {
         payment_status: success ? 'success' : 'failed',
         payment_reference: success ? `PAY-${Date.now()}` : null,
-        payment_method: success ? 'card' : null,
+        payment_method: success ? 'razorpay' : null,
       });
 
       setCompanySettings(response.data);
@@ -1804,6 +1816,27 @@ function CurrentPlanContent() {
           </div>
         )}
 
+        {hasPendingChanges && currentChange && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-amber-800 font-medium">Plan Changes Pending</p>
+              <p className="text-amber-700 text-sm mt-0.5">
+                {daysRemaining !== null && (
+                  <>{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} remaining to review. </>
+                )}
+                Deadline: {formatISTDate(currentChange.deadline)}
+              </p>
+            </div>
+            <button
+              onClick={openReviewModal}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+            >
+              Review Changes
+            </button>
+          </div>
+        )}
+
         {/* Account Locked Warning */}
         {isLocked && (
           <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
@@ -1913,10 +1946,10 @@ function CurrentPlanContent() {
               <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial
                   ? (companySettings?.trial_start_date
-                      ? formatDate(companySettings.trial_start_date)
+                      ? formatISTDate(companySettings.trial_start_date)
                       : '-')
                   : (companySettings?.plan_start_date
-                      ? formatDate(companySettings.plan_start_date)
+                      ? formatISTDate(companySettings.plan_start_date)
                       : '-')
                 }
               </p>
@@ -1928,10 +1961,10 @@ function CurrentPlanContent() {
               <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial
                   ? (companySettings?.trial_end_date
-                      ? formatDate(companySettings.trial_end_date)
+                      ? formatISTDate(companySettings.trial_end_date)
                       : '-')
                   : (companySettings?.plan_expiry_date
-                      ? formatDate(companySettings.plan_expiry_date)
+                      ? formatISTDate(companySettings.plan_expiry_date)
                       : '-')
                 }
               </p>
@@ -2187,7 +2220,7 @@ function CurrentPlanContent() {
                   {companySettings?.last_synced_at && (
                     <div className="p-3 bg-gray-50 rounded-lg">
                       <p className="text-xs text-gray-500 mb-0.5">Last Synced</p>
-                      <p className="text-sm font-medium text-gray-900">{formatDate(companySettings.last_synced_at)}</p>
+                      <p className="text-sm font-medium text-gray-900">{formatISTDate(companySettings.last_synced_at)}</p>
                     </div>
                   )}
                 </div>
@@ -2202,9 +2235,9 @@ function CurrentPlanContent() {
             <div className="flex items-start sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
               <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600 flex-shrink-0" />
               <div>
-                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-amber-800">Pending Upgrades</h3>
+                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-amber-800">Pending Plan Changes</h3>
                 <p className="text-xs sm:text-sm text-amber-700">
-                  You have {queuedUpgrades.length} queued upgrade{queuedUpgrades.length > 1 ? 's' : ''} waiting to be applied
+                  You have {queuedUpgrades.length} queued plan change{queuedUpgrades.length > 1 ? 's' : ''} waiting to be applied
                 </p>
               </div>
             </div>
@@ -2244,13 +2277,13 @@ function CurrentPlanContent() {
                         <div>
                           <span className="text-gray-500">Auto-applies:</span>
                           <span className="ml-1 font-medium text-gray-900">
-                            {upgrade.auto_apply_date ? formatDate(upgrade.auto_apply_date) : 'On plan expiry'}
+                            {upgrade.auto_apply_date ? formatISTDate(upgrade.auto_apply_date) : 'On plan expiry'}
                           </span>
                         </div>
                         <div>
                           <span className="text-gray-500">Queued on:</span>
                           <span className="ml-1 font-medium text-gray-900">
-                            {upgrade.created_at ? formatDate(upgrade.created_at) : '-'}
+                            {upgrade.created_at ? formatISTDate(upgrade.created_at) : '-'}
                           </span>
                         </div>
                       </div>
@@ -2306,7 +2339,7 @@ function CurrentPlanContent() {
               </h2>
               {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
                 <p className="text-xs sm:text-sm text-amber-600 text-center mt-2">
-                  You have a pending upgrade queued. Cancel it above or apply it now to select a different plan.
+                  You have a pending plan change queued. Cancel it above or apply it now to select a different plan.
                 </p>
               )}
 
@@ -2436,7 +2469,7 @@ function CurrentPlanContent() {
                                 ? (plan.annualPrice ? '/year' : '/month')
                                 : (plan.monthlyPrice ? '/month' : '/year')}
                             </span>
-                            <span className="text-gray-400 text-xs ml-1">(+18% GST)</span>
+
                           </div>
                           {/* Show strikethrough price and discount badge when viewing yearly and both prices exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (plan.monthlyPrice * 12) > plan.annualPrice && (
@@ -2548,31 +2581,36 @@ function CurrentPlanContent() {
                     })()}
 
                     {/* Features Section - Expand on hover */}
-                    {plan.features.length > 0 && (
-                      <div className="mb-6">
-                        <ul className="space-y-2.5">
-                          {plan.features.slice(0, expandedFeaturesPlan === plan.id ? undefined : 4).map((feature, idx) => (
-                            <li key={idx} className="flex items-start gap-2.5">
-                              <Check className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
-                              <span className="text-gray-700 text-sm">{feature}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        {plan.features.length > 4 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setExpandedFeaturesPlan(expandedFeaturesPlan === plan.id ? null : plan.id);
-                            }}
-                            className="text-gray-400 hover:text-gray-600 text-sm mt-2 pl-6 text-left"
-                          >
-                            {expandedFeaturesPlan === plan.id
-                              ? 'Show less'
-                              : `+${plan.features.length - 4} more features`}
-                          </button>
-                        )}
-                      </div>
-                    )}
+                    {(() => {
+                      const displayFeatures = isYearly
+                        ? (plan.annualFeatures?.length ? plan.annualFeatures : plan.features)
+                        : (plan.monthlyFeatures?.length ? plan.monthlyFeatures : plan.features);
+                      return displayFeatures.length > 0 && (
+                        <div className="mb-6">
+                          <ul className="space-y-2.5">
+                            {displayFeatures.slice(0, expandedFeaturesPlan === plan.id ? undefined : 4).map((feature, idx) => (
+                              <li key={idx} className="flex items-start gap-2.5">
+                                <Check className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
+                                <span className="text-gray-700 text-sm">{feature}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          {displayFeatures.length > 4 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExpandedFeaturesPlan(expandedFeaturesPlan === plan.id ? null : plan.id);
+                              }}
+                              className="text-gray-400 hover:text-gray-600 text-sm mt-2 pl-6 text-left"
+                            >
+                              {expandedFeaturesPlan === plan.id
+                                ? 'Show less'
+                                : `+${displayFeatures.length - 4} more features`}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* Spacer to push button to bottom */}
                     <div className="flex-grow" />
@@ -2615,7 +2653,11 @@ function CurrentPlanContent() {
                       ) : isSelectedPending ? (
                         'Pending Payment'
                       ) : queuedUpgrades.length > 0 ? (
-                        'Upgrade Queued'
+                        (() => {
+                          const queuedPlan = plans.find(p => p.name === queuedUpgrades[0]?.new_plan_name);
+                          const queuedDirection = comparePlanTiers(currentPlan?.tier, queuedPlan?.tier);
+                          return queuedDirection === -1 ? 'Downgrade Queued' : 'Upgrade Queued';
+                        })()
                       ) : (!plan.monthlyPrice && !plan.annualPrice) ? (
                         'Contact Sales'
                       ) : (isYearly && !plan.annualPrice && plan.monthlyPrice) ? (
@@ -2918,8 +2960,8 @@ function CurrentPlanContent() {
                       <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Clock className="w-10 h-10 text-amber-600" />
                       </div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">Upgrade Queued!</h3>
-                      <p className="text-gray-600">Your payment was successful. The upgrade will apply automatically.</p>
+                      <h3 className="text-xl font-semibold text-gray-900 mb-2">{isDowngradePayment ? 'Downgrade Queued!' : 'Upgrade Queued!'}</h3>
+                      <p className="text-gray-600">Your payment was successful. The {isDowngradePayment ? 'downgrade' : 'upgrade'} will apply automatically.</p>
                     </div>
 
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
@@ -2935,7 +2977,7 @@ function CurrentPlanContent() {
                         <span className="text-gray-600">Auto-applies on:</span>
                         <span className="font-medium text-gray-900">
                           {transactionResult.auto_apply_date
-                            ? formatDate(transactionResult.auto_apply_date)
+                            ? formatISTDate(transactionResult.auto_apply_date)
                             : 'When current plan expires'}
                         </span>
                       </div>
@@ -3308,7 +3350,7 @@ function CurrentPlanContent() {
                   <div className="flex justify-between">
                     <span className="text-gray-500">Scheduled for:</span>
                     <span className="font-medium text-gray-900">
-                      {selectedQueuedUpgrade.auto_apply_date ? formatDate(selectedQueuedUpgrade.auto_apply_date) : 'On plan expiry'}
+                      {selectedQueuedUpgrade.auto_apply_date ? formatISTDate(selectedQueuedUpgrade.auto_apply_date) : 'On plan expiry'}
                     </span>
                   </div>
                   {selectedQueuedUpgrade.days_until_activation !== undefined && (
@@ -3322,7 +3364,7 @@ function CurrentPlanContent() {
                   <div className="flex justify-between">
                     <span className="text-gray-500">Queued on:</span>
                     <span className="font-medium text-gray-900">
-                      {selectedQueuedUpgrade.created_at ? formatDate(selectedQueuedUpgrade.created_at) : '-'}
+                      {selectedQueuedUpgrade.created_at ? formatISTDate(selectedQueuedUpgrade.created_at) : '-'}
                     </span>
                   </div>
                 </div>

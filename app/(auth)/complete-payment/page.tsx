@@ -1,5 +1,9 @@
 'use client';
 
+// MIRROR PAGE: This file and components/auth/SignUp.tsx share the same
+// plan display logic (quota rendering, feature list, formatQuotaValue, etc.).
+// Any changes made here must also be applied to SignUp.tsx and vice versa.
+
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -199,6 +203,7 @@ function CompletePaymentContent() {
           tenant_id: tenantId,
           plan_id: planDetails.id,
           billing_interval: billingInterval,
+          payment_method: 'razorpay',
           razorpay_payment_id: razorpayResult.razorpay_payment_id,
           razorpay_order_id: razorpayResult.razorpay_order_id,
           razorpay_signature: razorpayResult.razorpay_signature,
@@ -243,7 +248,9 @@ function CompletePaymentContent() {
     }
   };
 
-  // Format currency
+  const GST_RATE = 0.18;
+
+  // Format currency with up to 2 decimal places (trims trailing zeros)
   const formatCurrency = (amount: number, currency: string): string => {
     const currencySymbols: Record<string, string> = {
       'USD': '$',
@@ -252,7 +259,10 @@ function CompletePaymentContent() {
       'GBP': '\u00A3',
     };
     const symbol = currencySymbols[currency] || currency + ' ';
-    return `${symbol}${amount.toLocaleString()}`;
+    const formatted = amount % 1 === 0
+      ? amount.toLocaleString()
+      : amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return `${symbol}${formatted}`;
   };
 
   // Helper to get quota label
@@ -270,10 +280,11 @@ function CompletePaymentContent() {
   };
 
   // Helper to format quota value
-  const formatQuotaValue = (key: string, value: number | undefined): string => {
+  const formatQuotaValue = (key: string, value: number | string | undefined): string => {
     if (value === undefined || value === null) return 'Unlimited';
     if (value === -1) return 'Unlimited';
-    return value.toLocaleString();
+    if (typeof value === 'string' && value.toLowerCase() === 'unlimited') return 'Unlimited';
+    return Number(value).toLocaleString();
   };
 
   // --- Styles (matching SignUp.tsx payment step) ---
@@ -398,43 +409,67 @@ function CompletePaymentContent() {
           </div>
 
           {/* Price Display */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
-            <div>
-              <span style={{ fontSize: 14, color: '#6B7280' }}>Billing:</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginLeft: 8 }}>
-                {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
-              </span>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: 32, fontWeight: 700, color: '#111827' }}>
-                {formatCurrency(planDetails.base_price, planDetails.currency)}
-              </span>
-              <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
-                /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
-              </span>
-              {/* Strikethrough price and Save badge for annual plans */}
-              {billingInterval === 'ANNUAL' && planDetails.monthly_price && (planDetails.monthly_price * 12) > planDetails.base_price && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
-                  <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
-                    {formatCurrency(planDetails.monthly_price * 12, planDetails.currency)}
-                  </span>
-                  {planDetails.discount_percentage && planDetails.discount_percentage > 0 && (
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '2px 8px',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      backgroundColor: '#DCFCE7',
-                      color: '#15803D',
-                      borderRadius: 12
-                    }}>
-                      Save {Math.round(planDetails.discount_percentage)}%
+          {(() => {
+            const gstAmount = Math.round(planDetails.base_price * GST_RATE * 100) / 100;
+            const totalAmount = Math.round((planDetails.base_price + gstAmount) * 100) / 100;
+            return (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderTop: '1px solid #E5E7EB' }}>
+                  <div>
+                    <span style={{ fontSize: 14, color: '#6B7280' }}>Billing:</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: '#111827', marginLeft: 8 }}>
+                      {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
                     </span>
-                  )}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: 32, fontWeight: 700, color: '#111827' }}>
+                      {formatCurrency(planDetails.base_price, planDetails.currency)}
+                    </span>
+                    <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
+                      /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
+                    </span>
+                    {/* Strikethrough price and Save badge for annual plans */}
+                    {billingInterval === 'ANNUAL' && planDetails.monthly_price && (planDetails.monthly_price * 12) > planDetails.base_price && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
+                        <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
+                          {formatCurrency(planDetails.monthly_price * 12, planDetails.currency)}
+                        </span>
+                        {planDetails.discount_percentage && planDetails.discount_percentage > 0 && (
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            backgroundColor: '#DCFCE7',
+                            color: '#15803D',
+                            borderRadius: 12
+                          }}>
+                            Save {Math.round(planDetails.discount_percentage)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
+
+                {/* GST & Total Breakdown */}
+                <div style={{ padding: '12px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, color: '#6B7280' }}>Subtotal</span>
+                    <span style={{ fontSize: 13, color: '#374151' }}>{formatCurrency(planDetails.base_price, planDetails.currency)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, color: '#6B7280' }}>GST (18%)</span>
+                    <span style={{ fontSize: 13, color: '#374151' }}>{formatCurrency(gstAmount, planDetails.currency)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px dashed #E5E7EB' }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>Total</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{formatCurrency(totalAmount, planDetails.currency)}</span>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
 
           {/* Included Seats */}
           {planDetails.included_seats && (
@@ -452,7 +487,7 @@ function CompletePaymentContent() {
             <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {Object.entries(planDetails.quotas)
-                  .filter(([key]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key))
+                  .filter(([key, value]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key) && value !== 0 && value !== null && value !== undefined)
                   .map(([key, value]) => (
                   <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid #E5E7EB' }}>
                     <span style={{ fontSize: 13, color: '#6B7280' }}>{getQuotaLabel(key)}</span>
@@ -512,7 +547,7 @@ function CompletePaymentContent() {
           ) : (
             <>
               <CreditCard style={{ width: 20, height: 20 }} />
-              Pay {formatCurrency(planDetails.base_price, planDetails.currency)} - Razorpay
+              Pay {formatCurrency(Math.round((planDetails.base_price * (1 + GST_RATE)) * 100) / 100, planDetails.currency)} - Razorpay
             </>
           )}
         </button>

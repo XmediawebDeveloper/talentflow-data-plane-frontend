@@ -36,6 +36,7 @@ export interface Permission {
   canCreateAssessments: boolean;// Create Assessments
   canUpdateAssessments?: boolean;// Edit Assessments
   canDeleteAssessments?: boolean;// Delete Assessments
+  canDownloadAssessmentPDF?: boolean;// Download PDF reports for assessment results
 
   // Analytics & Reports
   canViewAnalytics: boolean;    // Reports & Analytics
@@ -75,6 +76,9 @@ export interface Permission {
   canManageApiManagement?: boolean;
   canManageBranding?: boolean;
   canManageSecuritySettings?: boolean;
+
+  // Teams
+  canViewTeams?: boolean;
 
   // RBAC06: Feature flags
   canViewScoring?: boolean;      // NEW: View resume scoring page/results
@@ -243,6 +247,7 @@ export const getPermissionsForRole = (role: UserRole): Permission => {
         canCreateAssessments: true,
         canUpdateAssessments: true,
         canDeleteAssessments: true,
+        canDownloadAssessmentPDF: true,
         // Analytics & Admin
         canViewAnalytics: true,
         canManageSettings: true,
@@ -282,6 +287,7 @@ export const getPermissionsForRole = (role: UserRole): Permission => {
         canCreateAssessments: true,
         canUpdateAssessments: true,
         canDeleteAssessments: true,
+        canDownloadAssessmentPDF: true,
         // Analytics & Admin
         canViewAnalytics: true,
         canManageSettings: false,
@@ -318,6 +324,7 @@ export const getPermissionsForRole = (role: UserRole): Permission => {
         canCreateAssessments: false,
         canUpdateAssessments: false,
         canDeleteAssessments: false,
+        canDownloadAssessmentPDF: false,
         // Analytics & Admin
         canViewAnalytics: true,
         canManageSettings: false,

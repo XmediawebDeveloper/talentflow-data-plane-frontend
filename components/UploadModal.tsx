@@ -7,6 +7,7 @@ import { Tenant } from '@/lib/types/tenant';
 import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { toast } from 'sonner';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 import ErrorModal from './ErrorModal';
 
@@ -847,7 +848,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                               </div>
                               {error.existingResume.uploadedAt && (
                                 <div className="text-[10px] sm:text-xs text-gray-500">
-                                  Uploaded: {new Date(error.existingResume.uploadedAt).toLocaleDateString()}
+                                  Uploaded: {formatISTDate(error.existingResume.uploadedAt)}
                                 </div>
                               )}
                             </div>

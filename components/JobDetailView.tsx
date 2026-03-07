@@ -21,45 +21,17 @@ import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
+import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandidate } from '@/lib/services/aiMatchService';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
 import { toast } from 'sonner';
 import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 
-// Helper function to format UTC date to IST
-const formatToIST = (dateString: string): string => {
-  const utcDate = new Date(dateString);
-  // Add 5 hours 30 minutes (IST offset)
-  const istTime = utcDate.getTime() + (5.5 * 60 * 60 * 1000);
-  const istDate = new Date(istTime);
-
-  const day = istDate.getUTCDate();
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = months[istDate.getUTCMonth()];
-  const year = istDate.getUTCFullYear();
-  const hours = istDate.getUTCHours();
-  const minutes = istDate.getUTCMinutes().toString().padStart(2, '0');
-  const ampm = hours >= 12 ? 'pm' : 'am';
-  const hour12 = hours % 12 || 12;
-
-  return `${day} ${month} ${year}, ${hour12.toString().padStart(2, '0')}:${minutes} ${ampm}`;
-};
-
-// Helper function to format an already-IST datetime (no offset needed)
-const formatISTDateTime = (dateString: string): string => {
-  const date = new Date(dateString);
-
-  const day = date.getDate();
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = months[date.getMonth()];
-  const year = date.getFullYear();
-  const hours = date.getHours();
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  const ampm = hours >= 12 ? 'pm' : 'am';
-  const hour12 = hours % 12 || 12;
-
-  return `${day} ${month} ${year}, ${hour12.toString().padStart(2, '0')}:${minutes} ${ampm}`;
-};
+// Legacy aliases — both now use the centralized IST formatter
+const formatToIST = formatIST;
+const formatISTDateTime = formatIST;
 
 // ✅ PERMISSIONS: Reusable Quick Action Button Component
 interface QuickActionButtonProps {
@@ -147,6 +119,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const router = useRouter();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
+  const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
 
   const handleEdit = () => {
     if (onEdit) {
@@ -191,6 +164,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // Assessment results state
   const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
+
+  // AI Talent Match state
+  const [aiMatchSessions, setAiMatchSessions] = useState<AIMatchSessionResponse[]>([]);
+  const [aiMatchCandidates, setAiMatchCandidates] = useState<MatchedCandidate[]>([]);
+  const [loadingAiMatch, setLoadingAiMatch] = useState(false);
 
   // ✅ PERMISSIONS: Permission checking function
   const hasPermission = (permission: string): boolean => {
@@ -243,6 +221,13 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   useEffect(() => {
     if (job.id && hasPlanFeature('assessment')) {
       fetchAssessmentResults();
+    }
+  }, [job.id, hasPlanFeature]);
+
+  // Fetch AI match data on component mount (only if plan includes ai_talent_match)
+  useEffect(() => {
+    if (job.id && hasPlanFeature('ai_talent_match')) {
+      fetchAiMatchData();
     }
   }, [job.id, hasPlanFeature]);
 
@@ -322,6 +307,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
         return {
           id: item.id,
+          resume_id: item.resume_id || '',
           candidateName: item.candidate_name || 'Unknown',
           email: item.candidate_email || '',
           phone: item.phone || '',
@@ -464,14 +450,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               scorePercentage: scorePercentage,
               passFail: result.passed ? 'Pass' : 'Fail',
               completedDate: result.completed_at
-                ? new Date(result.completed_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                ? formatISTDate(result.completed_at)
                 : result.status === 'pending' ? 'Not started' : 'In Progress',
               completionTime: completionTime,
               duration: duration,
               aiSummary: result.ai_evaluation?.summary || 'Assessment completed.',
               roundScores: roundScores,
               invitedDate: result.started_at
-                ? new Date(result.started_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+                ? formatISTDate(result.started_at)
                 : 'N/A',
               invitedBy: result.invite_source || 'System',
               inviteSource: result.invite_source || 'Manual',
@@ -496,7 +482,46 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results'>('overview');
+  // Fetch AI match sessions for this JD
+  const fetchAiMatchData = async () => {
+    setLoadingAiMatch(true);
+    try {
+      const response = await aiMatchService.listSessions({ jd_id: job.id, page_size: 100 });
+      const sessions = response.items || [];
+      setAiMatchSessions(sessions);
+
+      // listSessions returns sessions with results: [] — fetch each session individually for enriched candidates
+      const allCandidatesMap = new Map<string, MatchedCandidate>();
+      await Promise.all(
+        sessions.map(async (session) => {
+          try {
+            const { candidates } = await aiMatchService.getSession(session.id);
+            candidates.forEach((c) => {
+              const existing = allCandidatesMap.get(c.resumeId);
+              // Keep the one with the higher match score (from the most recent/best session)
+              if (!existing || c.matchScore > existing.matchScore) {
+                allCandidatesMap.set(c.resumeId, c);
+              }
+            });
+          } catch (err) {
+            console.warn(`Failed to fetch session ${session.id}:`, err);
+          }
+        })
+      );
+
+      // Sort by matchScore descending
+      const sorted = Array.from(allCandidatesMap.values()).sort((a, b) => b.matchScore - a.matchScore);
+      setAiMatchCandidates(sorted);
+    } catch (error) {
+      console.error('Failed to fetch AI match data:', error);
+      setAiMatchSessions([]);
+      setAiMatchCandidates([]);
+    } finally {
+      setLoadingAiMatch(false);
+    }
+  };
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match'>('overview');
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -575,11 +600,39 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   const handleAIMatchComplete = (results: any[]) => {
     setShowAIMatchPanel(false);
     toast.success(`AI Talent Match completed! Found ${results.length} matching candidates.`);
-    // Navigate to results page
-    if (onNavigateToAITalentMatch) {
-      sessionStorage.setItem('showResultsOnly', 'true');
-      onNavigateToAITalentMatch(job.id);
+    fetchAiMatchData();
+    setActiveTab('ai-talent-match');
+  };
+
+  // Score selected AI match candidates synchronously with floating progress indicator
+  const startAiMatchScoring = async (candidates: MatchedCandidate[]) => {
+    if (candidates.length === 0) return;
+    const scoringJobId = `aimatch-${job.id}-${Date.now()}`;
+    const initialItems = candidates.map((c) => ({
+      id: `${scoringJobId}-${c.resumeId}`,
+      resumeId: c.resumeId,
+      candidateName: c.name,
+      jobTitle: job.title,
+      jobId: job.id,
+      source: 'Internal DB' as const,
+    }));
+    startScoringJob(scoringJobId, job.title, initialItems);
+
+    for (const candidate of candidates) {
+      const itemId = `${scoringJobId}-${candidate.resumeId}`;
+      updateItemStatus(scoringJobId, itemId, 'Scoring in progress');
+      try {
+        const result = await scoringService.scoreResume(candidate.resumeId, job.id, 'internal-db');
+        updateItemStatus(scoringJobId, itemId, 'Scored successfully', {
+          score: result.overall_score,
+          scoredDateTime: new Date().toISOString(),
+        });
+      } catch (err: any) {
+        const errorMsg = err?.message || 'Scoring failed';
+        updateItemStatus(scoringJobId, itemId, 'Failed', { errorReason: errorMsg });
+      }
     }
+    fetchScoredResumes();
   };
 
   const handleAIMatchError = (error: string) => {
@@ -826,7 +879,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
                 {/* Posted Date with Time */}
                 <span>
-                  Posted {job.postedDate ? new Date(new Date(job.postedDate).getTime() + 19800000).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A'}
+                  Posted {job.postedDate ? formatISTDateTime(job.postedDate) : 'N/A'}
                 </span>
                 <span className="text-gray-300">•</span>
 
@@ -923,49 +976,24 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             {/* Action Buttons - Only for Published jobs */}
             {job.status === 'Published' && (
               <div className="flex items-center gap-2">
-                {/* JD13: Edit Button - COMMENTED OUT */}
-                {false && onEdit && (
+                {onDisable && (
                   <button
-                    onClick={handleEdit}
-                    disabled={job.usageStatus?.is_used}
-                    className={`px-4 py-2 rounded-lg transition-all flex items-center gap-2 ${
-                      job.usageStatus?.is_used
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-gray-700 text-white hover:bg-gray-800'
-                    }`}
-                    title={job.usageStatus?.is_used ? job.usageStatus.edit_restriction_reason : 'Edit this job description'}
+                    onClick={handleDisable}
+                    className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-all flex items-center gap-2"
+                    title="Disable this job description"
                   >
-                    <Edit className="w-4 h-4" />
-                    <span className="font-medium">Edit & Republish</span>
+                    <Ban className="w-4 h-4" />
+                    <span className="font-medium">Disable</span>
                   </button>
                 )}
                 {onArchive && (
                   <button
                     onClick={handleArchive}
                     className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
+                    title="Archive this job description"
                   >
                     <Archive className="w-4 h-4" />
                     <span className="font-medium">Archive</span>
-                  </button>
-                )}
-                {onDisable && (
-                  <button
-                    onClick={handleDisable}
-                    className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all flex items-center gap-2"
-                    title="Disable this JD"
-                  >
-                    <Ban className="w-4 h-4" />
-                    <span className="font-medium">Disable</span>
-                  </button>
-                )}
-                {/* Delete button - COMMENTED OUT */}
-                {false && onDelete && (
-                  <button
-                    onClick={handleDelete}
-                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
-                    title="Delete Job"
-                  >
-                    <Trash2 className="w-5 h-5" />
                   </button>
                 )}
               </div>
@@ -1081,6 +1109,28 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 {assessmentResults.length}
               </span>
               {activeTab === 'assessment-results' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+              )}
+            </button>
+          )}
+          {hasPlanFeature('ai_talent_match') && (
+            <button
+              onClick={() => setActiveTab('ai-talent-match')}
+              className={`px-6 py-4 text-sm transition-colors relative flex items-center gap-2 ${
+                activeTab === 'ai-talent-match'
+                  ? 'text-blue-600 bg-blue-50'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              AI Talent Match
+              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                activeTab === 'ai-talent-match'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-600'
+              }`}>
+                {aiMatchCandidates.length}
+              </span>
+              {activeTab === 'ai-talent-match' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
               )}
             </button>
@@ -1254,16 +1304,12 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* 2. AI Talent Match - Permission + Feature flag + Plan feature + JD Status */}
+              {/* 2. AI Talent Match - runs on-page, shows results in AI Talent Match tab */}
               {permissions.canRunAiMatch && aiTalentMatchAvailable && (
                 <QuickActionButton
                   icon={<Brain className="w-4 h-4" />}
                   label="AI Talent Match"
-                  onClick={() => {
-                    if (onNavigateToAITalentMatch) {
-                      onNavigateToAITalentMatch(job.id);
-                    }
-                  }}
+                  onClick={() => setShowAIMatchPanel(true)}
                   disabled={!features.ai_talent_match || job.status === 'Disabled'}
                   disabledTooltip={
                     !features.ai_talent_match
@@ -1293,7 +1339,18 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* 5. Add Applicants - Permission + Plan feature + Feature flag + JD Status */}
+              {/* 5. Resume Scoring - Score resumes in this JD page (shows popup, no navigation) */}
+              {permissions.canUploadResumes && hasPlanFeature('resume_scoring') && (
+                <QuickActionButton
+                  icon={<Target className="w-4 h-4" />}
+                  label="Resume Scoring"
+                  onClick={() => setShowSelectSourceModal(true)}
+                  disabled={job.status === 'Disabled'}
+                  disabledTooltip="Resume scoring is not available for disabled JDs"
+                />
+              )}
+
+              {/* 6. Add Applicants - Permission + Plan feature + Feature flag + JD Status */}
               {permissions.canUploadResumes && hasPlanFeature('resume_upload') && features.resume_upload && (
                 <QuickActionButton
                   icon={<UserPlus className="w-4 h-4" />}
@@ -1357,7 +1414,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   <div>
                     <div className="text-sm text-gray-900">Job published by {job.postedBy || 'System'}</div>
                     <div className="text-xs text-gray-500">
-                      {new Date(new Date(job.postedDate).getTime() + 19800000).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                      {formatISTDateTime(job.postedDate)}
                     </div>
                   </div>
                 </div>
@@ -1469,6 +1526,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             results={assessmentResults}
             jobTitle={job.title}
             jobId={job.id}
+            canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
             onViewResultDetail={(result) => {
               if (onViewAssessmentResult) {
                 onViewAssessmentResult(result, job.title);
@@ -1476,6 +1534,23 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             }}
           />
         </div>
+      )}
+
+      {/* AI Talent Match Tab Content */}
+      {activeTab === 'ai-talent-match' && (
+        <AIMatchTabContent
+          candidates={aiMatchCandidates}
+          scoredResumes={scoredResumes}
+          sessions={aiMatchSessions}
+          loading={loadingAiMatch}
+          canRunAiMatch={permissions.canRunAiMatch}
+          onRunMatch={() => setShowAIMatchPanel(true)}
+          onScoreSelected={(selected) => startAiMatchScoring(selected)}
+          onScoreAll={() => startAiMatchScoring(aiMatchCandidates.filter((c) => {
+            const scoredIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
+            return !scoredIds.has(c.resumeId);
+          }))}
+        />
       )}
 
       {/* Resume Upload Modal */}
@@ -1503,8 +1578,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
           jobId={job.id}
           onClose={() => setShowSelectSourceModal(false)}
           onScoringComplete={() => {
-            // Refresh scored resumes after scoring
+            setShowSelectSourceModal(false);
             fetchScoredResumes();
+            setActiveTab('scored-resumes');
           }}
         />
       )}
@@ -1597,7 +1673,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                         const htmlContent = `
                           <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 800px; line-height: 1.6;">
                             <h1 style="color: #1f2937; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 5px;">${title}</h1>
-                            <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px;">Version ${version}.0 | Generated on ${new Date().toLocaleDateString()}</p>
+                            <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px;">Version ${version}.0 | Generated on ${formatISTDate(new Date().toISOString())}</p>
                             <div style="color: #4b5563;">
                               ${jdContent
                                 .replace(/^### (.*$)/gm, '<h3 style="color: #4b5563; margin-top: 20px; font-size: 16px;">$1</h3>')
@@ -1896,5 +1972,227 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         />
       )}
     </main>
+  );
+}
+
+// ─── AI Match Tab Sub-component ──────────────────────────────────────────────
+function AIMatchTabContent({
+  candidates,
+  scoredResumes,
+  sessions,
+  loading,
+  canRunAiMatch,
+  onRunMatch,
+  onScoreSelected,
+  onScoreAll,
+}: {
+  candidates: MatchedCandidate[];
+  scoredResumes: any[];
+  sessions: AIMatchSessionResponse[];
+  loading: boolean;
+  canRunAiMatch: boolean;
+  onRunMatch: () => void;
+  onScoreSelected: (selected: MatchedCandidate[]) => void;
+  onScoreAll: () => void;
+}) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const scoredResumeIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
+
+  const toggleSelect = (resumeId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(resumeId)) next.delete(resumeId);
+      else next.add(resumeId);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === candidates.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(candidates.map((c) => c.resumeId)));
+  };
+
+  const unscoredCount = candidates.filter((c) => !scoredResumeIds.has(c.resumeId)).length;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
+          <p className="text-gray-500 text-sm">Loading AI match results...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (candidates.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <Brain className="w-16 h-16 text-gray-300 mb-4" />
+        <h3 className="text-lg font-medium text-gray-700 mb-2">No AI Talent Match Results</h3>
+        <p className="text-sm text-gray-500 max-w-sm">
+          Run an AI Talent Match session to find the best candidates for this role.
+        </p>
+        {canRunAiMatch && (
+          <button
+            onClick={onRunMatch}
+            className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors flex items-center gap-2"
+          >
+            <Sparkles className="w-4 h-4" />
+            Run AI Match
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  const selectedCandidates = candidates.filter((c) => selectedIds.has(c.resumeId));
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Brain className="w-5 h-5 text-purple-600" />
+            <h3 className="font-semibold text-gray-900">AI Talent Match Results</h3>
+            <span className="px-2.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">
+              {candidates.length} candidates
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500">
+              {sessions.length} session{sessions.length !== 1 ? 's' : ''}
+            </span>
+            {selectedIds.size > 0 && (
+              <button
+                onClick={() => onScoreSelected(selectedCandidates)}
+                className="px-3 py-1.5 bg-gray-700 text-white rounded-lg text-xs hover:bg-gray-800 transition-colors flex items-center gap-1.5"
+              >
+                <Target className="w-3 h-3" />
+                Score Selected ({selectedIds.size})
+              </button>
+            )}
+            {unscoredCount > 0 && (
+              <button
+                onClick={onScoreAll}
+                className="px-3 py-1.5 bg-gray-700 text-white rounded-lg text-xs hover:bg-gray-800 transition-colors flex items-center gap-1.5"
+              >
+                <Target className="w-3 h-3" />
+                Score All Unscored ({unscoredCount})
+              </button>
+            )}
+            {canRunAiMatch && (
+              <button
+                onClick={onRunMatch}
+                className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs hover:bg-purple-700 transition-colors flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3 h-3" />
+                Run New Match
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="px-4 py-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === candidates.length && candidates.length > 0}
+                    onChange={toggleAll}
+                    className="rounded border-gray-300"
+                  />
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Match Rating</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Candidate Name</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Skills</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Experience</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded By</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded Date</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attachments</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resume Scored</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {candidates.map((candidate, idx) => {
+                const isScored = scoredResumeIds.has(candidate.resumeId);
+                const score = candidate.matchScore;
+                const scoreColor = score >= 70 ? 'bg-green-500' : score >= 45 ? 'bg-yellow-500' : 'bg-red-400';
+                const uploadDate = candidate.uploadDate
+                  ? formatISTDate(candidate.uploadDate)
+                  : '—';
+
+                return (
+                  <tr key={candidate.resumeId} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(candidate.resumeId)}
+                        onChange={() => toggleSelect(candidate.resumeId)}
+                        className="rounded border-gray-300"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-7 h-7 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="w-14 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${scoreColor}`} style={{ width: `${Math.min(score, 100)}%` }} />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-900">{score}%</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{candidate.name}</p>
+                        {candidate.title && <p className="text-xs text-gray-500">{candidate.title}</p>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.email || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.phone || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.location || '—'}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        {candidate.skills.slice(0, 3).map((skill, i) => (
+                          <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">{skill}</span>
+                        ))}
+                        {candidate.skills.length > 3 && (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">+{candidate.skills.length - 3}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.experience || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{uploadDate}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.attachmentCount ?? 1}</td>
+                    <td className="px-4 py-3">
+                      {isScored ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                          <CheckCircle className="w-3 h-3" />
+                          Scored
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                          <XCircle className="w-3 h-3" />
+                          Not Scored
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }

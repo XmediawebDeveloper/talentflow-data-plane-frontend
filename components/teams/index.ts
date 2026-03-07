@@ -8,3 +8,4 @@ export { default as TeamDetailsModal } from './TeamDetailsModal';
 export { default as EmptyState } from './EmptyState';
 export { default as TeamAnalyticsDashboard } from './TeamAnalyticsDashboard';
 export { default as TeamMemberUsage } from './TeamMemberUsage';
+export { default as TeamUsageAnalytics } from './TeamUsageAnalytics';

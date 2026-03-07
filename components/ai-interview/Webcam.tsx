@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle, memo } from "react";
 
 interface WebcamProps {
   onStream?: (stream: MediaStream) => void;
@@ -14,7 +14,7 @@ export interface WebcamRef {
   getVideoElement: () => HTMLVideoElement | null;
 }
 
-export const Webcam = forwardRef<WebcamRef, WebcamProps>(function Webcam(
+export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
   { onStream, onVideoReady, className = "", showHandIndicator = false, isHandRaised = false },
   ref
 ) {
@@ -27,6 +27,9 @@ export const Webcam = forwardRef<WebcamRef, WebcamProps>(function Webcam(
   useImperativeHandle(ref, () => ({
     getVideoElement: () => videoRef.current,
   }));
+
+  // Guard: ensure onVideoReady is called exactly once even if both effects fire
+  const videoReadyCalledRef = useRef(false);
 
   useEffect(() => {
     const startWebcam = async () => {
@@ -53,8 +56,9 @@ export const Webcam = forwardRef<WebcamRef, WebcamProps>(function Webcam(
               console.log("✅ Webcam active");
               onStream?.(stream);
 
-              // Notify when video is fully ready for processing
-              if (videoRef.current) {
+              // Notify when video is fully ready for processing (guard against double-call)
+              if (videoRef.current && !videoReadyCalledRef.current) {
+                videoReadyCalledRef.current = true;
                 onVideoReady?.(videoRef.current);
               }
             });
@@ -75,10 +79,6 @@ export const Webcam = forwardRef<WebcamRef, WebcamProps>(function Webcam(
       }
     };
   }, []); // Only run once on mount
-
-  // Separate effect for callbacks to avoid recreating stream
-  // But only call onVideoReady once when active, not on every callback change
-  const videoReadyCalledRef = useRef(false);
 
   useEffect(() => {
     if (isActive && videoRef.current && streamRef.current) {
@@ -125,4 +125,4 @@ export const Webcam = forwardRef<WebcamRef, WebcamProps>(function Webcam(
       )}
     </div>
   );
-});
+}));

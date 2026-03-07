@@ -4,12 +4,12 @@
 
 import api, { setTokens, clearTokens, handleApiError } from './api';
 
-const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
 
 /**
  * Returns the correct login URL preserving org context.
  * - Localhost: /login?org=<subdomain>
- * - Production subdomain (myorg.0sms.com): https://myorg.0sms.com/login
+ * - Production subdomain (myorg.talentflow.data.mo.vc): https://myorg.talentflow.data.mo.vc/login
  */
 export const getLoginUrl = (): string => {
   if (typeof window === 'undefined') return '/login';
@@ -38,8 +38,8 @@ export const getLoginUrl = (): string => {
     return '/login';
   }
 
-  // ── Production subdomain (myorg.0sms.com) ─────────────────────────────────
-  // Extract subdomain from hostname: myorg.0sms.com → myorg
+  // ── Production subdomain (myorg.talentflow.data.mo.vc) ─────────────────────────────────
+  // Extract subdomain from hostname: myorg.talentflow.data.mo.vc → myorg
   if (hostname.endsWith(`.${BASE_DOMAIN}`)) {
     const subdomain = hostname.slice(0, -(BASE_DOMAIN.length + 1));
     if (subdomain) return `https://${subdomain}.${BASE_DOMAIN}/login`;
@@ -101,6 +101,8 @@ export interface User {
     can_view_billing?: boolean;
     can_view_invoices?: boolean;
     can_view_usage?: boolean;
+    // Teams
+    can_view_teams?: boolean;
     // RBAC06: Feature flags permissions - GRANULAR (VIEW + RUN)
     can_view_scoring?: boolean;      // NEW: View resume scoring page/results
     can_run_scoring?: boolean;       // Run scoring operations
@@ -125,6 +127,7 @@ export interface User {
     can_view_assessments?: boolean;
     can_update_assessments?: boolean;
     can_delete_assessments?: boolean;
+    can_download_assessment_pdf?: boolean;
   };
   // RBAC06: Feature flags
   feature_flags?: FeatureFlags;

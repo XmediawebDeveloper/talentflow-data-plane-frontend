@@ -1,7 +1,8 @@
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import {
@@ -16,6 +17,7 @@ interface AssessmentResultsProps {
   assessmentId: string;
   assessmentTitle: string;
   jdTitle?: string;
+  canDownloadPDF?: boolean;
 }
 
 interface CandidateResult {
@@ -34,6 +36,7 @@ interface CandidateResult {
   coding_score?: number; // Coding round score percentage
   hr_score?: number; // HR round score percentage
   status: 'Completed' | 'In Progress' | 'Pending';
+  scoring_status?: string;  // "pending", "processing", "completed", "error"
   completedDate: string;
   duration: string;
   sent_at?: string;
@@ -72,12 +75,14 @@ interface QuestionResult {
   type: 'multiple-choice' | 'text' | 'coding';
 }
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle, canDownloadPDF = false }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
+  const initialLoadDone = useRef(false);
   const [apiStats, setApiStats] = useState<{ completed_count: number; in_progress_count: number; pending_count: number; average_score: number | null }>({ completed_count: 0, in_progress_count: 0, pending_count: 0, average_score: null });
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
@@ -237,7 +242,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Fetch results from API with server-side pagination and filters
   useEffect(() => {
     const fetchResults = async () => {
-      setIsLoading(true);
+      if (!initialLoadDone.current) {
+        setIsLoading(true);
+      } else {
+        setIsFetching(true);
+      }
       try {
         // Build server-side filter parameters
         const params: any = {
@@ -261,29 +270,31 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           params.passed = false;
         }
 
-        // Date range filter
-        if (dateFrom) params.date_from = dateFrom;
-        if (dateTo) params.date_to = dateTo;
+        // Date range filter — append time so FastAPI parses as valid datetime
+        if (dateFrom) params.date_from = `${dateFrom}T00:00:00`;
+        if (dateTo) params.date_to = `${dateTo}T23:59:59`;
 
         const response = await assessmentService.listResults(assessmentId, params);
         if (response?.items) {
           // Map API response to component format
           const mapped: CandidateResult[] = response.items.map((item: any, index: number) => {
-            // Determine status - mark as "In Progress" or "Completed"
+            // Determine status: attempt status + scoring status
+            const scoringStatus: string = item.scoring_status || 'pending';
             let status: 'Completed' | 'In Progress' | 'Pending' = 'Completed';
             if (item.status === 'pending') {
               status = 'Pending';
             } else if (item.status === 'in_progress') {
               status = 'In Progress';
             } else if (item.status === 'completed') {
-              status = 'Completed';
+              // Attempt done — but only show Completed once AI scoring is also done
+              status = scoringStatus === 'completed' ? 'Completed' : 'In Progress';
             }
 
-            // Calculate scores using the formula: (total_marks_in_round / total_marks_of_round) * 100
-            // The API returns scores as percentages already, so we use them directly
-            const tech_score = item.technical_score != null ? Math.round(Number(item.technical_score)) : undefined;
-            const coding_score = item.coding_score != null ? Math.round(Number(item.coding_score)) : undefined;
-            const hr_score = item.hr_score != null ? Math.round(Number(item.hr_score)) : undefined;
+            // Hide scores while AI scoring is still running
+            const scoringDone = scoringStatus === 'completed';
+            const tech_score = scoringDone && item.technical_score != null ? Math.round(Number(item.technical_score)) : undefined;
+            const coding_score = scoringDone && item.coding_score != null ? Math.round(Number(item.coding_score)) : undefined;
+            const hr_score = scoringDone && item.hr_score != null ? Math.round(Number(item.hr_score)) : undefined;
 
             // Format duration properly
             let duration = '-';
@@ -309,13 +320,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               email: item.candidate_email || '',
               phone: item.candidate_phone || '',
               inviteSource: item.invite_source || 'Manual',
-              score: Math.round(Number(item.overall_score) || 0),
+              score: scoringDone ? Math.round(Number(item.overall_score) || 0) : 0,
               totalScore: 100,
-              percentage: Math.round(Number(item.overall_score) || 0),
+              percentage: scoringDone ? Math.round(Number(item.overall_score) || 0) : 0,
               tech_score,
               coding_score,
               hr_score,
               status,
+              scoring_status: scoringStatus,
               sent_at: item.sent_at || undefined,
               started_at: item.started_at || undefined,
               completed_at: item.completed_at || undefined,
@@ -323,14 +335,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               completedDate: (() => {
                 const dateStr = item.completed_at || item.started_at;
                 if (!dateStr) return status === 'Pending' ? 'Not started' : 'N/A';
-                // Convert UTC to IST and format as date
-                const date = new Date(dateStr);
-                return date.toLocaleDateString('en-US', {
-                  timeZone: 'Asia/Kolkata',
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric'
-                });
+                return formatISTDate(dateStr);
               })(),
               duration,
               sections: [
@@ -358,11 +363,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           // Set total from server for pagination
           setTotalItems(response.total || mapped.length);
 
-          // Set stats from API
+          // Set stats from mapped data so "processing" attempts show as In Progress
           setApiStats({
-            completed_count: response.completed_count || mapped.filter((c: CandidateResult) => c.status === 'Completed').length,
-            in_progress_count: response.in_progress_count || mapped.filter((c: CandidateResult) => c.status === 'In Progress').length,
-            pending_count: response.pending_count || mapped.filter((c: CandidateResult) => c.status === 'Pending').length,
+            completed_count: mapped.filter((c: CandidateResult) => c.status === 'Completed').length,
+            in_progress_count: mapped.filter((c: CandidateResult) => c.status === 'In Progress').length,
+            pending_count: mapped.filter((c: CandidateResult) => c.status === 'Pending').length,
             average_score: response.average_score ? Math.round(Number(response.average_score)) : null
           });
         }
@@ -373,11 +378,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         setTotalItems(0);
       } finally {
         setIsLoading(false);
+        setIsFetching(false);
+        initialLoadDone.current = true;
       }
     };
 
     fetchResults();
-  }, [assessmentId, currentPage, pageSize, searchQuery, statusFilter, passFailFilter]);
+  }, [assessmentId, currentPage, pageSize, searchQuery, statusFilter, passFailFilter, dateFrom, dateTo]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -390,16 +397,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   const formatTimelineDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
-    const dateWithZ = dateStr + (dateStr.includes('Z') ? '' : 'Z');
-    const date = new Date(dateWithZ);
-    return date.toLocaleString('en-US', {
-      timeZone: 'Asia/Kolkata',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
+    return formatIST(dateStr);
   };
 
   // Handle delete result
@@ -807,8 +805,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </p>
             </div>
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-              {/* AS-26: Bulk PDF Download Button */}
-              {selectedRows.length > 0 && (
+              {/* AS-26: Bulk PDF Download Button — only for users with download_pdf permission */}
+              {canDownloadPDF && selectedRows.length > 0 && (
                 <button
                   onClick={handleDownloadBulkPDFs}
                   disabled={downloadingBulkPDF}
@@ -1092,7 +1090,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         {/* Candidates Results Table */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
-            <h2 className="text-sm sm:text-base font-medium text-gray-900">Candidate Results</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm sm:text-base font-medium text-gray-900">Candidate Results</h2>
+              {isFetching && (
+                <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+              )}
+            </div>
             <div className="text-xs sm:text-sm text-gray-500">
               {selectedRows.length > 0 && `${selectedRows.length} selected`}
             </div>
@@ -1389,15 +1392,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.status !== 'Pending' && (
                           <button
                             onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
-                            className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
+                            className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
                             title="View Details"
                           >
-                            <Award className="w-3 h-3 flex-shrink-0" />
+                            <Eye className="w-3.5 h-3 flex-shrink-0.5 shrink-0" />
                             <span className="hidden sm:inline">View Details</span>
                           </button>
                           )}
-                          {/* AS-25: PDF Download Button */}
-                          {candidate.status === 'Completed' ? (
+                          {/* AS-25: PDF Download Button — only for users with download_pdf permission */}
+                          {canDownloadPDF && candidate.status === 'Completed' ? (
                             <button
                               onClick={() => handleDownloadPDF(candidate.id, candidate.name)}
                               disabled={downloadingPDF === candidate.id}

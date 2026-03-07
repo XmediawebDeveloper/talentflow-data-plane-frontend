@@ -170,7 +170,7 @@ export const handleUnauthorized = () => {
   if (typeof window !== 'undefined') {
     // Import getLoginUrl inline to avoid circular dependency
     // (api.ts is imported by authService.ts which defines getLoginUrl)
-    const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+    const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
     const hostname = window.location.hostname;
     const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
 
@@ -188,7 +188,7 @@ export const handleUnauthorized = () => {
           if (sub) loginUrl = `/login?org=${sub}`;
         }
       } else if (hostname.endsWith(`.${BASE_DOMAIN}`)) {
-        // Production subdomain: myorg.0sms.com → https://myorg.0sms.com/login
+        // Production subdomain: myorg.talentflow.data.mo.vc → https://myorg.talentflow.data.mo.vc/login
         const subdomain = hostname.slice(0, -(BASE_DOMAIN.length + 1));
         if (subdomain) loginUrl = `https://${subdomain}.${BASE_DOMAIN}/login`;
       }
@@ -304,6 +304,22 @@ export const dispatchUnitsConsumed = () => {
   if (typeof window !== 'undefined') {
     console.log('[API] Dispatching unitsConsumed event');
     window.dispatchEvent(new CustomEvent(UNITS_CONSUMED_EVENT));
+  }
+};
+
+// Custom event for plan change pending (403 SUSPENDED or WebSocket push)
+export const PLAN_CHANGE_PENDING_EVENT = 'plan-change-pending';
+
+export interface PlanChangePendingDetail {
+  notification_id?: string;
+  change_type?: string;
+  deadline?: string;
+  message?: string;
+}
+
+export const dispatchPlanChangePendingEvent = (detail: PlanChangePendingDetail) => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(PLAN_CHANGE_PENDING_EVENT, { detail }));
   }
 };
 
@@ -434,7 +450,14 @@ api.interceptors.response.use(
 
     // Handle SUBSCRIPTION_INACTIVE error (403 with specific error_code)
     if (error.response?.status === 403) {
-      const detail = error.response.data as { detail?: SubscriptionInactiveDetail };
+      const detail = error.response.data as { detail?: SubscriptionInactiveDetail & { error_type?: string } };
+
+      // Check if suspension is due to plan changes (SUSPENDED error_type)
+      if (detail?.detail?.error_type === 'SUSPENDED') {
+        dispatchPlanChangePendingEvent({ message: detail?.detail?.message });
+        return Promise.reject(error);
+      }
+
       if (detail?.detail?.error_code === 'SUBSCRIPTION_INACTIVE') {
         // Skip modal dispatch if user is already on the subscription page (where they can renew)
         const isOnSubscriptionPage = typeof window !== 'undefined' &&

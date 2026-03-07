@@ -9,6 +9,7 @@ import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface AdminDashboardProps {
   user?: User;
@@ -220,9 +221,9 @@ export default function AdminDashboard({
                 <p className="text-xs text-gray-500 mb-1">Trial Ends</p>
                 <p className="text-sm font-semibold text-gray-900">
                   {quotaData?.trial_info?.trial_end_date
-                    ? new Date(quotaData.trial_info.trial_end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    ? formatISTDate(quotaData.trial_info.trial_end_date)
                     : quotaData?.trial_end_date
-                      ? new Date(quotaData.trial_end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                      ? formatISTDate(quotaData.trial_end_date)
                       : '-'}
                 </p>
               </div>

@@ -20,6 +20,7 @@ import {
   Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatIST } from '@/lib/utils/dateUtils';
 import {
   unitPoolService,
   UnitType,
@@ -248,7 +249,7 @@ export default function UnitAdjustmentModal({
                           </div>
                           <div className="text-right text-xs text-gray-400">
                             <p>{entry.actor_email || entry.actor_type}</p>
-                            <p>{new Date(entry.created_at).toLocaleString()}</p>
+                            <p>{formatIST(entry.created_at)}</p>
                             <p className="mt-1 text-gray-500">
                               {entry.balance_before} → {entry.balance_after}
                             </p>

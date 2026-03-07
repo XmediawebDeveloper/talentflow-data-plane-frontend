@@ -27,48 +27,36 @@ const PlanFeaturesContext = createContext<PlanFeaturesContextType>({
   loading: true,
 });
 
-// Check if a quota has an active subscription limit
-function hasActiveQuota(quotaInfo?: { subscription?: { limit: number | string } }): boolean {
-  if (!quotaInfo) return false;
-  const limit = quotaInfo.subscription?.limit;
-  if (limit === undefined || limit === null) return false;
-  if (typeof limit === 'string') return limit.toLowerCase() === 'unlimited';
-  return limit > 0;
-}
-
-// Normalize a single string to lowercase snake_case
-function toSnakeCase(str: string): string {
-  return str
-    .replace(/([a-z])([A-Z])/g, '$1_$2')
-    .replace(/[-\s]+/g, '_')
-    .toLowerCase();
-}
-
-// Extract all feature keys from the API features array
-// The API may return: strings, or objects with feature_key/feature_name/name
-function extractFeatureKeys(features: any[]): Set<string> {
-  const keys = new Set<string>();
-  for (const f of features) {
-    if (typeof f === 'string') {
-      keys.add(toSnakeCase(f));
-    } else if (typeof f === 'object' && f !== null) {
-      if (f.is_enabled === false) continue;
-      if (f.feature_key) keys.add(toSnakeCase(f.feature_key));
-      if (f.feature_name) keys.add(toSnakeCase(f.feature_name));
-      if (f.name) keys.add(toSnakeCase(f.name));
-    }
-  }
-  return keys;
-}
-
-// Boolean features available per plan tier (mirrors backend PLAN_FEATURES)
-// Quota-based features (resume_upload, resume_scoring, assessment, ai_interview)
-// are determined from quota data, NOT from this map.
-const TIER_BOOLEAN_FEATURES: Record<string, PlanFeatureKey[]> = {
-  starter: [],
-  professional: ['ai_talent_match', 'teams'],
-  enterprise: ['ai_talent_match', 'teams', 'api_access', 'sso', 'priority_support'],
+// Normalizes API feature_key values to the PlanFeatureKey used in the frontend.
+// Needed because the control plane API uses different key names for some features.
+const API_KEY_NORMALIZE: Record<string, string> = {
+  assessments: 'assessment',
+  ai_interviews: 'ai_interview',
+  'sso_(single_sign-on)': 'sso',
+  sso_integration: 'sso',
 };
+
+// Resolve which features are enabled using the features[] array from /quota-status.
+//
+// Decision logic per API contract:
+//   1. is_enabled == false               → BLOCK (not in plan, or admin override)
+//   2. is_enabled == true, quota_key set → check quotas[quota_key].status
+//        EXCEEDED                        → BLOCK (quota exhausted)
+//        OK / APPROACHING / WARNING / CRITICAL → ALLOW
+//   3. is_enabled == true, quota_key null → ALLOW (boolean feature, no metering)
+function resolveEnabledFeatures(
+  features: { feature_key: string; is_enabled: boolean; quota_key: string | null }[],
+  quotas: Record<string, { status?: string } | undefined>
+): Set<string> {
+  const enabled = new Set<string>();
+  for (const f of features) {
+    if (!f.is_enabled) continue;
+    if (f.quota_key !== null && quotas[f.quota_key]?.status === 'EXCEEDED') continue;
+    const key = API_KEY_NORMALIZE[f.feature_key] ?? f.feature_key;
+    enabled.add(key);
+  }
+  return enabled;
+}
 
 export function PlanFeaturesProvider({ children }: { children: React.ReactNode }) {
   const { quotaData, loading: quotaLoading } = useQuota();
@@ -89,45 +77,25 @@ export function PlanFeaturesProvider({ children }: { children: React.ReactNode }
       };
     }
 
-    const quotas = quotaData.quotas || {};
+    const enabled = resolveEnabledFeatures(
+      quotaData.features ?? [],
+      quotaData.quotas ?? {}
+    );
 
-    // 1. Try to get boolean features from plan_info.features (Admin API)
-    const rawFeatures = quotaData.plan_info?.features || [];
-    const planFeatures = extractFeatureKeys(rawFeatures);
+    console.log('[PlanFeatures] Enabled features from /quota-status:', [...enabled]);
 
-    // 2. Fallback: derive boolean features from plan_tier if features array is empty
-    if (planFeatures.size === 0 && quotaData.plan_info?.plan_tier) {
-      const tier = quotaData.plan_info.plan_tier.toLowerCase();
-      const tierFeatures = TIER_BOOLEAN_FEATURES[tier] || [];
-      for (const f of tierFeatures) {
-        planFeatures.add(f);
-      }
-      if (tierFeatures.length > 0) {
-        console.log('[PlanFeatures] Derived from plan_tier:', tier, '→', tierFeatures);
-      }
-    }
-
-    // Debug logging
-    console.log('[PlanFeatures] Raw API features:', rawFeatures);
-    console.log('[PlanFeatures] Plan tier:', quotaData.plan_info?.plan_tier);
-    console.log('[PlanFeatures] Resolved feature keys:', [...planFeatures]);
-
-    const resolved = {
+    return {
       seats: true,
-      resume_upload: hasActiveQuota(quotas.RU),
-      resume_scoring: hasActiveQuota(quotas.RS),
-      assessment: hasActiveQuota(quotas.AS),
-      ai_interview: hasActiveQuota(quotas.AIU),
-      api_access: planFeatures.has('api_access'),
-      sso: planFeatures.has('sso'),
-      priority_support: planFeatures.has('priority_support'),
-      ai_talent_match: planFeatures.has('ai_talent_match'),
-      teams: planFeatures.has('teams'),
+      resume_upload: enabled.has('resume_upload'),
+      resume_scoring: enabled.has('resume_scoring'),
+      assessment: enabled.has('assessment'),
+      ai_interview: enabled.has('ai_interview'),
+      api_access: enabled.has('api_access'),
+      sso: enabled.has('sso'),
+      priority_support: enabled.has('priority_support'),
+      ai_talent_match: enabled.has('ai_talent_match'),
+      teams: enabled.has('teams'),
     };
-
-    console.log('[PlanFeatures] Final:', resolved);
-
-    return resolved;
   }, [quotaData]);
 
   const hasPlanFeature = useMemo(() => {

@@ -6,6 +6,7 @@ import InviteToAssessmentModal from './InviteToAssessmentModal';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
@@ -296,8 +297,7 @@ export default function ScoredResumesTable({
           typeof cert === 'string' ? cert : (cert?.name || '')
         ).join(', ') || '';
       case 'scoredDate':
-        const d = new Date(resume.scoredDate);
-        return `${d.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} ${d.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true })}`;
+        return formatIST(resume.scoredDate);
       case 'scoredBy':
         return resume.scoredBy || '';
       case 'tenantName':
@@ -369,7 +369,7 @@ export default function ScoredResumesTable({
       </head>
       <body>
         <h2>${jobTitle} - Scored Resumes</h2>
-        <p>Exported: ${new Date().toLocaleString()}</p>
+        <p>Exported: ${formatIST(new Date().toISOString())}</p>
         <p>Total Records: ${dataToExport.length}</p>
         <table>
           <thead>
@@ -880,28 +880,11 @@ export default function ScoredResumesTable({
                     );
                   }
                   if (col.id === 'scoredDate') {
-                    const date = new Date(resume.scoredDate);
                     return (
                       <td key={col.id} className="py-3 px-4">
                         <div className="flex items-center gap-1 text-sm text-gray-600">
                           <Calendar className="w-3.5 h-3.5" />
-                          <span>
-                            {date.toLocaleDateString('en-US', {
-                              timeZone: 'Asia/Kolkata',
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
-                            {' '}
-                            <span className="text-gray-400">
-                              {date.toLocaleTimeString('en-US', {
-                                timeZone: 'Asia/Kolkata',
-                                hour: 'numeric',
-                                minute: '2-digit',
-                                hour12: true
-                              })}
-                            </span>
-                          </span>
+                          <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
                         </div>
                       </td>
                     );
@@ -1087,31 +1070,12 @@ export default function ScoredResumesTable({
                   }
                 </div>
               )}
-              {enabledColumns.find(c => c.id === 'scoredDate') && (() => {
-                const date = new Date(resume.scoredDate);
-                return (
+              {enabledColumns.find(c => c.id === 'scoredDate') && (
                   <div className="flex items-center gap-2 text-gray-600">
                     <Calendar className="w-4 h-4" />
-                    <span>
-                      {date.toLocaleDateString('en-US', {
-                        timeZone: 'Asia/Kolkata',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}
-                      {' '}
-                      <span className="text-gray-400">
-                        {date.toLocaleTimeString('en-US', {
-                          timeZone: 'Asia/Kolkata',
-                          hour: 'numeric',
-                          minute: '2-digit',
-                          hour12: true
-                        })}
-                      </span>
-                    </span>
+                    <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
                   </div>
-                );
-              })()}
+              )}
               {enabledColumns.find(c => c.id === 'scoredBy') && (
                 <div className="text-gray-600">
                   <span className="text-gray-500">Scored by:</span> {resume.scoredBy}

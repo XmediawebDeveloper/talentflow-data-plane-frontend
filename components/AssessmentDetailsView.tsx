@@ -6,6 +6,7 @@ import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import VersionBadge from './VersionBadge';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -256,20 +257,12 @@ export default function AssessmentDetailsView({
                   <span>{assessment.candidates || 0} candidates</span>
                   {assessment.created_at && (
                     <span>
-                      Created {(() => {
-                        const dateWithZ = assessment.created_at + (assessment.created_at.includes('Z') ? '' : 'Z');
-                        const date = new Date(dateWithZ);
-                        return `${date.toLocaleDateString('en-IN', { timeZone: INDIA_TIMEZONE, month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { timeZone: INDIA_TIMEZONE, hour: '2-digit', minute: '2-digit', hour12: true })}`;
-                      })()}
+                      Created {formatIST(assessment.created_at)}
                     </span>
                   )}
                   {assessment.updated_at && (
                     <span>
-                      Last Updated {(() => {
-                        const dateWithZ = assessment.updated_at + (assessment.updated_at.includes('Z') ? '' : 'Z');
-                        const date = new Date(dateWithZ);
-                        return `${date.toLocaleDateString('en-IN', { timeZone: INDIA_TIMEZONE, month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { timeZone: INDIA_TIMEZONE, hour: '2-digit', minute: '2-digit', hour12: true })}`;
-                      })()}
+                      Last Updated {formatIST(assessment.updated_at)}
                     </span>
                   )}
                 </div>
@@ -793,17 +786,7 @@ export default function AssessmentDetailsView({
 
                         const statusBadge = getStatusBadge();
                         const activityDate = activity.sent_at || activity.created_at;
-                        const formattedDate = activityDate ? (() => {
-                          const dateWithZ = activityDate + (activityDate.includes('Z') ? '' : 'Z');
-                          return new Date(dateWithZ).toLocaleString('en-IN', {
-                            timeZone: 'Asia/Kolkata',
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true
-                          });
-                        })() : 'N/A';
+                        const formattedDate = activityDate ? formatIST(activityDate) : 'N/A';
 
                         return (
                           <div key={activity.id} className="bg-gray-50 rounded-lg p-2.5 sm:p-3 lg:p-4 hover:bg-gray-100 transition-colors">
@@ -1077,12 +1060,7 @@ export default function AssessmentDetailsView({
                   const info = getActivityInfo();
                   const ActivityIcon = info.icon;
                   const activityDate = activity.completed_at || activity.started_at || activity.created_at;
-                  const formattedDate = activityDate ? (() => {
-                    const dateWithZ = activityDate + (activityDate.includes('Z') ? '' : 'Z');
-                    return new Date(dateWithZ).toLocaleString('en-IN', {
-                      timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true
-                    });
-                  })() : 'N/A';
+                  const formattedDate = activityDate ? formatIST(activityDate) : 'N/A';
 
                   return (
                     <div key={activity.id} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors">
@@ -1159,17 +1137,7 @@ export default function AssessmentDetailsView({
               <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
                 {versionHistory.map((version: any, idx: number) => {
                   const isCurrentVersion = idx === 0;
-                  const dateWithZ = version.created_at + (version.created_at.includes('Z') ? '' : 'Z');
-                  const date = new Date(dateWithZ);
-                  const versionDate = date.toLocaleString('en-IN', {
-                    timeZone: INDIA_TIMEZONE, // IST = UTC+5:30
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                  });
+                  const versionDate = formatIST(version.created_at);
 
                   return (
                     <div key={version.id} className="space-y-4">

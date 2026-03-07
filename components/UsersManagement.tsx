@@ -5,6 +5,7 @@ import { userService, ApiUser, UserPermissions } from '../services/userService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface UsersManagementProps {
   currentUser?: User;
@@ -737,15 +738,6 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
     }
   };
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr || dateStr === '-') return '-';
-    try {
-      return new Date(dateStr).toLocaleDateString();
-    } catch {
-      return dateStr;
-    }
-  };
-
   return (
     <main className="flex-1 p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header */}
@@ -917,7 +909,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <Calendar className="w-4 h-4" />
-                      {formatDate(user.last_login)}
+                      {user.last_login && user.last_login !== '-' ? formatISTDate(user.last_login) : '-'}
                     </div>
                   </td>
                   <td className="px-6 py-4">

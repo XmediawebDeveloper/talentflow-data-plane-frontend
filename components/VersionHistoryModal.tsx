@@ -1,5 +1,6 @@
 'use client'
 
+import { formatIST } from '@/lib/utils/dateUtils';
 import { X, Download, Clock, User, FileText, History, Briefcase } from 'lucide-react';
 import { ResumeVersion } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
@@ -37,20 +38,6 @@ export default function VersionHistoryModal({
   const displayTitle = isJobVersion ? jobTitle : candidateName;
   const versionData = isJobVersion ? versionHistory : versions;
 
-  const formatDate = (dateString: string) => {
-    // Add Z suffix if not present to treat as UTC
-    const utcDateString = dateString && !dateString.includes('Z') ? dateString + 'Z' : dateString;
-    const date = new Date(utcDateString);
-    return date.toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
 
   const getRelativeTime = (dateString: string) => {
     // Add Z suffix if not present to treat as UTC
@@ -152,7 +139,7 @@ export default function VersionHistoryModal({
                             <div className="flex items-center gap-3 text-xs text-gray-600">
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
-                                {formatDate(version.uploadDate || version.date || version.timestamp)}
+                                {formatIST(version.uploadDate || version.date || version.timestamp)}
                               </span>
                               {version.size && (
                                 <>
@@ -222,7 +209,7 @@ export default function VersionHistoryModal({
                         </div>
                         <span className="text-gray-300">•</span>
                         <span className="text-xs text-gray-500">
-                          {formatDate(version.uploadDate || version.date || version.timestamp)}
+                          {formatIST(version.uploadDate || version.date || version.timestamp)}
                         </span>
                       </div>
                     </div>

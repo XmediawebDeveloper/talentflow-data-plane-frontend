@@ -11,6 +11,7 @@ import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettings
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
@@ -19,6 +20,8 @@ const ROUND_LABELS: Record<string, string> = {
   culture_fit: 'Culture Fit',
   leadership: 'Leadership',
   problem_solving: 'Problem Solving',
+  must_have_skills: 'Must-Have Skills',
+  nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
 type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'processing' | 'audit' | 'consent' | 'settings';
@@ -497,8 +500,8 @@ export default function AIInterview() {
               className="flex items-center gap-2 bg-gray-800 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg hover:bg-gray-900 transition-colors text-xs sm:text-sm"
             >
               <Settings className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-              <span className="hidden sm:inline">AI Interview Configuration</span>
-              <span className="sm:hidden">Configure</span>
+              <span className="hidden sm:inline">Browse Roles</span>
+              <span className="sm:hidden">Browse Roles</span>
             </button>
           </div>
         </div>
@@ -609,7 +612,7 @@ export default function AIInterview() {
                         className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
                       >
                         <Settings className="w-4 h-4" />
-                        AI Interview Configuration
+                        Browse Roles
                       </button>
                     </>
                   )}
@@ -665,7 +668,7 @@ export default function AIInterview() {
                               )}
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
-                                {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                {formatIST(config.created_at)}
                               </span>
                               {config.created_by_name && (
                                 <span className="text-xs text-gray-400">
@@ -850,7 +853,7 @@ export default function AIInterview() {
                         <span className="text-gray-500">{session.duration_minutes} min</span>
                         {session.started_at && (
                           <span className="text-xs text-gray-400">
-                            Started {new Date(session.started_at).toLocaleString()}
+                            Started {formatIST(session.started_at)}
                           </span>
                         )}
                         <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-yellow-100 text-yellow-700">
@@ -927,7 +930,7 @@ export default function AIInterview() {
                             {activity.actor_name && <span className="truncate">by {activity.actor_name}</span>}
                             {activity.candidate_name && <span className="truncate">{activity.candidate_name}</span>}
                             {activity.score != null && <span>Score: {activity.score}%</span>}
-                            <span className="flex-shrink-0">{new Date(activity.timestamp).toLocaleString()}</span>
+                            <span className="flex-shrink-0">{formatIST(activity.timestamp)}</span>
                           </div>
                         </div>
                       </div>
@@ -1274,7 +1277,7 @@ export default function AIInterview() {
                         </span>
                         {inv.scheduled_at && (
                           <span className="text-[10px] sm:text-xs text-gray-400">
-                            {new Date(inv.scheduled_at).toLocaleString()}
+                            {formatIST(inv.scheduled_at)}
                           </span>
                         )}
                       </div>

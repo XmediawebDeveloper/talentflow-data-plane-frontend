@@ -4,6 +4,7 @@ import { AlertTriangle, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCirc
 import { useState, useEffect, useMemo } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { generateDisputeRecordPDF } from '@/lib/utils/pdfInvoice';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 
 // Use backend proxy instead of direct Admin API calls
@@ -184,16 +185,6 @@ export default function DisputeHistoryPage() {
     });
   }, [disputes, searchQuery, statusFilter, startDate, endDate]);
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-
   const formatAmount = (amount: number) => {
     return `₹${Math.abs(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
@@ -249,8 +240,8 @@ export default function DisputeHistoryPage() {
     const csvHeaders = ['Dispute #', 'Date', 'Deadline', 'Original Invoice', 'Reason', 'Customer Claim', 'Amount', 'Status', 'Bank Reference'];
     const csvRows = filteredDisputes.map(d => [
       d.invoice_number || '',
-      formatDate(d.issue_date),
-      formatDate(d.metadata?.deadline || d.deadline || null),
+      formatISTDate(d.issue_date),
+      formatISTDate(d.metadata?.deadline || d.deadline || null),
       d.metadata?.original_invoice_number || '',
       d.metadata?.reason || d.reason || d.line_items?.[0]?.description || '',
       d.metadata?.customer_claim || d.customer_claim || '',
@@ -488,7 +479,7 @@ export default function DisputeHistoryPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="text-sm text-gray-900">{formatDate(dispute.issue_date)}</div>
+                        <div className="text-sm text-gray-900">{formatISTDate(dispute.issue_date)}</div>
                       </td>
                       <td className="px-4 py-4">
                         <div className="text-sm text-gray-900 truncate" title={dispute.metadata?.original_invoice_number || ''}>
@@ -559,11 +550,11 @@ export default function DisputeHistoryPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6">
                   <div>
                     <p className="text-xs text-gray-500 uppercase">Issue Date</p>
-                    <p className="text-sm font-medium text-gray-900">{formatDate(selectedDispute.issue_date)}</p>
+                    <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedDispute.issue_date)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase">Deadline</p>
-                    <p className="text-sm font-medium text-gray-900">{formatDate(selectedDispute.metadata?.deadline || selectedDispute.deadline || null)}</p>
+                    <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedDispute.metadata?.deadline || selectedDispute.deadline || null)}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase">Dispute Status</p>
@@ -585,7 +576,7 @@ export default function DisputeHistoryPage() {
                   {selectedDispute.paid_at && (
                     <div>
                       <p className="text-xs text-gray-500 uppercase">Paid At</p>
-                      <p className="text-sm font-medium text-gray-900">{formatDate(selectedDispute.paid_at)}</p>
+                      <p className="text-sm font-medium text-gray-900">{formatISTDate(selectedDispute.paid_at)}</p>
                     </div>
                   )}
                 </div>

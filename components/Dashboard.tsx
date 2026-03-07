@@ -40,6 +40,7 @@ import { User, Tenant, getRemainingUnits } from '@/lib/types/tenant';
 import UnitsWarningBanner from './UnitsWarningBanner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { PLAN_FEATURE_METADATA, PlanFeatureKey } from '@/lib/types/planFeatures';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -290,7 +291,7 @@ export default function Dashboard({
     if (diffMins < 60) return `${diffMins} min ago`;
     if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    return date.toLocaleDateString();
+    return formatISTDate(dateStr);
   };
 
   // Fetch JDs and Assessment Stats from API
@@ -438,7 +439,7 @@ export default function Dashboard({
               <div className="text-xs text-gray-600 mb-1">Renews on</div>
               <div className="text-gray-900 mb-2">
                 {subscription?.renewalDate
-                  ? new Date(subscription.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                  ? formatISTDate(subscription.renewalDate)
                   : 'Not available'}
               </div>
               {user?.can_upgrade_plan !== false && onUpgradePlan ? (
@@ -663,7 +664,7 @@ export default function Dashboard({
                           {jd.published_at && (
                             <div className="flex items-center gap-2">
                               <Calendar className="w-4 h-4 text-gray-400" />
-                              Published {new Date(jd.published_at).toLocaleDateString()}
+                              Published {formatISTDate(jd.published_at)}
                             </div>
                           )}
                         </div>
@@ -772,7 +773,7 @@ export default function Dashboard({
                           {jd.created_at && (
                             <div className="flex items-center gap-2">
                               <Calendar className="w-4 h-4 text-gray-400" />
-                              Created {new Date(jd.created_at).toLocaleDateString()}
+                              Created {formatISTDate(jd.created_at)}
                             </div>
                           )}
                         </div>

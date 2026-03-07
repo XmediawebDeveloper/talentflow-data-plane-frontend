@@ -6,7 +6,7 @@
  * Dev fallback: localhost:3000?org=acme → "acme"
  */
 
-const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || '0sms.com';
+const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
 
 /**
  * Extracts tenant subdomain from the current window hostname.

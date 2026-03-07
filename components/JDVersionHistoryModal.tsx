@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, Clock, User, FileText, History, Loader2, ArrowLeft, Eye, Download } from 'lucide-react';
 import { jdService, JDVersion, JDVersionHistoryResponse } from '@/lib/services/jdService';
+import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 
@@ -67,18 +68,6 @@ export default function JDVersionHistoryModal({
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
   };
 
   const getRelativeTime = (dateString: string) => {
@@ -359,7 +348,7 @@ export default function JDVersionHistoryModal({
                     </div>
 
                     <p className="text-xs text-gray-400 mt-2">
-                      {formatDate(version.published_at)}
+                      {formatIST(version.published_at)}
                     </p>
                   </button>
                 );

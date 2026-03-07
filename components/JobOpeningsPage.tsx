@@ -1,5 +1,6 @@
 'use client';
 
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -211,13 +212,6 @@ export default function JobOpeningsPage() {
     );
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
 
   const getExperienceText = (min?: number, max?: number) => {
     if (min && max) return `${min}-${max} years`;
@@ -556,7 +550,7 @@ export default function JobOpeningsPage() {
                   </div>
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Calendar className="w-4 h-4 text-gray-400" />
-                    <span>{formatDate(job.created_at)}</span>
+                    <span>{formatISTDate(job.created_at)}</span>
                   </div>
                 </div>
 
@@ -645,7 +639,7 @@ export default function JobOpeningsPage() {
                       </div>
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-500 hidden lg:table-cell">
-                      {formatDate(job.created_at)}
+                      {formatISTDate(job.created_at)}
                     </td>
                     <td className="px-2 sm:px-6 py-3 sm:py-4 text-right">
                       <div className="flex items-center justify-end gap-0.5 sm:gap-2">

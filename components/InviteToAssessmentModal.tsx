@@ -137,6 +137,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
           assessmentService.invite(selectedAssessment, {
             candidate_name: candidate.name,
             candidate_email: candidate.email,
+            invite_source: 'JD',
           })
         )
       );

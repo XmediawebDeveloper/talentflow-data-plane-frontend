@@ -8,6 +8,7 @@ import { assessmentService, jdService } from '@/lib/services';
 import JDCreation from '@/components/JDCreation';
 import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // 1:1 JD-Assessment relationship: JDs that already have assessments cannot be selected
 
@@ -1359,9 +1360,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       : job.experience || 'Not specified';
 
                   // Format posted date
-                  const postedDate = job.postedDate
-                    ? new Date(job.postedDate).toLocaleDateString('en-US', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                    : 'N/A';
+                  const postedDate = job.postedDate ? formatISTDate(job.postedDate) : 'N/A';
 
                   return (
                     <div
