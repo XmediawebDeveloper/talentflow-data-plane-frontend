@@ -31,6 +31,7 @@ function JobDetailsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jobId = searchParams.get('id');
+  const tabParam = searchParams.get('tab') as 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | null;
 
   // JD15: Get user role for disable/enable button visibility
   const { isTenantAdmin } = usePermissions();
@@ -89,6 +90,7 @@ function JobDetailsContent() {
         employmentType: data.employment_type,
         workMode: data.remote_type,
         education: data.education_requirements?.degree,
+        experience_level: data.experience_level || data.job_level,
         currentVersion: data.current_version || 1, // Use from response, fallback to 1
         internalRecruiterComments: data.internal_comments ? [data.internal_comments] : [],
         mustHaveComments: data.must_have_comments || [],
@@ -328,6 +330,7 @@ function JobDetailsContent() {
       <JobDetailView
         job={job}
         onBack={handleBack}
+        initialTab={tabParam || undefined}
         onEdit={handleEdit}
         onDisable={isTenantAdmin || hasPermission('canDisableJD') ? handleDisable : undefined}
         onEnable={isTenantAdmin || hasPermission('canDisableJD') ? handleEnable : undefined}

@@ -167,7 +167,7 @@ export default function GlobalScoringProgressIndicator() {
             onToggle={() => setExpandedJobId(expandedJobId === job.jobId ? null : job.jobId)}
             onClear={() => clearJob(job.jobId)}
             onNavigate={() => {
-              router.push(`/recruitment/resume-scoring?jd_id=${job.jobId}`);
+              router.push(job.returnUrl || `/recruitment/resume-scoring?jd_id=${job.jobId}`);
               setMinimized(true);
             }}
           />

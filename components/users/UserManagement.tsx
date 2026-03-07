@@ -29,7 +29,7 @@ import DependencyMatrix from './DependencyMatrix';
 import UserLimits, { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { checkQuotaStatus } from '@/lib/services/usageTrackingService';
+import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // Types
@@ -719,9 +719,8 @@ export default function UserManagement() {
   // RBAC01: User limits hook
   const { limits, isAtLimit, canAddUsers, refresh: refreshLimits } = useUserLimits();
 
-  // Quota-gated feature visibility — which features are provisioned in the tenant's plan
-  // Default to all enabled; updated on mount from /usage/quota-status
-  const [enabledQuotas, setEnabledQuotas] = useState<Set<string>>(new Set(['RU', 'RS', 'AS', 'AIU']));
+  // Plan feature flags from /quota-status (via PlanFeaturesProvider)
+  const { hasPlanFeature } = usePlanFeaturesContext();
 
   // Refresh trigger for SeatQuotaCard
   const [seatQuotaRefreshTrigger, setSeatQuotaRefreshTrigger] = useState(0);
@@ -801,21 +800,6 @@ export default function UserManagement() {
         // Continue loading users even if sync fails
       }
 
-      // Load quota status to know which features are provisioned for this tenant
-      try {
-        const quotaResult = await checkQuotaStatus();
-        if (quotaResult.status === 'success' && quotaResult.data?.quotas) {
-          const q = quotaResult.data.quotas;
-          const enabled = new Set<string>();
-          if (q.RU && q.RU.status !== 'NOT_PROVISIONED') enabled.add('RU');
-          if (q.RS && q.RS.status !== 'NOT_PROVISIONED') enabled.add('RS');
-          if (q.AS && q.AS.status !== 'NOT_PROVISIONED') enabled.add('AS');
-          if (q.AIU && q.AIU.status !== 'NOT_PROVISIONED') enabled.add('AIU');
-          setEnabledQuotas(enabled);
-        }
-      } catch (e) {
-        // Keep default (all enabled) if quota check fails
-      }
 
       // Then load users and related data
       loadUsers();
@@ -1888,14 +1872,18 @@ export default function UserManagement() {
 
   // Returns false if a permission category or sub-category is for a feature not in the tenant's plan
   const isCategoryVisible = (categoryId: string, subCategoryName?: string): boolean => {
+    // Sub-category gating
     if (subCategoryName) {
-      if (subCategoryName === 'My Resumes' || subCategoryName === 'Internal Database') return enabledQuotas.has('RU');
-      if (subCategoryName === 'Assessment') return enabledQuotas.has('AS');
+      if (subCategoryName === 'My Resumes' || subCategoryName === 'Internal Database') return hasPlanFeature('resume_upload');
+      if (subCategoryName === 'Assessment') return hasPlanFeature('assessment');
+      if (subCategoryName === 'API Management') return hasPlanFeature('api_access');
       return true;
     }
-    if (categoryId === 'resume_scoring') return enabledQuotas.has('RS');
-    if (categoryId === 'ai_talent_match') return enabledQuotas.has('AIU');
-    if (categoryId === 'resume_management') return enabledQuotas.has('RU') || enabledQuotas.has('AS');
+    // Top-level category gating
+    if (categoryId === 'resume_scoring') return hasPlanFeature('resume_scoring');
+    if (categoryId === 'ai_talent_match') return hasPlanFeature('ai_talent_match');
+    if (categoryId === 'teams') return hasPlanFeature('teams');
+    if (categoryId === 'resume_management') return hasPlanFeature('resume_upload') || hasPlanFeature('assessment');
     return true;
   };
 

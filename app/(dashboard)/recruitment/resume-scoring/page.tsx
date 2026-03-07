@@ -350,12 +350,33 @@ export default function ResumeScoringRoute() {
       const allItems = firstPage.items || [];
 
       // Group scores by JD
-      const scoresByJd = new Map<string, { jdTitle: string; scores: any[] }>();
+      const scoresByJd = new Map<string, {
+        jdTitle: string; jdStatus: string; jdJobId?: string;
+        jdCreationMethod?: string; jdCurrentVersion?: number;
+        jdDepartment?: string; jdIndustryType?: string;
+        jdEmploymentType?: string; jdRemoteType?: string; jdLocation?: string;
+        jdPublishedAt?: string; jdCreatedByName?: string;
+        scores: any[];
+      }>();
 
       for (const item of allItems) {
         const jdId = item.jd_id;
         if (!scoresByJd.has(jdId)) {
-          scoresByJd.set(jdId, { jdTitle: item.jd_title || 'Unknown Job', scores: [] });
+          scoresByJd.set(jdId, {
+            jdTitle: item.jd_title || 'Unknown Job',
+            jdStatus: item.jd_status || 'published',
+            jdJobId: item.jd_job_id,
+            jdCreationMethod: item.jd_creation_method,
+            jdCurrentVersion: item.jd_current_version,
+            jdDepartment: item.jd_department,
+            jdIndustryType: item.jd_industry_type,
+            jdEmploymentType: item.jd_employment_type,
+            jdRemoteType: item.jd_remote_type,
+            jdLocation: item.jd_location,
+            jdPublishedAt: item.jd_published_at,
+            jdCreatedByName: item.jd_created_by_name,
+            scores: [],
+          });
         }
 
         // Convert score to display format - use backend match_status as source of truth
@@ -429,6 +450,17 @@ export default function ResumeScoringRoute() {
             jobTitle: data.jdTitle,
             scoredAt: new Date(data.scores[0]?.scoredDate || new Date()),
             source: 'database' as const,
+            jdStatus: data.jdStatus,
+            jdJobId: data.jdJobId,
+            jdCreationMethod: data.jdCreationMethod,
+            jdCurrentVersion: data.jdCurrentVersion,
+            jdDepartment: data.jdDepartment,
+            jdIndustryType: data.jdIndustryType,
+            jdEmploymentType: data.jdEmploymentType,
+            jdRemoteType: data.jdRemoteType,
+            jdLocation: data.jdLocation,
+            jdPublishedAt: data.jdPublishedAt,
+            jdCreatedByName: data.jdCreatedByName,
             totalScored: data.scores.length,
             scoredResumes: data.scores,
           });
@@ -590,6 +622,11 @@ export default function ResumeScoringRoute() {
         experience: jd.experience_min ? `${jd.experience_min}+ years` : undefined,
         job_id: jd.job_id,
         current_version: jd.current_version,
+        published_at: jd.published_at,
+        created_by_name: jd.created_by_name,
+        creation_method: jd.creation_method,
+        industry_type: jd.industry_type,
+        remote_type: jd.remote_type,
       }));
 
       // Convert API Resume to component Resume type
