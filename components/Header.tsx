@@ -373,7 +373,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     if (!notification.is_read) {
       await handleMarkAsRead(notification.id);
     }
-    if (notification.action_url) {
+    if (user.role === 'tenant_admin' && notification.action_url) {
       setShowNotifications(false);
       router.push(notification.action_url);
     }
@@ -856,7 +856,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                                   <span className="text-xs text-gray-500 whitespace-nowrap">{notification.time_ago}</span>
                                 </div>
                                 <p className="text-xs text-gray-600">{notification.message}</p>
-                                {notification.action_label && (
+                                {user.role === 'tenant_admin' && notification.action_label && (
                                   <div className="flex items-center gap-2 mt-2">
                                     <span className={`text-xs ${style.labelColor} font-medium`}>{notification.action_label}</span>
                                   </div>

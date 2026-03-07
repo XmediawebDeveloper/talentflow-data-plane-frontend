@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { featurePermissionService, UserLimitsResponse } from '@/lib/services/featurePermissionService';
+import { useQuota } from '@/contexts/QuotaContext';
 import AddSeatsModal from './AddSeatsModal';
 
 interface UserLimitsProps {
@@ -29,6 +30,8 @@ interface UserLimitsProps {
 
 export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = false, refreshTrigger = 0 }: UserLimitsProps) {
   const router = useRouter();
+  const { quotaData } = useQuota();
+  const isTrial = quotaData?.is_trial ?? false;
   const [isLoading, setIsLoading] = useState(true);
   const [limits, setLimits] = useState<UserLimitsResponse | null>(null);
   const [showAddSeatsModal, setShowAddSeatsModal] = useState(false);
@@ -91,7 +94,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                 {limits.current_users}/{limits.max_users === -1 ? '∞' : limits.max_users} users
               </span>
             </div>
-            {limits.is_at_limit && (
+            {limits.is_at_limit && !isTrial && (
               <button
                 onClick={() => {
                   if (onAddSeatsClick) {
@@ -185,22 +188,26 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
           <div className="flex-1 min-w-0">
             <p className="text-xs sm:text-sm font-medium text-red-800">User limit reached</p>
             <p className="text-[10px] sm:text-sm text-red-700 mt-0.5">
-              You cannot add more users. Purchase additional seats, upgrade your plan, or deactivate existing users.
+              {isTrial
+                ? 'Purchasing additional seats is only available for paid subscriptions. Please upgrade your plan.'
+                : 'You cannot add more users. Purchase additional seats, upgrade your plan, or deactivate existing users.'}
             </p>
             <div className="mt-2 sm:mt-3 flex flex-wrap gap-2">
-              <button
-                onClick={() => {
-                  if (onAddSeatsClick) {
-                    onAddSeatsClick();
-                  } else {
-                    setShowAddSeatsModal(true);
-                  }
-                }}
-                className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-red-600 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Add Seats
-              </button>
+              {!isTrial && (
+                <button
+                  onClick={() => {
+                    if (onAddSeatsClick) {
+                      onAddSeatsClick();
+                    } else {
+                      setShowAddSeatsModal(true);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-red-600 text-white text-xs sm:text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  Add Seats
+                </button>
+              )}
               {onUpgradeClick && (
                 <button
                   onClick={onUpgradeClick}
