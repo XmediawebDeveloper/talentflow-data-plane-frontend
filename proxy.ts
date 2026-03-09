@@ -26,6 +26,10 @@ const protectedRoutes = [
   '/subscription',
   '/settings',
   '/analytics',
+  '/audits',
+  '/support-tickets',
+  '/masters',
+  '/help-desk',
 ];
 
 const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
