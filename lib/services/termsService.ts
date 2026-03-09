@@ -83,7 +83,7 @@ export const termsService = {
   async getCurrentTerms(documentType: DocumentType = 'TERMS_AND_CONDITIONS'): Promise<TermsAndConditions> {
     try {
       const response = await api.get(`/public/terms-and-conditions/current?document_type=${documentType}`);
-      return response.data;
+      return response.data?.data || response.data;
     } catch (error) {
       throw handleApiError(error);
     }
@@ -121,7 +121,7 @@ export const termsService = {
 
     try {
       const response = await api.get(`/public/terms-and-conditions/status?document_type=${documentType}`);
-      const data: TermsAcceptanceStatus = response.data;
+      const data: TermsAcceptanceStatus = response.data?.data || response.data;
       setCachedStatus(documentType, data);
       return data;
     } catch (error) {
@@ -150,7 +150,23 @@ export const termsService = {
   async getAcceptanceHistory(documentType: DocumentType = 'TERMS_AND_CONDITIONS'): Promise<TermsAcceptanceRecord[]> {
     try {
       const response = await api.get(`/public/terms-and-conditions/history?document_type=${documentType}`);
-      return response.data;
+      const raw = response.data;
+      console.log('[termsService] getAcceptanceHistory raw response:', JSON.stringify(raw));
+      // Direct array
+      if (Array.isArray(raw)) return raw;
+      // Recursively find first array value
+      const findArray = (obj: any): any[] | null => {
+        if (!obj || typeof obj !== 'object') return null;
+        for (const val of Object.values(obj)) {
+          if (Array.isArray(val)) return val as any[];
+          if (val && typeof val === 'object') {
+            const nested = findArray(val);
+            if (nested) return nested;
+          }
+        }
+        return null;
+      };
+      return findArray(raw) ?? [];
     } catch (error) {
       throw handleApiError(error);
     }

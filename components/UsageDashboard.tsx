@@ -1190,6 +1190,25 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             </div>
           </div>
 
+          {/* Trial / blocked banner */}
+          {isAddonPurchaseBlocked && subscriptionSummary?.is_trial && (
+            <div className="mx-4 sm:mx-6 mt-4 mb-1 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5">
+              <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-800">Add-on Units — Not Available on Free Trial</p>
+                <p className="text-sm text-amber-700 mt-0.5">
+                  Purchasing add-on units is only available for paid subscriptions. Upgrade your plan to unlock this feature.
+                </p>
+              </div>
+              <button
+                onClick={handleUpgradeClick}
+                className="flex-shrink-0 flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Upgrade <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
           <div className="p-3 sm:p-4 md:p-6">
             {addonsLoading && (
               <div className="flex flex-col items-center justify-center py-12">
