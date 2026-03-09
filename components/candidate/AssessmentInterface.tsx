@@ -745,44 +745,7 @@ export function AssessmentInterface({
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [isGlobalTimeExpired, onComplete, currentQuestion.time_limit_seconds]);
 
-  // Automatic time-based unit deduction check (every 60 seconds)
-  useEffect(() => {
-    if (!isInitialized) {
-      return;
-    }
-
-    const checkTimeDeduction = async () => {
-      try {
-        console.log('[UNIT-DEDUCTION] Checking time-based deduction thresholds...');
-        const result = await candidateService.checkTimeBasedDeduction(token);
-
-        if (result.success && result.units_deducted_now && result.units_deducted_now > 0) {
-          console.log(`[UNIT-DEDUCTION] ✓ ${result.units_deducted_now} units deducted at ${result.threshold_reached} threshold`);
-          console.log(`[UNIT-DEDUCTION] ✓ Deduction from Control Plane successful`);
-          console.log(`[UNIT-DEDUCTION] Total units consumed so far: ${result.units_deducted_so_far}`);
-          console.log(`[UNIT-DEDUCTION] Time: ${result.time_percentage}%`);
-        } else if (!result.success) {
-          console.error('[UNIT-DEDUCTION] ✗ Deduction failed:', result.message);
-          // Note: Assessment continues even if deduction fails
-          // Final validation will happen at completion
-        } else {
-          console.log(`[UNIT-DEDUCTION] No deduction needed at ${result.time_percentage}%`);
-        }
-      } catch (error) {
-        console.error('[UNIT-DEDUCTION] ✗ Error checking time deduction:', error);
-        // Don't block the assessment on deduction errors
-        // Final validation happens at completion
-      }
-    };
-
-    // Check immediately on start
-    checkTimeDeduction();
-
-    // Then check every 60 seconds
-    const deductionCheckInterval = setInterval(checkTimeDeduction, 60000); // 60 seconds
-
-    return () => clearInterval(deductionCheckInterval);
-  }, [token, isInitialized]);
+  // Time-based unit deduction removed — 1 AS unit is deducted upfront at assessment start.
 
   // Track when all questions are answered
   useEffect(() => {

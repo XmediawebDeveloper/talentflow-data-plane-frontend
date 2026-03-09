@@ -107,15 +107,13 @@ export default function GlobalScoringProgressIndicator() {
           >
             <Minimize2 className="w-4 h-4" />
           </button>
-          {isAllComplete && (
-            <button
-              onClick={clearCompletedJobs}
-              className="p-1.5 hover:bg-white/20 rounded transition-colors"
-              title="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <button
+            onClick={() => activeScoringJobs.forEach(job => clearJob(job.jobId))}
+            className="p-1.5 hover:bg-white/20 rounded transition-colors"
+            title="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
 

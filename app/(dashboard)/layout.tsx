@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/hooks/useAuth';
+import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
@@ -184,7 +185,12 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       console.log('[DASHBOARD] Not authenticated, redirecting to login');
-      router.push('/login');
+      const loginUrl = getLoginUrl();
+      if (loginUrl.startsWith('http')) {
+        window.location.href = loginUrl;
+      } else {
+        router.push(loginUrl);
+      }
     }
   }, [isAuthenticated, isLoading, router]);
 

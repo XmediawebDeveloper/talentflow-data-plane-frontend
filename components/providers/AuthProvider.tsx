@@ -646,7 +646,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[AUTH] Permission version cache cleared on logout');
     }
 
-    router.push(loginUrl);
+    if (loginUrl.startsWith('http')) {
+      window.location.href = loginUrl;
+    } else {
+      router.push(loginUrl);
+    }
   };
 
   const updateUser = (userData: User) => {
