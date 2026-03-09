@@ -692,17 +692,18 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           } catch (err) {
             if (isMountedRef.current) {
               const errorMessage = err instanceof Error ? err.message : '';
-              // Keep SESSION_ALREADY_ACTIVE error visible (security issue)
+              // Hard errors — show error, do NOT reload (reloading creates an infinite loop)
               if (errorMessage === 'SESSION_ALREADY_ACTIVE') {
                 setError('This assessment is already open in another browser or device. Please close the other session and try again. Only one active session is allowed per assessment.');
-                setStepSafe('error');
-                isStartingRef.current = false;
-                isFlowActiveRef.current = false;
+              } else if (errorMessage.includes('temporarily unavailable') || errorMessage.includes('Server')) {
+                // 500 server error — don't reload, show the error
+                setError('The server encountered an error. Please refresh the page and try again.');
               } else {
-                // Auto-refresh for other errors
-                console.log('[PORTAL] Timeout error - auto-refreshing page');
-                window.location.reload();
+                setError(errorMessage || 'Failed to start assessment. Please refresh the page.');
               }
+              setStepSafe('error');
+              isStartingRef.current = false;
+              isFlowActiveRef.current = false;
             }
           }
         };
