@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
+import { useQuota } from '@/contexts/QuotaContext';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -65,10 +66,11 @@ const getCurrencySymbol = (currency: string): string => {
 
 export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigger = 0 }: SeatQuotaCardProps) {
   const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
+  const { quotaData } = useQuota();
+  const isTrial = quotaData?.is_trial ?? false;
   const [loading, setLoading] = useState(true);
   const [seatData, setSeatData] = useState<SeatQuotaData | null>(null);
   const [planName, setPlanName] = useState('');
-  const [isTrial, setIsTrial] = useState(false);
 
   // Addon modal states
   const [showAddonModal, setShowAddonModal] = useState(false);
@@ -127,7 +129,6 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
         });
 
         setPlanName(data.plan_name || 'Unknown Plan');
-        setIsTrial(false);
       }
     } catch (error) {
       console.error('[SeatQuotaCard] Error fetching user limits:', error);
@@ -412,23 +413,40 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
 
 
         {/* Action Buttons */}
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => {
-              setShowAddonModal(true);
-              setQuantity(1);
-              setPurchaseError(null);
-            }}
-            className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm transition-colors ${
-              seatData.is_exhausted
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-gray-800 text-white hover:bg-gray-700'
-            }`}
-          >
-            <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            Add
-          </button>
-          {!isTrial && (
+        {isTrial ? (
+          <div className="flex items-start gap-2 p-2.5 sm:p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs sm:text-sm font-semibold text-amber-800">Not available on Free Trial</p>
+              <p className="text-[10px] sm:text-xs text-amber-700 mt-0.5">
+                Purchasing additional seats is only available for paid subscriptions.
+              </p>
+            </div>
+            <button
+              onClick={() => window.location.href = '/subscription/current-plan'}
+              className="flex-shrink-0 flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors"
+            >
+              <TrendingUp className="w-3 h-3" />
+              Upgrade
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                setShowAddonModal(true);
+                setQuantity(1);
+                setPurchaseError(null);
+              }}
+              className={`inline-flex items-center justify-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm transition-colors ${
+                seatData.is_exhausted
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-gray-800 text-white hover:bg-gray-700'
+              }`}
+            >
+              <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              Add
+            </button>
             <button
               onClick={() => window.location.href = '/subscription/current-plan'}
               className="px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 text-gray-700 rounded-lg font-medium text-xs sm:text-sm hover:bg-gray-50 transition-colors flex items-center gap-1 sm:gap-1.5"
@@ -436,8 +454,8 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
               <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               Upgrade
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Purchase Modal */}

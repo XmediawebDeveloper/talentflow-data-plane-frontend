@@ -26,11 +26,12 @@ import { RoleListItem, Permission } from '@/lib/types/rbac';
 import { UserRole } from '@/lib/types/tenant';
 import FeaturePermissionManager from './FeaturePermissionManager';
 import DependencyMatrix from './DependencyMatrix';
-import UserLimits, { useUserLimits } from './UserLimits';
+import { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useQuota } from '@/contexts/QuotaContext';
 import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
-import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 
 // Types
 interface UserPermissions {
@@ -718,6 +719,8 @@ export default function UserManagement() {
 
   // RBAC01: User limits hook
   const { limits, isAtLimit, canAddUsers, refresh: refreshLimits } = useUserLimits();
+  const { quotaData } = useQuota();
+  const isTrial = quotaData?.is_trial ?? false;
 
   // Plan feature flags from /quota-status (via PlanFeaturesProvider)
   const { hasPlanFeature } = usePlanFeaturesContext();
@@ -1915,7 +1918,11 @@ export default function UserManagement() {
             <button
               onClick={() => {
                 if (isAtLimit) {
-                  toast.error('User limit reached. Please upgrade your plan or deactivate existing users.');
+                  if (isTrial) {
+                    toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+                  } else {
+                    toast.error('User limit reached. Purchase additional seats or deactivate existing users to add more.');
+                  }
                   return;
                 }
                 setIsCreateModalOpen(true);
@@ -1933,16 +1940,16 @@ export default function UserManagement() {
           </div>
         </div>
 
-        {/* RBAC01: User Limits - always visible */}
-        <div className="mt-4 sm:mt-6 space-y-3 sm:space-y-4">
-          <UserLimits compact refreshTrigger={seatQuotaRefreshTrigger} />
-          {/* Addon card - only shows when quota exhausted */}
-          <SeatQuotaCard
-            onRefresh={() => { loadUsers(); refreshLimits(); }}
-            compact
-            refreshTrigger={seatQuotaRefreshTrigger}
-          />
-        </div>
+        {/* Addon card - only shows when quota exhausted, hidden for trial users */}
+        {!isTrial && (
+          <div className="mt-4 sm:mt-6">
+            <SeatQuotaCard
+              onRefresh={() => { loadUsers(); refreshLimits(); }}
+              compact
+              refreshTrigger={seatQuotaRefreshTrigger}
+            />
+          </div>
+        )}
       </div>
 
       {/* Search Bar */}
@@ -1961,9 +1968,62 @@ export default function UserManagement() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:gap-6 mb-6 sm:mb-8">
+        {/* Total Users card with quota breakdown */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
           <p className="text-xs sm:text-sm text-gray-600">Total Users</p>
-          <p className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900 mt-1">{users.length}</p>
+          <div className="flex items-baseline gap-1 mt-1">
+            <p className="text-xl sm:text-2xl lg:text-3xl font-semibold text-gray-900">
+              {limits?.current_users ?? users.length}
+            </p>
+            <span className="text-sm text-gray-400">
+              / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
+            </span>
+          </div>
+          {/* Progress bar */}
+          {limits && limits.max_users > 0 && (
+            <div className="mt-2">
+              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    isAtLimit
+                      ? 'bg-gradient-to-r from-red-400 to-red-600'
+                      : limits.approaching_limit
+                        ? 'bg-gradient-to-r from-amber-400 to-amber-500'
+                        : 'bg-gradient-to-r from-gray-400 to-gray-600'
+                  }`}
+                  style={{ width: `${Math.min(limits.usage_percentage, 100)}%` }}
+                />
+              </div>
+              {/* Plan Limit / Add-ons breakdown */}
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1 text-gray-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" />
+                    Plan Limit
+                  </span>
+                  <span className="font-semibold text-gray-700">
+                    {(() => {
+                      const sl = quotaData?.quotas?.max_seats?.subscription?.limit;
+                      return sl === 'unlimited' || sl === -1 ? '∞' : (sl ?? limits.max_users);
+                    })()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1 text-gray-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
+                    Add-ons
+                  </span>
+                  {(quotaData?.quotas?.max_seats?.addon?.total_purchased ?? 0) > 0 ? (
+                    <span className="font-semibold text-gray-700">
+                      {quotaData?.quotas?.max_seats?.addon?.total_purchased}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 italic text-[10px]">None purchased</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4 lg:p-6">
           <p className="text-xs sm:text-sm text-gray-600">Active Users</p>
@@ -2091,7 +2151,7 @@ export default function UserManagement() {
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
                     <div className="flex items-center gap-2 text-sm text-gray-500">
                       <Calendar className="w-4 h-4" />
-                      {formatISTDate(user.last_login)}
+                      {formatIST(user.last_login)}
                     </div>
                   </td>
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">

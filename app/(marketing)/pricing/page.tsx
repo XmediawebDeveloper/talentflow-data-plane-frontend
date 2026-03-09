@@ -548,7 +548,7 @@ export default function PricingPage() {
           const freeTrialCard: DisplayPlan | null = freeTrial ? {
             id: 'free-trial',
             name: 'Free Trial',
-            description: freeTrial.trial_days + " days free • No credit card required",
+            description: freeTrial.trial_days + (freeTrial.trial_days === 1 ? " day" : " days") + " free • No credit card required",
             basePrice: 0,
             monthlyPrice: 0,
             yearlyPrice: 0,
@@ -558,7 +558,10 @@ export default function PricingPage() {
             icon: Sparkles,
             gradient: 'from-emerald-500 to-teal-600',
             popular: false,
-            features: freeTrial.trial_includes || [],
+            features: (freeTrial.trial_includes || []).filter((item: string) =>
+              !item.toLowerCase().includes('free access') &&
+              !item.toLowerCase().includes('no credit card')
+            ),
             trialDays: freeTrial.trial_days,
             quotas: {
               max_jobs: trialFeatures.MAX_JOBS ?? trialFeatures.max_jobs,
@@ -702,7 +705,7 @@ export default function PricingPage() {
                           {isTrialPlan ? (
                             <div className="flex items-baseline gap-2">
                               <span className="text-3xl font-bold text-gray-900 dark:text-white">Free</span>
-                              <span className="text-gray-500 text-sm">for {plan.trialDays} days</span>
+                              <span className="text-gray-500 text-sm">for {plan.trialDays} {plan.trialDays === 1 ? 'day' : 'days'}</span>
                             </div>
                           ) : (plan.monthlyPrice || plan.yearlyPrice) ? (
                             <>
