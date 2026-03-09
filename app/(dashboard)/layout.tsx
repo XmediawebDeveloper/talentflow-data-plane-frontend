@@ -36,6 +36,10 @@ const adminRoutes = [
 const SUBSCRIPTION_ALLOWED_PATHS = [
   '/subscription/current-plan',
   '/subscription/payment-methods',
+  '/audits/trail',
+  '/audits/activity',
+  '/support-tickets',
+  '/settings/general-settings',
 ];
 
 // Storage key for scoring batch persistence
