@@ -79,7 +79,7 @@ export default function LegalCompliancePage() {
                 {history.map((record) => (
                   <tr key={record.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{record.terms_version}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{record.terms_title}</td>
+                    <td className="px-6 py-4 text-sm text-gray-600">{record.terms_title || record.title || '—'}</td>
                     <td className="px-6 py-4">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{record.accepted_by}</p>
