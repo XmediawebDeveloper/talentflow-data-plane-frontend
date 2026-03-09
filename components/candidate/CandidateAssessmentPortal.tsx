@@ -139,6 +139,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const [results, setResults] = useState<AssessmentResult | null>(null);
   const [progress, setProgress] = useState({ answered: 0, total: 0, percent: 0 });
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [completingStuck, setCompletingStuck] = useState(false);
 
   // Proctoring warnings are displayed via ProctoringEventBus → ProctoringWarningModal
   // (no local state needed — modal subscribes to EventBus directly)
@@ -863,6 +864,16 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     return response;
   };
 
+  // Show "close" option if stuck on completing screen for > 10s
+  useEffect(() => {
+    if (step !== 'completing') {
+      setCompletingStuck(false);
+      return;
+    }
+    const t = setTimeout(() => setCompletingStuck(true), 10000);
+    return () => clearTimeout(t);
+  }, [step]);
+
   // ============================================
   // COMPLETION HANDLER - NEW FLOW
   // ============================================
@@ -1077,10 +1088,22 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     case 'completing':
       return (
-        <LoadingScreen
-          message="Submitting your assessment..."
-          subMessage="Please wait..."
-        />
+        <div className="relative">
+          <LoadingScreen
+            message="Submitting your assessment..."
+            subMessage={completingStuck ? 'This is taking longer than expected.' : 'Please wait...'}
+          />
+          {completingStuck && (
+            <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50">
+              <button
+                onClick={() => window.close()}
+                className="px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl shadow-lg transition-colors flex items-center gap-2"
+              >
+                Close Window
+              </button>
+            </div>
+          )}
+        </div>
       );
 
     case 'completed':
