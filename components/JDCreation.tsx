@@ -5680,7 +5680,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           <DialogFooter>
             <button
               onClick={() => setShowCancelDialog(false)}
-              className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700 text-white"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700 text-black"
             >
               Continue Editing
             </button>
