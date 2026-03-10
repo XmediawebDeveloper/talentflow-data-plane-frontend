@@ -405,6 +405,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   }, [stopRevealingTokens]);
 
   // Web Speech API for real-time transcription
+  // Accumulates ALL finalized segments + current interim so the user
+  // sees their complete speech in the live transcript bubble.
+  const webSpeechFinalizedRef = useRef("");
+
   const startWebSpeechRecognition = useCallback(() => {
     if (typeof window === 'undefined') return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -412,19 +416,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
     }
+    webSpeechFinalizedRef.current = "";
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
     recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      let finalizedText = '';
+      let interimText = '';
+      for (let i = 0; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
-        if (!event.results[i].isFinal) {
-          interimTranscript += transcript;
+        if (event.results[i].isFinal) {
+          finalizedText += transcript + ' ';
+        } else {
+          interimText += transcript;
         }
       }
-      if (interimTranscript) setCurrentTranscript(interimTranscript);
+      if (finalizedText) {
+        webSpeechFinalizedRef.current = finalizedText.trimEnd();
+      }
+      // Show everything: all finalized segments + current interim
+      const fullText = (webSpeechFinalizedRef.current + ' ' + interimText).trim();
+      if (fullText) setCurrentTranscript(fullText);
     };
     recognition.onend = () => {
       if (isRecordingRef.current) {
@@ -439,6 +452,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); recognitionRef.current = null; } catch {}
     }
+    webSpeechFinalizedRef.current = "";
   }, []);
 
   // ── Real-time viseme loop ────────────────────────────────────────────────────
@@ -592,11 +606,26 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       case "transcript":
         if (data.is_final && data.text?.trim()) {
           setCurrentTranscript("");
-          setMessages(prev => [...prev, {
-            id: crypto.randomUUID(),
-            role: "user",
-            content: data.text
-          }]);
+          if (data.is_enhanced) {
+            // Enhanced transcript from LLM correction — update the last user message
+            setMessages(prev => {
+              const updated = [...prev];
+              for (let i = updated.length - 1; i >= 0; i--) {
+                if (updated[i].role === "user") {
+                  updated[i] = { ...updated[i], content: data.text };
+                  break;
+                }
+              }
+              return updated;
+            });
+          } else {
+            // Raw Whisper transcript — add as new user message
+            setMessages(prev => [...prev, {
+              id: crypto.randomUUID(),
+              role: "user",
+              content: data.text
+            }]);
+          }
           currentAiTextRef.current = "";
           setCurrentAiText("");
         } else {

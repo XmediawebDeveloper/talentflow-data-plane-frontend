@@ -10,6 +10,7 @@ export interface AIInterviewRoundConfig {
   duration_minutes: number;
   topics: string[];
   topic_weights?: Record<string, number>;
+  topic_time_minutes?: Record<string, number>;
   topic_comments?: Record<string, string>;
   enabled: boolean;
   order: number;
@@ -82,6 +83,7 @@ export interface PublishedJD {
   experience_min?: number;
   experience_max?: number;
   education_requirements?: Record<string, any>;
+  description?: string;
   coding_required?: boolean;
   created_at?: string;
   published_at?: string;
@@ -606,6 +608,28 @@ export const aiInterviewService = {
   }): Promise<AIInterviewAuditTrailResponse> {
     try {
       const response = await api.get<AIInterviewAuditTrailResponse>('/ai-interview/audit-trail/combined', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Generate AI-powered skill clusters
+   */
+  async generateClusters(mthSkills: string[], nthSkills: string[], jdTitle?: string, jdDescription?: string, mthTimeMin?: number, nthTimeMin?: number): Promise<{
+    mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+  }> {
+    try {
+      const response = await api.post('/ai-interview/generate-clusters', {
+        mth_skills: mthSkills,
+        nth_skills: nthSkills,
+        jd_title: jdTitle,
+        jd_description: jdDescription,
+        mth_time_min: mthTimeMin,
+        nth_time_min: nthTimeMin,
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

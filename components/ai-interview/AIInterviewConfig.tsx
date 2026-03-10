@@ -4,7 +4,7 @@ import {
   ArrowLeft, Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
   MessageSquare, GripVertical, Info, AlertCircle, Timer, Zap,
-  Video, Upload,
+  Video, Upload, Layers,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -24,6 +24,7 @@ interface Cluster {
   name: string;
   priority: 1 | 2 | 3 | 4 | 5;
   skills: string[];
+  reason?: string;
 }
 
 interface SkillEntry {
@@ -56,12 +57,12 @@ const SUPPORTED_LANGUAGES = [
   'Thai', 'Turkish', 'Ukrainian', 'Urdu', 'Vietnamese', 'Welsh',
 ];
 
-const PRIORITY_LABELS: Record<number, { label: string; color: string }> = {
-  5: { label: 'P5 – Critical',   color: 'bg-red-100 text-red-700 border-red-200' },
-  4: { label: 'P4 – High',       color: 'bg-orange-100 text-orange-700 border-orange-200' },
-  3: { label: 'P3 – Medium',     color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
-  2: { label: 'P2 – Low',        color: 'bg-blue-100 text-blue-700 border-blue-200' },
-  1: { label: 'P1 – Optional',   color: 'bg-gray-100 text-gray-600 border-gray-200' },
+const PRIORITY_LABELS: Record<number, { label: string; short: string; color: string; dot: string }> = {
+  5: { label: 'P5 – Critical',   short: 'Critical',  color: 'bg-red-100 text-red-700 border-red-200',       dot: 'bg-red-500' },
+  4: { label: 'P4 – High',       short: 'High',      color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+  3: { label: 'P3 – Medium',     short: 'Medium',    color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
+  2: { label: 'P2 – Low',        short: 'Low',       color: 'bg-blue-100 text-blue-700 border-blue-200',     dot: 'bg-blue-500' },
+  1: { label: 'P1 – Optional',   short: 'Optional',  color: 'bg-gray-100 text-gray-600 border-gray-200',     dot: 'bg-gray-400' },
 };
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -85,84 +86,81 @@ function PriorityBadge({ p }: { p: number }) {
   );
 }
 
-interface ClusterCardProps {
+interface ClusterRowProps {
   cluster: Cluster;
-  allSkillNames: string[];   // all skill names in this category (for "add skill" dropdown)
+  timeMin?: number;
+  isOpen: boolean;
+  onToggle: () => void;
   onChange: (updated: Cluster) => void;
   onRemove: () => void;
 }
 
-function ClusterCard({ cluster, allSkillNames, onChange, onRemove }: ClusterCardProps) {
-  const [addingSkill, setAddingSkill] = useState('');
-  const availableSkills = allSkillNames.filter(s => !cluster.skills.includes(s));
+function ClusterRow({ cluster, timeMin, isOpen, onToggle, onChange, onRemove }: ClusterRowProps) {
+  const [editingDetails, setEditingDetails] = useState(false);
+  const pInfo = PRIORITY_LABELS[cluster.priority] ?? PRIORITY_LABELS[3];
 
   return (
-    <div className="border border-gray-200 rounded-lg bg-white">
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100">
-        <GripVertical className="w-4 h-4 text-gray-300 flex-shrink-0" />
+    <div className="border-b border-gray-100 last:border-b-0">
+      {/* Collapsed row: Topic + Priority + Time + Expand/Remove */}
+      <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50/50 transition-colors">
+        <button onClick={onToggle} className="p-0.5 text-gray-400 hover:text-gray-600 flex-shrink-0">
+          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
         <input
           value={cluster.name}
           onChange={e => onChange({ ...cluster, name: e.target.value })}
-          placeholder="Cluster name (e.g. Frontend Engineering)"
-          className="flex-1 text-sm font-medium text-gray-900 bg-transparent focus:outline-none placeholder-gray-400"
+          placeholder="Topic name..."
+          className="flex-1 min-w-0 text-sm font-medium text-gray-900 bg-transparent focus:outline-none placeholder-gray-400"
+          onClick={e => e.stopPropagation()}
         />
+        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-semibold flex-shrink-0 ${pInfo.color}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${pInfo.dot}`} />
+          {pInfo.short}
+        </div>
         <select
           value={cluster.priority}
-          onChange={e => onChange({ ...cluster, priority: Number(e.target.value) as Cluster['priority'] })}
-          className="text-xs border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white"
+          onChange={e => { e.stopPropagation(); onChange({ ...cluster, priority: Number(e.target.value) as Cluster['priority'] }); }}
+          className="text-[10px] border border-gray-200 rounded px-1 py-0.5 focus:outline-none bg-white text-gray-500 cursor-pointer flex-shrink-0"
         >
           {[5, 4, 3, 2, 1].map(p => (
-            <option key={p} value={p}>{PRIORITY_LABELS[p].label}</option>
+            <option key={p} value={p}>{PRIORITY_LABELS[p].short}</option>
           ))}
         </select>
-        <button onClick={onRemove} className="p-1 text-gray-400 hover:text-red-500 transition-colors">
+        {timeMin !== undefined && (
+          <span className="text-[10px] text-gray-400 flex-shrink-0 font-medium">{timeMin} min</span>
+        )}
+        <button onClick={onRemove} className="p-1 text-gray-300 hover:text-red-500 transition-colors flex-shrink-0">
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
 
-      <div className="px-3 py-2">
-        {/* Skills in cluster */}
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {cluster.skills.length === 0 && (
-            <span className="text-xs text-gray-400 italic">No skills assigned yet</span>
-          )}
-          {cluster.skills.map(skill => (
-            <span key={skill} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700 border border-gray-200">
-              {skill}
-              <button
-                onClick={() => onChange({ ...cluster, skills: cluster.skills.filter(s => s !== skill) })}
-                className="hover:text-red-500 transition-colors"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-
-        {/* Add skill to cluster */}
-        {availableSkills.length > 0 && (
-          <div className="flex items-center gap-2">
-            <select
-              value={addingSkill}
-              onChange={e => setAddingSkill(e.target.value)}
-              className="flex-1 text-xs border border-dashed border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white text-gray-600"
-            >
-              <option value="">Add skill to this cluster…</option>
-              {availableSkills.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+      {/* Expanded: Topic Details */}
+      {isOpen && (
+        <div className="px-10 pb-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Topic Details</span>
             <button
-              onClick={() => {
-                if (!addingSkill) return;
-                onChange({ ...cluster, skills: [...cluster.skills, addingSkill] });
-                setAddingSkill('');
-              }}
-              className="px-2.5 py-1 text-xs bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+              onClick={() => setEditingDetails(!editingDetails)}
+              className="text-[10px] text-purple-600 hover:text-purple-800 font-medium"
             >
-              Add
+              {editingDetails ? 'Done' : 'Edit'}
             </button>
           </div>
-        )}
-      </div>
+          {editingDetails ? (
+            <textarea
+              value={cluster.reason || ''}
+              onChange={e => onChange({ ...cluster, reason: e.target.value })}
+              placeholder="Describe what to assess..."
+              rows={2}
+              className="w-full text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-300 resize-none"
+            />
+          ) : (
+            <p className="text-xs text-gray-600 leading-relaxed bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
+              {cluster.reason || <span className="italic text-gray-400">No details — click Edit to add</span>}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -184,11 +182,26 @@ interface SkillSectionProps {
 function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinutes, onChange }: SkillSectionProps) {
   const [customInput, setCustomInput] = useState('');
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
+  const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
 
   const jdSet = new Set(jdSkillNames.map(s => s.toLowerCase()));
   const color = category === 'mth'
     ? { tag: 'bg-purple-50 text-purple-700 border-purple-200', accent: 'text-purple-700' }
     : { tag: 'bg-indigo-50 text-indigo-700 border-indigo-200', accent: 'text-indigo-700' };
+
+  const hasClusters = config.clusters.length > 0;
+
+  // Find skills not assigned to any cluster
+  const assignedSkillSet = new Set(config.clusters.flatMap(c => c.skills.map(s => s.toLowerCase())));
+  const unclusteredSkills = config.skills.filter(s => !assignedSkillSet.has(s.name.toLowerCase()));
+
+  const toggleCluster = (id: string) => {
+    setCollapsedClusters(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   const addCustomSkill = () => {
     const name = customInput.trim();
@@ -202,11 +215,59 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
   };
 
   const removeSkill = (name: string) => {
-    onChange({ skills: config.skills.filter(s => s.name !== name) });
+    // Also remove from clusters
+    const updatedClusters = config.clusters.map(c => ({
+      ...c,
+      skills: c.skills.filter(s => s.toLowerCase() !== name.toLowerCase()),
+    }));
+    onChange({
+      skills: config.skills.filter(s => s.name !== name),
+      clusters: updatedClusters,
+    });
   };
 
   const updateComment = (name: string, comment: string) => {
     onChange({ skills: config.skills.map(s => s.name === name ? { ...s, comment } : s) });
+  };
+
+  const renderSkillTag = (skill: SkillEntry) => {
+    const fromJd = jdSet.has(skill.name.toLowerCase());
+    return (
+      <div key={skill.name} className="group">
+        <div className="flex items-center gap-2">
+          <span className={`flex-1 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border ${
+            fromJd ? color.tag : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          }`}>
+            {skill.name}
+            {fromJd && <span className="text-[10px] opacity-60">JD</span>}
+          </span>
+          <button
+            onClick={() => setCommentOpen(commentOpen === skill.name ? null : skill.name)}
+            title="Add comment"
+            className={`p-1 rounded transition-colors ${skill.comment ? 'text-amber-500' : 'text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100'}`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => removeSkill(skill.name)}
+            className="p-1 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        {commentOpen === skill.name && (
+          <div className="mt-1 ml-0.5">
+            <input
+              autoFocus
+              value={skill.comment}
+              onChange={e => updateComment(skill.name, e.target.value)}
+              placeholder="Add interviewer note for this skill (not shown to candidate)…"
+              className="w-full px-3 py-1.5 text-xs border border-amber-200 rounded-lg bg-amber-50/50 focus:outline-none focus:ring-1 focus:ring-amber-300 placeholder-amber-300"
+            />
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -248,81 +309,118 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Skills list */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Skills</span>
-            <span className="text-xs text-gray-400">{config.skills.length} skill{config.skills.length !== 1 ? 's' : ''}</span>
-          </div>
 
-          <div className="space-y-1.5">
-            {config.skills.map(skill => {
-              const fromJd = jdSet.has(skill.name.toLowerCase());
-              return (
-                <div key={skill.name} className="group">
-                  <div className="flex items-center gap-2">
-                    <span className={`flex-1 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border ${
-                      fromJd ? color.tag : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    }`}>
-                      {skill.name}
-                      {fromJd && <span className="text-[10px] opacity-60">JD</span>}
-                    </span>
-                    <button
-                      onClick={() => setCommentOpen(commentOpen === skill.name ? null : skill.name)}
-                      title="Add comment"
-                      className={`p-1 rounded transition-colors ${skill.comment ? 'text-amber-500' : 'text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100'}`}
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => removeSkill(skill.name)}
-                      className="p-1 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  {commentOpen === skill.name && (
-                    <div className="mt-1 ml-0.5">
-                      <input
-                        autoFocus
-                        value={skill.comment}
-                        onChange={e => updateComment(skill.name, e.target.value)}
-                        placeholder="Add interviewer note for this skill (not shown to candidate)…"
-                        className="w-full px-3 py-1.5 text-xs border border-amber-200 rounded-lg bg-amber-50/50 focus:outline-none focus:ring-1 focus:ring-amber-300 placeholder-amber-300"
-                      />
+        {/* ── Clustered view: skills grouped by cluster topic ── */}
+        {hasClusters && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Layers className="w-3.5 h-3.5 text-purple-500" />
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Skill Clusters</span>
+              </div>
+              <span className="text-xs text-gray-400">
+                {config.clusters.length} cluster{config.clusters.length !== 1 ? 's' : ''} · {config.skills.length} skill{config.skills.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {config.clusters
+                .slice()
+                .sort((a, b) => b.priority - a.priority)
+                .map(cluster => {
+                  const isCollapsed = collapsedClusters.has(cluster.id);
+                  const clusterSkills = config.skills.filter(s =>
+                    cluster.skills.some(cs => cs.toLowerCase() === s.name.toLowerCase())
+                  );
+
+                  return (
+                    <div key={cluster.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                      {/* Cluster header */}
+                      <button
+                        onClick={() => toggleCluster(cluster.id)}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                      >
+                        {isCollapsed
+                          ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          : <ChevronUp className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        }
+                        <span className="flex-1 text-sm font-medium text-gray-800">{cluster.name || 'Unnamed Topic'}</span>
+                        <PriorityBadge p={cluster.priority} />
+                        <span className="text-[11px] text-gray-400">{clusterSkills.length} skill{clusterSkills.length !== 1 ? 's' : ''}</span>
+                      </button>
+
+                      {/* Cluster body */}
+                      {!isCollapsed && (
+                        <div className="px-3 py-2.5 space-y-1.5 border-t border-gray-100">
+                          {cluster.reason && (
+                            <p className="text-[11px] text-gray-500 italic mb-1">{cluster.reason}</p>
+                          )}
+                          {clusterSkills.length === 0 && (
+                            <p className="text-xs text-gray-400 italic">No matching skills</p>
+                          )}
+                          {clusterSkills.map(skill => renderSkillTag(skill))}
+                        </div>
+                      )}
                     </div>
-                  )}
+                  );
+                })}
+
+              {/* Unclustered skills */}
+              {unclusteredSkills.length > 0 && (
+                <div className="border border-dashed border-amber-300 rounded-lg overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-50">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                    <span className="flex-1 text-sm font-medium text-amber-700">Unassigned Skills</span>
+                    <span className="text-[11px] text-amber-500">{unclusteredSkills.length} skill{unclusteredSkills.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="px-3 py-2.5 space-y-1.5 border-t border-amber-200">
+                    {unclusteredSkills.map(skill => renderSkillTag(skill))}
+                  </div>
                 </div>
-              );
-            })}
-
-            {config.skills.length === 0 && (
-              <p className="text-xs text-gray-400 italic py-1">No skills yet — will be auto-populated from JD.</p>
-            )}
+              )}
+            </div>
           </div>
+        )}
 
-          {/* Add custom skill */}
-          <div className="flex items-center gap-2 mt-2.5">
-            <input
-              value={customInput}
-              onChange={e => setCustomInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomSkill())}
-              placeholder="Add a skill (won't modify the JD)…"
-              className="flex-1 px-3 py-1.5 text-xs border border-dashed border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400 placeholder-gray-400"
-            />
-            <button
-              onClick={addCustomSkill}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Plus className="w-3 h-3" />
-              Add
-            </button>
+        {/* ── Flat view: no clusters yet, show skills as flat list ── */}
+        {!hasClusters && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Skills</span>
+              <span className="text-xs text-gray-400">{config.skills.length} skill{config.skills.length !== 1 ? 's' : ''}</span>
+            </div>
+
+            <div className="space-y-1.5">
+              {config.skills.map(skill => renderSkillTag(skill))}
+
+              {config.skills.length === 0 && (
+                <p className="text-xs text-gray-400 italic py-1">No skills yet — will be auto-populated from JD.</p>
+              )}
+            </div>
           </div>
-          <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
-            <Info className="w-3 h-3 flex-shrink-0" />
-            Added skills apply to this interview config only — the original JD is unchanged.
-          </p>
+        )}
+
+        {/* Add custom skill */}
+        <div className="flex items-center gap-2 mt-2.5">
+          <input
+            value={customInput}
+            onChange={e => setCustomInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomSkill())}
+            placeholder="Add a skill (won't modify the JD)…"
+            className="flex-1 px-3 py-1.5 text-xs border border-dashed border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400 placeholder-gray-400"
+          />
+          <button
+            onClick={addCustomSkill}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+            Add
+          </button>
         </div>
+        <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
+          <Info className="w-3 h-3 flex-shrink-0" />
+          Added skills apply to this interview config only — the original JD is unchanged.
+        </p>
 
       </div>
     </div>
@@ -446,6 +544,13 @@ export default function AIInterviewConfig() {
   const [recordingEnabled, setRecordingEnabled] = useState(true);
   const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
   const [languageInput, setLanguageInput] = useState('');
+
+  /* Cluster modal */
+  const [showClusterModal, setShowClusterModal] = useState(false);
+  const [generatingClusters, setGeneratingClusters] = useState(false);
+  const [draftMthClusters, setDraftMthClusters] = useState<Cluster[]>([]);
+  const [draftNthClusters, setDraftNthClusters] = useState<Cluster[]>([]);
+  const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null);
 
   /* Introduction video (optional) */
   const [introVideoFile, setIntroVideoFile] = useState<File | null>(null);
@@ -660,6 +765,83 @@ export default function AIInterviewConfig() {
   const totalPct = mth.percentage + (nth.enabled ? nth.percentage : 0) + (hrEnabled ? hrPct : 0);
   const pctValid = totalPct === 100;
 
+  /* ── Cluster handlers ── */
+  // Track whether clusters have ever been generated this session
+  const clustersGeneratedRef = useRef(false);
+
+  const handleOpenClusterModal = async () => {
+    // Show existing clusters — only auto-generate on very first time
+    setDraftMthClusters(mth.clusters);
+    setDraftNthClusters(nth.clusters);
+    setShowClusterModal(true);
+
+    const hasAnyClusters = mth.clusters.length > 0 || nth.clusters.length > 0;
+    if (!hasAnyClusters && !clustersGeneratedRef.current) {
+      await handleGenerateClusters();
+    }
+  };
+
+  const handleGenerateClusters = async () => {
+    if (!selectedJd) return;
+    setGeneratingClusters(true);
+    try {
+      const result = await aiInterviewService.generateClusters(
+        mth.skills.map(s => s.name),
+        nth.enabled ? nth.skills.map(s => s.name) : [],
+        selectedJd.title,
+        selectedJd.description,
+        fixedMthMin,
+        fixedNthMin,
+      );
+      const newMth = result.mth_clusters.map(c => ({
+        ...c,
+        priority: c.priority as Cluster['priority'],
+        reason: c.reason || '',
+      }));
+      const newNth = result.nth_clusters.map(c => ({
+        ...c,
+        priority: c.priority as Cluster['priority'],
+        reason: c.reason || '',
+      }));
+      setDraftMthClusters(newMth);
+      setDraftNthClusters(newNth);
+      clustersGeneratedRef.current = true;
+      // Auto-apply so clusters persist even if user closes without clicking Apply
+      setMth(prev => ({ ...prev, clusters: newMth }));
+      setNth(prev => ({ ...prev, clusters: newNth }));
+    } catch {
+      toast.error('Failed to generate clusters');
+    } finally {
+      setGeneratingClusters(false);
+    }
+  };
+
+  const handleApplyClusters = () => {
+    setMth(prev => ({ ...prev, clusters: draftMthClusters }));
+    setNth(prev => ({ ...prev, clusters: draftNthClusters }));
+    setShowClusterModal(false);
+    toast.success('Clusters applied!');
+  };
+
+  const handleUpdateDraftCluster = (
+    category: 'mth' | 'nth',
+    index: number,
+    updated: Cluster,
+  ) => {
+    const setter = category === 'mth' ? setDraftMthClusters : setDraftNthClusters;
+    setter(prev => prev.map((c, i) => i === index ? updated : c));
+  };
+
+  const handleRemoveDraftCluster = (category: 'mth' | 'nth', index: number) => {
+    const setter = category === 'mth' ? setDraftMthClusters : setDraftNthClusters;
+    setter(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddDraftCluster = (category: 'mth' | 'nth') => {
+    const setter = category === 'mth' ? setDraftMthClusters : setDraftNthClusters;
+    setter(prev => [...prev, { id: uid(), name: '', priority: 3 as Cluster['priority'], skills: [] }]);
+  };
+
   /* ── Video handlers ── */
   const handleVideoUpload = async (file: File) => {
     setIntroVideoFile(file);
@@ -699,10 +881,17 @@ export default function AIInterviewConfig() {
       const jdSet = new Set((selectedJd?.must_have_skills || []).map(s => s.toLowerCase()));
       const jdSkills = mth.skills.filter(s => jdSet.has(s.name.toLowerCase())).map(s => s.name);
       const customSkills = mth.skills.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
-      // Clusters → topics + topic_weights (priority as weight proxy: priority × 20)
+      // Clusters → topics + topic_weights + topic_time_minutes
       const topics = mth.clusters.map(c => c.name).filter(Boolean);
       const topicWeights: Record<string, number> = {};
-      mth.clusters.forEach(c => { if (c.name) topicWeights[c.name] = c.priority * 20; });
+      const topicTime: Record<string, number> = {};
+      const mthTotalW = mth.clusters.reduce((s, c) => s + c.priority, 0);
+      mth.clusters.forEach(c => {
+        if (c.name) {
+          topicWeights[c.name] = c.priority * 20;
+          topicTime[c.name] = mthTotalW > 0 ? Math.round((c.priority / mthTotalW) * fixedMthMin) : 0;
+        }
+      });
 
       rounds.push({
         type: 'must_have_skills',
@@ -710,6 +899,7 @@ export default function AIInterviewConfig() {
         duration_minutes: dur('mth'),
         topics,
         topic_weights: topics.length > 0 ? topicWeights : undefined,
+        topic_time_minutes: topics.length > 0 ? topicTime : undefined,
         enabled: true,
         order: 2,
         jd_skills: jdSkills.length > 0 ? jdSkills : undefined,
@@ -724,7 +914,14 @@ export default function AIInterviewConfig() {
       const customSkills = nth.skills.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
       const topics = nth.clusters.map(c => c.name).filter(Boolean);
       const topicWeights: Record<string, number> = {};
-      nth.clusters.forEach(c => { if (c.name) topicWeights[c.name] = c.priority * 20; });
+      const nthTopicTime: Record<string, number> = {};
+      const nthTotalW = nth.clusters.reduce((s, c) => s + c.priority, 0);
+      nth.clusters.forEach(c => {
+        if (c.name) {
+          topicWeights[c.name] = c.priority * 20;
+          nthTopicTime[c.name] = nthTotalW > 0 ? Math.round((c.priority / nthTotalW) * fixedNthMin) : 0;
+        }
+      });
 
       rounds.push({
         type: 'nice_to_have_skills',
@@ -732,6 +929,7 @@ export default function AIInterviewConfig() {
         duration_minutes: dur('nth'),
         topics,
         topic_weights: topics.length > 0 ? topicWeights : undefined,
+        topic_time_minutes: topics.length > 0 ? nthTopicTime : undefined,
         enabled: true,
         order: 3,
         jd_skills: jdSkills.length > 0 ? jdSkills : undefined,
@@ -922,49 +1120,63 @@ export default function AIInterviewConfig() {
               </button>
             </div>
 
-            {/* ── Interview Mode ── */}
-            <div className="border border-gray-200 rounded-lg bg-white p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="w-4 h-4 text-gray-600" />
-                <span className="font-semibold text-gray-900 text-sm">Interview Mode</span>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                {/* Fixed */}
-                <button
-                  onClick={() => setMode('fixed')}
-                  className={`relative flex flex-col gap-1 p-4 rounded-lg border-2 text-left transition-all ${
-                    mode === 'fixed' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
+            {/* ── Interview Mode + Make Clusters ── */}
+            <div className="border border-gray-200 rounded-lg bg-white p-4 space-y-4">
+              <div>
+                <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <Timer className={`w-4 h-4 ${mode === 'fixed' ? 'text-white' : 'text-gray-600'}`} />
-                    <span className="font-semibold text-sm">Fixed — 30 min</span>
+                    <Clock className="w-4 h-4 text-gray-600" />
+                    <span className="font-semibold text-gray-900 text-sm">Interview Mode</span>
                   </div>
-                  <p className={`text-xs ${mode === 'fixed' ? 'text-gray-300' : 'text-gray-500'}`}>
-                    Candidate response time is capped. AI narration excluded.
-                  </p>
-                  <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'fixed' ? 'text-gray-400' : 'text-gray-400'}`}>
-                    {hrEnabled && <div>HR Round → {fixedHrMin} min</div>}
-                    <div>Must-to-Have → {fixedMthMin} min</div>
-                    {nth.enabled && <div>Nice-to-Have → {fixedNthMin} min</div>}
-                  </div>
-                </button>
+                  <button
+                    onClick={handleOpenClusterModal}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-purple-300 text-purple-700 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    {mth.clusters.length > 0 || nth.clusters.length > 0
+                      ? `Edit Clusters (${mth.clusters.length + nth.clusters.length})`
+                      : 'Make Clusters'
+                    }
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Fixed */}
+                  <button
+                    onClick={() => setMode('fixed')}
+                    className={`relative flex flex-col gap-1 p-4 rounded-lg border-2 text-left transition-all ${
+                      mode === 'fixed' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Timer className={`w-4 h-4 ${mode === 'fixed' ? 'text-white' : 'text-gray-600'}`} />
+                      <span className="font-semibold text-sm">Fixed — 30 min</span>
+                    </div>
+                    <p className={`text-xs ${mode === 'fixed' ? 'text-gray-300' : 'text-gray-500'}`}>
+                      Candidate response time is capped. AI narration excluded.
+                    </p>
+                    <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'fixed' ? 'text-gray-400' : 'text-gray-400'}`}>
+                      {hrEnabled && <div>HR Round → {fixedHrMin} min</div>}
+                      <div>Must-to-Have → {fixedMthMin} min</div>
+                      {nth.enabled && <div>Nice-to-Have → {fixedNthMin} min</div>}
+                    </div>
+                  </button>
 
-                {/* Flexible */}
-                <button
-                  onClick={() => setMode('flexible')}
-                  className={`flex flex-col gap-1 p-4 rounded-lg border-2 text-left transition-all ${
-                    mode === 'flexible' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Zap className={`w-4 h-4 ${mode === 'flexible' ? 'text-white' : 'text-gray-600'}`} />
-                    <span className="font-semibold text-sm">Flexible</span>
-                  </div>
-                  <p className={`text-xs ${mode === 'flexible' ? 'text-gray-300' : 'text-gray-500'}`}>
-                    No time restriction. Interview runs until all questions are covered.
-                  </p>
-                </button>
+                  {/* Flexible */}
+                  <button
+                    onClick={() => setMode('flexible')}
+                    className={`flex flex-col gap-1 p-4 rounded-lg border-2 text-left transition-all ${
+                      mode === 'flexible' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Zap className={`w-4 h-4 ${mode === 'flexible' ? 'text-white' : 'text-gray-600'}`} />
+                      <span className="font-semibold text-sm">Flexible</span>
+                    </div>
+                    <p className={`text-xs ${mode === 'flexible' ? 'text-gray-300' : 'text-gray-500'}`}>
+                      No time restriction. Interview runs until all questions are covered.
+                    </p>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1018,6 +1230,51 @@ export default function AIInterviewConfig() {
               onToggle={() => setHrEnabled(e => !e)}
               onPctChange={setHrPct}
             />
+
+
+            {/* Cluster summary (when clusters exist) */}
+            {(mth.clusters.length > 0 || nth.clusters.length > 0) && (
+              <div className="border border-purple-200 rounded-lg bg-purple-50/50 p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-purple-800">
+                  <Layers className="w-4 h-4" />
+                  Active Clusters
+                </div>
+                {mth.clusters.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Must-To-Have</p>
+                    <div className="space-y-1">
+                      {mth.clusters.map(c => (
+                        <div key={c.id} className="text-xs">
+                          <div className="flex items-center gap-2">
+                            <PriorityBadge p={c.priority} />
+                            <span className="font-medium text-gray-700">{c.name || 'Unnamed'}</span>
+                            <span className="text-gray-400">({c.skills.length} skills)</span>
+                          </div>
+                          {c.reason && <p className="text-[11px] text-gray-400 italic ml-[calc(theme(spacing.2)+4rem)]">{c.reason}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {nth.clusters.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Nice-To-Have</p>
+                    <div className="space-y-1">
+                      {nth.clusters.map(c => (
+                        <div key={c.id} className="text-xs">
+                          <div className="flex items-center gap-2">
+                            <PriorityBadge p={c.priority} />
+                            <span className="font-medium text-gray-700">{c.name || 'Unnamed'}</span>
+                            <span className="text-gray-400">({c.skills.length} skills)</span>
+                          </div>
+                          {c.reason && <p className="text-[11px] text-gray-400 italic ml-[calc(theme(spacing.2)+4rem)]">{c.reason}</p>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Recording */}
             <label className="flex items-center gap-3 cursor-pointer px-1">
@@ -1250,6 +1507,168 @@ export default function AIInterviewConfig() {
               {savingDraft ? 'Saving…' : 'Save Draft'}
             </button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Cluster Modal ── */}
+      <Dialog open={showClusterModal} onOpenChange={open => !open && setShowClusterModal(false)}>
+        <DialogContent className="!max-w-[1100px] w-[95vw] h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+          {/* Fixed Header — pr-12 leaves space for the Dialog close (X) button */}
+          <div className="px-4 sm:px-6 pr-12 sm:pr-14 py-3 sm:py-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50 flex-shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
+              <div className="min-w-0">
+                <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Layers className="w-5 h-5 text-purple-600 flex-shrink-0" />
+                  Skill Clusters
+                </DialogTitle>
+                <DialogDescription className="mt-1 text-xs sm:text-sm text-gray-500">
+                  AI generates focused clusters from your skills based on available time. Higher priority clusters get more time.
+                </DialogDescription>
+              </div>
+              <button
+                onClick={handleGenerateClusters}
+                disabled={generatingClusters}
+                className="flex items-center justify-center gap-2 px-4 py-2 sm:py-2.5 text-sm font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 shadow-sm flex-shrink-0 w-full sm:w-auto"
+              >
+                {generatingClusters ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {generatingClusters ? 'Regenerating…' : 'Regenerate with AI'}
+              </button>
+            </div>
+          </div>
+
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-4 sm:py-5">
+            {generatingClusters ? (
+              <div className="flex items-center justify-center py-16">
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+                  <p className="text-sm text-gray-500">AI is analyzing skills and generating clusters…</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {/* Must-To-Have Skills */}
+                {mth.skills.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4.5 h-4.5 text-purple-600" />
+                        <h3 className="font-semibold text-gray-900 text-base">Must-To-Have Skills</h3>
+                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{fixedMthMin} min</span>
+                      </div>
+                      <button
+                        onClick={() => handleAddDraftCluster('mth')}
+                        disabled={false}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Cluster
+                      </button>
+                    </div>
+
+                    {draftMthClusters.length === 0 ? (
+                      <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
+                        <Layers className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-400">No clusters yet. Click <strong>&quot;Regenerate with AI&quot;</strong> or add manually.</p>
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
+                        {(() => {
+                          const totalWeight = draftMthClusters.reduce((s, c) => s + c.priority, 0);
+                          return draftMthClusters.map((cluster, i) => {
+                            const timeMin = totalWeight > 0 ? Math.round((cluster.priority / totalWeight) * fixedMthMin) : 0;
+                            return (
+                              <ClusterRow
+                                key={cluster.id}
+                                cluster={cluster}
+                                timeMin={timeMin}
+                                isOpen={expandedClusterId === cluster.id}
+                                onToggle={() => setExpandedClusterId(prev => prev === cluster.id ? null : cluster.id)}
+                                onChange={updated => handleUpdateDraftCluster('mth', i, updated)}
+                                onRemove={() => handleRemoveDraftCluster('mth', i)}
+                              />
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Nice-To-Have Skills */}
+                {nth.enabled && nth.skills.length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4.5 h-4.5 text-indigo-600" />
+                        <h3 className="font-semibold text-gray-900 text-base">Nice-To-Have Skills</h3>
+                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{fixedNthMin} min</span>
+                      </div>
+                      <button
+                        onClick={() => handleAddDraftCluster('nth')}
+                        disabled={false}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Cluster
+                      </button>
+                    </div>
+
+                    {draftNthClusters.length === 0 ? (
+                      <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
+                        <Layers className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-400">No clusters yet. Click <strong>&quot;Regenerate with AI&quot;</strong> or add manually.</p>
+                      </div>
+                    ) : (
+                      <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
+                        {(() => {
+                          const totalWeight = draftNthClusters.reduce((s, c) => s + c.priority, 0);
+                          return draftNthClusters.map((cluster, i) => {
+                            const timeMin = totalWeight > 0 ? Math.round((cluster.priority / totalWeight) * fixedNthMin) : 0;
+                            return (
+                              <ClusterRow
+                                key={cluster.id}
+                                cluster={cluster}
+                                timeMin={timeMin}
+                                isOpen={expandedClusterId === cluster.id}
+                                onToggle={() => setExpandedClusterId(prev => prev === cluster.id ? null : cluster.id)}
+                                onChange={updated => handleUpdateDraftCluster('nth', i, updated)}
+                                onRemove={() => handleRemoveDraftCluster('nth', i)}
+                              />
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Fixed Footer */}
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 flex-shrink-0">
+            <p className="text-xs text-gray-400 flex items-center gap-1.5 hidden sm:flex">
+              <Info className="w-3.5 h-3.5 flex-shrink-0" />
+              Add new skills in the config, then click Regenerate to include them in clusters.
+            </p>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <button
+                onClick={() => setShowClusterModal(false)}
+                className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyClusters}
+                disabled={generatingClusters}
+                className="flex-1 sm:flex-none px-5 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 text-sm font-semibold flex items-center justify-center gap-2 shadow-sm"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Apply Clusters
+              </button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
