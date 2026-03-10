@@ -148,6 +148,7 @@ export async function proxy(request: NextRequest) {
   const subdomainAllowedPaths = [
     '/login',
     '/reset-password',
+    '/complete-payment',
     '/assessment',
     '/ai-interview',
     ...protectedRoutes,

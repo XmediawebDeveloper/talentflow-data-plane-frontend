@@ -139,7 +139,7 @@ function CompletePaymentContent() {
     };
 
     fetchPlanDetails();
-  }, [planId, billingInterval]);
+  }, [planId]);
 
   // Handle payment submission via Razorpay
   const handlePaymentSubmit = async () => {

@@ -8,6 +8,7 @@ import { mockTenant } from '@/lib/mockData/tenantData';
 import { useRouter } from 'next/navigation';
 import type { User as ApiUser, FeatureFlags as ApiFeatureFlags } from '@/lib/services/authService';
 import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
+import { encodeParam, encodePlanId } from '@/lib/utils/planEncoder';
 
 // Helper to store/retrieve user from localStorage
 const USER_STORAGE_KEY = 'talentflow_user';
@@ -347,6 +348,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Validate with API in background and refresh tenant name
         try {
           const apiUserData = await authService.getCurrentUser();
+
+          // If tenant has pending payment, redirect to payment page (same logic as Login.tsx)
+          if (apiUserData.pending_payment && apiUserData.pending_payment_redirect) {
+            if (typeof window !== 'undefined' && !window.location.pathname.includes('/complete-payment')) {
+              console.log('[AUTH] Tenant has pending payment, redirecting from session restore');
+              try {
+                const url = new URL(apiUserData.pending_payment_redirect, window.location.origin);
+                const rawTenantId = url.searchParams.get('tenant_id');
+                const rawPlanId = url.searchParams.get('plan_id');
+                if (rawTenantId && rawPlanId) {
+                  window.location.href = `/complete-payment?t=${encodeURIComponent(encodeParam(rawTenantId))}&p=${encodeURIComponent(encodePlanId(rawPlanId))}`;
+                  return;
+                }
+              } catch {
+                window.location.href = apiUserData.pending_payment_redirect;
+                return;
+              }
+            }
+            return;
+          }
+
           const userData = mapApiUserToUser(apiUserData);
           // Preserve lastLogin and createdAt from cached user if API doesn't return them
           if (!userData.lastLogin && storedUser.lastLogin) {
@@ -406,6 +428,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AUTH] Fetching current user from API...');
           const apiUserData = await authService.getCurrentUser();
           console.log('[AUTH] Got user data:', apiUserData);
+
+          // If tenant has pending payment, redirect to payment page (same logic as Login.tsx)
+          if (apiUserData.pending_payment && apiUserData.pending_payment_redirect) {
+            if (typeof window !== 'undefined' && !window.location.pathname.includes('/complete-payment')) {
+              console.log('[AUTH] Tenant has pending payment, redirecting from session restore');
+              try {
+                const url = new URL(apiUserData.pending_payment_redirect, window.location.origin);
+                const rawTenantId = url.searchParams.get('tenant_id');
+                const rawPlanId = url.searchParams.get('plan_id');
+                if (rawTenantId && rawPlanId) {
+                  window.location.href = `/complete-payment?t=${encodeURIComponent(encodeParam(rawTenantId))}&p=${encodeURIComponent(encodePlanId(rawPlanId))}`;
+                  setIsLoading(false);
+                  return;
+                }
+              } catch {
+                window.location.href = apiUserData.pending_payment_redirect;
+                setIsLoading(false);
+                return;
+              }
+            }
+            setIsLoading(false);
+            return;
+          }
+
           const userData = mapApiUserToUser(apiUserData);
           setUser(userData);
           const freshTenant = {
