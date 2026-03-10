@@ -239,7 +239,12 @@ function CompletePaymentContent() {
 
     } catch (err: any) {
       console.error('Payment error:', err);
-      const message = err.message || 'Payment failed. Please try again.';
+      const rawMessage = err.message || '';
+      // Strip technical/internal error details — only show user-friendly messages
+      const isTechnical = /sqlalchemy|asyncpg|psycopg|traceback|exception|relation|column|syntax|sql:|programming|integrity|undefined|stacktrace/i.test(rawMessage);
+      const message = isTechnical || !rawMessage
+        ? 'Payment processing failed. Please try again or contact support if the issue persists.'
+        : rawMessage;
       setError(message);
       toast.error('Payment failed', { description: message });
     } finally {

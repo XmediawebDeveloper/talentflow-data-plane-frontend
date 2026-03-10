@@ -214,6 +214,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     enabled: isProctoringActive,
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
+    copyPasteBlocking: assessmentData?.proctoring_settings?.copy_paste_blocking ?? true,
+    tabSwitchDetection: assessmentData?.proctoring_settings?.tab_switch_detection ?? true,
     reportEvent: async (tok, event) => {
       await candidateService.reportProctorEvent(tok, {
         event_type: event.event_type as any,

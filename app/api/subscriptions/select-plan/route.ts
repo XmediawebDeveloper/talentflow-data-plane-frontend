@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const ADMIN_API_URL = process.env.SUBSCRIPTION_API_URL || 'http://localhost:8000/api/v1';
+// Route to the DP backend (has queue logic for paid plan upgrades)
+const DP_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,8 +15,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const apiUrl = `${ADMIN_API_URL}/subscriptions/${tenant_id}/select-plan`;
-    console.log('[Subscription API] Calling:', apiUrl);
+    // Forward auth token so DP backend can authenticate via get_current_user
+    const accessToken = request.cookies.get('accessToken')?.value;
+    const authHeader = accessToken ? `Bearer ${accessToken}` : '';
+
+    const apiUrl = `${DP_API_URL}/subscription/${tenant_id}/select-plan`;
+    console.log('[Subscription API] Calling DP backend:', apiUrl);
     console.log('[Subscription API] Payload:', JSON.stringify(payload));
 
     const response = await fetch(apiUrl, {
@@ -23,7 +28,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/json',
         'X-Tenant-ID': tenant_id,
-        // Not sending Authorization header - admin API uses different JWT secret
+        ...(authHeader && { Authorization: authHeader }),
       },
       body: JSON.stringify(payload),
       // Add timeout
@@ -49,9 +54,9 @@ export async function POST(request: NextRequest) {
     let errorMessage = 'Internal server error';
     if (error instanceof Error) {
       if (error.name === 'AbortError' || error.message.includes('timeout')) {
-        errorMessage = 'Request timeout - server at 192.168.1.110 is not responding';
+        errorMessage = 'Request timed out. Please try again.';
       } else if (error.message.includes('ECONNREFUSED') || error.message.includes('fetch failed')) {
-        errorMessage = 'Cannot connect to server at 192.168.1.110 - please check if the server is running';
+        errorMessage = 'Cannot connect to server. Please try again or contact support.';
       } else {
         errorMessage = error.message;
       }
