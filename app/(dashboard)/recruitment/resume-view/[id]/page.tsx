@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import {
   ArrowLeft, Download, Mail, Phone, MapPin, Briefcase, Calendar, Award,
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
@@ -1344,15 +1345,7 @@ Best regards`);
                                 <div className="flex items-center gap-3 text-xs text-gray-600">
                                   <span className="flex items-center gap-1">
                                     <Clock className="w-3 h-3" />
-                                    {new Date(version.uploadDate + (version.uploadDate.includes('Z') ? '' : 'Z')).toLocaleString('en-IN', {
-                                      timeZone: 'Asia/Kolkata',
-                                      month: 'short',
-                                      day: 'numeric',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                      hour12: true
-                                    })}
+                                    {formatIST(version.uploadDate)}
                                   </span>
                                   <span>•</span>
                                   <span>{version.size}</span>
@@ -1474,15 +1467,7 @@ Best regards`);
                   <div>
                     <div className="text-xs text-gray-500 mb-1">Upload Date</div>
                     <div className="text-sm text-gray-900">
-                      {new Date(resume.uploadDate + (resume.uploadDate?.includes('Z') ? '' : 'Z')).toLocaleString('en-IN', {
-                        timeZone: 'Asia/Kolkata',
-                        month: 'long',
-                        day: 'numeric',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true
-                      })}
+                      {formatIST(resume.uploadDate)}
                     </div>
                   </div>
                 </div>
@@ -1496,15 +1481,7 @@ Best regards`);
                     <div className="text-xs text-gray-500 mb-1">Last Modified</div>
                     <div className="text-sm text-gray-900">
                       {resume.lastUpdated
-                        ? new Date(resume.lastUpdated + (resume.lastUpdated?.includes('Z') ? '' : 'Z')).toLocaleString('en-IN', {
-                            timeZone: 'Asia/Kolkata',
-                            month: 'long',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true
-                          })
+                        ? formatIST(resume.lastUpdated)
                         : 'Never'}
                     </div>
                   </div>
@@ -1984,7 +1961,7 @@ Best regards`);
                       <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {resume.uploadDate ? new Date(resume.uploadDate).toLocaleDateString() : 'N/A'}
+                          {resume.uploadDate ? formatISTDate(resume.uploadDate) : 'N/A'}
                         </span>
                         {resume.fileSizeKb && (
                           <span className="flex items-center gap-1">
@@ -2028,7 +2005,7 @@ Best regards`);
                         <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
-                            {version.uploadDate ? new Date(version.uploadDate).toLocaleDateString() : 'N/A'}
+                            {version.uploadDate ? formatISTDate(version.uploadDate) : 'N/A'}
                           </span>
                           {version.size && (
                             <span className="flex items-center gap-1">

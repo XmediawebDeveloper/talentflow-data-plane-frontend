@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { User, Tenant, UserRole } from '@/lib/types/tenant';
 import { Clock, Building2, CreditCard, CalendarDays } from 'lucide-react';
 import { useQuota } from '@/contexts/QuotaContext';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 
 interface WelcomeBannerProps {
   user?: User;
@@ -67,13 +68,7 @@ function formatLastLogin(lastLogin: string): string {
   if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
   if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 
-  return loginDate.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatIST(lastLogin);
 }
 
 export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
@@ -140,7 +135,7 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
           ) : user?.createdAt ? (
             <span className="inline-flex items-center gap-1.5 text-xs text-gray-400">
               <Clock className="h-3.5 w-3.5" />
-              Member since {new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              Member since {formatISTDate(user.createdAt)}
             </span>
           ) : null}
         </div>

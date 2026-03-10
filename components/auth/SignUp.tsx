@@ -102,6 +102,8 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [companyNameError, setCompanyNameError] = useState('');
+  const [adminNameError, setAdminNameError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
@@ -274,6 +276,29 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     fetchPlanDetails();
   }, [encodedPlanFromUrl, billingInterval]);
 
+  // Company name validation: letters, numbers, spaces, & . - ' ( ) allowed; min 2, max 100
+  const validateCompanyName = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) return 'Company name is required';
+    if (trimmed.length < 2) return 'Company name must be at least 2 characters';
+    if (trimmed.length > 100) return 'Company name must be 100 characters or less';
+    if (!/^[a-zA-Z0-9 &.\-'()]+$/.test(trimmed))
+      return "Only letters, numbers, spaces and & . - ' ( ) are allowed";
+    return '';
+  };
+
+  // Name validation: letters, spaces, hyphen, apostrophe only; min 2, max 100
+  const validateName = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) return 'Your name is required';
+    if (trimmed.length < 2) return 'Name must be at least 2 characters';
+    if (trimmed.length > 100) return 'Name must be 100 characters or less';
+    if (/[0-9]/.test(trimmed)) return 'Name must not contain numbers';
+    if (!/^[a-zA-Z \-']+$/.test(trimmed))
+      return "Only letters, spaces, hyphens and apostrophes are allowed";
+    return '';
+  };
+
   // Comprehensive email validation
   const validateEmail = (email: string): { isValid: boolean; error: string } => {
     // Check if email is empty
@@ -347,6 +372,16 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     } else if (field === 'adminEmail') {
       setEmailError('');
     }
+
+    // Validate company name in real-time
+    if (field === 'companyName') {
+      setCompanyNameError(validateCompanyName(value));
+    }
+
+    // Validate admin name in real-time
+    if (field === 'adminName') {
+      setAdminNameError(validateName(value));
+    }
   };
 
   // Password strength validation (live feedback)
@@ -374,9 +409,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const isFormComplete =
     (freeTrialAcknowledged || !!selectedPlanDetails) &&
     form.companyName.trim().length >= 2 &&
+    !companyNameError &&
     !emailError &&
     otpVerified &&
     form.adminName.trim().length >= 2 &&
+    !adminNameError &&
     /^[0-9+\-\s()]{10,}$/.test(form.phoneNumber.trim()) &&
     form.password.length >= 8 &&
     /[A-Z]/.test(form.password) &&
@@ -393,12 +430,8 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
 
     // Company name validation
-    if (!form.companyName.trim()) {
-      return 'Company name is required';
-    }
-    if (form.companyName.trim().length < 2) {
-      return 'Company name must be at least 2 characters';
-    }
+    const companyErr = validateCompanyName(form.companyName);
+    if (companyErr) return companyErr;
 
     // Email validation
     const emailValidation = validateEmail(form.adminEmail);
@@ -412,12 +445,8 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
 
     // Admin name validation
-    if (!form.adminName.trim()) {
-      return 'Your name is required';
-    }
-    if (form.adminName.trim().length < 2) {
-      return 'Name must be at least 2 characters';
-    }
+    const nameErr = validateName(form.adminName);
+    if (nameErr) return nameErr;
 
     // Phone number validation
     if (!form.phoneNumber.trim()) {
@@ -1545,9 +1574,13 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     onChange={handleChange('companyName')}
                     placeholder="Acme Corporation"
                     required
-                    style={inputStyle}
+                    maxLength={100}
+                    style={{ ...inputStyle, borderColor: companyNameError ? '#EF4444' : '#D1D5DB' }}
                   />
                 </div>
+                {companyNameError && (
+                  <p style={{ marginTop: 4, fontSize: 12, color: '#EF4444' }}>{companyNameError}</p>
+                )}
               </div>
 
               {/* Admin Name */}
@@ -1561,9 +1594,13 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     onChange={handleChange('adminName')}
                     placeholder="John Smith"
                     required
-                    style={inputStyle}
+                    maxLength={100}
+                    style={{ ...inputStyle, borderColor: adminNameError ? '#EF4444' : '#D1D5DB' }}
                   />
                 </div>
+                {adminNameError && (
+                  <p style={{ marginTop: 4, fontSize: 12, color: '#EF4444' }}>{adminNameError}</p>
+                )}
               </div>
 
               {/* Work Email with OTP */}

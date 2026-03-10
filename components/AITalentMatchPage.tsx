@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList } from 'lucide-react';
+import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -12,10 +12,12 @@ import { MatchedCandidate } from '@/lib/services/aiMatchService';
 import api from '@/lib/services/api';
 import { scoringService } from '@/lib/services/scoringService';
 import { resumeService } from '@/lib/services/resumeService';
+import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface Job {
   id: string;
@@ -161,6 +163,30 @@ export default function AITalentMatchPage({
 
   // Available units from quota API
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
+
+  // Scored resume IDs for current JD
+  const [scoredResumeIds, setScoredResumeIds] = useState<Set<string>>(new Set());
+
+  // Fetch scored resumes when viewing details or results for a JD
+  useEffect(() => {
+    const jobId = selectedHistoryItem?.jobId || (viewMode === 'results' ? selectedJob : '');
+    if (!jobId) {
+      setScoredResumeIds(new Set());
+      return;
+    }
+    const fetchScored = async () => {
+      try {
+        const response = await jdService.getScoredResumes(jobId, { page_size: 500 });
+        const ids = new Set<string>(
+          (response.items || []).map((r: any) => r.resume_id).filter(Boolean)
+        );
+        setScoredResumeIds(ids);
+      } catch (e) {
+        setScoredResumeIds(new Set());
+      }
+    };
+    fetchScored();
+  }, [selectedHistoryItem, selectedJob, viewMode]);
 
   // Handle attachments click - fetch real versions
   const handleAttachmentsClick = async (candidate: MatchedCandidateWithVersions) => {
@@ -869,11 +895,7 @@ export default function AITalentMatchPage({
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600 mt-1">
                   <span className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
-                    {new Date(selectedHistoryItem.matchedAt).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}
+                    {formatISTDate(selectedHistoryItem.matchedAt)}
                   </span>
                   <span className="flex items-center gap-1">
                     <User className="w-4 h-4" />
@@ -1046,6 +1068,9 @@ export default function AITalentMatchPage({
                 <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
                   Attachments
                 </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                  Scored Status
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -1115,11 +1140,7 @@ export default function AITalentMatchPage({
                     {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
                   </td>
                   <td className="px-4 py-4 text-sm text-gray-700">
-                    {candidate.uploadDate ? new Date(candidate.uploadDate).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    }) : <span className="text-gray-400">-</span>}
+                    {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-400">-</span>}
                   </td>
                   <td className="px-4 py-4">
                     <button
@@ -1132,6 +1153,19 @@ export default function AITalentMatchPage({
                       <Paperclip className="w-3.5 h-3.5" />
                       {candidate.attachmentCount || 1}
                     </button>
+                  </td>
+                  <td className="px-4 py-4">
+                    {scoredResumeIds.has(candidate.resumeId) ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                        <CheckCircle className="w-3 h-3" />
+                        Scored
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                        <XCircle className="w-3 h-3" />
+                        Not Scored
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1771,11 +1805,7 @@ export default function AITalentMatchPage({
                         <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                           <span className="flex items-center gap-1.5">
                             <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
-                            {new Date(item.matchedAt).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
+                            {formatISTDate(item.matchedAt)}
                           </span>
                           <span className="flex items-center gap-1.5">
                             <User className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -2127,6 +2157,9 @@ export default function AITalentMatchPage({
                   <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
                     Attachments
                   </th>
+                  <th className="px-4 py-3 text-left text-xs text-gray-900 uppercase tracking-wider">
+                    Scored Status
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -2196,11 +2229,7 @@ export default function AITalentMatchPage({
                       {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-700">
-                      {candidate.uploadDate ? new Date(candidate.uploadDate).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      }) : <span className="text-gray-400">-</span>}
+                      {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-400">-</span>}
                     </td>
                     <td className="px-4 py-4">
                       <button
@@ -2213,6 +2242,19 @@ export default function AITalentMatchPage({
                         <Paperclip className="w-3.5 h-3.5" />
                         {candidate.attachmentCount || 1}
                       </button>
+                    </td>
+                    <td className="px-4 py-4">
+                      {scoredResumeIds.has(candidate.resumeId) ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                          <CheckCircle className="w-3 h-3" />
+                          Scored
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                          <XCircle className="w-3 h-3" />
+                          Not Scored
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}

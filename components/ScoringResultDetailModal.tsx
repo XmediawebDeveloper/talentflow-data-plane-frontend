@@ -3,6 +3,7 @@ import { useState } from 'react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import ContactCandidateModal from './ContactCandidateModal';
 import ResumePreviewModal from './ResumePreviewModal';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 
 interface DetailedScores {
@@ -169,11 +170,7 @@ export default function ScoringResultDetailModal({ resume, jobTitle, onClose }: 
                 <div className="text-lg font-bold text-gray-900">{jobTitle}</div>
                 <div className="text-xs text-gray-600 mt-2 flex items-center gap-1.5 justify-end">
                   <Clock className="w-3.5 h-3.5" />
-                  Scored on {new Date(resume.scoredDate).toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                  })}
+                  Scored on {formatISTDate(resume.scoredDate)}
                 </div>
               </div>
             </div>

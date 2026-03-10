@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/hooks/useAuth';
 import {
   Bell,
   CheckCircle,
@@ -17,6 +18,7 @@ import notificationService, { Notification } from '@/lib/services/notificationSe
 
 export default function NotificationsPage() {
   const router = useRouter();
+  const { isTenantAdmin } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -98,7 +100,7 @@ export default function NotificationsPage() {
     if (!notification.is_read) {
       await handleMarkAsRead(notification.id);
     }
-    if (notification.action_url) {
+    if (isTenantAdmin && notification.action_url) {
       router.push(notification.action_url);
     }
   };
@@ -271,7 +273,7 @@ export default function NotificationsPage() {
                       </div>
                       <p className="text-xs sm:text-sm text-gray-600 mb-2 line-clamp-2">{notification.message}</p>
                       <div className="flex items-center gap-3">
-                        {notification.action_label && (
+                        {isTenantAdmin && notification.action_label && (
                           <span className="text-xs text-gray-800 font-medium hover:underline">
                             {notification.action_label}
                           </span>

@@ -24,6 +24,7 @@ import {
 import teamService, { TeamMembersUsageSummary, TeamMemberUsage as MemberUsage } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Team } from '@/lib/services/teamService';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface TeamMemberUsageProps {
   team: Team;
@@ -126,7 +127,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
+    return formatISTDate(dateStr);
   };
 
   if (!isTenantAdmin) {

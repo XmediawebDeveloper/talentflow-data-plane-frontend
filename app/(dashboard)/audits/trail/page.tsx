@@ -42,6 +42,7 @@ import {
   getBillingImpact,
   type ErrorOrigin,
 } from '@/lib/types/auditSession';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -493,14 +494,7 @@ export default function AuditTrailPage() {
   };
 
   const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatIST(dateStr);
   };
 
   const handleExport = async () => {
@@ -1355,13 +1349,7 @@ export default function AuditTrailPage() {
                   <div className="bg-purple-50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 border border-purple-100">
                     <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-0.5 sm:mb-1">Generation Timestamp</p>
                     <p className="text-xs sm:text-sm font-medium text-gray-900">
-                      {aiAuditData.questions_generated_at
-                        ? new Date(aiAuditData.questions_generated_at).toLocaleString('en-US', {
-                            timeZone: 'Asia/Kolkata',
-                            month: 'short', day: 'numeric', year: 'numeric',
-                            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true,
-                          })
-                        : 'N/A'}
+                      {formatIST(aiAuditData.questions_generated_at)}
                     </p>
                   </div>
                 </div>

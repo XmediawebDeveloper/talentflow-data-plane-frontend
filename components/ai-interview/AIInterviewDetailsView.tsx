@@ -14,6 +14,7 @@ import type {
   AIInterviewVersionHistoryItem,
 } from '@/lib/services/aiInterviewService';
 import CandidateResultsView from './CandidateResultsView';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 
 const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
@@ -270,7 +271,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                 </span>
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5" />
-                  {new Date(config.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })} at {new Date(config.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  {formatIST(config.created_at)}
                 </span>
                 {config.created_by_name && (
                   <span>by {config.created_by_name}</span>
@@ -613,11 +614,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                             </div>
                           )}
                           <div className="text-xs text-gray-400">
-                            {activity.completed_at
-                              ? new Date(activity.completed_at).toLocaleDateString()
-                              : activity.started_at
-                              ? new Date(activity.started_at).toLocaleDateString()
-                              : new Date(activity.created_at).toLocaleDateString()}
+                            {formatISTDate(activity.completed_at || activity.started_at || activity.created_at)}
                           </div>
                           <ChevronRight className="w-4 h-4 text-gray-400" />
                         </div>
@@ -668,7 +665,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                             {version.changed_by_name && (
                               <span>by {version.changed_by_name}</span>
                             )}
-                            <span>{new Date(version.created_at).toLocaleString()}</span>
+                            <span>{formatIST(version.created_at)}</span>
                           </div>
                           <div className="mt-2 text-sm text-gray-500 space-y-1">
                             {version.interview_type && (

@@ -7,6 +7,7 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // Email validation regex
 const isValidEmail = (email: string): boolean => {
@@ -243,7 +244,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           // scheduled_at,  // Commented out - schedule feature disabled for now
           custom_message: customMessage
             ? customMessage.replace('[deadline date]', expiryDays > 0
-                ? new Date(Date.now() + expiryDays * 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                ? formatISTDate(new Date(Date.now() + expiryDays * 86400000).toISOString())
                 : 'no specific deadline'
               )
             : undefined,
@@ -744,7 +745,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   {customMessage
                     .replace('[Candidate Name]', candidates[0]?.name || '[Candidate Name]')
                     .replace('[deadline date]', expiryDays > 0
-                      ? new Date(Date.now() + expiryDays * 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+                      ? formatISTDate(new Date(Date.now() + expiryDays * 86400000).toISOString())
                       : 'no specific deadline'
                     )
                   }

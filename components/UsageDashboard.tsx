@@ -8,6 +8,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { PlanFeatureKey } from '@/lib/types/planFeatures';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 // Addon interface
 interface Addon {
@@ -898,7 +899,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               {quotaSummary.billing_period && (
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-500 bg-gray-50 px-3 sm:px-4 py-2 rounded-lg border border-gray-200 self-start sm:self-auto">
                   <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                  <span className="truncate">{new Date(quotaSummary.billing_period.start).toLocaleDateString()} - {new Date(quotaSummary.billing_period.end).toLocaleDateString()}</span>
+                  <span className="truncate">{formatISTDate(quotaSummary.billing_period.start)} - {formatISTDate(quotaSummary.billing_period.end)}</span>
                 </div>
               )}
             </div>
@@ -1188,6 +1189,25 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               </div>
             </div>
           </div>
+
+          {/* Trial / blocked banner */}
+          {isAddonPurchaseBlocked && subscriptionSummary?.is_trial && (
+            <div className="mx-4 sm:mx-6 mt-4 mb-1 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5">
+              <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-800">Add-on Units — Not Available on Free Trial</p>
+                <p className="text-sm text-amber-700 mt-0.5">
+                  Purchasing add-on units is only available for paid subscriptions. Upgrade your plan to unlock this feature.
+                </p>
+              </div>
+              <button
+                onClick={handleUpgradeClick}
+                className="flex-shrink-0 flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Upgrade <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           <div className="p-3 sm:p-4 md:p-6">
             {addonsLoading && (

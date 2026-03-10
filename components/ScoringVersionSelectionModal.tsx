@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, FileText, Calendar, User, CheckCircle2, Target, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import { Resume, ResumeVersion } from '@/lib/types/types';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 import { resumeService } from '@/lib/services/resumeService';
 
 interface ResumeWithVersions extends Resume {
@@ -278,7 +279,7 @@ export default function ScoringVersionSelectionModal({
                                           <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-gray-600 mt-0.5 flex-wrap">
                                             <span className="flex items-center gap-1">
                                               <Calendar className="w-3 h-3 flex-shrink-0" />
-                                              {new Date(version.uploadDate).toLocaleDateString()}
+                                              {formatISTDate(version.uploadDate)}
                                             </span>
                                             <span className="flex items-center gap-1">
                                               <User className="w-3 h-3 flex-shrink-0" />

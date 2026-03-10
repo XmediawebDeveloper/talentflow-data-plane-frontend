@@ -1,5 +1,6 @@
 import { Sparkles, MapPin, Briefcase, User, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X } from 'lucide-react';
 import { useState } from 'react';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface Job {
   id: string;
@@ -334,11 +335,7 @@ export default function AITalentMatchPageJobsList({
                                   <div className="flex items-center gap-1.5 sm:gap-2">
                                     <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
                                     <span className="text-xs sm:text-sm text-gray-700 font-medium">
-                                      {new Date(latestMatch.matchedAt).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric'
-                                      })}
+                                      {formatISTDate(latestMatch.matchedAt)}
                                     </span>
                                   </div>
                                 </div>

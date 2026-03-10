@@ -21,6 +21,7 @@ import { useAuditVerification } from '@/lib/hooks/useAuditVerification';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 import type { PendingVerification, VerificationStatus } from '@/lib/services/auditVerificationService';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 const STATUS_CONFIG: Record<VerificationStatus, { label: string; color: string; icon: React.ElementType }> = {
   PENDING: { label: 'Pending', color: 'bg-gray-100 text-gray-700 border border-gray-200', icon: Clock },
@@ -29,17 +30,6 @@ const STATUS_CONFIG: Record<VerificationStatus, { label: string; color: string; 
   NOT_FOUND: { label: 'Not Found', color: 'bg-amber-100 text-amber-800 border border-amber-200', icon: AlertTriangle },
   ERROR: { label: 'Error', color: 'bg-red-100 text-red-800 border border-red-200', icon: XCircle },
 };
-
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 function formatAction(action: string): string {
   return action
@@ -373,7 +363,7 @@ export default function LogVerificationPage() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2 text-sm text-gray-600">
                             <Clock className="w-4 h-4 text-gray-400" />
-                            <span>{formatDate(entry.expected.timestamp)}</span>
+                            <span>{formatIST(entry.expected.timestamp)}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -455,7 +445,7 @@ export default function LogVerificationPage() {
                           </div>
                           <div className="flex items-start px-4 py-3 gap-4">
                             <span className="text-xs font-medium text-gray-500 min-w-[100px]">Timestamp</span>
-                            <span className="text-sm text-gray-900">{formatDate(entry.expected.timestamp)}</span>
+                            <span className="text-sm text-gray-900">{formatIST(entry.expected.timestamp)}</span>
                           </div>
                         </div>
                       </div>
@@ -488,7 +478,7 @@ export default function LogVerificationPage() {
                             </div>
                             <div className="flex items-start px-4 py-3 gap-4">
                               <span className="text-xs font-medium text-gray-500 min-w-[100px]">Timestamp</span>
-                              <span className="text-sm text-gray-900">{formatDate(entry.result.actual.created_at)}</span>
+                              <span className="text-sm text-gray-900">{formatIST(entry.result.actual.created_at)}</span>
                             </div>
                           </div>
                         ) : (
@@ -529,7 +519,7 @@ export default function LogVerificationPage() {
                     {/* Verified timestamp */}
                     {entry.result.verifiedAt && (
                       <p className="text-xs text-gray-400 mt-4 max-w-4xl">
-                        Verified at {formatDate(entry.result.verifiedAt)}
+                        Verified at {formatIST(entry.result.verifiedAt)}
                       </p>
                     )}
                   </div>
@@ -546,7 +536,7 @@ export default function LogVerificationPage() {
             <div className="flex items-center gap-6 text-sm">
               <span className="text-gray-500">
                 <Calendar className="w-3.5 h-3.5 inline mr-1" />
-                {formatDate(lastReport.completedAt)}
+                {formatIST(lastReport.completedAt)}
               </span>
               <span className="text-gray-700 font-medium">{lastReport.summary.total} checked</span>
               <span className="text-green-700 font-medium">{lastReport.summary.match} matched</span>

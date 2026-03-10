@@ -31,6 +31,7 @@ import {
   formatSessionDuration,
   type ErrorOrigin,
 } from '@/lib/types/auditSession';
+import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -145,12 +146,7 @@ export default function ActivityLogsPage() {
 
   // Group logs by date
   const groupedLogs: GroupedLogs = logs.reduce((groups: GroupedLogs, log) => {
-    const date = new Date(log.created_at).toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
+    const date = formatISTDate(log.created_at);
     if (!groups[date]) {
       groups[date] = [];
     }
@@ -180,14 +176,6 @@ export default function ActivityLogsPage() {
     return actionColors.default;
   };
 
-  const formatTime = (dateStr: string): string => {
-    const date = new Date(dateStr);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   const getRelativeTime = (dateStr: string): string => {
     const date = new Date(dateStr);
     const now = new Date();
@@ -200,7 +188,7 @@ export default function ActivityLogsPage() {
     if (diffMins < 60) return `${diffMins} min ago`;
     if (diffHours < 24) return `${diffHours} hours ago`;
     if (diffDays < 7) return `${diffDays} days ago`;
-    return formatTime(dateStr);
+    return formatISTTime(dateStr);
   };
 
   return (
@@ -365,7 +353,7 @@ export default function ActivityLogsPage() {
                               </div>
 
                               <div className="text-right flex-shrink-0">
-                                <p className="text-xs text-gray-500">{formatTime(log.created_at)}</p>
+                                <p className="text-xs text-gray-500">{formatISTTime(log.created_at)}</p>
                                 <p className="text-xs text-gray-400">{getRelativeTime(log.created_at)}</p>
                               </div>
                             </div>

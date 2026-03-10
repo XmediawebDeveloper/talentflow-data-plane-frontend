@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, FileText, Download, Calendar, GitBranch, Eye, Clock, Loader2, ArrowLeft, Plus, Minus, Equal, Briefcase, MapPin, GraduationCap, Award } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface ResumeVersion {
   id: string;
@@ -268,11 +269,7 @@ export default function ResumeVersionsModal({
                       v{selectedVersion.version}
                     </span>
                     <span className="text-sm text-gray-600">
-                      {new Date(selectedVersion.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
+                      {formatISTDate(selectedVersion.created_at)}
                     </span>
                   </div>
                   {previousVersion && (
@@ -283,11 +280,7 @@ export default function ResumeVersionsModal({
                           v{previousVersion.version}
                         </span>
                         <span className="text-sm text-gray-600">
-                          {new Date(previousVersion.created_at).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                          })}
+                          {formatISTDate(previousVersion.created_at)}
                         </span>
                       </div>
                     </>
@@ -560,11 +553,7 @@ export default function ResumeVersionsModal({
                         <div className="flex items-center gap-3 text-sm text-gray-600 mt-1 flex-wrap">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3.5 h-3.5" />
-                            {new Date(version.created_at).toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}
+                            {formatISTDate(version.created_at)}
                           </span>
                           <span>{formatFileSize(version)}</span>
                           {version.uploaded_by_name && (

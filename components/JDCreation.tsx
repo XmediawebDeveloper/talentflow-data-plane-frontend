@@ -78,15 +78,11 @@ const containsCodePatterns = (text: string): boolean => {
 
   const sanitizedLowerText = sanitizedText.toLowerCase();
 
-  // Common programming keywords across multiple languages
+  // Only truly unique code tokens that never appear in plain English job descriptions
   const codeKeywords = [
-    'function', 'def ', 'import ', 'export ', 'const ', 'let ', 'var ',
-    'return ', 'if ', 'else ', 'for ', 'while ', 'switch ', 'case ',
-    'async ', 'await ', 'try ', 'catch ', 'throw ',
-    'public ', 'private ', 'protected ', 'static ', 'void ',
-    'int ', 'boolean ', 'float ', 'double ',
     'printf', 'cout', 'println', 'console.log', 'print(',
-    '__init__', 'self.', 'this.', '<?php', '#!/bin'
+    '__init__', 'self.', 'this.', '<?php', '#!/bin',
+    'function(', '=>{', '=>{', '};', '});',
   ];
 
   // Check for programming keywords in sanitized text
@@ -647,6 +643,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             salary_min: jd.salary_min,
             salary_max: jd.salary_max,
             compensation_type: jd.compensation_type,
+            job_level: jd.job_level,
             employment_type: jd.employment_type,
             remote_type: jd.remote_type,
             assessment_guidance: jd.assessment_guidance,
@@ -1816,6 +1813,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Coding assessment fields
         coding_required: extraction.codingRequired,
         supported_languages: extraction.suggestedLanguages,
+        job_level: extraction.experience || undefined,
         locations: (extraction.locations || []).map(loc => ({
           city: loc.city,
           radius_km: parseInt(loc.radius) || 50,
@@ -2701,6 +2699,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Coding assessment fields
         coding_required: extractedData.codingRequired,
         supported_languages: extractedData.suggestedLanguages,
+        job_level: extractedData.experience || undefined,
         locations: (extractedData.locations || []).map(loc => ({
           city: loc.city,
           radius_km: parseInt(loc.radius) || 50,
@@ -2915,6 +2914,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
+        job_level: extractedData.experience || undefined,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
@@ -3202,6 +3202,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
         salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
         compensation_type: extractedData.compensationType,
+        job_level: extractedData.experience || undefined,
         assessment_guidance: extractedData.assessmentGuidance || undefined,
         internal_comments: extractedData.internalRecruiterComments.join('\n') || undefined,
         must_have_comments: extractedData.mustHaveComments,
@@ -3428,7 +3429,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           return 'entry';
         };
 
-        const experienceValue = mapExpToLevel(effectiveEditingJD.experience_min, effectiveEditingJD.experience_max);
+        const experienceValue = effectiveEditingJD.job_level || mapExpToLevel(effectiveEditingJD.experience_min, effectiveEditingJD.experience_max);
         // Restore industry type from saved draft
         const industryValue = effectiveEditingJD.industry_type || '';
 

@@ -1,6 +1,7 @@
 import { X, AlertCircle, Eye, Upload, FileText, Mail, Phone, Briefcase, MapPin, Calendar } from 'lucide-react';
 import { Resume } from '@/lib/types/types';
 import React from 'react';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface DuplicateCheckModalProps {
   onClose: () => void;
@@ -214,11 +215,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                         First Uploaded
                       </div>
                       <div className="text-sm text-gray-900">
-                        {new Date(existingResume.uploadDate).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
+                        {formatISTDate(existingResume.uploadDate)}
                       </div>
                     </div>
                     <div>
@@ -227,11 +224,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                         Last Updated
                       </div>
                       <div className="text-sm text-gray-900">
-                        {existingResume.lastUpdated ? new Date(existingResume.lastUpdated).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        }) : 'Never'}
+                        {existingResume.lastUpdated ? formatISTDate(existingResume.lastUpdated) : 'Never'}
                       </div>
                     </div>
                   </div>

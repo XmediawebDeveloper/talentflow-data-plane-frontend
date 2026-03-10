@@ -3,31 +3,15 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/components/providers/AuthProvider';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
+import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 // Utility function to format date to IST (Asia/Kolkata timezone)
 function formatDateTimeIST(date: Date | string | undefined): { date: string; time: string } {
   if (!date) {
     return { date: '-', time: '' };
   }
-
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-
-  // Use Asia/Kolkata timezone for proper IST conversion
-  const dateStr = dateObj.toLocaleDateString('en-US', {
-    timeZone: 'Asia/Kolkata',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  });
-
-  const timeStr = dateObj.toLocaleTimeString('en-US', {
-    timeZone: 'Asia/Kolkata',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
-
-  return { date: dateStr, time: timeStr };
+  const str = typeof date === 'string' ? date : date.toISOString();
+  return { date: formatISTDate(str) || '-', time: formatISTTime(str) };
 }
 
 export interface ScoringProgressItem {

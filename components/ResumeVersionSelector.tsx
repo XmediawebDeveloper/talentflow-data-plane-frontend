@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, FileText, Calendar, User, Clock, CheckCircle2 } from 'lucide-react';
 import { Resume, ResumeVersion } from '@/lib/types/types';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface ResumeVersionSelectorProps {
   resume: Resume;
@@ -101,11 +102,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600">
                       <div className="flex items-center gap-1.5">
                         <Calendar className="w-4 h-4 text-gray-400" />
-                        <span>{new Date(version.uploadDate).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}</span>
+                        <span>{formatISTDate(version.uploadDate)}</span>
                       </div>
 
                       <div className="flex items-center gap-1.5">

@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle, Clock, FileText } from 'lucide-react';
+import { CheckCircle, Clock, FileText, X } from 'lucide-react';
 
 interface CompletedScreenProps {
   assessmentTitle?: string;
@@ -8,6 +8,14 @@ interface CompletedScreenProps {
 }
 
 export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScreenProps) {
+  const handleClose = () => {
+    window.close();
+    // If window.close() is blocked (tab not opened by script), show a fallback
+    setTimeout(() => {
+      // If we're still here, the close was blocked — the text already tells them to close manually
+    }, 300);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-teal-50 flex items-center justify-center p-4">
       <div className="max-w-lg w-full">
@@ -56,14 +64,20 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
           </div>
 
           {/* Message */}
-          <div className="text-sm text-gray-500 space-y-2">
+          <div className="text-sm text-gray-500 space-y-2 mb-6">
             <p>
               The hiring team will review your results and contact you with next steps.
             </p>
-            <p className="font-medium text-gray-700">
-              You can safely close this window.
-            </p>
           </div>
+
+          {/* Close Button */}
+          <button
+            onClick={handleClose}
+            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl transition-colors"
+          >
+            <X className="w-4 h-4" />
+            Close Window
+          </button>
 
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-gray-100">

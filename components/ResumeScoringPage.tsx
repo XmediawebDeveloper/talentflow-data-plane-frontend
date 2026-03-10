@@ -1,6 +1,6 @@
 "use client";
 
-import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader, Square, CheckSquare, ChevronRight } from 'lucide-react';
+import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, FolderOpen, Database, TrendingUp, Award, ChevronDown, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, AlertCircle, DollarSign, List, LayoutGrid, Loader, Square, CheckSquare, ChevronRight, Building2, Calendar, Users } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -14,6 +14,17 @@ import { toast } from 'sonner';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { formatIST } from '@/lib/utils/dateUtils';
+
+const formatEmploymentType = (type: string | undefined): string => {
+  if (!type) return '-';
+  return type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+};
+
+const formatIndustryType = (type: string | undefined): string => {
+  if (!type) return '-';
+  return type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+};
 
 // Helper function to convert backend match_status to frontend format
 const convertMatchStatus = (status: string | undefined): 'Exact Match' | 'Partial Match' | 'No Match' => {
@@ -46,6 +57,11 @@ interface Job {
   experience?: string;
   job_id?: string;
   current_version?: number;
+  published_at?: string;
+  created_by_name?: string;
+  creation_method?: string;
+  industry_type?: string;
+  remote_type?: string;
 }
 
 interface Resume {
@@ -81,6 +97,17 @@ interface ScoredResumeData {
   jobTitle: string;
   scoredAt: Date;
   source: 'my-resumes' | 'database';
+  jdStatus?: string;
+  jdJobId?: string;
+  jdCreationMethod?: string;
+  jdCurrentVersion?: number;
+  jdDepartment?: string;
+  jdIndustryType?: string;
+  jdEmploymentType?: string;
+  jdRemoteType?: string;
+  jdLocation?: string;
+  jdPublishedAt?: string;
+  jdCreatedByName?: string;
   totalScored: number;
   scoredResumes: any[];
   // Processing state for in-progress jobs
@@ -228,6 +255,9 @@ export default function ResumeScoringPage({
     return () => setOnRestorePanel(undefined);
   }, [showScoringPanel, isScoringMinimized, setOnRestorePanel]);
 
+  // Scoring History Modal
+  const [historyModalItem, setHistoryModalItem] = useState<ScoredResumeData | null>(null);
+
   // State for Progress Tables Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressData, setProgressData] = useState<ScoringProgressItem[]>([]);
@@ -272,11 +302,12 @@ export default function ResumeScoringPage({
 
   // History filters
   const [historySearchQuery, setHistorySearchQuery] = useState('');
-  const [historySourceFilter, setHistorySourceFilter] = useState<'all' | 'my-resumes' | 'database'>('all');
-  const [historyDateFrom, setHistoryDateFrom] = useState('');
-  const [historyDateTo, setHistoryDateTo] = useState('');
-  const [historyMinCandidates, setHistoryMinCandidates] = useState<number>(0);
-  const [historyAvgScoreMin, setHistoryAvgScoreMin] = useState<number>(0);
+  const [historyCreatedBy, setHistoryCreatedBy] = useState('');
+  const [historyScoredFrom, setHistoryScoredFrom] = useState('');
+  const [historyScoredTo, setHistoryScoredTo] = useState('');
+  const [historyLocation, setHistoryLocation] = useState('');
+  const [historyJobType, setHistoryJobType] = useState('');
+  const [historyIndustry, setHistoryIndustry] = useState('');
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
 
   // History view mode and selection
@@ -971,6 +1002,19 @@ export default function ResumeScoringPage({
 
   const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
   const selectedJobData = jobs.find(j => j.id === selectedJob);
+  const [showJobDropdown, setShowJobDropdown] = useState(false);
+  const [jobDropdownSearch, setJobDropdownSearch] = useState('');
+  const jobDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (jobDropdownRef.current && !jobDropdownRef.current.contains(e.target as Node)) {
+        setShowJobDropdown(false);
+      }
+    };
+    if (showJobDropdown) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showJobDropdown]);
 
   // Convert scored resumes to ScoredResumesTable format
   const convertToScoredResumesFormat = (scoredData: ScoredResumeData) => {
@@ -1132,18 +1176,7 @@ export default function ResumeScoringPage({
                   <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm text-gray-600">
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
-                      {new Date(selectedHistoryItem.scoredAt).toLocaleDateString('en-US', {
-                        timeZone: 'Asia/Kolkata',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
-                      })}{' '}
-                      {new Date(selectedHistoryItem.scoredAt).toLocaleTimeString('en-US', {
-                        timeZone: 'Asia/Kolkata',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true
-                      })}
+                      {formatIST(selectedHistoryItem.scoredAt)}
                     </span>
                     <span className="flex items-center gap-1">
                       <FileText className="w-4 h-4" />
@@ -1374,26 +1407,26 @@ export default function ResumeScoringPage({
     // Filter history items
     const filteredHistory = scoredHistory.filter(item => {
       const matchesSearch = historySearchQuery === '' ||
-        item.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase());
+        item.jobTitle.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
+        (item.jdJobId || '').toLowerCase().includes(historySearchQuery.toLowerCase());
 
-      const matchesSource = historySourceFilter === 'all' || item.source === historySourceFilter;
+      const matchesCreatedBy = historyCreatedBy === '' ||
+        (item.jdCreatedByName || '') === historyCreatedBy;
 
-      let matchesDate = true;
-      if (historyDateFrom) {
-        matchesDate = matchesDate && new Date(item.scoredAt) >= new Date(historyDateFrom);
-      }
-      if (historyDateTo) {
-        matchesDate = matchesDate && new Date(item.scoredAt) <= new Date(historyDateTo);
-      }
+      let matchesScoredDate = true;
+      if (historyScoredFrom) matchesScoredDate = matchesScoredDate && new Date(item.scoredAt) >= new Date(historyScoredFrom);
+      if (historyScoredTo) matchesScoredDate = matchesScoredDate && new Date(item.scoredAt) <= new Date(historyScoredTo);
 
-      const matchesCandidates = item.totalScored >= historyMinCandidates;
+      const matchesLocation = historyLocation === '' ||
+        (item.jdLocation || '').toLowerCase().includes(historyLocation.toLowerCase());
 
-      const avgScore = item.scoredResumes.length > 0
-        ? item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length
-        : 0;
-      const matchesAvgScore = avgScore >= historyAvgScoreMin;
+      const matchesJobType = historyJobType === '' ||
+        (item.jdEmploymentType || '').toLowerCase() === historyJobType.toLowerCase();
 
-      return matchesSearch && matchesSource && matchesDate && matchesCandidates && matchesAvgScore;
+      const matchesIndustry = historyIndustry === '' ||
+        (item.jdIndustryType || '').toLowerCase() === historyIndustry.toLowerCase();
+
+      return matchesSearch && matchesCreatedBy && matchesScoredDate && matchesLocation && matchesJobType && matchesIndustry;
     });
 
     // Add processing entry at the top if it exists and matches filters
@@ -1402,20 +1435,20 @@ export default function ResumeScoringPage({
       : filteredHistory;
 
     const activeFiltersCount = [
-      historySearchQuery !== '',
-      historySourceFilter !== 'all',
-      historyDateFrom !== '',
-      historyDateTo !== '',
-      historyMinCandidates > 0,
-      historyAvgScoreMin > 0,
+      historyCreatedBy !== '',
+      historyScoredFrom !== '',
+      historyScoredTo !== '',
+      historyLocation !== '',
+      historyJobType !== '',
+      historyIndustry !== '',
     ].filter(Boolean).length;
 
     return (
       <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-gray-50 to-white">
         {/* Header */}
-        <div className="mb-6">
-          {/* Title row */}
-          <div className="flex items-center gap-3 sm:gap-4 mb-4">
+        <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
+          {/* Left: back + icon + title */}
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
             {onBack && (
               <button
                 onClick={onBack}
@@ -1428,29 +1461,27 @@ export default function ResumeScoringPage({
             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
               <History className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0">
               <h1 className="text-gray-900 text-lg sm:text-xl font-semibold">Scored Candidates</h1>
               <p className="text-xs sm:text-sm text-gray-600 truncate">View and manage previously scored resumes</p>
             </div>
           </div>
 
-          {/* Actions row - responsive wrap */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* Right: actions */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             {/* Available Units Display */}
             {availableUnits !== null && (
-              <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-3 sm:p-4 border-2 border-gray-300">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                    <DollarSign className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-100 mb-0.5">Available Units</div>
-                    <div className="flex items-baseline gap-1 sm:gap-2">
-                      <span className="text-lg sm:text-xl font-bold text-white">
-                        {availableUnits.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-gray-100">units</span>
-                    </div>
+              <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg px-3 py-2 border-2 border-gray-300 flex items-center gap-2 sm:gap-3">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <DollarSign className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <div className="text-[10px] text-gray-300 leading-tight">Available Units</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-base sm:text-lg font-bold text-white leading-tight">
+                      {availableUnits.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-gray-300">units</span>
                   </div>
                 </div>
               </div>
@@ -1460,7 +1491,6 @@ export default function ResumeScoringPage({
             {scoredHistory.length > 0 && (
               <button
                 onClick={() => {
-                  // Convert scored history to progress data format for the modal
                   const allProgressData = scoredHistory.flatMap(item =>
                     item.scoredResumes.map(resume => ({
                       id: resume.id,
@@ -1484,11 +1514,10 @@ export default function ResumeScoringPage({
                   setFilterByJobId(undefined);
                   setShowProgressModal(true);
                 }}
-                className="px-3 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+                className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
               >
                 <Clock className="w-4 h-4" />
-                <span className="hidden sm:inline">Progress Tables</span>
-                <span className="sm:hidden">Progress</span>
+                <span>Progress Tables</span>
                 <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">
                   {scoredHistory.reduce((sum, item) => sum + item.totalScored, 0)}
                 </span>
@@ -1498,17 +1527,17 @@ export default function ResumeScoringPage({
             {/* View All Candidates Button */}
             <button
               onClick={handleToggleGlobalView}
-              className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md ${
+              className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm hover:shadow-md ${
                 isGlobalView
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
               }`}
             >
               <Eye className="w-4 h-4" />
-              <span className="hidden sm:inline">{isGlobalView ? 'View by Job' : 'View All Candidates'}</span>
-              <span className="sm:hidden">{isGlobalView ? 'By Job' : 'All'}</span>
+              <span>{isGlobalView ? 'View by Job' : 'View All Candidates'}</span>
             </button>
 
+            {/* Score Resumes Button */}
             <button
               onClick={() => {
                 if (!canRunScoring) {
@@ -1521,7 +1550,7 @@ export default function ResumeScoringPage({
                 setSelectedResumes([]);
               }}
               disabled={!canRunScoring}
-              className={`px-5 py-2.5 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm ${
+              className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm ${
                 canRunScoring
                   ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
                   : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
@@ -1668,108 +1697,89 @@ export default function ResumeScoringPage({
           </div>
 
           {/* Expanded Filters */}
-          {showHistoryFilters && (
+          {showHistoryFilters && (() => {
+            const uniqueLocations = [...new Set(scoredHistory.map(i => i.jdLocation).filter(Boolean))];
+            const uniqueJobTypes = [...new Set(scoredHistory.map(i => i.jdEmploymentType).filter(Boolean))];
+            const uniqueIndustries = [...new Set(scoredHistory.map(i => i.jdIndustryType).filter(Boolean))];
+            const uniqueCreators = [...new Set(scoredHistory.map(i => i.jdCreatedByName).filter(Boolean))];
+            const selectCls = "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white text-gray-900 text-sm";
+            const inputCls = "w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white text-gray-900 text-sm";
+            const labelCls = "block text-xs font-medium text-gray-600 mb-1.5";
+            return (
             <div className="mt-5 pt-5 border-t border-gray-200">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                {/* Created By — dropdown with user names */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Resume Source
-                  </label>
-                  <select
-                    value={historySourceFilter}
-                    onChange={(e) => setHistorySourceFilter(e.target.value as 'all' | 'my-resumes' | 'database')}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white text-gray-900 transition-shadow"
-                  >
-                    <option value="all">All Sources</option>
-                    <option value="my-resumes">My Resumes</option>
-                    <option value="database">Resume Database</option>
+                  <label className={labelCls}>Created By</label>
+                  <select value={historyCreatedBy} onChange={e => setHistoryCreatedBy(e.target.value)} className={selectCls}>
+                    <option value="">All Users</option>
+                    {uniqueCreators.map(name => <option key={name} value={name!}>{name}</option>)}
                   </select>
                 </div>
 
+                {/* Scored From */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Scored From
-                  </label>
-                  <input
-                    type="date"
-                    value={historyDateFrom}
-                    onChange={(e) => setHistoryDateFrom(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white text-gray-900 transition-shadow"
-                  />
+                  <label className={labelCls}>Scored From</label>
+                  <input type="date" value={historyScoredFrom} onChange={e => setHistoryScoredFrom(e.target.value)} className={inputCls} />
                 </div>
 
+                {/* Scored To */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Scored To
-                  </label>
-                  <input
-                    type="date"
-                    value={historyDateTo}
-                    onChange={(e) => setHistoryDateTo(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent bg-white text-gray-900 transition-shadow"
-                  />
+                  <label className={labelCls}>Scored To</label>
+                  <input type="date" value={historyScoredTo} onChange={e => setHistoryScoredTo(e.target.value)} className={inputCls} />
                 </div>
 
+                {/* Location */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Min Candidates: <span className="text-gray-800">{historyMinCandidates}</span>
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="50"
-                    step="5"
-                    value={historyMinCandidates}
-                    onChange={(e) => setHistoryMinCandidates(Number(e.target.value))}
-                    className="w-full accent-gray-600"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>0</span>
-                    <span>25</span>
-                    <span>50</span>
-                  </div>
+                  <label className={labelCls}>Location</label>
+                  <select value={historyLocation} onChange={e => setHistoryLocation(e.target.value)} className={selectCls}>
+                    <option value="">All Locations</option>
+                    {uniqueLocations.map(l => <option key={l} value={l!}>{l}</option>)}
+                  </select>
                 </div>
 
+                {/* Job Type */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Min Avg Score: <span className="text-gray-800">{historyAvgScoreMin}%</span>
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="5"
-                    value={historyAvgScoreMin}
-                    onChange={(e) => setHistoryAvgScoreMin(Number(e.target.value))}
-                    className="w-full accent-gray-600"
-                  />
-                  <div className="flex justify-between text-xs text-gray-500 mt-1">
-                    <span>0%</span>
-                    <span>50%</span>
-                    <span>100%</span>
-                  </div>
+                  <label className={labelCls}>Job Type</label>
+                  <select value={historyJobType} onChange={e => setHistoryJobType(e.target.value)} className={selectCls}>
+                    <option value="">All Types</option>
+                    {uniqueJobTypes.map(t => <option key={t} value={t!}>{formatEmploymentType(t)}</option>)}
+                  </select>
                 </div>
 
-                <div className="flex items-end">
+                {/* Industry */}
+                <div>
+                  <label className={labelCls}>Industry</label>
+                  <select value={historyIndustry} onChange={e => setHistoryIndustry(e.target.value)} className={selectCls}>
+                    <option value="">All Industries</option>
+                    {uniqueIndustries.map(i => <option key={i} value={i!}>{formatIndustryType(i)}</option>)}
+                  </select>
+                </div>
+
+              </div>
+
+              {activeFiltersCount > 0 && (
+                <div className="mt-4 flex justify-end">
                   <button
                     onClick={() => {
-                      setHistorySearchQuery('');
-                      setHistorySourceFilter('all');
-                      setHistoryDateFrom('');
-                      setHistoryDateTo('');
-                      setHistoryMinCandidates(0);
-                      setHistoryAvgScoreMin(0);
+                      setHistoryCreatedBy('');
+                      setHistoryScoredFrom('');
+                      setHistoryScoredTo('');
+                      setHistoryLocation('');
+                      setHistoryJobType('');
+                      setHistoryIndustry('');
                     }}
-                    disabled={activeFiltersCount === 0}
-                    className="w-full px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-medium hover:border-gray-400"
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all flex items-center gap-2 text-sm font-medium"
                   >
                     <X className="w-4 h-4" />
-                    Clear All
+                    Clear All Filters
                   </button>
                 </div>
-              </div>
+              )}
             </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* History List or Empty State */}
@@ -1780,9 +1790,9 @@ export default function ResumeScoringPage({
                 ? Math.round(item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length)
                 : 0;
 
-              const excellentCount = item.scoredResumes.filter(r => (r.overall_score || r.scorePercentage || 0) >= 85).length;
-              const goodCount = item.scoredResumes.filter(r => (r.overall_score || r.scorePercentage || 0) >= 70 && (r.overall_score || r.scorePercentage || 0) < 85).length;
-              const moderateCount = item.scoredResumes.filter(r => (r.overall_score || r.scorePercentage || 0) < 70).length;
+              const exactMatchCount = item.scoredResumes.filter(r => r.matchStatus === 'Exact Match' || r.matchStatus === 'exact_match').length;
+              const partialMatchCount = item.scoredResumes.filter(r => r.matchStatus === 'Partial Match' || r.matchStatus === 'partial_match').length;
+              const noMatchCount = item.scoredResumes.filter(r => r.matchStatus === 'No Match' || r.matchStatus === 'no_match' || (!r.matchStatus)).length;
               const isSelected = selectedHistoryItems.has(item.id);
 
               const jobDetails = jobs.find(j => j.id === item.jobId);
@@ -1799,98 +1809,108 @@ export default function ResumeScoringPage({
                         <Target className="w-6 h-6 text-white" />
                       </div>
                       <div className="flex-1 min-w-0 w-full">
-                        {/* Title row with job details - like JD card */}
+                        {/* Title row — matches JD list card */}
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-                          {jobDetails?.job_id && (
-                            <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-xs sm:text-sm font-medium border border-blue-200 flex-shrink-0">
-                              {jobDetails.job_id}
+                          {item.jdJobId && (
+                            <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 bg-blue-100 text-blue-700 rounded-md text-xs sm:text-sm font-bold font-mono border border-blue-200 flex-shrink-0">
+                              {item.jdJobId}
                             </span>
                           )}
                           <h3
-                            className="text-base sm:text-lg font-semibold text-blue-600 cursor-pointer hover:text-blue-800 hover:underline transition-colors"
+                            className="text-base sm:text-xl font-medium text-gray-900 truncate cursor-pointer hover:text-blue-600 transition-colors"
                             onClick={() => {
                               setSelectedHistoryItem(item);
                               setViewMode('details');
                               onLoadJdScores?.(item.jobId, item.jobTitle);
-                              try {
-                                localStorage.setItem('lastViewedScoringJdId', item.jobId);
-                              } catch (e) {}
+                              try { localStorage.setItem('lastViewedScoringJdId', item.jobId); } catch (e) {}
                               router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                             }}
                           >
                             {item.jobTitle}
                           </h3>
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
-                            item.source === 'my-resumes'
-                              ? 'bg-gray-100 text-gray-900 border border-gray-200'
-                              : 'bg-gray-100 text-gray-900 border border-gray-200'
-                          }`}>
-                            {item.source === 'my-resumes' ? (
-                              <>
-                                <FolderOpen className="w-3 h-3" />
-                                My Resumes
-                              </>
-                            ) : (
-                              <>
-                                <Database className="w-3 h-3" />
-                                Database
-                              </>
-                            )}
-                          </span>
-                          {jobDetails?.current_version && jobDetails.current_version > 0 && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
-                              v{jobDetails.current_version}
+                          {/* Status badge */}
+                          {(() => {
+                            const s = (item.jdStatus || 'published').toLowerCase();
+                            const cfg: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
+                              published: { label: 'Published', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  dot: 'bg-green-500' },
+                              active:    { label: 'Published', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  dot: 'bg-green-500' },
+                              closed:    { label: 'Closed',    bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200',    dot: 'bg-red-500' },
+                              archived:  { label: 'Archived',  bg: 'bg-gray-50',   text: 'text-gray-500',   border: 'border-gray-200',   dot: 'bg-gray-400' },
+                              disabled:  { label: 'Disabled',  bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
+                              draft:     { label: 'Draft',     bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', dot: 'bg-yellow-500' },
+                            };
+                            const c = cfg[s] || cfg.published;
+                            return (
+                              <span className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm ${c.bg} ${c.text} border ${c.border} flex items-center gap-1.5 sm:gap-2 flex-shrink-0`}>
+                                <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${c.dot}`}></div>
+                                {c.label}
+                              </span>
+                            );
+                          })()}
+                          {/* Version badge */}
+                          {item.jdCurrentVersion && item.jdCurrentVersion >= 1 && (
+                            <span className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0">
+                              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-gray-500"></div>
+                              v{item.jdCurrentVersion}
                             </span>
                           )}
+                          {/* History icon button */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
+                            className="p-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex-shrink-0"
+                            title="Scoring History"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                          </button>
                         </div>
 
-                        {/* Metadata row - like JD card */}
-                        <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-500 mb-3 flex-wrap">
-                          {jobDetails?.department && (
-                            <span className="flex items-center gap-1">
-                              <Briefcase className="w-4 h-4" />
-                              {jobDetails.department}
+                        {/* Info row — matches JD list card exactly */}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:gap-5 text-sm sm:text-base text-gray-600 mb-2">
+                          {item.jdDepartment && (
+                            <span className="flex items-center gap-1.5 sm:gap-2">
+                              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                              {item.jdDepartment}
                             </span>
                           )}
-                          {jobDetails?.location && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-4 h-4" />
-                              {jobDetails.location}
+                          {item.jdIndustryType && (
+                            <span className="flex items-center gap-1.5 sm:gap-2">
+                              <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                              {formatIndustryType(item.jdIndustryType)}
                             </span>
                           )}
-                          {jobDetails?.employmentType && (
-                            <span className="flex items-center gap-1">
-                              <User className="w-4 h-4" />
-                              {jobDetails.employmentType}
-                            </span>
-                          )}
-                          {jobDetails?.experience && (
-                            <span className="flex items-center gap-1">
-                              <Award className="w-4 h-4" />
-                              {jobDetails.experience}
-                            </span>
-                          )}
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-4 h-4" />
-                            Scored {new Date(item.scoredAt).toLocaleDateString('en-US', {
-                              timeZone: 'Asia/Kolkata',
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}{', '}
-                            {new Date(item.scoredAt).toLocaleTimeString('en-US', {
-                              timeZone: 'Asia/Kolkata',
-                              hour: 'numeric',
-                              minute: '2-digit',
-                              hour12: true
-                            })}
+                          {item.jdLocation && (
+                          <span className="flex items-center gap-1.5 sm:gap-2">
+                            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                            {item.jdLocation}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <FileText className="w-4 h-4" />
-                            {item.totalScored} candidates
+                          )}
+                          {item.jdEmploymentType && (
+                            <span className="flex items-center gap-1.5 sm:gap-2">
+                              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                              {formatEmploymentType(item.jdEmploymentType)}
+                            </span>
+                          )}
+                          {item.jdRemoteType && (
+                            <span className="flex items-center gap-1.5 sm:gap-2">
+                              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                              <span className="capitalize">{item.jdRemoteType}</span>
+                            </span>
+                          )}
+                          {item.scoredResumes?.[0]?.scoredBy && (
+                            <span className="flex items-center gap-1.5 sm:gap-2">
+                              <User className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                              Scored by {item.scoredResumes[0].scoredBy}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1.5 sm:gap-2">
+                            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                            {new Date(item.scoredAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                          </span>
+                          <span className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-gray-50 rounded-lg">
+                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                            {item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored
                           </span>
                         </div>
-
                       </div>
 
                       {/* Action buttons - right side */}
@@ -1964,114 +1984,133 @@ export default function ResumeScoringPage({
                         router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                       }}
                     >
-                      <div className="flex items-start gap-4 mb-4">
-                        <div className="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl flex items-center justify-center shadow-md flex-shrink-0 group-hover:scale-105 transition-transform">
-                          <Target className="w-6 h-6 text-white" />
+                      {/* Card header — matches JD grid card */}
+                      <div className="p-0 mb-4">
+                        {/* Top: icon + badges */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            {(() => {
+                              const s = (item.jdStatus || 'published').toLowerCase();
+                              const cfg: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
+                                published: { label: 'Published', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  dot: 'bg-green-500' },
+                                active:    { label: 'Published', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  dot: 'bg-green-500' },
+                                closed:    { label: 'Closed',    bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200',    dot: 'bg-red-500' },
+                                archived:  { label: 'Archived',  bg: 'bg-gray-50',   text: 'text-gray-500',   border: 'border-gray-200',   dot: 'bg-gray-400' },
+                                disabled:  { label: 'Disabled',  bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
+                                draft:     { label: 'Draft',     bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', dot: 'bg-yellow-500' },
+                              };
+                              const c = cfg[s] || cfg.published;
+                              return (
+                                <span className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm ${c.bg} ${c.text} border ${c.border} flex items-center gap-1.5`}>
+                                  <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${c.dot}`}></div>
+                                  {c.label}
+                                </span>
+                              );
+                            })()}
+                            {item.jdCurrentVersion && item.jdCurrentVersion >= 1 && (
+                              <span className="px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5">
+                                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-gray-500"></div>
+                                v{item.jdCurrentVersion}
+                              </span>
+                            )}
+                            {/* History icon button */}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
+                              className="p-1.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors flex-shrink-0"
+                              title="Scoring History"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-xl text-blue-600 mb-2 group-hover:text-blue-800 group-hover:underline transition-colors">
+
+                        {/* job_id + title */}
+                        <div className="flex items-center gap-2 mb-3">
+                          {item.jdJobId && (
+                            <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 bg-blue-100 text-blue-700 rounded-md text-xs sm:text-sm font-bold font-mono border border-blue-200">
+                              {item.jdJobId}
+                            </span>
+                          )}
+                          <h3 className="text-base sm:text-xl font-medium text-gray-900 line-clamp-2">
                             {item.jobTitle}
                           </h3>
-                          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600 mb-3">
-                            <span className="flex items-center gap-1.5">
-                              <Clock className="w-4 h-4" />
-                              Scored {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleDateString('en-US', {
-                                month: 'short',
-                                day: 'numeric',
-                                year: 'numeric'
-                              })}{', '}
-                              {new Date(new Date(item.scoredAt).getTime() + (5 * 60 + 30) * 60 * 1000).toLocaleTimeString('en-US', {
-                                hour: 'numeric',
-                                minute: '2-digit',
-                                hour12: true
-                              })}
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <FileText className="w-4 h-4" />
-                              {item.totalScored} candidates
-                            </span>
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${
-                              item.source === 'my-resumes'
-                                ? 'bg-gray-100 text-gray-900 border border-gray-200'
-                                : 'bg-gray-100 text-gray-900 border border-gray-200'
-                            }`}>
-                              {item.source === 'my-resumes' ? (
-                                <>
-                                  <FolderOpen className="w-3 h-3" />
-                                  My Resumes
-                                </>
-                              ) : (
-                                <>
-                                  <Database className="w-3 h-3" />
-                                  Database
-                                </>
-                              )}
-                            </span>
-                          </div>
+                        </div>
 
-                          {jobDetails && (
-                            <div className="bg-gradient-to-r from-gray-50 to-gray-50/30 border border-gray-200 rounded-lg p-4 mb-4">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                                <div className="flex items-start gap-2">
-                                  <MapPin className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                                  <div className="min-w-0">
-                                    <div className="text-xs text-gray-500 mb-0.5">Location</div>
-                                    <div className="text-sm text-gray-900 font-medium">{jobDetails.location}</div>
-                                  </div>
-                                </div>
-                                <div className="flex items-start gap-2">
-                                  <Briefcase className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                                  <div className="min-w-0">
-                                    <div className="text-xs text-gray-500 mb-0.5">Department</div>
-                                    <div className="text-sm text-gray-900 font-medium">{jobDetails.department}</div>
-                                  </div>
-                                </div>
-                                <div className="flex items-start gap-2">
-                                  <User className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                                  <div className="min-w-0">
-                                    <div className="text-xs text-gray-500 mb-0.5">Employment Type</div>
-                                    <div className="text-sm text-gray-900 font-medium">{jobDetails.employmentType || 'Full-time'}</div>
-                                  </div>
-                                </div>
-                                <div className="flex items-start gap-2">
-                                  <Award className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                                  <div className="min-w-0">
-                                    <div className="text-xs text-gray-500 mb-0.5">Experience</div>
-                                    <div className="text-sm text-gray-900 font-medium">{jobDetails.experience || 'Not specified'}</div>
-                                  </div>
-                                </div>
-                              </div>
+                        {/* Info rows — matches JD grid card body */}
+                        <div className="space-y-2">
+                          {item.jdDepartment && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{item.jdDepartment}</span>
                             </div>
                           )}
+                          {item.jdIndustryType && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{formatIndustryType(item.jdIndustryType)}</span>
+                            </div>
+                          )}
+                          {item.jdLocation && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{item.jdLocation}</span>
+                          </div>
+                          )}
+                          {item.jdEmploymentType && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{formatEmploymentType(item.jdEmploymentType)}</span>
+                            </div>
+                          )}
+                          {item.jdRemoteType && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <span className="capitalize">{item.jdRemoteType}</span>
+                            </div>
+                          )}
+                          {item.jdPublishedAt && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <span>Posted {new Date(item.jdPublishedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                            </div>
+                          )}
+                          {item.jdCreatedByName && (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <User className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">By {item.jdCreatedByName}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
+                            <span>{item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored</span>
+                          </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                         <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 font-medium">Excellent</span>
+                            <span className="text-xs text-gray-700 font-medium">Exact Match</span>
                             <Award className="w-4 h-4 text-green-600" />
                           </div>
-                          <div className="text-2xl text-green-700 font-bold">{excellentCount}</div>
-                          <div className="text-xs text-gray-600 mt-0.5">85%+ match</div>
+                          <div className="text-2xl text-green-700 font-bold">{exactMatchCount}</div>
                         </div>
-
-                        <div className="bg-gradient-to-br from-gray-50 to-sky-50 border border-gray-200 rounded-lg p-3">
+                        <div className="bg-gradient-to-br from-blue-50 to-sky-50 border border-blue-200 rounded-lg p-3">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 font-medium">Good</span>
-                            <CheckCircle className="w-4 h-4 text-gray-800" />
+                            <span className="text-xs text-gray-700 font-medium">Partial Match</span>
+                            <CheckCircle className="w-4 h-4 text-blue-600" />
                           </div>
-                          <div className="text-2xl text-gray-900 font-bold">{goodCount}</div>
-                          <div className="text-xs text-gray-600 mt-0.5">70-84% match</div>
+                          <div className="text-2xl text-blue-700 font-bold">{partialMatchCount}</div>
                         </div>
-
                         <div className="bg-gradient-to-br from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-3">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 font-medium">Moderate</span>
-                            <TrendingUp className="w-4 h-4 text-yellow-600" />
+                            <span className="text-xs text-gray-700 font-medium">No Match</span>
+                            <XCircle className="w-4 h-4 text-yellow-600" />
                           </div>
-                          <div className="text-2xl text-yellow-700 font-bold">{moderateCount}</div>
-                          <div className="text-xs text-gray-600 mt-0.5">&lt;70% match</div>
+                          <div className="text-2xl text-yellow-700 font-bold">{noMatchCount}</div>
                         </div>
                       </div>
                     </div>
@@ -2081,15 +2120,10 @@ export default function ResumeScoringPage({
                       <div className={`text-3xl sm:text-4xl font-bold mb-2 ${getScoreColor(avgScore)}`}>
                         {avgScore}%
                       </div>
-                      <div className={`inline-block px-3 py-1.5 rounded-full text-xs border font-medium ${getScoreBgColor(avgScore)}`}>
-                        {getScoreLabel(avgScore)}
-                      </div>
-
                       <div className="mt-4 flex flex-col gap-2 w-full">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            // Show progress in BulkScoringProgressModal
                             const resumes = item.scoredResumes || [];
                             const allProgressItems: ScoringProgressItem[] = resumes.map((resume: any) => ({
                               id: resume.resumeId || resume.id || '',
@@ -2116,7 +2150,7 @@ export default function ResumeScoringPage({
                           }}
                           className="px-3 sm:px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-xs sm:text-sm font-medium flex items-center gap-1.5 justify-center w-full"
                         >
-                          <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
+                          <Eye className="w-3.5 h-3.5" />
                           View Progress
                         </button>
                         <button
@@ -2131,10 +2165,10 @@ export default function ResumeScoringPage({
                             }
                             router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                           }}
-                          className="px-3 sm:px-4 py-2 border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 hover:border-gray-400 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center gap-1 justify-center cursor-pointer w-full"
+                          className="flex-1 py-2 border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 hover:border-gray-400 rounded-lg transition-colors text-xs sm:text-sm font-medium flex items-center gap-1.5 justify-center cursor-pointer"
                         >
                           View Details
-                          <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 rotate-180 hover:translate-x-1 transition-transform" />
+                          <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
                         </button>
                       </div>
                     </div>
@@ -2273,6 +2307,89 @@ export default function ResumeScoringPage({
           />
         )}
 
+      {/* Scoring History Modal */}
+      {historyModalItem && (() => {
+        const groups: { scoredBy: string; date: string; count: number; source: string }[] = [];
+        const seen = new Map<string, number>();
+        (historyModalItem.scoredResumes || []).forEach((r: any) => {
+          const scorer = r.scoredBy || 'System';
+          const rawDate = r.scoredDate || r.created_at || historyModalItem.scoredAt;
+          const day = new Date(rawDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+          const time = new Date(rawDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+          const src = r.source === 'my-resumes' ? 'My Resumes' : 'Resume Database';
+          const key = `${scorer}||${day}||${src}`;
+          if (seen.has(key)) {
+            groups[seen.get(key)!].count++;
+          } else {
+            seen.set(key, groups.length);
+            groups.push({ scoredBy: scorer, date: `${day}, ${time}`, count: 1, source: src });
+          }
+        });
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                    <History className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 text-sm">Scoring History</h3>
+                    <p className="text-xs text-gray-500 truncate max-w-[260px]">{historyModalItem.jobTitle}</p>
+                  </div>
+                </div>
+                <button onClick={() => setHistoryModalItem(null)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+              <div className="overflow-y-auto max-h-[420px]">
+                {groups.length === 0 ? (
+                  <div className="px-6 py-10 text-center text-sm text-gray-400">No scoring history available.</div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-100 sticky top-0">
+                      <tr>
+                        <th className="text-left px-5 py-3 text-xs font-medium text-gray-500">Scored By</th>
+                        <th className="text-left px-5 py-3 text-xs font-medium text-gray-500">Date & Time</th>
+                        <th className="text-center px-5 py-3 text-xs font-medium text-gray-500">Resumes</th>
+                        <th className="text-left px-5 py-3 text-xs font-medium text-gray-500">Source</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {groups.map((g, i) => (
+                        <tr key={i} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
+                                <span className="text-xs font-semibold text-indigo-700">{g.scoredBy.charAt(0).toUpperCase()}</span>
+                              </div>
+                              <span className="text-gray-800 font-medium">{g.scoredBy}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-gray-600 text-xs whitespace-nowrap">{g.date}</td>
+                          <td className="px-5 py-3.5 text-center">
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-gray-800 font-bold text-sm">{g.count}</span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${g.source === 'My Resumes' ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-gray-50 text-gray-700 border border-gray-200'}`}>
+                              {g.source}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div className="px-6 py-3 border-t border-gray-100 flex justify-between items-center bg-gray-50">
+                <span className="text-xs text-gray-500">{historyModalItem.totalScored} total resumes scored</span>
+                <button onClick={() => setHistoryModalItem(null)} className="px-4 py-1.5 bg-gray-800 text-white rounded-lg text-xs font-medium hover:bg-gray-900 transition-colors">Close</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       </main>
     );
   }
@@ -2316,23 +2433,111 @@ export default function ResumeScoringPage({
           Select Job Description
         </label>
 
-        <select
-          value={selectedJob}
-          onChange={(e) => {
-            setSelectedJob(e.target.value);
-            setResumeSource(null);
-            setSelectedResumes([]);
-            setShowResults(false);
-          }}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent bg-white text-gray-900"
-        >
-          <option value="">Choose a published job...</option>
-          {publishedJobs.map((job) => (
-            <option key={job.id} value={job.id}>
-              {job.title} — {job.location || 'Remote'} — {job.applicants} applicants
-            </option>
-          ))}
-        </select>
+        {/* Custom Job Dropdown */}
+        <div className="relative" ref={jobDropdownRef}>
+          {/* Trigger button */}
+          <button
+            type="button"
+            onClick={() => { setShowJobDropdown(v => !v); setJobDropdownSearch(''); }}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-left flex items-center justify-between gap-3 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent hover:border-gray-400 transition-colors"
+          >
+            {selectedJobData ? (
+              <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+                {selectedJobData.job_id && (
+                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-bold font-mono border border-blue-200">
+                    {selectedJobData.job_id}
+                  </span>
+                )}
+                <span className="text-gray-900 font-semibold text-sm">{selectedJobData.title}</span>
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
+                  Published
+                </span>
+                {selectedJobData.creation_method === 'ai_generated' && (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-50 text-purple-700 border border-purple-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"></span>
+                    AI
+                  </span>
+                )}
+                {selectedJobData.current_version && (
+                  <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200">
+                    v{selectedJobData.current_version}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-gray-400 text-sm">Choose a published job...</span>
+            )}
+            <ChevronDown className={`w-4 h-4 text-gray-500 flex-shrink-0 transition-transform ${showJobDropdown ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Dropdown panel */}
+          {showJobDropdown && (
+            <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+              {/* Search */}
+              <div className="p-2 border-b border-gray-100">
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+                  <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <input
+                    autoFocus
+                    type="text"
+                    value={jobDropdownSearch}
+                    onChange={e => setJobDropdownSearch(e.target.value)}
+                    placeholder="Search by title or JD ID..."
+                    className="flex-1 bg-transparent text-sm text-gray-700 outline-none placeholder-gray-400"
+                  />
+                </div>
+              </div>
+              {/* Options */}
+              <div className="max-h-72 overflow-y-auto">
+                {publishedJobs
+                  .filter(j => j.title.toLowerCase().includes(jobDropdownSearch.toLowerCase()) || (j.job_id || '').toLowerCase().includes(jobDropdownSearch.toLowerCase()))
+                  .map(job => (
+                    <button
+                      key={job.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedJob(job.id);
+                        setResumeSource(null);
+                        setSelectedResumes([]);
+                        setShowResults(false);
+                        setShowJobDropdown(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0 ${selectedJob === job.id ? 'bg-blue-50 hover:bg-blue-50' : ''}`}
+                    >
+                      {/* JD ID + title + status + AI + version only */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {job.job_id && (
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-bold font-mono border border-blue-200">
+                            {job.job_id}
+                          </span>
+                        )}
+                        <span className="text-gray-900 font-medium text-sm">{job.title}</span>
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
+                          Published
+                        </span>
+                        {job.creation_method === 'ai_generated' && (
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-50 text-purple-700 border border-purple-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"></span>
+                            AI
+                          </span>
+                        )}
+                        {job.current_version && (
+                          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200">
+                            v{job.current_version}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                {publishedJobs.filter(j => j.title.toLowerCase().includes(jobDropdownSearch.toLowerCase()) || (j.job_id || '').toLowerCase().includes(jobDropdownSearch.toLowerCase())).length === 0 && (
+                  <div className="px-4 py-6 text-center text-sm text-gray-400">No jobs match your search</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {publishedJobs.length === 0 && (
           <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-3">
@@ -2347,21 +2552,53 @@ export default function ResumeScoringPage({
         {selectedJobData && (
           <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Briefcase className="w-5 h-5 text-white" />
                 </div>
-                <div>
-                  <h3 className="font-medium text-gray-900">{selectedJobData.title}</h3>
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm text-gray-500 mt-0.5">
-                    <span className="flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5" />
-                      {selectedJobData.location || 'Remote'}
+                <div className="min-w-0">
+                  {/* Row 1: JD ID + title + badges */}
+                  <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                    {selectedJobData.job_id && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-bold font-mono border border-blue-200">
+                        {selectedJobData.job_id}
+                      </span>
+                    )}
+                    <span className="font-semibold text-gray-900 text-sm">{selectedJobData.title}</span>
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
+                      Published
                     </span>
-                    <span className="hidden sm:inline">•</span>
-                    <span>{selectedJobData.department}</span>
-                    <span className="hidden sm:inline">•</span>
-                    <span>{selectedJobData.applicants} applicants</span>
+                    {selectedJobData.creation_method === 'ai_generated' && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-purple-50 text-purple-700 border border-purple-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"></span>
+                        AI
+                      </span>
+                    )}
+                    {selectedJobData.current_version && (
+                      <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600 border border-gray-200">
+                        v{selectedJobData.current_version}
+                      </span>
+                    )}
+                  </div>
+                  {/* Row 2: industry · employment · remote · posted · by · applicants */}
+                  <div className="flex items-center gap-3 text-xs text-gray-500 flex-wrap">
+                    {selectedJobData.industry_type && (
+                      <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{formatIndustryType(selectedJobData.industry_type)}</span>
+                    )}
+                    {selectedJobData.employmentType && (
+                      <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{formatEmploymentType(selectedJobData.employmentType)}</span>
+                    )}
+                    {selectedJobData.remote_type && (
+                      <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /><span className="capitalize">{selectedJobData.remote_type}</span></span>
+                    )}
+                    {selectedJobData.published_at && (
+                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Posted {new Date(selectedJobData.published_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                    )}
+                    {selectedJobData.created_by_name && (
+                      <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" />By {selectedJobData.created_by_name}</span>
+                    )}
+                    <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" />{selectedJobData.applicants} {selectedJobData.applicants === 1 ? 'applicant' : 'applicants'}</span>
                   </div>
                 </div>
               </div>
@@ -2633,6 +2870,7 @@ export default function ResumeScoringPage({
           }}
         />
       )}
+
 
     </main>
   );

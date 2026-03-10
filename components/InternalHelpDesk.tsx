@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketStats, InternalTicketCategory, InternalTicketPriority } from '@/lib/services';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 
 type ViewType = 'overview' | 'submit' | 'tickets' | 'detail';
 
@@ -218,29 +219,6 @@ export default function InternalHelpDesk() {
     return matchesSearch;
   });
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-
-    if (diffInHours < 1) return 'Just now';
-    if (diffInHours < 24) return `${diffInHours}h ago`;
-    if (diffInHours < 48) return 'Yesterday';
-
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-
-  const formatFullDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
   const openTickets = stats?.open_tickets ?? 0;
   const inProgressTickets = stats?.in_progress_tickets ?? 0;
   const resolvedTickets = stats?.resolved_tickets ?? 0;
@@ -395,7 +373,7 @@ export default function InternalHelpDesk() {
                         <span>-</span>
                         {getPriorityBadge(ticket.priority)}
                         <span>-</span>
-                        <span>{formatDate(ticket.updated_at)}</span>
+                        <span>{formatISTDate(ticket.updated_at)}</span>
                       </div>
                     </button>
                   ))}
@@ -616,7 +594,7 @@ export default function InternalHelpDesk() {
                               {getStatusBadge(ticket.status)}
                             </td>
                             <td className="px-6 py-4">
-                              <span className="text-sm text-gray-600">{formatDate(ticket.updated_at)}</span>
+                              <span className="text-sm text-gray-600">{formatISTDate(ticket.updated_at)}</span>
                             </td>
                             <td className="px-6 py-4">
                               <button
@@ -708,7 +686,7 @@ export default function InternalHelpDesk() {
                               <span className="text-sm font-medium text-gray-900">
                                 {response.user_role === 'user' ? (response.user_name || 'You') : 'Administrator'}
                               </span>
-                              <span className="text-xs text-gray-500">{formatDate(response.created_at)}</span>
+                              <span className="text-xs text-gray-500">{formatIST(response.created_at)}</span>
                             </div>
                             <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{response.message}</p>
                           </div>
@@ -752,12 +730,12 @@ export default function InternalHelpDesk() {
                   <div className="space-y-4">
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Created</div>
-                      <div className="text-sm text-gray-900">{formatFullDate(selectedTicket.created_at)}</div>
+                      <div className="text-sm text-gray-900">{formatIST(selectedTicket.created_at)}</div>
                     </div>
 
                     <div>
                       <div className="text-xs text-gray-600 mb-1">Last Updated</div>
-                      <div className="text-sm text-gray-900">{formatFullDate(selectedTicket.updated_at)}</div>
+                      <div className="text-sm text-gray-900">{formatIST(selectedTicket.updated_at)}</div>
                     </div>
 
                     {selectedTicket.assigned_to && (

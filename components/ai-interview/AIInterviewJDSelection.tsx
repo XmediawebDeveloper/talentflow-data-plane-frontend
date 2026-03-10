@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 export default function AIInterviewJDSelection() {
   const router = useRouter();
@@ -100,9 +101,9 @@ export default function AIInterviewJDSelection() {
             {filteredJds.map(jd => {
               const isUsed = jd.has_published_config === true;
               const postedDate = jd.published_at
-                ? new Date(jd.published_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                ? formatISTDate(jd.published_at)
                 : jd.created_at
-                  ? new Date(jd.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                  ? formatISTDate(jd.created_at)
                   : null;
 
               return (

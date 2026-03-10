@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import { formatIST } from '@/lib/utils/dateUtils';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
 import {
@@ -171,14 +172,6 @@ export default function RoleManagement() {
     } catch (error) {
       console.error('Error loading role permissions:', error);
       toast.error('Failed to load role permissions');
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    try {
-      return new Date(dateStr).toLocaleString();
-    } catch {
-      return dateStr;
     }
   };
 
@@ -655,7 +648,7 @@ export default function RoleManagement() {
                       </div>
                     </td>
                     <td className="px-4 lg:px-6 py-4">
-                      <div className="text-sm text-gray-600">{formatDate(log.performed_at)}</div>
+                      <div className="text-sm text-gray-600">{formatIST(log.performed_at)}</div>
                     </td>
                     <td className="px-4 lg:px-6 py-4">
                       {formatAuditChanges(log.action, log.changes)}
@@ -680,7 +673,7 @@ export default function RoleManagement() {
                   }`}>
                     {getAuditActionLabel(log.action)}
                   </span>
-                  <span className="text-[10px] sm:text-xs text-gray-400">{formatDate(log.performed_at)}</span>
+                  <span className="text-[10px] sm:text-xs text-gray-400">{formatIST(log.performed_at)}</span>
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm font-medium text-gray-900">{log.entity_name || log.entity_id}</div>

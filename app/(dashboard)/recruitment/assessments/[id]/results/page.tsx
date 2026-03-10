@@ -5,11 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import AssessmentResults from '@/components/AssessmentResults';
 import { assessmentService } from '@/lib/services';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 export default function AssessmentResultsPage() {
   const params = useParams();
   const router = useRouter();
+  const { user, isTenantAdmin } = useAuth();
   const assessmentId = params.id as string;
+  const canDownloadPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
   const [jdTitle, setJdTitle] = useState<string>('');
@@ -73,6 +76,7 @@ export default function AssessmentResultsPage() {
         assessmentId={assessmentId}
         assessmentTitle={assessmentTitle}
         jdTitle={jdTitle}
+        canDownloadPDF={canDownloadPDF}
       />
     </FeatureGate>
   );

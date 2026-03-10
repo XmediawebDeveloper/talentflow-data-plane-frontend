@@ -4,6 +4,7 @@ import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, P
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/services/api';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 interface TrackInvitesModalProps {
   isOpen: boolean;
@@ -12,23 +13,6 @@ interface TrackInvitesModalProps {
   jdTitle: string;
 }
 
-// Helper function to format date/time in IST timezone
-const formatDateTimeIST = (dateStr: string | null | undefined, options?: { includeTime?: boolean }) => {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const dateOptions: Intl.DateTimeFormatOptions = {
-    timeZone: 'Asia/Kolkata',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  };
-  if (options?.includeTime) {
-    dateOptions.hour = '2-digit';
-    dateOptions.minute = '2-digit';
-    dateOptions.hour12 = true;
-  }
-  return date.toLocaleString('en-US', dateOptions);
-};
 
 const isValidEmail = (email: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -195,11 +179,6 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
     return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return null;
-    return formatDateTimeIST(dateStr, { includeTime: true });
-  };
-
   return (
     <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-2 sm:p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -325,19 +304,19 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                         {invitation.sent_at && (
                           <div className="flex items-center gap-1.5">
                             <Mail className="w-2.5 h-2.5 text-blue-500 flex-shrink-0" />
-                            <span>Sent: {formatDate(invitation.sent_at)}</span>
+                            <span>Sent: {formatIST(invitation.sent_at)}</span>
                           </div>
                         )}
                         {invitation.started_at && (
                           <div className="flex items-center gap-1.5">
                             <Play className="w-2.5 h-2.5 text-yellow-500 flex-shrink-0" />
-                            <span>Started: {formatDate(invitation.started_at)}</span>
+                            <span>Started: {formatIST(invitation.started_at)}</span>
                           </div>
                         )}
                         {invitation.completed_at && (
                           <div className="flex items-center gap-1.5">
                             <CheckCircle className="w-2.5 h-2.5 text-green-500 flex-shrink-0" />
-                            <span>Done: {formatDate(invitation.completed_at)}</span>
+                            <span>Done: {formatIST(invitation.completed_at)}</span>
                           </div>
                         )}
                       </div>
@@ -445,31 +424,31 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                               {invitation.sent_at && (
                                 <div className="flex items-center gap-2">
                                   <Mail className="w-3 h-3 text-blue-500 flex-shrink-0" />
-                                  <span>Sent: {formatDate(invitation.sent_at)}</span>
+                                  <span>Sent: {formatIST(invitation.sent_at)}</span>
                                 </div>
                               )}
                               {invitation.email_read_at && (
                                 <div className="flex items-center gap-2">
                                   <Eye className="w-3 h-3 text-indigo-500 flex-shrink-0" />
-                                  <span>Email Read: {formatDate(invitation.email_read_at)}</span>
+                                  <span>Email Read: {formatIST(invitation.email_read_at)}</span>
                                 </div>
                               )}
                               {invitation.bounced_at && (
                                 <div className="flex items-center gap-2">
                                   <RefreshCw className="w-3 h-3 text-red-500 flex-shrink-0" />
-                                  <span className="text-red-600">Bounced: {formatDate(invitation.bounced_at)}</span>
+                                  <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
                                 </div>
                               )}
                               {invitation.started_at && (
                                 <div className="flex items-center gap-2">
                                   <Play className="w-3 h-3 text-yellow-500 flex-shrink-0" />
-                                  <span>Started: {formatDate(invitation.started_at)}</span>
+                                  <span>Started: {formatIST(invitation.started_at)}</span>
                                 </div>
                               )}
                               {invitation.completed_at && (
                                 <div className="flex items-center gap-2">
                                   <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
-                                  <span>Completed: {formatDate(invitation.completed_at)}</span>
+                                  <span>Completed: {formatIST(invitation.completed_at)}</span>
                                 </div>
                               )}
                             </div>

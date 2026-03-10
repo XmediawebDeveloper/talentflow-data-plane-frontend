@@ -134,6 +134,7 @@ export interface Job {
   employmentType?: string;
   workMode?: string; // Remote type: onsite, hybrid, remote
   education?: string; // Education requirement: bachelors, masters, doctorate, etc.
+  experience_level?: string; // Experience level: entry, junior, mid, senior, architect, management
   currentVersion?: number;
   versionHistory?: JobSnapshot[];
   assignedTo?: string; // Team member ID

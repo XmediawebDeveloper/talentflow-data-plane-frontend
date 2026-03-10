@@ -146,25 +146,26 @@ interface Addon {
   updated_at?: string;
 }
 
+interface FreeTrialFeature {
+  feature_key: string;
+  feature_name: string;
+  feature_category: string;
+  icon_name?: string;
+  quota_key: string | null;
+  quota_limit: number | null;
+}
+
 interface FreeTrialData {
   id?: number;
   trial_days: number;
-  features: {
-    // Support both uppercase (legacy) and lowercase (API) property names
-    MAX_JOBS?: number;
-    MAX_SEATS?: number;
-    ASSESSMENTS?: number;
-    AI_INTERVIEW?: number;
-    RESUME_SCORING?: number;
-    RESUME_STORAGE?: number;
-    max_jobs?: number;
-    max_seats?: number;
-    assessments?: number;
-    ai_interview?: number;
-    resume_scoring?: number;
-    resume_storage?: number;
+  plan_name?: string;
+  features: FreeTrialFeature[];
+  quotas: {
+    MAX_SEATS?: number | string;
+    MAX_JOBS?: number | string;
+    STORAGE_GB?: number;
+    API_RATE_LIMIT?: number;
   };
-  trial_includes: string[];
 }
 
 interface PlanSettingsData {
@@ -543,12 +544,30 @@ export default function PricingPage() {
         {/* Pricing Cards - Interactive Hover Design */}
         {(() => {
           // Create a free trial plan card if freeTrial config exists
-          // Handle both uppercase (MAX_JOBS) and lowercase (max_jobs) property names from API
-          const trialFeatures = freeTrial?.features || {};
+          const buildTrialQuotas = (trial: FreeTrialData): PlanQuotas => {
+            const q = trial.quotas || {};
+            const result: PlanQuotas = {
+              max_seats: q.MAX_SEATS,
+              max_jobs: q.MAX_JOBS,
+              total_resume_storage: typeof q.STORAGE_GB === 'number' ? q.STORAGE_GB : undefined,
+            };
+            for (const feature of trial.features || []) {
+              if (feature.quota_key && feature.quota_limit !== null) {
+                switch (feature.quota_key) {
+                  case 'RU': result.RU = feature.quota_limit ?? undefined; break;
+                  case 'RS': result.RS = feature.quota_limit ?? undefined; break;
+                  case 'AS': result.AS = feature.quota_limit ?? undefined; break;
+                  case 'AIU': result.AIU = feature.quota_limit ?? undefined; break;
+                }
+              }
+            }
+            return result;
+          };
+
           const freeTrialCard: DisplayPlan | null = freeTrial ? {
             id: 'free-trial',
             name: 'Free Trial',
-            description: freeTrial.trial_days + " days free • No credit card required",
+            description: freeTrial.trial_days + (freeTrial.trial_days === 1 ? " day" : " days") + " free • No credit card required",
             basePrice: 0,
             monthlyPrice: 0,
             yearlyPrice: 0,
@@ -558,16 +577,9 @@ export default function PricingPage() {
             icon: Sparkles,
             gradient: 'from-emerald-500 to-teal-600',
             popular: false,
-            features: freeTrial.trial_includes || [],
+            features: (freeTrial.features || []).map(f => f.feature_name),
             trialDays: freeTrial.trial_days,
-            quotas: {
-              max_jobs: trialFeatures.MAX_JOBS ?? trialFeatures.max_jobs,
-              max_seats: trialFeatures.MAX_SEATS ?? trialFeatures.max_seats,
-              AS: trialFeatures.ASSESSMENTS ?? trialFeatures.assessments,
-              AIU: trialFeatures.AI_INTERVIEW ?? trialFeatures.ai_interview,
-              RS: trialFeatures.RESUME_SCORING ?? trialFeatures.resume_scoring,
-              RU: trialFeatures.RESUME_STORAGE ?? trialFeatures.resume_storage,
-            },
+            quotas: buildTrialQuotas(freeTrial),
             planSlug: 'free-trial',
           } : null;
 
@@ -702,7 +714,7 @@ export default function PricingPage() {
                           {isTrialPlan ? (
                             <div className="flex items-baseline gap-2">
                               <span className="text-3xl font-bold text-gray-900 dark:text-white">Free</span>
-                              <span className="text-gray-500 text-sm">for {plan.trialDays} days</span>
+                              <span className="text-gray-500 text-sm">for {plan.trialDays} {plan.trialDays === 1 ? 'day' : 'days'}</span>
                             </div>
                           ) : (plan.monthlyPrice || plan.yearlyPrice) ? (
                             <>

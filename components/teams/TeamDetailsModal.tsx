@@ -2,6 +2,7 @@
 
 import { X, Users } from 'lucide-react';
 import { Team } from '@/lib/services/teamService';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface TeamDetailsModalProps {
   isOpen: boolean;
@@ -115,11 +116,11 @@ export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsM
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-gray-500">Created</p>
-                <p className="text-gray-900">{new Date(team.created_at).toLocaleDateString()}</p>
+                <p className="text-gray-900">{formatISTDate(team.created_at)}</p>
               </div>
               <div>
                 <p className="text-gray-500">Last Updated</p>
-                <p className="text-gray-900">{new Date(team.updated_at).toLocaleDateString()}</p>
+                <p className="text-gray-900">{formatISTDate(team.updated_at)}</p>
               </div>
             </div>
           </div>

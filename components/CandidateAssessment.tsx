@@ -1,5 +1,6 @@
 import { CheckCircle2, Shield, Lock, FileText, Clock, Sparkles, Mic, Video, MessageSquare, Send, AlertCircle, ThumbsUp, Play, Code2, Terminal } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface AssessmentData {
   id: string;
@@ -764,7 +765,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             </div>
 
             <div className="text-xs text-gray-500">
-              Assessment ID: {assessmentId} • Submitted on {new Date().toLocaleDateString()}
+              Assessment ID: {assessmentId} • Submitted on {formatISTDate(new Date().toISOString())}
             </div>
           </div>
         </div>

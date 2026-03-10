@@ -1,5 +1,6 @@
 import { Bell, X, CheckCircle, AlertCircle, Info, Clock, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 
 interface Notification {
   id: string;
@@ -45,7 +46,7 @@ export default function NotificationCenter({
   };
 
   const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
+    const date = parseIST(timestamp);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
@@ -56,7 +57,7 @@ export default function NotificationCenter({
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
+    return formatISTDate(timestamp);
   };
 
   return (

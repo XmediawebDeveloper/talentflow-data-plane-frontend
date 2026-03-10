@@ -48,42 +48,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 
-// Helper function to format date in IST (UTC+5:30)
-const formatDateIST = (dateString: string | null | undefined): string => {
-  if (!dateString) return '-';
-  try {
-    const date = new Date(dateString);
-    // Format in IST timezone
-    return date.toLocaleDateString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  } catch {
-    return '-';
-  }
-};
-
-// Helper function to format date with time in IST
-const formatDateTimeIST = (dateString: string | null | undefined): string => {
-  if (!dateString) return '-';
-  try {
-    const date = new Date(dateString);
-    return date.toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-  } catch {
-    return '-';
-  }
-};
+const formatDateIST = formatISTDate;
+const formatDateTimeIST = formatIST;
 
 // Drag item type for resumes (must match ResumeTable and FolderTree)
 const RESUME_DRAG_TYPE = 'RESUME';

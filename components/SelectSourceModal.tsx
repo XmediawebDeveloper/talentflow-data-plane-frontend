@@ -10,6 +10,7 @@ import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import UploadModal from './UploadModal';
+import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 
 // Progress item interface (internal)
 interface ProgressItem {
@@ -36,6 +37,7 @@ export default function SelectSourceModal({
 }: SelectSourceModalProps) {
   const router = useRouter();
   const { user, tenant } = useAuth();
+  const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
@@ -58,6 +60,12 @@ export default function SelectSourceModal({
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
+
+  // Hide global floating widget while progress modal is open here; show it when modal closes or user navigates
+  useEffect(() => {
+    setMainPanelOpen(showProgressModal);
+    return () => { setMainPanelOpen(false); };
+  }, [showProgressModal, setMainPanelOpen]);
 
   // Fetch resumes and folders on mount and tab change
   useEffect(() => {
@@ -241,89 +249,38 @@ export default function SelectSourceModal({
       // Continue with scoring even if check fails
     }
 
-    // Initialize all items with 'queued' status immediately
-    const initialItems: ProgressItem[] = resumesToScore.map(resumeId => {
-      const resume = resumes.find(r => r.id === resumeId);
-      return {
-        resumeId,
-        candidateName: resume?.candidate_name || 'Unknown',
-        status: 'queued' as const,
-      };
-    });
-
-    setProgressItems(initialItems);
-    setScoringStats({ queued: resumesToScore.length, processing: 0, completed: 0, failed: 0 });
-    setShowProgressModal(true);
     setSubmitting(true);
 
-    let completed = 0;
-    let failed = 0;
+    try {
+      // Use async Celery-based bulk scoring (same as Resume Scoring module)
+      const response = await scoringService.startBulkScoringAsync(jobId, resumesToScore);
 
-    // Score resumes one by one to show real-time progress
-    for (let i = 0; i < resumesToScore.length; i++) {
-      const resumeId = resumesToScore[i];
-      const resume = resumes.find(r => r.id === resumeId);
-      const candidateName = resume?.candidate_name || 'Unknown';
-
-      // Update current item to 'processing'
-      setProgressItems(prev => prev.map(item =>
-        item.resumeId === resumeId
-          ? { ...item, status: 'processing' as const }
-          : item
-      ));
-      setScoringStats({
-        queued: resumesToScore.length - i - 1,
-        processing: 1,
-        completed,
-        failed,
+      // Build resume items for progress display
+      const resumeItems = resumesToScore.map(resumeId => {
+        const resume = resumes.find(r => r.id === resumeId);
+        return {
+          resumeId,
+          candidateName: resume?.candidate_name || 'Unknown',
+        };
       });
 
-      try {
-        const result = await scoringService.scoreResume(jobId, resumeId);
-        completed++;
+      // Store batch info for the resume-scoring page to poll
+      const scoringData = {
+        batchId: response.batch_id,
+        jobId: response.jd_id,
+        jobTitle: response.jd_title,
+        totalResumes: response.total_resumes,
+        resumeItems,
+      };
+      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
-        // Update item to 'completed' with score and actual match_status from API
-        setProgressItems(prev => prev.map(item =>
-          item.resumeId === resumeId
-            ? { ...item, status: 'completed' as const, score: Math.round(result.overall_score), matchStatus: result.match_status }
-            : item
-        ));
-        setScoringStats({
-          queued: resumesToScore.length - i - 1,
-          processing: 0,
-          completed,
-          failed,
-        });
-      } catch (error: any) {
-        failed++;
-        const errorMsg = error?.message || 'Scoring failed';
-
-        // Update item to 'failed' with error
-        setProgressItems(prev => prev.map(item =>
-          item.resumeId === resumeId
-            ? { ...item, status: 'failed' as const, errorMessage: errorMsg }
-            : item
-        ));
-        setScoringStats({
-          queued: resumesToScore.length - i - 1,
-          processing: 0,
-          completed,
-          failed,
-        });
-      }
-    }
-
-    // All done
-    setSubmitting(false);
-
-    if (completed > 0) {
-      toast.success(`${completed} resume(s) scored successfully${failed > 0 ? `, ${failed} failed` : ''}`);
-    } else if (failed > 0) {
-      toast.error(`All ${failed} resume(s) failed to score`);
-    }
-
-    if (onScoringComplete) {
-      onScoringComplete();
+      // Close modal and stay on JD page (Scored Resumes tab)
+      onClose();
+      router.push(`/recruitment/job-details?id=${jobId}&tab=scored-resumes`);
+    } catch (error: any) {
+      console.error('Failed to start scoring:', error);
+      toast.error(error.message || 'Failed to start scoring');
+      setSubmitting(false);
     }
   };
 
