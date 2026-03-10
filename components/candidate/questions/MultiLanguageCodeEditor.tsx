@@ -880,8 +880,9 @@ export function MultiLanguageCodeEditor({
             {/* Reset Button */}
             <button
               onClick={handleResetCode}
-              className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
-              title="Reset to starter code"
+              disabled={isLocked}
+              className={`p-2 rounded-lg transition-colors ${isLocked ? 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-40' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+              title={isLocked ? 'Cannot reset after submission' : 'Reset to starter code'}
             >
               <RotateCcw className="w-4 h-4" />
             </button>

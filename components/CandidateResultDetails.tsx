@@ -1008,7 +1008,7 @@ export default function CandidateResultDetails({
                           <p className="text-sm text-gray-600 mt-1">
                             {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''} •
                             <span className="ml-1">
-                              {Math.round(questionsForRound.reduce((s, q) => s + (q.points_earned || 0), 0) * 10) / 10}
+                              {Math.round(questionsForRound.reduce((s, q) => s + (q.points_earned || 0), 0))}
                               /{questionsForRound.reduce((s, q) => s + (q.points_possible || 10), 0)} points
                             </span>
                           </p>
@@ -1068,7 +1068,7 @@ export default function CandidateResultDetails({
                                         return (
                                           <>
                                             <div className={`text-lg sm:text-2xl font-bold ${getScoreColor(percentage)}`}>
-                                              {Math.round(normalizedEarned * 10) / 10}
+                                              {Math.round(normalizedEarned)}
                                             </div>
                                             <div className="text-gray-400">/</div>
                                             <div className="text-base sm:text-xl text-gray-600">{normalizedPossible}</div>
