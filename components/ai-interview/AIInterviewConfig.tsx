@@ -3,21 +3,29 @@
 import {
   ArrowLeft, Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
-  MessageSquare, GripVertical, Info, AlertCircle, Timer, Zap,
-  Video, Upload, Layers,
+  MessageSquare, Info, AlertCircle, Timer, Zap,
+  Video, Upload, Layers, ChevronRight,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD, AIInterviewRoundConfig, AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+
+/* ─────────────────────────────────────────────────────────────────────── */
+/*  Step indicator constants                                               */
+/* ─────────────────────────────────────────────────────────────────────── */
+const STEPS = ['Select JD', 'Configure', 'Clusters', 'Preview & Publish'];
+const CURRENT_STEP = 2;
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
 /* ─────────────────────────────────────────────────────────────────────── */
 
 type InterviewMode = 'fixed' | 'flexible';
+type SkillType = 'Skill' | 'Command' | 'Certification';
 
 interface Cluster {
   id: string;
@@ -30,6 +38,7 @@ interface Cluster {
 interface SkillEntry {
   name: string;
   comment: string;
+  type: SkillType;
 }
 
 interface CategoryConfig {
@@ -66,14 +75,6 @@ const PRIORITY_LABELS: Record<number, { label: string; short: string; color: str
 };
 
 /* ─────────────────────────────────────────────────────────────────────── */
-/*  Small helpers                                                           */
-/* ─────────────────────────────────────────────────────────────────────── */
-
-function uid() {
-  return Math.random().toString(36).slice(2, 9);
-}
-
-/* ─────────────────────────────────────────────────────────────────────── */
 /*  Sub-components                                                          */
 /* ─────────────────────────────────────────────────────────────────────── */
 
@@ -83,85 +84,6 @@ function PriorityBadge({ p }: { p: number }) {
     <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${color}`}>
       {label}
     </span>
-  );
-}
-
-interface ClusterRowProps {
-  cluster: Cluster;
-  timeMin?: number;
-  isOpen: boolean;
-  onToggle: () => void;
-  onChange: (updated: Cluster) => void;
-  onRemove: () => void;
-}
-
-function ClusterRow({ cluster, timeMin, isOpen, onToggle, onChange, onRemove }: ClusterRowProps) {
-  const [editingDetails, setEditingDetails] = useState(false);
-  const pInfo = PRIORITY_LABELS[cluster.priority] ?? PRIORITY_LABELS[3];
-
-  return (
-    <div className="border-b border-gray-100 last:border-b-0">
-      {/* Collapsed row: Topic + Priority + Time + Expand/Remove */}
-      <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50/50 transition-colors">
-        <button onClick={onToggle} className="p-0.5 text-gray-400 hover:text-gray-600 flex-shrink-0">
-          <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-        </button>
-        <input
-          value={cluster.name}
-          onChange={e => onChange({ ...cluster, name: e.target.value })}
-          placeholder="Topic name..."
-          className="flex-1 min-w-0 text-sm font-medium text-gray-900 bg-transparent focus:outline-none placeholder-gray-400"
-          onClick={e => e.stopPropagation()}
-        />
-        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-semibold flex-shrink-0 ${pInfo.color}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${pInfo.dot}`} />
-          {pInfo.short}
-        </div>
-        <select
-          value={cluster.priority}
-          onChange={e => { e.stopPropagation(); onChange({ ...cluster, priority: Number(e.target.value) as Cluster['priority'] }); }}
-          className="text-[10px] border border-gray-200 rounded px-1 py-0.5 focus:outline-none bg-white text-gray-500 cursor-pointer flex-shrink-0"
-        >
-          {[5, 4, 3, 2, 1].map(p => (
-            <option key={p} value={p}>{PRIORITY_LABELS[p].short}</option>
-          ))}
-        </select>
-        {timeMin !== undefined && (
-          <span className="text-[10px] text-gray-400 flex-shrink-0 font-medium">{timeMin} min</span>
-        )}
-        <button onClick={onRemove} className="p-1 text-gray-300 hover:text-red-500 transition-colors flex-shrink-0">
-          <X className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* Expanded: Topic Details */}
-      {isOpen && (
-        <div className="px-10 pb-3">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Topic Details</span>
-            <button
-              onClick={() => setEditingDetails(!editingDetails)}
-              className="text-[10px] text-purple-600 hover:text-purple-800 font-medium"
-            >
-              {editingDetails ? 'Done' : 'Edit'}
-            </button>
-          </div>
-          {editingDetails ? (
-            <textarea
-              value={cluster.reason || ''}
-              onChange={e => onChange({ ...cluster, reason: e.target.value })}
-              placeholder="Describe what to assess..."
-              rows={2}
-              className="w-full text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-300 resize-none"
-            />
-          ) : (
-            <p className="text-xs text-gray-600 leading-relaxed bg-gray-50 px-3 py-2 rounded-lg border border-gray-100">
-              {cluster.reason || <span className="italic text-gray-400">No details — click Edit to add</span>}
-            </p>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -183,6 +105,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
   const [customInput, setCustomInput] = useState('');
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
+  const [skillToDelete, setSkillToDelete] = useState<string | null>(null);
 
   const jdSet = new Set(jdSkillNames.map(s => s.toLowerCase()));
   const color = category === 'mth'
@@ -210,7 +133,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
       toast.error('Skill already added');
       return;
     }
-    onChange({ skills: [...config.skills, { name, comment: '' }] });
+    onChange({ skills: [...config.skills, { name, comment: '', type: 'Skill' as SkillType }] });
     setCustomInput('');
   };
 
@@ -230,8 +153,19 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
     onChange({ skills: config.skills.map(s => s.name === name ? { ...s, comment } : s) });
   };
 
+  const updateSkillType = (name: string, type: SkillType) => {
+    onChange({ skills: config.skills.map(s => s.name === name ? { ...s, type } : s) });
+  };
+
+  const SKILL_TYPE_COLORS: Record<SkillType, string> = {
+    'Skill': 'bg-gray-100 text-gray-600 border-gray-200',
+    'Command': 'bg-blue-50 text-blue-600 border-blue-200',
+    'Certification': 'bg-green-50 text-green-600 border-green-200',
+  };
+
   const renderSkillTag = (skill: SkillEntry) => {
     const fromJd = jdSet.has(skill.name.toLowerCase());
+    const skillType = skill.type || 'Skill';
     return (
       <div key={skill.name} className="group">
         <div className="flex items-center gap-2">
@@ -241,6 +175,15 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
             {skill.name}
             {fromJd && <span className="text-[10px] opacity-60">JD</span>}
           </span>
+          <select
+            value={skillType}
+            onChange={e => updateSkillType(skill.name, e.target.value as SkillType)}
+            className={`text-[10px] font-medium px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${SKILL_TYPE_COLORS[skillType]}`}
+          >
+            <option value="Skill">Skill</option>
+            <option value="Command">Command</option>
+            <option value="Certification">Certification</option>
+          </select>
           <button
             onClick={() => setCommentOpen(commentOpen === skill.name ? null : skill.name)}
             title="Add comment"
@@ -249,21 +192,28 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
             <MessageSquare className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => removeSkill(skill.name)}
+            onClick={() => setSkillToDelete(skill.name)}
             className="p-1 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
           >
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
         {commentOpen === skill.name && (
-          <div className="mt-1 ml-0.5">
+          <div className="mt-1 ml-0.5 flex items-center gap-1.5">
             <input
               autoFocus
               value={skill.comment}
               onChange={e => updateComment(skill.name, e.target.value)}
               placeholder="Add interviewer note for this skill (not shown to candidate)…"
-              className="w-full px-3 py-1.5 text-xs border border-amber-200 rounded-lg bg-amber-50/50 focus:outline-none focus:ring-1 focus:ring-amber-300 placeholder-amber-300"
+              className="flex-1 px-3 py-1.5 text-xs border border-amber-200 rounded-lg bg-amber-50/50 focus:outline-none focus:ring-1 focus:ring-amber-300 placeholder-amber-300"
             />
+            <button
+              onClick={() => { updateComment(skill.name, ''); setCommentOpen(null); }}
+              title="Clear & close"
+              className="p-1 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
       </div>
@@ -423,6 +373,17 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
         </p>
 
       </div>
+
+      {/* Delete skill confirmation */}
+      <ConfirmationDialog
+        isOpen={!!skillToDelete}
+        onClose={() => setSkillToDelete(null)}
+        onConfirm={() => { if (skillToDelete) removeSkill(skillToDelete); }}
+        title="Remove Skill"
+        description={`Are you sure you want to remove "${skillToDelete}"? This will also remove it from any cluster it belongs to.`}
+        confirmText="Remove"
+        variant="danger"
+      />
     </div>
   );
 }
@@ -545,25 +506,16 @@ export default function AIInterviewConfig() {
   const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
   const [languageInput, setLanguageInput] = useState('');
 
-  /* Cluster modal */
-  const [showClusterModal, setShowClusterModal] = useState(false);
-  const [generatingClusters, setGeneratingClusters] = useState(false);
-  const [draftMthClusters, setDraftMthClusters] = useState<Cluster[]>([]);
-  const [draftNthClusters, setDraftNthClusters] = useState<Cluster[]>([]);
-  const [expandedClusterId, setExpandedClusterId] = useState<string | null>(null);
-
   /* Introduction video (optional) */
   const [introVideoFile, setIntroVideoFile] = useState<File | null>(null);
   const [introVideoUrl, setIntroVideoUrl] = useState<string>('');
   const [uploadingVideo, setUploadingVideo] = useState(false);
 
   /* Action states */
-  const [publishing, setPublishing] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const isNavigatingRef = useRef(false);
-  const isPublishedRef = useRef(false);
 
   /* ── Load JD + restore draft if one exists ── */
   useEffect(() => {
@@ -600,14 +552,14 @@ export default function AIInterviewConfig() {
           const hrRound  = existingDraft.rounds_config.find((r: AIInterviewRoundConfig) => r.type === 'hr');
 
           const toSkillEntries = (skills: string[] = []) =>
-            skills.map(s => ({ name: s, comment: '' }));
+            skills.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType }));
 
           if (mthRound) {
             const draftSkills = [...(mthRound.jd_skills || []), ...(mthRound.custom_skills || [])];
             setMth({
               skills: draftSkills.length > 0
                 ? toSkillEntries(draftSkills)
-                : (jd.must_have_skills?.map(s => ({ name: s, comment: '' })) ?? []),
+                : (jd.must_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? []),
               clusters: [],
               percentage: mthRound.percentage ?? DEFAULT_PCT.mth,
               enabled: true,
@@ -615,7 +567,7 @@ export default function AIInterviewConfig() {
           } else {
             setMth(prev => ({
               ...prev,
-              skills: jd.must_have_skills?.map(s => ({ name: s, comment: '' })) ?? [],
+              skills: jd.must_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
             }));
           }
 
@@ -624,7 +576,7 @@ export default function AIInterviewConfig() {
             setNth({
               skills: draftSkills.length > 0
                 ? toSkillEntries(draftSkills)
-                : (jd.nice_to_have_skills?.map(s => ({ name: s, comment: '' })) ?? []),
+                : (jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? []),
               clusters: [],
               percentage: nthRound.percentage ?? DEFAULT_PCT.nth,
               enabled: true,
@@ -633,7 +585,7 @@ export default function AIInterviewConfig() {
             setNth(prev => ({
               ...prev,
               enabled: false,
-              skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '' })) ?? [],
+              skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
             }));
           }
 
@@ -658,15 +610,59 @@ export default function AIInterviewConfig() {
             setIntroVideoUrl((existingDraft as any).introduction_video_url);
           }
 
+          // Restore clusters, skill comments, and skill types from special_instructions
+          try {
+            const si = (existingDraft as any).special_instructions;
+            if (si) {
+              const parsed = JSON.parse(si);
+              const mthComments: Record<string, string> = parsed.skill_comments?.mth || {};
+              const nthComments: Record<string, string> = parsed.skill_comments?.nth || {};
+              const mthTypes: Record<string, string> = parsed.skill_types?.mth || {};
+              const nthTypes: Record<string, string> = parsed.skill_types?.nth || {};
+
+              // Restore clusters
+              if (parsed.mth_clusters?.length) {
+                setMth(prev => ({ ...prev, clusters: parsed.mth_clusters }));
+              }
+              if (parsed.nth_clusters?.length) {
+                setNth(prev => ({ ...prev, clusters: parsed.nth_clusters }));
+              }
+
+              // Restore comments and types onto skills
+              if (Object.keys(mthComments).length || Object.keys(mthTypes).length) {
+                setMth(prev => ({
+                  ...prev,
+                  skills: prev.skills.map(s => ({
+                    ...s,
+                    comment: mthComments[s.name] || s.comment,
+                    type: (mthTypes[s.name] as SkillType) || s.type || 'Skill',
+                  })),
+                }));
+              }
+              if (Object.keys(nthComments).length || Object.keys(nthTypes).length) {
+                setNth(prev => ({
+                  ...prev,
+                  skills: prev.skills.map(s => ({
+                    ...s,
+                    comment: nthComments[s.name] || s.comment,
+                    type: (nthTypes[s.name] as SkillType) || s.type || 'Skill',
+                  })),
+                }));
+              }
+            }
+          } catch {
+            // Silent — malformed special_instructions is non-critical
+          }
+
         } else {
           // No draft — populate from JD
           setMth(prev => ({
             ...prev,
-            skills: jd.must_have_skills?.map(s => ({ name: s, comment: '' })) ?? [],
+            skills: jd.must_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
           }));
           setNth(prev => ({
             ...prev,
-            skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '' })) ?? [],
+            skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
           }));
         }
 
@@ -684,7 +680,7 @@ export default function AIInterviewConfig() {
   /* ── Navigation guards ── */
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (selectedJd && !isPublishedRef.current && !isNavigatingRef.current) {
+      if (selectedJd && !isNavigatingRef.current) {
         e.preventDefault(); e.returnValue = '';
       }
     };
@@ -694,7 +690,7 @@ export default function AIInterviewConfig() {
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (!selectedJd || isPublishedRef.current || isNavigatingRef.current) return;
+      if (!selectedJd || isNavigatingRef.current) return;
       let target = e.target as HTMLElement;
       while (target && target !== document.body) {
         if (target.tagName === 'A' || target.getAttribute('role') === 'link') {
@@ -714,7 +710,7 @@ export default function AIInterviewConfig() {
 
   /* ── Auto-save draft (debounced 2s) whenever config changes ── */
   useEffect(() => {
-    if (!selectedJd || isPublishedRef.current || loadingJd) return;
+    if (!selectedJd || loadingJd) return;
 
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
 
@@ -764,83 +760,6 @@ export default function AIInterviewConfig() {
 
   const totalPct = mth.percentage + (nth.enabled ? nth.percentage : 0) + (hrEnabled ? hrPct : 0);
   const pctValid = totalPct === 100;
-
-  /* ── Cluster handlers ── */
-  // Track whether clusters have ever been generated this session
-  const clustersGeneratedRef = useRef(false);
-
-  const handleOpenClusterModal = async () => {
-    // Show existing clusters — only auto-generate on very first time
-    setDraftMthClusters(mth.clusters);
-    setDraftNthClusters(nth.clusters);
-    setShowClusterModal(true);
-
-    const hasAnyClusters = mth.clusters.length > 0 || nth.clusters.length > 0;
-    if (!hasAnyClusters && !clustersGeneratedRef.current) {
-      await handleGenerateClusters();
-    }
-  };
-
-  const handleGenerateClusters = async () => {
-    if (!selectedJd) return;
-    setGeneratingClusters(true);
-    try {
-      const result = await aiInterviewService.generateClusters(
-        mth.skills.map(s => s.name),
-        nth.enabled ? nth.skills.map(s => s.name) : [],
-        selectedJd.title,
-        selectedJd.description,
-        fixedMthMin,
-        fixedNthMin,
-      );
-      const newMth = result.mth_clusters.map(c => ({
-        ...c,
-        priority: c.priority as Cluster['priority'],
-        reason: c.reason || '',
-      }));
-      const newNth = result.nth_clusters.map(c => ({
-        ...c,
-        priority: c.priority as Cluster['priority'],
-        reason: c.reason || '',
-      }));
-      setDraftMthClusters(newMth);
-      setDraftNthClusters(newNth);
-      clustersGeneratedRef.current = true;
-      // Auto-apply so clusters persist even if user closes without clicking Apply
-      setMth(prev => ({ ...prev, clusters: newMth }));
-      setNth(prev => ({ ...prev, clusters: newNth }));
-    } catch {
-      toast.error('Failed to generate clusters');
-    } finally {
-      setGeneratingClusters(false);
-    }
-  };
-
-  const handleApplyClusters = () => {
-    setMth(prev => ({ ...prev, clusters: draftMthClusters }));
-    setNth(prev => ({ ...prev, clusters: draftNthClusters }));
-    setShowClusterModal(false);
-    toast.success('Clusters applied!');
-  };
-
-  const handleUpdateDraftCluster = (
-    category: 'mth' | 'nth',
-    index: number,
-    updated: Cluster,
-  ) => {
-    const setter = category === 'mth' ? setDraftMthClusters : setDraftNthClusters;
-    setter(prev => prev.map((c, i) => i === index ? updated : c));
-  };
-
-  const handleRemoveDraftCluster = (category: 'mth' | 'nth', index: number) => {
-    const setter = category === 'mth' ? setDraftMthClusters : setDraftNthClusters;
-    setter(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleAddDraftCluster = (category: 'mth' | 'nth') => {
-    const setter = category === 'mth' ? setDraftMthClusters : setDraftNthClusters;
-    setter(prev => [...prev, { id: uid(), name: '', priority: 3 as Cluster['priority'], skills: [] }]);
-  };
 
   /* ── Video handlers ── */
   const handleVideoUpload = async (file: File) => {
@@ -961,6 +880,10 @@ export default function AIInterviewConfig() {
       mth: Object.fromEntries(mth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
       nth: Object.fromEntries(nth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
     },
+    skill_types: {
+      mth: Object.fromEntries(mth.skills.filter(s => s.type && s.type !== 'Skill').map(s => [s.name, s.type])),
+      nth: Object.fromEntries(nth.skills.filter(s => s.type && s.type !== 'Skill').map(s => [s.name, s.type])),
+    },
   });
 
   /* ── Save / Publish ── */
@@ -1001,39 +924,56 @@ export default function AIInterviewConfig() {
     if (ok) router.push('/recruitment/ai-interviews');
   };
 
-  const handlePublish = async () => {
+  const [generatingClusters, setGeneratingClusters] = useState(false);
+
+  const handleContinueToClusters = async () => {
     if (!selectedJd || !pctValid) return;
-    setPublishing(true);
-    try {
-      const payload = {
-        position: selectedJd.title,
-        jd_id: selectedJd.id,
-        duration_minutes: mode === 'fixed' ? totalFixed : 0,
-        rounds_config: buildRounds(false),
-        recording_enabled: recordingEnabled,
-        available_languages: availableLanguages,
-        title: `${selectedJd.title} - AI Interview`,
-        special_instructions: buildClusterJson(),
-        introduction_video_url: introVideoUrl || undefined,
-      };
-      let interviewId: string;
-      if (existingDraftIdRef.current) {
-        await aiInterviewService.update(existingDraftIdRef.current, payload);
-        interviewId = existingDraftIdRef.current;
-      } else {
-        const created = await aiInterviewService.create(payload);
-        existingDraftIdRef.current = created.id;
-        interviewId = created.id;
-      }
-      await aiInterviewService.publishConfig(interviewId);
-      isPublishedRef.current = true;
-      toast.success('AI Interview configuration published!');
-      router.push('/recruitment/ai-interviews');
-    } catch {
-      toast.error('Failed to publish configuration');
-    } finally {
-      setPublishing(false);
+    isNavigatingRef.current = true;
+
+    // 1. Save draft first
+    const ok = await saveDraft(true);
+    if (!ok || !existingDraftIdRef.current) {
+      isNavigatingRef.current = false;
+      toast.error('Please save your configuration first');
+      return;
     }
+
+    // 2. Generate clusters via API
+    setGeneratingClusters(true);
+    try {
+      const result = await aiInterviewService.generateClusters(
+        mth.skills.map(s => s.name),
+        nth.enabled ? nth.skills.map(s => s.name) : [],
+        selectedJd.title,
+        selectedJd.description,
+        fixedMthMin,
+        nth.enabled ? fixedNthMin : 0,
+      );
+
+      // Save generated clusters to the draft
+      const siObj = JSON.parse(buildClusterJson());
+      siObj.mth_clusters = result.mth_clusters.map(c => ({
+        ...c,
+        priority: c.priority as Cluster['priority'],
+        reason: c.reason || '',
+      }));
+      siObj.nth_clusters = result.nth_clusters.map(c => ({
+        ...c,
+        priority: c.priority as Cluster['priority'],
+        reason: c.reason || '',
+      }));
+      await aiInterviewService.update(existingDraftIdRef.current, {
+        special_instructions: JSON.stringify(siObj),
+      });
+    } catch {
+      // Clusters generation failed — still navigate, user can generate on clusters page
+      console.warn('Cluster generation failed, navigating without pre-generated clusters');
+    } finally {
+      setGeneratingClusters(false);
+    }
+
+    // 3. Navigate to clusters page
+    router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${existingDraftIdRef.current}`);
   };
 
   const handleBackClick = async () => {
@@ -1052,9 +992,18 @@ export default function AIInterviewConfig() {
     setPendingNavigation(null);
   };
 
-  const handleDiscardAndNavigate = () => {
+  const handleDiscardAndNavigate = async () => {
     setShowUnsavedDialog(false);
     isNavigatingRef.current = true;
+    // Delete draft if it exists
+    if (existingDraftIdRef.current) {
+      try {
+        await aiInterviewService.delete(existingDraftIdRef.current);
+        existingDraftIdRef.current = null;
+      } catch {
+        // Silent — don't block navigation on delete failure
+      }
+    }
     if (pendingNavigation) router.push(pendingNavigation);
     setPendingNavigation(null);
   };
@@ -1094,13 +1043,26 @@ export default function AIInterviewConfig() {
 
         {/* Step indicators */}
         <div className="flex items-center gap-2 mb-8">
-          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100">
-            <CheckCircle2 className="w-4 h-4 text-green-600" />
-          </div>
-          <span className="text-sm text-gray-400">Select JD</span>
-          <div className="w-10 h-px bg-gray-200" />
-          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-gray-900 text-white text-sm font-medium">2</div>
-          <span className="text-sm text-gray-900 font-medium">Configure & Publish</span>
+          {STEPS.map((step, i) => {
+            const stepNum = i + 1;
+            const isCompleted = stepNum < CURRENT_STEP;
+            const isCurrent = stepNum === CURRENT_STEP;
+            return (
+              <React.Fragment key={step}>
+                {i > 0 && <div className="w-8 h-px bg-gray-200" />}
+                {isCompleted ? (
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center bg-green-100">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  </div>
+                ) : (
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium ${
+                    isCurrent ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400'
+                  }`}>{stepNum}</div>
+                )}
+                <span className={`text-sm ${isCurrent ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>{step}</span>
+              </React.Fragment>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1123,21 +1085,9 @@ export default function AIInterviewConfig() {
             {/* ── Interview Mode + Make Clusters ── */}
             <div className="border border-gray-200 rounded-lg bg-white p-4 space-y-4">
               <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-gray-600" />
-                    <span className="font-semibold text-gray-900 text-sm">Interview Mode</span>
-                  </div>
-                  <button
-                    onClick={handleOpenClusterModal}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-purple-300 text-purple-700 rounded-lg hover:border-purple-400 hover:bg-purple-50 transition-colors"
-                  >
-                    <Layers className="w-3.5 h-3.5" />
-                    {mth.clusters.length > 0 || nth.clusters.length > 0
-                      ? `Edit Clusters (${mth.clusters.length + nth.clusters.length})`
-                      : 'Make Clusters'
-                    }
-                  </button>
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-4 h-4 text-gray-600" />
+                  <span className="font-semibold text-gray-900 text-sm">Interview Mode</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   {/* Fixed */}
@@ -1231,50 +1181,6 @@ export default function AIInterviewConfig() {
               onPctChange={setHrPct}
             />
 
-
-            {/* Cluster summary (when clusters exist) */}
-            {(mth.clusters.length > 0 || nth.clusters.length > 0) && (
-              <div className="border border-purple-200 rounded-lg bg-purple-50/50 p-4 space-y-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-purple-800">
-                  <Layers className="w-4 h-4" />
-                  Active Clusters
-                </div>
-                {mth.clusters.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Must-To-Have</p>
-                    <div className="space-y-1">
-                      {mth.clusters.map(c => (
-                        <div key={c.id} className="text-xs">
-                          <div className="flex items-center gap-2">
-                            <PriorityBadge p={c.priority} />
-                            <span className="font-medium text-gray-700">{c.name || 'Unnamed'}</span>
-                            <span className="text-gray-400">({c.skills.length} skills)</span>
-                          </div>
-                          {c.reason && <p className="text-[11px] text-gray-400 italic ml-[calc(theme(spacing.2)+4rem)]">{c.reason}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {nth.clusters.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Nice-To-Have</p>
-                    <div className="space-y-1">
-                      {nth.clusters.map(c => (
-                        <div key={c.id} className="text-xs">
-                          <div className="flex items-center gap-2">
-                            <PriorityBadge p={c.priority} />
-                            <span className="font-medium text-gray-700">{c.name || 'Unnamed'}</span>
-                            <span className="text-gray-400">({c.skills.length} skills)</span>
-                          </div>
-                          {c.reason && <p className="text-[11px] text-gray-400 italic ml-[calc(theme(spacing.2)+4rem)]">{c.reason}</p>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Recording */}
             <label className="flex items-center gap-3 cursor-pointer px-1">
@@ -1466,20 +1372,20 @@ export default function AIInterviewConfig() {
               {/* Actions */}
               <div className="space-y-2">
                 <button
-                  onClick={handlePublish}
-                  disabled={!pctValid || publishing || savingDraft}
+                  onClick={handleContinueToClusters}
+                  disabled={!pctValid || savingDraft || generatingClusters}
                   className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
-                    pctValid && !publishing && !savingDraft
+                    pctValid && !savingDraft && !generatingClusters
                       ? 'bg-gray-900 text-white hover:bg-gray-800'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
                 >
-                  {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
-                  {publishing ? 'Publishing…' : 'Publish Configuration'}
+                  {(savingDraft || generatingClusters) ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+                  {savingDraft ? 'Saving…' : generatingClusters ? 'Generating Clusters…' : 'Continue to Clusters'}
                 </button>
                 <button
                   onClick={handleSaveAsDraft}
-                  disabled={savingDraft || publishing}
+                  disabled={savingDraft}
                   className="w-full flex items-center justify-center gap-2 py-2.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -1510,167 +1416,6 @@ export default function AIInterviewConfig() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Cluster Modal ── */}
-      <Dialog open={showClusterModal} onOpenChange={open => !open && setShowClusterModal(false)}>
-        <DialogContent className="!max-w-[1100px] w-[95vw] h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-          {/* Fixed Header — pr-12 leaves space for the Dialog close (X) button */}
-          <div className="px-4 sm:px-6 pr-12 sm:pr-14 py-3 sm:py-4 border-b border-gray-200 bg-gradient-to-r from-purple-50 to-indigo-50 flex-shrink-0">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-              <div className="min-w-0">
-                <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
-                  <Layers className="w-5 h-5 text-purple-600 flex-shrink-0" />
-                  Skill Clusters
-                </DialogTitle>
-                <DialogDescription className="mt-1 text-xs sm:text-sm text-gray-500">
-                  AI generates focused clusters from your skills based on available time. Higher priority clusters get more time.
-                </DialogDescription>
-              </div>
-              <button
-                onClick={handleGenerateClusters}
-                disabled={generatingClusters}
-                className="flex items-center justify-center gap-2 px-4 py-2 sm:py-2.5 text-sm font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 shadow-sm flex-shrink-0 w-full sm:w-auto"
-              >
-                {generatingClusters ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {generatingClusters ? 'Regenerating…' : 'Regenerate with AI'}
-              </button>
-            </div>
-          </div>
-
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-6 py-4 sm:py-5">
-            {generatingClusters ? (
-              <div className="flex items-center justify-center py-16">
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
-                  <p className="text-sm text-gray-500">AI is analyzing skills and generating clusters…</p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-8">
-                {/* Must-To-Have Skills */}
-                {mth.skills.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Shield className="w-4.5 h-4.5 text-purple-600" />
-                        <h3 className="font-semibold text-gray-900 text-base">Must-To-Have Skills</h3>
-                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{fixedMthMin} min</span>
-                      </div>
-                      <button
-                        onClick={() => handleAddDraftCluster('mth')}
-                        disabled={false}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Add Cluster
-                      </button>
-                    </div>
-
-                    {draftMthClusters.length === 0 ? (
-                      <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
-                        <Layers className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                        <p className="text-sm text-gray-400">No clusters yet. Click <strong>&quot;Regenerate with AI&quot;</strong> or add manually.</p>
-                      </div>
-                    ) : (
-                      <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
-                        {(() => {
-                          const totalWeight = draftMthClusters.reduce((s, c) => s + c.priority, 0);
-                          return draftMthClusters.map((cluster, i) => {
-                            const timeMin = totalWeight > 0 ? Math.round((cluster.priority / totalWeight) * fixedMthMin) : 0;
-                            return (
-                              <ClusterRow
-                                key={cluster.id}
-                                cluster={cluster}
-                                timeMin={timeMin}
-                                isOpen={expandedClusterId === cluster.id}
-                                onToggle={() => setExpandedClusterId(prev => prev === cluster.id ? null : cluster.id)}
-                                onChange={updated => handleUpdateDraftCluster('mth', i, updated)}
-                                onRemove={() => handleRemoveDraftCluster('mth', i)}
-                              />
-                            );
-                          });
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Nice-To-Have Skills */}
-                {nth.enabled && nth.skills.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Sparkles className="w-4.5 h-4.5 text-indigo-600" />
-                        <h3 className="font-semibold text-gray-900 text-base">Nice-To-Have Skills</h3>
-                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{fixedNthMin} min</span>
-                      </div>
-                      <button
-                        onClick={() => handleAddDraftCluster('nth')}
-                        disabled={false}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        Add Cluster
-                      </button>
-                    </div>
-
-                    {draftNthClusters.length === 0 ? (
-                      <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-xl">
-                        <Layers className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                        <p className="text-sm text-gray-400">No clusters yet. Click <strong>&quot;Regenerate with AI&quot;</strong> or add manually.</p>
-                      </div>
-                    ) : (
-                      <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
-                        {(() => {
-                          const totalWeight = draftNthClusters.reduce((s, c) => s + c.priority, 0);
-                          return draftNthClusters.map((cluster, i) => {
-                            const timeMin = totalWeight > 0 ? Math.round((cluster.priority / totalWeight) * fixedNthMin) : 0;
-                            return (
-                              <ClusterRow
-                                key={cluster.id}
-                                cluster={cluster}
-                                timeMin={timeMin}
-                                isOpen={expandedClusterId === cluster.id}
-                                onToggle={() => setExpandedClusterId(prev => prev === cluster.id ? null : cluster.id)}
-                                onChange={updated => handleUpdateDraftCluster('nth', i, updated)}
-                                onRemove={() => handleRemoveDraftCluster('nth', i)}
-                              />
-                            );
-                          });
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Fixed Footer */}
-          <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 flex-shrink-0">
-            <p className="text-xs text-gray-400 flex items-center gap-1.5 hidden sm:flex">
-              <Info className="w-3.5 h-3.5 flex-shrink-0" />
-              Add new skills in the config, then click Regenerate to include them in clusters.
-            </p>
-            <div className="flex items-center gap-3 flex-shrink-0">
-              <button
-                onClick={() => setShowClusterModal(false)}
-                className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-sm font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApplyClusters}
-                disabled={generatingClusters}
-                className="flex-1 sm:flex-none px-5 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 text-sm font-semibold flex items-center justify-center gap-2 shadow-sm"
-              >
-                <CheckCircle2 className="w-4 h-4" />
-                Apply Clusters
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
