@@ -1,7 +1,7 @@
 'use client'
 
-import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import type { User, Tenant } from '@/lib/types/tenant';
@@ -99,6 +99,7 @@ interface ExtendedJob extends Job {
 interface JobDetailViewProps {
   job: ExtendedJob;
   onBack: () => void;
+  initialTab?: 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match';
   onEdit?: (job: Job) => void;
   resumes?: any[]; // All resumes for selection
   onScoreResumes?: (resumeIds: string[], jobId: string, source: 'my-resumes' | 'internal-db') => void;
@@ -115,7 +116,7 @@ interface JobDetailViewProps {
   tenant?: Tenant; // ✅ PERMISSIONS: Tenant object for feature flag checking
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, initialTab }: JobDetailViewProps) {
   const router = useRouter();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
@@ -521,7 +522,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     }
   };
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match'>(initialTab || 'overview');
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -604,35 +605,63 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     setActiveTab('ai-talent-match');
   };
 
-  // Score selected AI match candidates synchronously with floating progress indicator
+  // Score selected AI match candidates using async Celery bulk scoring
   const startAiMatchScoring = async (candidates: MatchedCandidate[]) => {
     if (candidates.length === 0) return;
-    const scoringJobId = `aimatch-${job.id}-${Date.now()}`;
-    const initialItems = candidates.map((c) => ({
-      id: `${scoringJobId}-${c.resumeId}`,
-      resumeId: c.resumeId,
-      candidateName: c.name,
-      jobTitle: job.title,
-      jobId: job.id,
-      source: 'Internal DB' as const,
-    }));
-    startScoringJob(scoringJobId, job.title, initialItems);
+    const resumeIds = candidates.map((c) => c.resumeId);
+    const returnUrl = `/recruitment/job-details?id=${job.id}&tab=scored-resumes`;
+    try {
+      const response = await scoringService.startBulkScoringAsync(job.id, resumeIds);
+      const batchId = response.batch_id;
 
-    for (const candidate of candidates) {
-      const itemId = `${scoringJobId}-${candidate.resumeId}`;
-      updateItemStatus(scoringJobId, itemId, 'Scoring in progress');
-      try {
-        const result = await scoringService.scoreResume(candidate.resumeId, job.id, 'internal-db');
-        updateItemStatus(scoringJobId, itemId, 'Scored successfully', {
-          score: result.overall_score,
-          scoredDateTime: new Date().toISOString(),
-        });
-      } catch (err: any) {
-        const errorMsg = err?.message || 'Scoring failed';
-        updateItemStatus(scoringJobId, itemId, 'Failed', { errorReason: errorMsg });
-      }
+      // Register items in floating progress widget
+      const initialItems = candidates.map((c) => ({
+        id: `${batchId}-${c.resumeId}`,
+        resumeId: c.resumeId,
+        candidateName: c.name,
+        jobTitle: job.title,
+        jobId: job.id,
+        source: 'Internal DB' as const,
+      }));
+      startScoringJob(batchId, job.title, initialItems, returnUrl);
+
+      toast.success(`Scoring started for ${resumeIds.length} candidate(s).`);
+      setActiveTab('scored-resumes');
+
+      // Poll batch status and update floating widget + scored resumes tab
+      const poll = setInterval(async () => {
+        try {
+          const status = await scoringService.getBatchStatus(batchId);
+          const items: any[] = status.items || [];
+
+          items.forEach((item: any) => {
+            const itemId = `${batchId}-${item.resume_id}`;
+            if (item.status === 'completed') {
+              updateItemStatus(batchId, itemId, 'Scored successfully', {
+                score: item.overall_score,
+                scoredDateTime: new Date().toISOString(),
+              });
+            } else if (item.status === 'failed') {
+              updateItemStatus(batchId, itemId, 'Failed', {
+                errorReason: item.error_message || 'Scoring failed',
+              });
+            } else if (item.status === 'processing') {
+              updateItemStatus(batchId, itemId, 'Scoring in progress');
+            }
+          });
+
+          // Stop polling when batch is finished
+          if (status.status === 'completed' || status.status === 'failed') {
+            clearInterval(poll);
+            fetchScoredResumes();
+          }
+        } catch {
+          clearInterval(poll);
+        }
+      }, 3000);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start scoring');
     }
-    fetchScoredResumes();
   };
 
   const handleAIMatchError = (error: string) => {
@@ -808,11 +837,11 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               {/* Row 1: JD ID + Job Title + Status */}
               <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
                 {job.job_id && (
-                  <span className="inline-flex items-center px-2 py-0.5 sm:px-2.5 sm:py-1 bg-gray-100 text-gray-600 rounded-md text-xs sm:text-sm font-medium">
+                  <span className="inline-flex items-center px-2.5 py-1 bg-blue-600 text-white rounded-md text-xs sm:text-sm font-semibold font-mono tracking-wide">
                     {job.job_id}
                   </span>
                 )}
-                <h1 className="font-bold text-gray-900 text-base sm:text-lg md:text-xl truncate">{job.title}</h1>
+                <h1 className="font-normal text-gray-900 text-base sm:text-lg md:text-xl truncate">{job.title}</h1>
                 <span className={`inline-flex items-center px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm border whitespace-nowrap ${getStatusBadgeClass(getDisplayStatus(job.status, job.currentVersion))}`}>
                   {getDisplayStatus(job.status, job.currentVersion)}
                 </span>
@@ -829,6 +858,25 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     </div>
                     <span className="text-gray-300">•</span>
                   </>
+                )}
+
+                {/* Experience Level */}
+                {job.experience_level && (
+                  <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                    {(() => {
+                      const label =
+                        job.experience_level === 'entry' || job.experience_level === 'entry_level' ? 'Entry Level' :
+                        job.experience_level === 'junior' || job.experience_level === 'junior_level' ? 'Junior' :
+                        job.experience_level === 'mid' || job.experience_level === 'mid_level' ? 'Mid Level' :
+                        job.experience_level === 'senior' || job.experience_level === 'senior_level' ? 'Senior' :
+                        job.experience_level === 'architect' || job.experience_level === 'architect_level' ? 'Architect' :
+                        job.experience_level === 'management' || job.experience_level === 'management_level' ? 'Management' :
+                        job.experience_level === 'lead' ? 'Lead' :
+                        job.experience_level === 'executive' ? 'Executive' :
+                        job.experience_level;
+                      return job.experience ? `${label} (${job.experience})` : label;
+                    })()}
+                  </span>
                 )}
 
                 {/* Education */}
@@ -872,8 +920,20 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </>
                 )}
 
+                {/* Salary */}
+                {(job.salaryMin || job.salaryMax) && (
+                  <span className="inline-flex items-center px-2.5 py-1 bg-green-50 text-green-700 rounded-md text-xs font-medium">
+                    {job.salaryMin && job.salaryMax
+                      ? `₹${Number(job.salaryMin).toLocaleString('en-IN')} – ₹${Number(job.salaryMax).toLocaleString('en-IN')}`
+                      : job.salaryMin
+                        ? `From ₹${Number(job.salaryMin).toLocaleString('en-IN')}`
+                        : `Up to ₹${Number(job.salaryMax).toLocaleString('en-IN')}`}
+                    {job.compensationType ? ` / ${job.compensationType}` : ''}
+                  </span>
+                )}
+
                 {/* Separator before Posted Info */}
-                {(job.location || job.education || job.employmentType || job.workMode) && (
+                {(job.location || job.education || job.employmentType || job.workMode || job.salaryMin || job.salaryMax) && (
                   <span className="text-gray-300">•</span>
                 )}
 
@@ -973,32 +1033,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               </div>
             )}
 
-            {/* Action Buttons - Only for Published jobs */}
-            {job.status === 'Published' && (
-              <div className="flex items-center gap-2">
-                {onDisable && (
-                  <button
-                    onClick={handleDisable}
-                    className="px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-all flex items-center gap-2"
-                    title="Disable this job description"
-                  >
-                    <Ban className="w-4 h-4" />
-                    <span className="font-medium">Disable</span>
-                  </button>
-                )}
-                {onArchive && (
-                  <button
-                    onClick={handleArchive}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
-                    title="Archive this job description"
-                  >
-                    <Archive className="w-4 h-4" />
-                    <span className="font-medium">Archive</span>
-                  </button>
-                )}
-              </div>
-            )}
-
             {/* JD15: Action Buttons - For Disabled jobs */}
             {job.status === 'Disabled' && (
               <div className="flex items-center gap-2">
@@ -1010,15 +1044,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   >
                     <CheckCircle className="w-4 h-4" />
                     <span className="font-medium">Re-enable JD</span>
-                  </button>
-                )}
-                {onArchive && (
-                  <button
-                    onClick={handleArchive}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-all flex items-center gap-2"
-                  >
-                    <Archive className="w-4 h-4" />
-                    <span className="font-medium">Archive</span>
                   </button>
                 )}
               </div>
@@ -1122,7 +1147,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
             >
-              AI Talent Match
+              AI Talent Match Results
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'ai-talent-match'
                   ? 'bg-blue-600 text-white'
@@ -1731,12 +1756,14 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     </button>
                   </div>
 
-                  {/* Job Title */}
-                  <h3 className="text-base sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6">{selectedHistoryVersion.version.title}</h3>
+                  {/* Job Title + Description - same layout as Overview tab */}
+                  <div className="p-4 sm:p-6 md:p-8 bg-white rounded-lg border border-gray-200">
+                    <h2 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 sm:mb-4">
+                      {selectedHistoryVersion.version.title}
+                    </h2>
+                    <div className="h-px bg-gray-200 mb-3 sm:mb-4"></div>
 
-                  {/* Job Description with proper markdown rendering and blue highlighting for new content */}
-                  <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-6">
-                    {(() => {
+                  {(() => {
                       const currentIndex = jdHistory.findIndex((h: any) => h.id === selectedHistoryVersion.id);
                       const prevVersion = currentIndex < jdHistory.length - 1 ? jdHistory[currentIndex + 1] : null;
                       const isV1 = selectedHistoryVersion.version.version_number === 1;
@@ -1746,7 +1773,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       // For v1 or no changes, just render normally
                       if (isV1 || !prevDesc) {
                         return (
-                          <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-li:text-gray-700 prose-strong:text-gray-900">
+                          <div className="markdown-content prose prose-sm max-w-none text-gray-700">
                             <ReactMarkdown>{currentDesc}</ReactMarkdown>
                           </div>
                         );
@@ -1996,7 +2023,48 @@ function AIMatchTabContent({
   onScoreAll: () => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterThreshold, setFilterThreshold] = useState(0);
+  const [filterPhone, setFilterPhone] = useState('');
+  const [filterLocation, setFilterLocation] = useState('');
+  const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
+  const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
+  const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
+
   const scoredResumeIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
+
+  const filteredCandidates = useMemo(() => {
+    const filtered = candidates.filter(candidate => {
+      const matchesThreshold = candidate.matchScore >= filterThreshold;
+      const matchesSearch = searchQuery === '' ||
+        candidate.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        candidate.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (candidate.email && candidate.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        candidate.skills.some(skill => skill.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesPhone = filterPhone === '' ||
+        (candidate.phone && (
+          candidate.phone.toLowerCase().includes(filterPhone.toLowerCase()) ||
+          candidate.phone.replace(/[^0-9]/g, '').includes(filterPhone.replace(/[^0-9]/g, ''))
+        ));
+      const matchesLocation = filterLocation === '' ||
+        (candidate.location && candidate.location.toLowerCase().includes(filterLocation.toLowerCase()));
+      const candidateExp = candidate.experience ? parseFloat(candidate.experience) : 0;
+      const matchesExpMin = filterExperienceMin === '' || candidateExp >= filterExperienceMin;
+      const matchesExpMax = filterExperienceMax === '' || candidateExp <= filterExperienceMax;
+      return matchesThreshold && matchesSearch && matchesPhone && matchesLocation && matchesExpMin && matchesExpMax;
+    });
+
+    const sorted = [...filtered];
+    switch (sortBy) {
+      case 'rank': sorted.sort((a, b) => (b.rank || 0) - (a.rank || 0)); break;
+      case 'name': sorted.sort((a, b) => a.name.localeCompare(b.name)); break;
+      case 'score': sorted.sort((a, b) => b.matchScore - a.matchScore); break;
+      case 'experience':
+        sorted.sort((a, b) => (parseFloat(a.experience || '0') || 0) - (parseFloat(b.experience || '0') || 0));
+        break;
+    }
+    return sorted;
+  }, [candidates, searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy]);
 
   const toggleSelect = (resumeId: string) => {
     setSelectedIds((prev) => {
@@ -2008,17 +2076,21 @@ function AIMatchTabContent({
   };
 
   const toggleAll = () => {
-    if (selectedIds.size === candidates.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(candidates.map((c) => c.resumeId)));
+    if (filteredCandidates.every(c => selectedIds.has(c.resumeId))) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredCandidates.map((c) => c.resumeId)));
+    }
   };
 
   const unscoredCount = candidates.filter((c) => !scoredResumeIds.has(c.resumeId)).length;
+  const selectedCandidates = candidates.filter((c) => selectedIds.has(c.resumeId));
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="flex flex-col items-center gap-3">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-purple-600"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-600"></div>
           <p className="text-gray-500 text-sm">Loading AI match results...</p>
         </div>
       </div>
@@ -2036,7 +2108,7 @@ function AIMatchTabContent({
         {canRunAiMatch && (
           <button
             onClick={onRunMatch}
-            className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 transition-colors flex items-center gap-2"
+            className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-lg text-sm hover:bg-gray-900 transition-colors flex items-center gap-2"
           >
             <Sparkles className="w-4 h-4" />
             Run AI Match
@@ -2046,55 +2118,100 @@ function AIMatchTabContent({
     );
   }
 
-  const selectedCandidates = candidates.filter((c) => selectedIds.has(c.resumeId));
-
   return (
     <div className="space-y-4">
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <Brain className="w-5 h-5 text-purple-600" />
-            <h3 className="font-semibold text-gray-900">AI Talent Match Results</h3>
-            <span className="px-2.5 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">
-              {candidates.length} candidates
-            </span>
+      {/* Search & Filters */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 space-y-3">
+        {/* Row 1: Search + Match filter + count + action buttons */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search candidates..."
+              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+            />
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-500">
-              {sessions.length} session{sessions.length !== 1 ? 's' : ''}
-            </span>
-            {selectedIds.size > 0 && (
-              <button
-                onClick={() => onScoreSelected(selectedCandidates)}
-                className="px-3 py-1.5 bg-gray-700 text-white rounded-lg text-xs hover:bg-gray-800 transition-colors flex items-center gap-1.5"
-              >
-                <Target className="w-3 h-3" />
-                Score Selected ({selectedIds.size})
-              </button>
-            )}
-            {unscoredCount > 0 && (
-              <button
-                onClick={onScoreAll}
-                className="px-3 py-1.5 bg-gray-700 text-white rounded-lg text-xs hover:bg-gray-800 transition-colors flex items-center gap-1.5"
-              >
-                <Target className="w-3 h-3" />
-                Score All Unscored ({unscoredCount})
-              </button>
-            )}
-            {canRunAiMatch && (
-              <button
-                onClick={onRunMatch}
-                className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs hover:bg-purple-700 transition-colors flex items-center gap-1.5"
-              >
-                <Sparkles className="w-3 h-3" />
-                Run New Match
-              </button>
-            )}
+          <select
+            value={filterThreshold}
+            onChange={(e) => setFilterThreshold(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm text-black"
+          >
+            <option value={0}>All Matches</option>
+            <option value={50}>50%+ Match</option>
+            <option value={70}>70%+ Match</option>
+            <option value={85}>85%+ Match</option>
+          </select>
+          <div className="text-xs sm:text-sm text-gray-700 bg-gray-100 px-3 py-2 rounded-lg font-medium border border-gray-200">
+            {filteredCandidates.length} candidates
           </div>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => onScoreSelected(selectedCandidates)}
+              className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg text-xs sm:text-sm hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium"
+            >
+              <Target className="w-3 h-3 sm:w-4 sm:h-4" />
+              Score ({selectedIds.size})
+            </button>
+          )}
+          {canRunAiMatch && (
+            <button
+              onClick={onRunMatch}
+              className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg text-xs sm:text-sm hover:bg-gray-900 transition-colors flex items-center gap-2 font-medium"
+            >
+              <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
+              Run AI Match
+            </button>
+          )}
         </div>
 
-        {/* Table */}
+        {/* Row 2: Additional filters */}
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
+          <input
+            type="text"
+            value={filterPhone}
+            onChange={(e) => setFilterPhone(e.target.value)}
+            placeholder="Filter by phone..."
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+          />
+          <input
+            type="text"
+            value={filterLocation}
+            onChange={(e) => setFilterLocation(e.target.value)}
+            placeholder="Filter by location..."
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+          />
+          <input
+            type="number"
+            value={filterExperienceMin}
+            onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
+            placeholder="Min exp"
+            className="w-full sm:w-28 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+          />
+          <input
+            type="number"
+            value={filterExperienceMax}
+            onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
+            placeholder="Max exp"
+            className="w-full sm:w-28 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 text-xs sm:text-sm text-black placeholder:text-gray-400"
+          />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white text-xs sm:text-sm text-black"
+          >
+            <option value="rank">Sort by Rating</option>
+            <option value="name">Sort by Name</option>
+            <option value="score">Sort by Score</option>
+            <option value="experience">Sort by Experience</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-100">
@@ -2102,7 +2219,7 @@ function AIMatchTabContent({
                 <th className="px-4 py-3 w-10">
                   <input
                     type="checkbox"
-                    checked={selectedIds.size === candidates.length && candidates.length > 0}
+                    checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedIds.has(c.resumeId))}
                     onChange={toggleAll}
                     className="rounded border-gray-300"
                   />
@@ -2117,78 +2234,96 @@ function AIMatchTabContent({
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded By</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Uploaded Date</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attachments</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resume Scored</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scored Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {candidates.map((candidate, idx) => {
-                const isScored = scoredResumeIds.has(candidate.resumeId);
-                const score = candidate.matchScore;
-                const scoreColor = score >= 70 ? 'bg-green-500' : score >= 45 ? 'bg-yellow-500' : 'bg-red-400';
-                const uploadDate = candidate.uploadDate
-                  ? formatISTDate(candidate.uploadDate)
-                  : '—';
+              {filteredCandidates.length === 0 ? (
+                <tr>
+                  <td colSpan={12} className="px-4 py-12 text-center text-gray-500 text-sm">
+                    No candidates match the current filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredCandidates.map((candidate, idx) => {
+                  const isScored = scoredResumeIds.has(candidate.resumeId);
+                  const score = candidate.matchScore;
+                  const scoreColor = score >= 70 ? 'bg-green-500' : score >= 45 ? 'bg-yellow-500' : 'bg-red-400';
+                  const uploadDate = candidate.uploadDate ? formatISTDate(candidate.uploadDate) : '—';
 
-                return (
-                  <tr key={candidate.resumeId} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(candidate.resumeId)}
-                        onChange={() => toggleSelect(candidate.resumeId)}
-                        className="rounded border-gray-300"
-                      />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="w-7 h-7 rounded-full bg-purple-100 text-purple-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                          {idx + 1}
-                        </span>
-                        <div className="w-14 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${scoreColor}`} style={{ width: `${Math.min(score, 100)}%` }} />
+                  return (
+                    <tr
+                      key={candidate.resumeId}
+                      className={`hover:bg-gray-50 transition-colors ${selectedIds.has(candidate.resumeId) ? 'bg-blue-50' : ''}`}
+                    >
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(candidate.resumeId)}
+                          onChange={() => toggleSelect(candidate.resumeId)}
+                          className="rounded border-gray-300"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className={`inline-flex items-center justify-center px-3 py-1 rounded-md font-bold text-sm ${
+                          (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
+                          (candidate.rank || 0) >= 4 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                          (candidate.rank || 0) >= 1 ? 'bg-gray-100 text-gray-700 border border-gray-300' :
+                          'bg-gray-50 text-gray-400 border border-gray-200'
+                        }`}>
+                          {candidate.rank || '-'}
                         </div>
-                        <span className="text-sm font-semibold text-gray-900">{score}%</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{candidate.name}</p>
-                        {candidate.title && <p className="text-xs text-gray-500">{candidate.title}</p>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.email || '—'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.phone || '—'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.location || '—'}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {candidate.skills.slice(0, 3).map((skill, i) => (
-                          <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">{skill}</span>
-                        ))}
-                        {candidate.skills.length > 3 && (
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">+{candidate.skills.length - 3}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm text-gray-700 font-medium flex-shrink-0">
+                            {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{candidate.name}</p>
+                            {candidate.title && <p className="text-xs text-gray-500">{candidate.title}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{candidate.email || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{candidate.phone || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{candidate.location || '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {candidate.skills.slice(0, 4).map((skill, i) => (
+                            <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200">{skill}</span>
+                          ))}
+                          {candidate.skills.length > 4 && (
+                            <span className="px-2 py-0.5 text-xs text-blue-600">+{candidate.skills.length - 4} more</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{candidate.experience || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{uploadDate}</td>
+                      <td className="px-4 py-3">
+                        <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 text-xs font-medium">
+                          <Paperclip className="w-3.5 h-3.5" />
+                          {candidate.attachmentCount ?? 1}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3">
+                        {isScored ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                            <CheckCircle className="w-3 h-3" />
+                            Scored
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                            <XCircle className="w-3 h-3" />
+                            Not Scored
+                          </span>
                         )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.experience || '—'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{uploadDate}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{candidate.attachmentCount ?? 1}</td>
-                    <td className="px-4 py-3">
-                      {isScored ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                          <CheckCircle className="w-3 h-3" />
-                          Scored
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
-                          <XCircle className="w-3 h-3" />
-                          Not Scored
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

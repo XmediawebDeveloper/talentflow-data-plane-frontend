@@ -66,6 +66,7 @@ interface JobsListingProps {
   jobs: Job[];
   onCreateNew: () => void;
   onViewJob: (job: Job) => void;
+  onViewApplicants?: (job: Job) => void;
   onAIMatch?: (job: Job) => void;
   onUpdateJobStatus?: (jobId: string, status: Job['status']) => void;
   onEditJob?: (job: Job) => void;
@@ -85,7 +86,7 @@ interface JobsListingProps {
   initialStatusFilter?: string;
 }
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'all');
@@ -975,14 +976,27 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 return (
                   <div
                     key={job.id}
-                    className="bg-white rounded-xl border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer"
+                    className={`bg-white rounded-xl border transition-all cursor-pointer ${selectedJobs.has(job.id) ? 'border-gray-700 shadow-md' : 'border-gray-200 hover:border-gray-400 hover:shadow-md'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     {/* Card Header */}
                     <div className="p-4 sm:p-6 border-b border-gray-100">
                       <div className="flex items-start justify-between mb-3 sm:mb-4">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
+                        <div className="flex items-center gap-2">
+                          {/* Individual Select */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
+                            className="flex-shrink-0"
+                            title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
+                          >
+                            {selectedJobs.has(job.id)
+                              ? <CheckSquare className="w-5 h-5 text-gray-800" />
+                              : <Square className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+                            }
+                          </button>
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-gray-700" />
+                          </div>
                         </div>
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
                           <span className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-1.5 sm:gap-2`}>
@@ -1094,29 +1108,25 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
                       {/* Actions */}
                       <div className="flex flex-wrap gap-2 items-center">
-                        {/* Edit Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onEditJob) onEditJob(job);
-                          }}
-                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
-                        >
-                          <Edit className="w-4 h-4" />
-                          Edit
-                        </button>
+                        {/* Edit Button - icon only */}
+                        {onEditJob && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
+                            className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
 
-                        {/* View Button - Hide for Draft */}
+                        {/* View Button - icon only, hide for Draft */}
                         {job.status.toLowerCase() !== 'draft' && (
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onViewJob(job);
-                            }}
-                            className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
+                            onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
+                            className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            title="View"
                           >
                             <Eye className="w-4 h-4" />
-                            View
                           </button>
                         )}
 
@@ -1138,7 +1148,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onViewJob(job);
+                                    (onViewApplicants || onViewJob)(job);
                                     setActiveDropdown(null);
                                   }}
                                   className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
@@ -1237,13 +1247,24 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                 return (
                   <div
                     key={job.id}
-                    className="bg-white rounded-xl border border-gray-200 hover:border-gray-400 hover:shadow-md transition-all cursor-pointer p-4 sm:p-6"
+                    className={`bg-white rounded-xl border transition-all cursor-pointer p-4 sm:p-6 ${selectedJobs.has(job.id) ? 'border-gray-700 shadow-md' : 'border-gray-200 hover:border-gray-400 hover:shadow-md'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-5">
-                      {/* Job Icon - hidden on mobile to save space */}
-                      <div className="hidden md:flex w-14 h-14 bg-gray-100 rounded-lg items-center justify-center flex-shrink-0">
-                        <Briefcase className="w-7 h-7 text-gray-700" />
+                      {/* Individual Select + Job Icon */}
+                      <div className="hidden md:flex items-center gap-3 flex-shrink-0">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
+                          title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
+                        >
+                          {selectedJobs.has(job.id)
+                            ? <CheckSquare className="w-5 h-5 text-gray-800" />
+                            : <Square className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+                          }
+                        </button>
+                        <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center">
+                          <Briefcase className="w-7 h-7 text-gray-700" />
+                        </div>
                       </div>
 
                       {/* Job Info */}
@@ -1350,29 +1371,25 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
 
                       {/* Actions */}
                       <div className="flex flex-wrap gap-2 flex-shrink-0 items-center">
-                        {/* Edit Button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onEditJob) onEditJob(job);
-                          }}
-                          className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
-                        >
-                          <Edit className="w-4 h-4" />
-                          Edit
-                        </button>
+                        {/* Edit Button - icon only */}
+                        {onEditJob && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
+                            className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
 
-                        {/* View Button - Hide for Draft */}
+                        {/* View Button - icon only, hide for Draft */}
                         {job.status.toLowerCase() !== 'draft' && (
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onViewJob(job);
-                            }}
-                            className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all text-sm font-medium flex items-center gap-2"
+                            onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
+                            className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            title="View"
                           >
                             <Eye className="w-4 h-4" />
-                            View
                           </button>
                         )}
 
@@ -1394,7 +1411,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onAIMatch, o
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onViewJob(job);
+                                    (onViewApplicants || onViewJob)(job);
                                     setActiveDropdown(null);
                                   }}
                                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"

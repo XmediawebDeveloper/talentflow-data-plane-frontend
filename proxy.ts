@@ -26,6 +26,10 @@ const protectedRoutes = [
   '/subscription',
   '/settings',
   '/analytics',
+  '/audits',
+  '/support-tickets',
+  '/masters',
+  '/help-desk',
 ];
 
 const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
@@ -136,6 +140,28 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
+  }
+
+  // Subdomain: only /login, /reset-password, /assessment, /ai-interview
+  // and protected dashboard routes are allowed. Everything else (marketing pages
+  // like /pricing, /features, /about, etc.) → redirect to /login.
+  const subdomainAllowedPaths = [
+    '/login',
+    '/reset-password',
+    '/complete-payment',
+    '/assessment',
+    '/ai-interview',
+    ...protectedRoutes,
+  ];
+  if (tenantSubdomain) {
+    const isAllowed = subdomainAllowedPaths.some(
+      (p) => pathname === p || pathname.startsWith(`${p}/`)
+    );
+    if (!isAllowed) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      return NextResponse.redirect(url);
+    }
   }
 
   // Check if route is public

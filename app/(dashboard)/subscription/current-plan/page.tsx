@@ -2122,111 +2122,60 @@ function CurrentPlanContent() {
             </div>
           )}
 
-          {/* Admin Plan Metadata - Collapsible, visible only to tenant admins */}
-          {isTenantAdmin && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <button
-                onClick={() => setShowAdminMeta(!showAdminMeta)}
-                className="flex w-full items-center justify-between text-left group"
-              >
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-indigo-600" />
-                  <h3 className="text-sm font-medium text-gray-700">Plan Details (Admin)</h3>
-                </div>
-                {showAdminMeta ? (
-                  <ChevronUp className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
-                )}
-              </button>
-              {showAdminMeta && (
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {companySettings?.current_plan_id && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Plan ID</p>
-                      <p className="text-sm font-medium text-gray-900">{companySettings.current_plan_id}</p>
-                    </div>
-                  )}
-                  {currentPlan?.planSlug && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Plan Slug</p>
-                      <p className="text-sm font-medium text-gray-900">{currentPlan.planSlug}</p>
-                    </div>
-                  )}
-                  {sharedQuotaData?.plan_info?.plan_tier && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Plan Tier</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.plan_tier}</p>
-                    </div>
-                  )}
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-500 mb-0.5">Billing Period</p>
-                    <p className="text-sm font-medium text-gray-900 capitalize">{currentPlanBillingPeriod?.toLowerCase() || '-'}</p>
+          {/* Plan Features - non-quota features only (Teams, API Access, SSO, etc.) */}
+          {(() => {
+            const QUOTA_FEATURE_KEYS = new Set([
+              'resume_upload', 'resume_storage', 'resume_scoring',
+              'assessment', 'assessments', 'ai_interview', 'ai_interviews',
+              'seats', 'storage', 'jobs',
+            ]);
+            // Also filter by feature_category if available (category 'quota' or 'metered')
+            const QUOTA_CATEGORIES = new Set(['quota', 'metered', 'usage']);
+            const seen = new Set<string>();
+            const nonQuotaFeatures = (sharedQuotaData?.features ?? []).filter(f => {
+              if (QUOTA_FEATURE_KEYS.has(f.feature_key)) return false;
+              if (f.feature_category && QUOTA_CATEGORIES.has(f.feature_category.toLowerCase())) return false;
+              // deduplicate by feature_key
+              if (seen.has(f.feature_key)) return false;
+              seen.add(f.feature_key);
+              return true;
+            });
+            if (nonQuotaFeatures.length === 0) return null;
+            return (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <h3 className="text-xs sm:text-sm font-medium text-gray-700">Plan Features</h3>
+                  <div className="flex items-center gap-3">
+                    {sharedQuotaData?.plan_info?.plan_tier && (
+                      <span className="text-xs text-gray-500">
+                        Tier: <span className="font-medium text-gray-800 capitalize">{sharedQuotaData.plan_info.plan_tier}</span>
+                      </span>
+                    )}
+                    {sharedQuotaData?.plan_info?.isolation_type && (
+                      <span className="text-xs text-gray-500">
+                        Isolation: <span className="font-medium text-gray-800 capitalize">{sharedQuotaData.plan_info.isolation_type.toLowerCase()}</span>
+                      </span>
+                    )}
                   </div>
-                  {sharedQuotaData?.plan_info?.billing_interval && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Billing Interval</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.billing_interval.toLowerCase()}</p>
-                    </div>
-                  )}
-                  {sharedQuotaData?.plan_info?.isolation_type && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Isolation Type</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.isolation_type.toLowerCase()}</p>
-                    </div>
-                  )}
-                  {companySettings?.max_seats !== undefined && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Included Seats</p>
-                      <p className="text-sm font-medium text-gray-900">{formatQuotaValue(companySettings.max_seats)}</p>
-                    </div>
-                  )}
-                  {sharedQuotaData?.quota_source && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Quota Source</p>
-                      <p className="text-sm font-medium text-gray-900">{sharedQuotaData.quota_source.replace(/_/g, ' ')}</p>
-                    </div>
-                  )}
-                  {companySettings?.subscription_status && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Subscription Status</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.subscription_status.toLowerCase().replace(/_/g, ' ')}</p>
-                    </div>
-                  )}
-                  {companySettings?.payment_status && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Payment Status</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.payment_status.toLowerCase().replace(/_/g, ' ')}</p>
-                    </div>
-                  )}
-                  {companySettings?.payment_method && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Payment Method</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.payment_method}</p>
-                    </div>
-                  )}
-                  {companySettings?.payment_reference && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Payment Reference</p>
-                      <p className="text-sm font-mono text-gray-900 text-xs">{companySettings.payment_reference}</p>
-                    </div>
-                  )}
-                  {sharedQuotaData?.tenant_id && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Tenant ID</p>
-                      <p className="text-sm font-mono text-gray-900 text-xs truncate" title={sharedQuotaData.tenant_id}>{sharedQuotaData.tenant_id}</p>
-                    </div>
-                  )}
-                  {companySettings?.last_synced_at && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Last Synced</p>
-                      <p className="text-sm font-medium text-gray-900">{formatISTDate(companySettings.last_synced_at)}</p>
-                    </div>
-                  )}
                 </div>
-              )}
-            </div>
-          )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {nonQuotaFeatures.map(f => (
+                    <div key={f.feature_key} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
+                      {f.is_enabled ? (
+                        <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                      )}
+                      <span className={`text-xs font-medium ${f.is_enabled ? 'text-gray-800' : 'text-gray-400'}`}>
+                        {f.feature_name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
         </div>
 
         {/* Queued Upgrades Section */}

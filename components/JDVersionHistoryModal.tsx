@@ -157,7 +157,7 @@ export default function JDVersionHistoryModal({
               </h2>
               <p className="text-sm text-gray-600 mt-0.5">
                 {selectedVersion
-                  ? `Published ${formatDate(selectedVersion.published_at)}`
+                  ? `Published ${formatIST(selectedVersion.published_at)}`
                   : `${jdTitle} - ${versionHistory?.total || 0} version${(versionHistory?.total || 0) !== 1 ? 's' : ''}`
                 }
               </p>

@@ -173,6 +173,7 @@ export interface AssessmentInfo {
   can_resume: boolean;
   message: string;
   session_token?: string;  // Session token for page refresh support
+  proctoring_settings?: AssessmentProctoringSettings | null;
 }
 
 export interface ConsentResponse {
@@ -250,6 +251,18 @@ export interface CurrentQuestion {
   all_question_statuses: QuestionStatusInfo[] | null;
 }
 
+export interface AssessmentProctoringSettings {
+  proctoring_enabled: boolean;
+  webcam_monitoring: boolean;
+  screen_recording: boolean;
+  tab_switch_detection: boolean;
+  copy_paste_blocking: boolean;
+  browser_lockdown: boolean;
+  ai_cheating_prevention: boolean;
+  max_tab_switches: number;
+  max_violations_before_flag: number;
+}
+
 export interface StartAssessmentResponse {
   attempt_id: string;
   started_at: string;
@@ -264,6 +277,7 @@ export interface StartAssessmentResponse {
   first_question: CurrentQuestion;
   message: string;
   session_token?: string;  // Unique session token for single-session enforcement
+  proctoring_settings?: AssessmentProctoringSettings | null;
 }
 
 export interface AnswerSubmission {

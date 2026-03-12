@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/lib/hooks/useAuth';
+import { getLoginUrl } from '@/lib/services/authService';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useEffect, useState, useCallback, Suspense, useRef } from 'react';
 import Sidebar from '@/components/shared/Sidebar';
@@ -13,7 +14,7 @@ import { QuotaProvider } from '@/contexts/QuotaContext';
 import { PlanFeaturesProvider } from '@/components/providers/PlanFeaturesProvider';
 import { TermsProvider } from '@/components/providers/TermsProvider';
 import { PlanChangeProvider, usePlanChange } from '@/components/providers/PlanChangeProvider';
-import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail } from '@/lib/services/api';
+import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail, PAYMENT_PENDING_EVENT, PaymentPendingDetail, redirectToPaymentPage } from '@/lib/services/api';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 import TermsReminderBanner from '@/components/terms/TermsReminderBanner';
 import TermsBlockingOverlay from '@/components/terms/TermsBlockingOverlay';
@@ -35,6 +36,10 @@ const adminRoutes = [
 const SUBSCRIPTION_ALLOWED_PATHS = [
   '/subscription/current-plan',
   '/subscription/payment-methods',
+  '/audits/trail',
+  '/audits/activity',
+  '/support-tickets',
+  '/settings/general-settings',
 ];
 
 // Storage key for scoring batch persistence
@@ -166,6 +171,19 @@ export default function DashboardLayout({
     };
   }, []);
 
+  // Listen for payment-pending events from API interceptor and redirect to complete-payment
+  // Uses shared redirectToPaymentPage() which has a module-level guard — so even if multiple
+  // concurrent 402 errors dispatch multiple events, only ONE hard redirect ever fires
+  useEffect(() => {
+    const handlePaymentPending = (event: CustomEvent<PaymentPendingDetail>) => {
+      console.log('[DASHBOARD] Payment pending detected, redirecting to complete-payment');
+      redirectToPaymentPage(event.detail.tenant_id, event.detail.plan_id);
+    };
+
+    window.addEventListener(PAYMENT_PENDING_EVENT, handlePaymentPending as EventListener);
+    return () => window.removeEventListener(PAYMENT_PENDING_EVENT, handlePaymentPending as EventListener);
+  }, []);
+
   // Redirect to current-plan page when subscription is expired and user is on a non-allowed page
   useEffect(() => {
     // Only redirect if explicitly expired (not undefined/loading) and NOT suspended
@@ -184,7 +202,12 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       console.log('[DASHBOARD] Not authenticated, redirecting to login');
-      router.push('/login');
+      const loginUrl = getLoginUrl();
+      if (loginUrl.startsWith('http')) {
+        window.location.href = loginUrl;
+      } else {
+        router.push(loginUrl);
+      }
     }
   }, [isAuthenticated, isLoading, router]);
 

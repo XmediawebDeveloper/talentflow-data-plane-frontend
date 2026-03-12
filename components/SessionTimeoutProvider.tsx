@@ -75,7 +75,11 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
     localStorage.removeItem('user');
     sessionStorage.clear();
     toast.error('Session expired due to inactivity. Please log in again.');
-    router.push(loginUrl);
+    if (loginUrl.startsWith('http')) {
+      window.location.href = loginUrl;
+    } else {
+      router.push(loginUrl);
+    }
   }, [router]);
 
   // Show warning before logout

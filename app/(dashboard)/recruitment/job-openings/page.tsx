@@ -164,6 +164,10 @@ export default function JobOpeningsPage() {
     }
   };
 
+  const handleViewApplicants = (job: Job) => {
+    router.push(`/recruitment/job-details?id=${job.id}&tab=scored-resumes`);
+  };
+
   const handleAIMatch = (job: Job) => {
     sessionStorage.setItem('preselectedJobId', job.id);
     router.push('/recruitment/ai-talent-match');
@@ -335,6 +339,7 @@ export default function JobOpeningsPage() {
         jobs={jobs}
         onCreateNew={hasPermission('canCreateJD') || isTenantAdmin ? handleCreateNew : undefined}
         onViewJob={handleViewJob}
+        onViewApplicants={handleViewApplicants}
         onAIMatch={hasPermission('canRunAiMatch') || isTenantAdmin ? handleAIMatch : undefined}
         onUpdateJobStatus={handleUpdateJobStatus}
         onEditJob={hasPermission('canUpdateJD') || isTenantAdmin ? handleEditJob : undefined}

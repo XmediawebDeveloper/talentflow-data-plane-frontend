@@ -771,6 +771,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         onCreateNewJD={onNavigateToJDCreation}
         topicSettings={topicSettings}
         preSelectedJobId={preSelectedJdId}
+        proctoringSettings={proctoringSettings}
       />
     );
   }

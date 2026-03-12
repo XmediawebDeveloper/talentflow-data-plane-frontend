@@ -27,9 +27,10 @@ export interface TermsAcceptanceRecord {
   tenant_id: string;
   terms_id: string;
   terms_version: string;
-  terms_title: string;
+  terms_title?: string;
   accepted_at: string;
   accepted_by: string;
+  accepted_by_name?: string;
   accepted_by_email: string;
 }
 

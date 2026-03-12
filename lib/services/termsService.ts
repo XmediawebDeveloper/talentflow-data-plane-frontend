@@ -147,9 +147,9 @@ export const termsService = {
   /**
    * Get acceptance history for a document type
    */
-  async getAcceptanceHistory(documentType: DocumentType = 'TERMS_AND_CONDITIONS'): Promise<TermsAcceptanceRecord[]> {
+  async getAcceptanceHistory(): Promise<TermsAcceptanceRecord[]> {
     try {
-      const response = await api.get(`/public/terms-and-conditions/history?document_type=${documentType}`);
+      const response = await api.get(`/public/terms-and-conditions/history`);
       const raw = response.data;
       console.log('[termsService] getAcceptanceHistory raw response:', JSON.stringify(raw));
       // Direct array

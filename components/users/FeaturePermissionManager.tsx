@@ -161,7 +161,8 @@ export default function FeaturePermissionManager({
   // Group features by category
   const featuresByCategory = useMemo(() => {
     const groups: Record<string, FeatureState[]> = {};
-    features.forEach(f => {
+    // Only include features that are available in the tenant's plan
+    features.filter(f => f.availableInPlan).forEach(f => {
       if (!groups[f.category]) {
         groups[f.category] = [];
       }
@@ -366,7 +367,7 @@ export default function FeaturePermissionManager({
                           <CategoryIcon className="w-5 h-5 text-gray-500" />
                           <span className="font-medium text-gray-900">{category}</span>
                           <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
-                            {categoryFeatures.filter(f => isFeatureEnabled(f.code)).length}/{categoryFeatures.length}
+                            {categoryFeatures.filter(f => isFeatureEnabled(f.code)).length} / {categoryFeatures.length}
                           </span>
                         </div>
                         {isExpanded ? (
@@ -381,7 +382,7 @@ export default function FeaturePermissionManager({
                           {categoryFeatures.map(feature => {
                             const isEnabled = isFeatureEnabled(feature.code);
                             const hasChange = pendingChanges[feature.code] !== undefined;
-                            const isDisabled = feature.locked || !feature.availableInPlan;
+                            const isDisabled = feature.locked;
 
                             return (
                               <div
@@ -398,11 +399,6 @@ export default function FeaturePermissionManager({
                                     {feature.locked && (
                                       <span title={feature.lockedReason}>
                                         <Lock className="w-4 h-4 text-amber-500" />
-                                      </span>
-                                    )}
-                                    {!feature.availableInPlan && (
-                                      <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">
-                                        Not in plan
                                       </span>
                                     )}
                                     {feature.dependencies.length > 0 && (

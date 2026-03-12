@@ -26,6 +26,7 @@ export interface ScoringJob {
   failed: number;
   startedAt: string;
   items: ScoringProgressItem[];
+  returnUrl?: string;
 }
 
 interface ScoringProgressContextType {
@@ -36,7 +37,7 @@ interface ScoringProgressContextType {
   isMainPanelOpen: boolean;  // True when center panel is visible (not minimized)
 
   // Actions
-  startScoringJob: (jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[]) => void;
+  startScoringJob: (jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string) => void;
   updateItemStatus: (jobId: string, itemId: string, status: ScoringProgressItem['status'], result?: Partial<ScoringProgressItem>) => void;
   clearCompletedJobs: () => void;
   clearJob: (jobId: string) => void;
@@ -93,7 +94,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
 
   const hasActiveScoring = activeScoringJobs.some(job => job.queued > 0 || job.processing > 0);
 
-  const startScoringJob = useCallback((jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[]) => {
+  const startScoringJob = useCallback((jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string) => {
     const newJob: ScoringJob = {
       jobId,
       jobTitle,
@@ -103,7 +104,8 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
       completed: 0,
       failed: 0,
       startedAt: new Date().toISOString(),
-      items: items.map(item => ({ ...item, status: 'Queued' as const }))
+      items: items.map(item => ({ ...item, status: 'Queued' as const })),
+      returnUrl,
     };
 
     setActiveScoringJobs(prev => {

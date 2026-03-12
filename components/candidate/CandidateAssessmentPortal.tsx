@@ -139,6 +139,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const [results, setResults] = useState<AssessmentResult | null>(null);
   const [progress, setProgress] = useState({ answered: 0, total: 0, percent: 0 });
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [completingStuck, setCompletingStuck] = useState(false);
 
   // Proctoring warnings are displayed via ProctoringEventBus → ProctoringWarningModal
   // (no local state needed — modal subscribes to EventBus directly)
@@ -213,6 +214,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     enabled: isProctoringActive,
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
+    copyPasteBlocking: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true,
+    tabSwitchDetection: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.tab_switch_detection ?? true,
     reportEvent: async (tok, event) => {
       await candidateService.reportProctorEvent(tok, {
         event_type: event.event_type as any,
@@ -692,17 +695,18 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           } catch (err) {
             if (isMountedRef.current) {
               const errorMessage = err instanceof Error ? err.message : '';
-              // Keep SESSION_ALREADY_ACTIVE error visible (security issue)
+              // Hard errors — show error, do NOT reload (reloading creates an infinite loop)
               if (errorMessage === 'SESSION_ALREADY_ACTIVE') {
                 setError('This assessment is already open in another browser or device. Please close the other session and try again. Only one active session is allowed per assessment.');
-                setStepSafe('error');
-                isStartingRef.current = false;
-                isFlowActiveRef.current = false;
+              } else if (errorMessage.includes('temporarily unavailable') || errorMessage.includes('Server')) {
+                // 500 server error — don't reload, show the error
+                setError('The server encountered an error. Please refresh the page and try again.');
               } else {
-                // Auto-refresh for other errors
-                console.log('[PORTAL] Timeout error - auto-refreshing page');
-                window.location.reload();
+                setError(errorMessage || 'Failed to start assessment. Please refresh the page.');
               }
+              setStepSafe('error');
+              isStartingRef.current = false;
+              isFlowActiveRef.current = false;
             }
           }
         };
@@ -861,6 +865,16 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     return response;
   };
+
+  // Show "close" option if stuck on completing screen for > 10s
+  useEffect(() => {
+    if (step !== 'completing') {
+      setCompletingStuck(false);
+      return;
+    }
+    const t = setTimeout(() => setCompletingStuck(true), 10000);
+    return () => clearTimeout(t);
+  }, [step]);
 
   // ============================================
   // COMPLETION HANDLER - NEW FLOW
@@ -1071,15 +1085,28 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           stream={cameraStream}
           isCameraActive={proctoringState.isCameraActive}
           isMicrophoneActive={proctoringState.isMicrophoneActive}
+          copyPasteBlocking={(assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true}
         />
       );
 
     case 'completing':
       return (
-        <LoadingScreen
-          message="Submitting your assessment..."
-          subMessage="Please wait..."
-        />
+        <div className="relative">
+          <LoadingScreen
+            message="Submitting your assessment..."
+            subMessage={completingStuck ? 'This is taking longer than expected.' : 'Please wait...'}
+          />
+          {completingStuck && (
+            <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50">
+              <button
+                onClick={() => window.close()}
+                className="px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl shadow-lg transition-colors flex items-center gap-2"
+              >
+                Close Window
+              </button>
+            </div>
+          )}
+        </div>
       );
 
     case 'completed':
