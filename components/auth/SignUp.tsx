@@ -584,7 +584,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         setStep('success');
         toast.success('Welcome aboard!', {
           description: freeTrialAcknowledged
-            ? `Your ${trialDays}-day free trial has started. Explore all features!`
+            ? `Your ${trialDays}-${trialDays === 1 ? 'day' : 'days'} free trial has started. Explore all features!`
             : 'Your account has been created successfully.',
         });
         // Redirect to org subdomain login after brief success message
@@ -1381,7 +1381,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
                 <Sparkles style={{ width: 20, height: 20, color: '#059669' }} />
                 <span style={{ fontSize: 16, fontWeight: 600, color: '#166534' }}>
-                  {trialDays}-Day Free Trial Activated
+                  {trialDays}-{trialDays === 1 ? 'Day' : 'Days'} Free Trial Activated
                 </span>
               </div>
               <p style={{ fontSize: 14, color: '#15803D' }}>
@@ -1443,7 +1443,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 <CheckCircle style={{ width: 20, height: 20, color: '#16A34A' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>{trialDays}-Day Free Trial</div>
+                <div style={{ color: '#111827', fontWeight: 500 }}>{trialDays}-{trialDays === 1 ? 'Day' : 'Days'} Free Trial</div>
                 <div style={{ fontSize: 14, color: '#6B7280' }}>No credit card required</div>
               </div>
             </div>

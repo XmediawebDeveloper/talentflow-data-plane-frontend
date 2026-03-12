@@ -6,10 +6,10 @@ import {
   Filter,
   Download,
   Calendar,
-  User,
   Clock,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   RefreshCw,
   Eye,
   X,
@@ -23,11 +23,9 @@ import {
   Zap,
   ShoppingCart,
   TrendingUp,
-  Tag,
   Shield,
   Cpu,
   Loader2 as Loader2Icon,
-  Timer,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
@@ -41,8 +39,10 @@ import {
   formatSessionDuration,
   getBillingImpact,
   type ErrorOrigin,
+  type RefundFlag,
 } from '@/lib/types/auditSession';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { useQuota } from '@/contexts/QuotaContext';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -50,6 +50,7 @@ interface AuditLog {
   id: string;
   tenant_id: string;
   user_id: string | null;
+  user_display_id: string | null;
   user_name: string | null;
   user_email: string | null;
   action: string;
@@ -71,10 +72,10 @@ interface AuditLog {
   session_end_time: string | null;
   total_session_duration: number | null; // seconds
   // Error origin classification (Section 5)
-  error_origin: 'TENANT' | 'SYSTEM' | 'NONE' | null;
+  error_origin: ErrorOrigin;
   error_code: string | null;
   // Refund tracking (Section 6)
-  refund_flag: 'YES' | 'NO' | null;
+  refund_flag: RefundFlag;
   // Module type and actor role
   module_type: string | null;
   actor_role: string | null;
@@ -110,6 +111,32 @@ const actionColors: Record<string, string> = {
   downgrade: 'bg-gray-200 text-gray-900 border border-gray-300',
   default: 'bg-gray-100 text-gray-700 border border-gray-200',
 };
+
+const EXPORT_COLUMNS = [
+  { key: 'timestamp',      label: 'Timestamp' },
+  { key: 'user',           label: 'User' },
+  { key: 'role',           label: 'Role' },
+  { key: 'action',         label: 'Action' },
+  { key: 'module',         label: 'Module' },
+  { key: 'entity_type',    label: 'Entity Type' },
+  { key: 'entity_id',      label: 'Entity ID' },
+  { key: 'status',         label: 'Status' },
+  { key: 'details',        label: 'Details' },
+  { key: 'impact',         label: 'Impact' },
+  { key: 'unit_type',      label: 'Unit Type' },
+  { key: 'units_impact',   label: 'Units Impact' },
+  { key: 'balance_before', label: 'Available Before' },
+  { key: 'balance_after',  label: 'Available After' },
+  { key: 'error_origin',   label: 'Error Origin' },
+  { key: 'error_code',     label: 'Error Code' },
+  { key: 'session_start',  label: 'Session Start' },
+  { key: 'session_end',    label: 'Session End' },
+  { key: 'duration',       label: 'Duration (s)' },
+  { key: 'refund',         label: 'Refund' },
+  { key: 'ip_address',     label: 'IP Address' },
+] as const;
+
+type ExportColumnKey = typeof EXPORT_COLUMNS[number]['key'];
 
 // Human-readable labels for known detail keys
 const DETAIL_KEY_LABELS: Record<string, string> = {
@@ -178,6 +205,7 @@ const entityIcons: Record<string, React.ElementType> = {
 };
 
 export default function AuditTrailPage() {
+  const { quotaData } = useQuota();
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -189,8 +217,6 @@ export default function AuditTrailPage() {
   const [entityFilter, setEntityFilter] = useState('');
   const [dateRange, setDateRange] = useState('30');
   const [errorOriginFilter, setErrorOriginFilter] = useState<'' | ErrorOrigin>('');
-  const [candidateEmailFilter, setCandidateEmailFilter] = useState('');
-  const [jdIdFilter, setJdIdFilter] = useState('');
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -216,9 +242,23 @@ export default function AuditTrailPage() {
   // Total users count
   const [totalUsers, setTotalUsers] = useState(0);
 
+  // Export state
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'excel'>('csv');
+  const [exportDateMode, setExportDateMode] = useState<'preset' | 'custom'>('preset');
+  const [exportPresetDays, setExportPresetDays] = useState('30');
+  const [exportStartDate, setExportStartDate] = useState('');
+  const [exportEndDate, setExportEndDate] = useState('');
+  const [exportSelectedCols, setExportSelectedCols] = useState<Record<string, boolean>>(
+    Object.fromEntries(EXPORT_COLUMNS.map(c => [c.key, true]))
+  );
+  const [exportLoading, setExportLoading] = useState(false);
+  const exportDropdownRef = useRef<HTMLDivElement>(null);
+
   // Prevent duplicate fetches in development mode
   const hasFetched = useRef(false);
-  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, errorOriginFilter, candidateEmailFilter, jdIdFilter });
+  const prevFilters = useRef({ page, actionFilter, entityFilter, dateRange, errorOriginFilter });
 
   // Valid backend enum values (actions the API accepts as filters)
   const validBackendActions = [
@@ -245,7 +285,7 @@ export default function AuditTrailPage() {
   ];
 
   const validBackendEntities = [
-    'user', 'job_description', 'resume', 'resume_batch', 'folder', 'assessment', 'role', 'permission', 'master_data', 'settings', 'subscription', 'session', 'scoring_batch',
+    'user', 'job_description', 'resume', 'resume_batch', 'folder', 'assessment', 'role', 'user_role_assignment', 'permission', 'master_data', 'settings', 'subscription', 'session', 'scoring_batch',
   ];
 
   const fetchAuditLogs = useCallback(async () => {
@@ -266,11 +306,8 @@ export default function AuditTrailPage() {
       if (entityFilter && validBackendEntities.includes(entityFilter)) {
         params.append('entity_type', entityFilter);
       }
-      if (candidateEmailFilter.trim()) {
-        params.append('candidate_email', candidateEmailFilter.trim());
-      }
-      if (jdIdFilter.trim()) {
-        params.append('jd_id', jdIdFilter.trim());
+      if (errorOriginFilter) {
+        params.append('error_origin', errorOriginFilter);
       }
 
       // Calculate date range
@@ -318,7 +355,7 @@ export default function AuditTrailPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, actionFilter, entityFilter, dateRange, candidateEmailFilter, jdIdFilter]);
+  }, [page, pageSize, actionFilter, entityFilter, dateRange, errorOriginFilter]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -380,7 +417,7 @@ export default function AuditTrailPage() {
   const fetchTotalUsers = useCallback(async () => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/users`, {
+      const response = await fetch(`${API_URL}/users?page=1&page_size=1`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -394,8 +431,7 @@ export default function AuditTrailPage() {
 
       if (response.ok) {
         const data = await response.json();
-        const users = data.users || data || [];
-        setTotalUsers(Array.isArray(users) ? users.length : 0);
+        setTotalUsers(data.total ?? (Array.isArray(data.users || data) ? (data.users || data).length : 0));
       }
     } catch (err) {
       console.error('Error fetching users count:', err);
@@ -420,16 +456,14 @@ export default function AuditTrailPage() {
       prev.actionFilter !== actionFilter ||
       prev.entityFilter !== entityFilter ||
       prev.dateRange !== dateRange ||
-      prev.errorOriginFilter !== errorOriginFilter ||
-      prev.candidateEmailFilter !== candidateEmailFilter ||
-      prev.jdIdFilter !== jdIdFilter;
+      prev.errorOriginFilter !== errorOriginFilter;
 
     if (filtersChanged && hasFetched.current) {
-      prevFilters.current = { page, actionFilter, entityFilter, dateRange, errorOriginFilter, candidateEmailFilter, jdIdFilter };
+      prevFilters.current = { page, actionFilter, entityFilter, dateRange, errorOriginFilter };
       fetchAuditLogs();
       fetchStats();
     }
-  }, [page, actionFilter, entityFilter, dateRange, errorOriginFilter, candidateEmailFilter, jdIdFilter]);
+  }, [page, actionFilter, entityFilter, dateRange, errorOriginFilter]);
 
   // Fetch AI generation audit data when an assessment-related log is selected
   useEffect(() => {
@@ -473,6 +507,28 @@ export default function AuditTrailPage() {
     fetchAiAudit();
   }, [selectedLog]);
 
+  // Close export dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target as Node)) {
+        setExportDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const openExportModal = (format: 'csv' | 'excel') => {
+    setExportFormat(format);
+    setExportDropdownOpen(false);
+    setExportPresetDays(dateRange);
+    setExportDateMode('preset');
+    setExportStartDate('');
+    setExportEndDate('');
+    setExportSelectedCols(Object.fromEntries(EXPORT_COLUMNS.map(c => [c.key, true])));
+    setExportModalOpen(true);
+  };
+
   const getActionColor = (action: string): string => {
     if (action.includes('addon') || action.includes('purchase')) return actionColors.addon;
     if (action.includes('usage') || action.includes('recorded')) return actionColors.usage;
@@ -497,21 +553,59 @@ export default function AuditTrailPage() {
     return formatIST(dateStr);
   };
 
+  const getColumnValue = (log: AuditLog, key: ExportColumnKey): string => {
+    const status = getActionStatus(log.action, log.error_origin);
+    const impact = getImpactText(log);
+    switch (key) {
+      case 'timestamp':      return log.created_at;
+      case 'user':           return log.user_name || '';
+      case 'role':           return log.actor_role || '';
+      case 'action':         return log.action_label;
+      case 'module':         return log.module_type || '';
+      case 'entity_type':    return log.entity_type || '';
+      case 'entity_id':      return log.entity_id || '';
+      case 'status':         return status.label;
+      case 'details':        return getDetailsSummary(log);
+      case 'impact':         return impact.text;
+      case 'unit_type':      return log.unit_type || '';
+      case 'units_impact':   return String(log.units_consumed || '');
+      case 'balance_before': return String(log.balance_before ?? log.details?.balance_before ?? '');
+      case 'balance_after':  return String(log.balance_after ?? log.details?.balance_after ?? '');
+      case 'error_origin':   return log.error_origin;
+      case 'error_code':     return log.error_code ? (ERROR_CODE_LABELS[log.error_code] || log.error_code) : '';
+      case 'session_start':  return log.session_start_time || '';
+      case 'session_end':    return log.session_end_time || '';
+      case 'duration':       return String(log.total_session_duration ?? '');
+      case 'refund':         return log.refund_flag;
+      case 'ip_address':     return log.ip_address || '';
+      default:               return '';
+    }
+  };
+
   const handleExport = async () => {
+    setExportLoading(true);
     try {
       const token = localStorage.getItem('accessToken');
-      const params = new URLSearchParams({
-        page: '1',
-        page_size: '100',
-      });
+      const exportPageSize = Math.min(total || 1000, 1000);
+      const params = new URLSearchParams({ page: '1', page_size: exportPageSize.toString() });
 
-      if (actionFilter) params.append('action', actionFilter);
-      if (entityFilter) params.append('entity_type', entityFilter);
+      if (actionFilter && validBackendActions.includes(actionFilter)) params.append('action', actionFilter);
+      if (entityFilter && validBackendEntities.includes(entityFilter)) params.append('entity_type', entityFilter);
+      if (errorOriginFilter) params.append('error_origin', errorOriginFilter);
+
+      if (exportDateMode === 'preset' && exportPresetDays) {
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - parseInt(exportPresetDays));
+        params.append('start_date', startDate.toISOString());
+        params.append('end_date', endDate.toISOString());
+      } else if (exportDateMode === 'custom' && exportStartDate && exportEndDate) {
+        params.append('start_date', new Date(exportStartDate).toISOString());
+        params.append('end_date', new Date(exportEndDate).toISOString());
+      }
 
       const response = await fetch(`${API_URL}/audits?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
 
       if (response.status === 401) {
@@ -521,11 +615,20 @@ export default function AuditTrailPage() {
 
       if (response.ok) {
         const data = await response.json();
-        const csv = convertToCSV(data.items);
-        downloadCSV(csv, 'audit-trail.csv');
+        const selectedKeys = EXPORT_COLUMNS.map(c => c.key).filter(k => exportSelectedCols[k]) as ExportColumnKey[];
+        if (exportFormat === 'csv') {
+          const csv = convertToCSV(data.items, selectedKeys);
+          downloadFile(csv, 'audit-trail.csv', 'text/csv');
+        } else {
+          const xls = convertToExcel(data.items, selectedKeys);
+          downloadFile(xls, 'audit-trail.xls', 'application/vnd.ms-excel');
+        }
+        setExportModalOpen(false);
       }
     } catch (err) {
       console.error('Export failed:', err);
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -598,45 +701,21 @@ export default function AuditTrailPage() {
     return { text: '—', negative: false };
   };
 
-  const convertToCSV = (logs: AuditLog[]): string => {
-    const headers = [
-      'Timestamp', 'User', 'Role', 'Action', 'Module', 'Entity Type', 'Entity ID', 'Status', 'Details', 'Impact',
-      'Unit Type', 'Units Impact', 'Available Before', 'Available After',
-      'Error Origin', 'Error Code', 'Session Start', 'Session End', 'Duration (s)', 'Refund',
-      'IP Address',
-    ];
-    const rows = logs.map(log => {
-      const status = getActionStatus(log.action, log.error_origin);
-      const impact = getImpactText(log);
-      return [
-        log.created_at,
-        log.user_name,
-        log.actor_role || '',
-        log.action_label,
-        log.module_type || '',
-        log.entity_type || '',
-        log.entity_id || '',
-        status.label,
-        getDetailsSummary(log),
-        impact.text,
-        log.unit_type || '',
-        log.units_consumed || '',
-        log.balance_before ?? log.details?.balance_before ?? '',
-        log.balance_after ?? log.details?.balance_after ?? '',
-        log.error_origin || '',
-        log.error_code ? (ERROR_CODE_LABELS[log.error_code] || log.error_code) : '',
-        log.session_start_time || '',
-        log.session_end_time || '',
-        log.total_session_duration ?? '',
-        log.refund_flag || '',
-        log.ip_address || '',
-      ];
-    });
-    return [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+  const convertToCSV = (logs: AuditLog[], keys: ExportColumnKey[]): string => {
+    const headers = keys.map(k => EXPORT_COLUMNS.find(c => c.key === k)!.label);
+    const rows = logs.map(log => keys.map(k => getColumnValue(log, k)));
+    return [headers, ...rows].map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
   };
 
-  const downloadCSV = (csv: string, filename: string) => {
-    const blob = new Blob([csv], { type: 'text/csv' });
+  const convertToExcel = (logs: AuditLog[], keys: ExportColumnKey[]): string => {
+    const headers = keys.map(k => EXPORT_COLUMNS.find(c => c.key === k)!.label);
+    const rows = logs.map(log => keys.map(k => getColumnValue(log, k)));
+    const esc = (v: string) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Audit Trail</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--><meta charset="UTF-8"></head><body><table><thead><tr>${headers.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${esc(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>`;
+  };
+
+  const downloadFile = (content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -673,7 +752,14 @@ export default function AuditTrailPage() {
                 <ScrollText className="w-4 h-4 sm:w-5 sm:h-5 md:w-7 md:h-7 text-white" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Audit Trail</h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">Audit Trail</h1>
+                  {quotaData?.tenant_code && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-mono font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                      {quotaData.tenant_code}
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs sm:text-sm text-gray-600 mt-0.5">Track all system activities and changes</p>
               </div>
             </div>
@@ -685,13 +771,34 @@ export default function AuditTrailPage() {
                 <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600" />
                 <span className="font-medium text-gray-700 hidden sm:inline">Refresh</span>
               </button>
-              <button
-                onClick={handleExport}
-                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-2.5 bg-gray-900 text-white rounded-lg sm:rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300 text-xs sm:text-sm"
-              >
-                <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="font-medium hidden sm:inline">Export CSV</span>
-              </button>
+              <div className="relative" ref={exportDropdownRef}>
+                <button
+                  onClick={() => setExportDropdownOpen(v => !v)}
+                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 md:py-2.5 bg-gray-900 text-white rounded-lg sm:rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300 text-xs sm:text-sm"
+                >
+                  <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="font-medium hidden sm:inline">Export</span>
+                  <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                </button>
+                {exportDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden min-w-[120px]">
+                    <button
+                      onClick={() => openExportModal('csv')}
+                      className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <FileText className="w-4 h-4 text-gray-500" />
+                      CSV
+                    </button>
+                    <button
+                      onClick={() => openExportModal('excel')}
+                      className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
+                    >
+                      <Activity className="w-4 h-4 text-gray-500" />
+                      Excel
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -842,26 +949,6 @@ export default function AuditTrailPage() {
                   </select>
                   <ChevronRight className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 w-3 h-3 sm:w-4 sm:h-4 text-gray-400 rotate-90 pointer-events-none" />
                 </div>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Candidate email..."
-                    value={candidateEmailFilter}
-                    onChange={(e) => { setCandidateEmailFilter(e.target.value); setPage(1); }}
-                    className="pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-sm w-44"
-                  />
-                </div>
-                <div className="relative">
-                  <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="JD ID..."
-                    value={jdIdFilter}
-                    onChange={(e) => { setJdIdFilter(e.target.value); setPage(1); }}
-                    className="pl-9 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all text-sm w-36"
-                  />
-                </div>
               </div>
             </div>
           </div>
@@ -956,7 +1043,9 @@ export default function AuditTrailPage() {
                 <thead>
                   <tr className="bg-gray-50/80">
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Timestamp</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User ID</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Details</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
@@ -982,17 +1071,26 @@ export default function AuditTrailPage() {
                           </div>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
+                          {log.user_display_id ? (
+                            <span className="text-sm font-mono text-gray-700">{log.user_display_id}</span>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
                             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center text-xs font-semibold shadow-md shadow-gray-200">
                               {(log.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                             </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">{log.user_name || 'Unknown'}</p>
-                              {log.actor_role && (
-                                <p className="text-xs text-gray-500 capitalize">{log.actor_role.replace(/_/g, ' ').toLowerCase()}</p>
-                              )}
-                            </div>
+                            <p className="text-sm font-medium text-gray-900">{log.user_name || 'Unknown'}</p>
                           </div>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          {log.actor_role ? (
+                            <span className="text-sm text-gray-700 capitalize">{log.actor_role.replace(/_/g, ' ').toLowerCase()}</span>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           <span className={`inline-flex px-3 py-1.5 rounded-lg text-xs font-semibold ${getActionColor(log.action)}`}>
@@ -1020,13 +1118,9 @@ export default function AuditTrailPage() {
                           })()}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
-                          {log.error_origin && log.error_origin !== 'NONE' ? (
-                            <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_ORIGIN_COLORS[log.error_origin as ErrorOrigin]}`}>
-                              {ERROR_ORIGIN_LABELS[log.error_origin as ErrorOrigin]}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-gray-400">—</span>
-                          )}
+                          <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_ORIGIN_COLORS[log.error_origin]}`}>
+                            {ERROR_ORIGIN_LABELS[log.error_origin]}
+                          </span>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           {log.error_code ? (
@@ -1047,13 +1141,9 @@ export default function AuditTrailPage() {
                           )}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
-                          {log.refund_flag && log.refund_flag !== 'NO' ? (
-                            <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${REFUND_FLAG_COLORS[log.refund_flag as 'YES' | 'NO']}`}>
-                              {log.refund_flag}
-                            </span>
-                          ) : (
-                            <span className="text-sm text-gray-400">—</span>
-                          )}
+                          <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${REFUND_FLAG_COLORS[log.refund_flag]}`}>
+                            {log.refund_flag}
+                          </span>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           {impact.text !== '—' ? (
@@ -1155,6 +1245,12 @@ export default function AuditTrailPage() {
                 <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold flex-shrink-0 ${getActionColor(selectedLog.action)}`}>
                   {selectedLog.action_label}
                 </span>
+              </div>
+
+              {/* Log ID */}
+              <div className="bg-gray-50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
+                <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-0.5 sm:mb-1">Log ID</p>
+                <p className="text-[10px] sm:text-xs font-mono text-gray-700 break-all">{selectedLog.id}</p>
               </div>
 
               {/* Summary Info */}
@@ -1265,14 +1361,12 @@ export default function AuditTrailPage() {
                         <span className="text-xs sm:text-sm font-semibold text-gray-900">{formatSessionDuration(selectedLog.total_session_duration)}</span>
                       </div>
                     )}
-                    {selectedLog.error_origin && (
-                      <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Origin</span>
-                        <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold ${ERROR_ORIGIN_COLORS[selectedLog.error_origin as ErrorOrigin]}`}>
-                          {ERROR_ORIGIN_LABELS[selectedLog.error_origin as ErrorOrigin]}
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
+                      <span className="text-[10px] sm:text-xs font-medium text-gray-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Origin</span>
+                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold ${ERROR_ORIGIN_COLORS[selectedLog.error_origin]}`}>
+                        {ERROR_ORIGIN_LABELS[selectedLog.error_origin]}
+                      </span>
+                    </div>
                     {selectedLog.error_code && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
                         <span className="text-[10px] sm:text-xs font-medium text-gray-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Code</span>
@@ -1281,18 +1375,16 @@ export default function AuditTrailPage() {
                         </span>
                       </div>
                     )}
-                    {selectedLog.refund_flag && (
-                      <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Refund</span>
-                        <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold ${REFUND_FLAG_COLORS[selectedLog.refund_flag as 'YES' | 'NO']}`}>
-                          {selectedLog.refund_flag === 'YES' ? 'Refunded' : 'No Refund'}
-                        </span>
-                      </div>
-                    )}
-                    {selectedLog.error_origin && selectedLog.error_origin !== 'NONE' && (
+                    <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
+                      <span className="text-[10px] sm:text-xs font-medium text-gray-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Refund</span>
+                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold ${REFUND_FLAG_COLORS[selectedLog.refund_flag]}`}>
+                        {selectedLog.refund_flag}
+                      </span>
+                    </div>
+                    {selectedLog.error_origin !== 'NONE' && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
                         <span className="text-[10px] sm:text-xs font-medium text-gray-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Billing Impact</span>
-                        <span className="text-xs sm:text-sm text-gray-700 break-words">{getBillingImpact(selectedLog.error_origin as ErrorOrigin).description}</span>
+                        <span className="text-xs sm:text-sm text-gray-700 break-words">{getBillingImpact(selectedLog.error_origin).description}</span>
                       </div>
                     )}
                   </div>
@@ -1408,6 +1500,157 @@ export default function AuditTrailPage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Modal */}
+      {exportModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-gradient-to-br from-gray-700 to-gray-900 rounded-xl flex items-center justify-center shadow-lg shadow-gray-300">
+                  <Download className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">
+                    Export {exportFormat === 'csv' ? 'CSV' : 'Excel'}
+                  </h3>
+                  <p className="text-xs text-gray-500">Configure date range and columns</p>
+                </div>
+              </div>
+              <button onClick={() => setExportModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="overflow-y-auto flex-1 p-5 space-y-5">
+              {/* Date Range */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Date Range</p>
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => setExportDateMode('preset')}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all ${exportDateMode === 'preset' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    Preset
+                  </button>
+                  <button
+                    onClick={() => setExportDateMode('custom')}
+                    className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all ${exportDateMode === 'custom' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    Custom
+                  </button>
+                </div>
+                {exportDateMode === 'preset' ? (
+                  <div className="grid grid-cols-4 gap-2">
+                    {[{ value: '7', label: '7 days' }, { value: '30', label: '30 days' }, { value: '90', label: '90 days' }, { value: '365', label: '1 year' }].map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setExportPresetDays(opt.value)}
+                        className={`py-2 rounded-xl text-xs font-medium border transition-all ${exportPresetDays === opt.value ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">Start Date</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <input
+                          type="date"
+                          value={exportStartDate}
+                          onChange={e => setExportStartDate(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">End Date</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <input
+                          type="date"
+                          value={exportEndDate}
+                          onChange={e => setExportEndDate(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 transition-all"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Columns */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Columns</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setExportSelectedCols(Object.fromEntries(EXPORT_COLUMNS.map(c => [c.key, true])))}
+                      className="text-xs text-gray-600 hover:text-gray-900 font-medium underline underline-offset-2"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-gray-300">|</span>
+                    <button
+                      onClick={() => setExportSelectedCols(Object.fromEntries(EXPORT_COLUMNS.map(c => [c.key, false])))}
+                      className="text-xs text-gray-600 hover:text-gray-900 font-medium underline underline-offset-2"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {EXPORT_COLUMNS.map(col => (
+                    <label key={col.key} className="flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-50 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={!!exportSelectedCols[col.key]}
+                        onChange={e => setExportSelectedCols(prev => ({ ...prev, [col.key]: e.target.checked }))}
+                        className="w-4 h-4 rounded border-gray-300 text-gray-900 focus:ring-gray-400 cursor-pointer"
+                      />
+                      <span className="text-sm text-gray-700 group-hover:text-gray-900">{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  {Object.values(exportSelectedCols).filter(Boolean).length} of {EXPORT_COLUMNS.length} columns selected
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
+              <p className="text-xs text-gray-500">
+                Up to {Math.min(total, 1000).toLocaleString()} records
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setExportModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleExport}
+                  disabled={exportLoading || Object.values(exportSelectedCols).every(v => !v) || (exportDateMode === 'custom' && (!exportStartDate || !exportEndDate))}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-xl hover:bg-gray-800 transition-all shadow-md shadow-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {exportLoading ? (
+                    <><Loader2Icon className="w-4 h-4 animate-spin" /> Exporting...</>
+                  ) : (
+                    <><Download className="w-4 h-4" /> Export {exportFormat === 'csv' ? 'CSV' : 'Excel'}</>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

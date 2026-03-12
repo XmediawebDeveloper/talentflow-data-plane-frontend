@@ -103,6 +103,7 @@ export interface UserPermissions {
 
 export interface ApiUser {
   id: string;
+  user_display_id?: string;  // Human-readable ID e.g. US-01
   tenant_id: string;
   email: string;
   name: string;

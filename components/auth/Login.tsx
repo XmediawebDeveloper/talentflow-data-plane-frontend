@@ -179,7 +179,8 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     }
 
     // First-time login (invite flow) — show a toast so user knows where to change their password
-    if (!response.user.last_login) {
+    // Only for non-tenant-admin users (recruiter, viewer, billing_manager, standard_user)
+    if (!response.user.last_login && response.user.role !== 'tenant_admin') {
       toast.info('You are logged in with a temporary password. Please change it via Settings → Change Password.', {
         duration: 8000,
       });

@@ -133,7 +133,7 @@ export function LandingPageContent() {
             <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-8 text-xs sm:text-sm text-gray-600 dark:text-gray-400 pt-3 sm:pt-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
-                <span>{trialDays}-day free trial</span>
+                <span>{trialDays}-{trialDays === 1 ? 'day' : 'days'} free trial</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />

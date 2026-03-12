@@ -1233,6 +1233,7 @@ export default function UserManagement() {
       console.log('[LOAD USERS] Raw data from API:', data.users?.slice(0, 2) || data.slice(0, 2));
       const mappedUsers: ApiUser[] = (data.users || data).map((user: any) => ({
         id: user.id.toString(),
+        user_display_id: user.user_display_id,
         name: user.name || user.full_name,
         email: user.email,
         role: user.role || 'viewer',
@@ -2049,6 +2050,9 @@ export default function UserManagement() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                  User ID
+                </th>
                 <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   User
                 </th>
@@ -2072,6 +2076,15 @@ export default function UserManagement() {
             <tbody className="divide-y divide-gray-200">
               {filteredUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
+                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden sm:table-cell">
+                    {user.user_display_id ? (
+                      <span className="px-2 py-0.5 text-[10px] sm:text-xs font-mono font-medium bg-gray-100 text-gray-700 rounded">
+                        {user.user_display_id}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] sm:text-xs text-gray-400">—</span>
+                    )}
+                  </td>
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
                     <div className="flex items-center gap-2 sm:gap-3">
                       <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
