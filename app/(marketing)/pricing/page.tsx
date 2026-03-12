@@ -781,7 +781,6 @@ export default function PricingPage() {
                                     { label: 'Resume Scores', value: 'Unlimited' },
                                     { label: 'Assessments', value: 'Unlimited' },
                                     { label: 'AI Interviews', value: 'Unlimited' },
-                                    { label: 'Total Storage', value: 'Unlimited' },
                                   ].map((item) => (
                                     <div key={item.label} className="flex justify-between items-center">
                                       <span className="text-gray-500">{item.label}</span>
@@ -854,14 +853,6 @@ export default function PricingPage() {
                                     <span className="text-gray-500">AI Interviews</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
                                       {normalizedQuotas.AIU.toLocaleString()}
-                                    </span>
-                                  </div>
-                                )}
-                                {normalizedQuotas.total_resume_storage !== undefined && normalizedQuotas.total_resume_storage >= 1 && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-gray-500">Total Storage</span>
-                                    <span className="font-semibold text-gray-900 dark:text-white">
-                                      {normalizedQuotas.total_resume_storage.toLocaleString()}
                                     </span>
                                   </div>
                                 )}
