@@ -173,6 +173,7 @@ export interface AssessmentInfo {
   can_resume: boolean;
   message: string;
   session_token?: string;  // Session token for page refresh support
+  proctoring_settings?: AssessmentProctoringSettings | null;
 }
 
 export interface ConsentResponse {

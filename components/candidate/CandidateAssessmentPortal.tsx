@@ -214,8 +214,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     enabled: isProctoringActive,
     voiceDetectionSensitivity: 50,
     obstructionThreshold: 30,
-    copyPasteBlocking: assessmentData?.proctoring_settings?.copy_paste_blocking ?? true,
-    tabSwitchDetection: assessmentData?.proctoring_settings?.tab_switch_detection ?? true,
+    copyPasteBlocking: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true,
+    tabSwitchDetection: (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.tab_switch_detection ?? true,
     reportEvent: async (tok, event) => {
       await candidateService.reportProctorEvent(tok, {
         event_type: event.event_type as any,
@@ -1085,6 +1085,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           stream={cameraStream}
           isCameraActive={proctoringState.isCameraActive}
           isMicrophoneActive={proctoringState.isMicrophoneActive}
+          copyPasteBlocking={(assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true}
         />
       );
 
