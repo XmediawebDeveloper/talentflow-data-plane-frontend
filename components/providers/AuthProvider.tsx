@@ -318,6 +318,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // First, try to restore from localStorage (fast path)
       const storedUser = getUserFromStorage();
       const storedTenant = getTenantFromStorage();
+      // Fast flag check — no API call needed.
+      // Set by Login.tsx when must_reset_password=true; cleared by SetPassword.tsx after success.
+      if (
+        typeof window !== 'undefined' &&
+        localStorage.getItem('pending_password_reset') === 'true' &&
+        !window.location.pathname.startsWith('/set-password')
+      ) {
+        console.log('[AUTH] pending_password_reset flag set — redirecting to /set-password');
+        setIsLoading(false);
+        window.location.href = '/set-password';
+        return;
+      }
+
       if (storedUser && authService.isAuthenticated()) {
         // Check if token is expired before restoring session
         if (isTokenExpired()) {
@@ -348,6 +361,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Validate with API in background and refresh tenant name
         try {
           const apiUserData = await authService.getCurrentUser();
+
+          // Catch existing sessions that have must_reset_password=true in DB but no local flag.
+          // (e.g. user was invited before this flag was introduced, or flag was cleared by browser)
+          if (apiUserData.must_reset_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
+            console.log('[AUTH] must_reset_password=true from API — redirecting to /set-password');
+            localStorage.setItem('pending_password_reset', 'true');
+            window.location.href = '/set-password';
+            return;
+          }
 
           // If tenant has pending payment, redirect to payment page (same logic as Login.tsx)
           if (apiUserData.pending_payment && apiUserData.pending_payment_redirect) {
@@ -428,6 +450,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AUTH] Fetching current user from API...');
           const apiUserData = await authService.getCurrentUser();
           console.log('[AUTH] Got user data:', apiUserData);
+
+          // must_reset_password guard — catches users with no cached data (first-ever session restore)
+          if (apiUserData.must_reset_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
+            console.log('[AUTH] must_reset_password=true — redirecting to /set-password');
+            localStorage.setItem('pending_password_reset', 'true');
+            setIsLoading(false);
+            window.location.href = '/set-password';
+            return;
+          }
 
           // If tenant has pending payment, redirect to payment page (same logic as Login.tsx)
           if (apiUserData.pending_payment && apiUserData.pending_payment_redirect) {

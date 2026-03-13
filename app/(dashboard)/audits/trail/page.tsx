@@ -285,7 +285,7 @@ export default function AuditTrailPage() {
   ];
 
   const validBackendEntities = [
-    'user', 'job_description', 'resume', 'resume_batch', 'folder', 'assessment', 'role', 'user_role_assignment', 'permission', 'master_data', 'settings', 'subscription', 'session', 'scoring_batch',
+    'user', 'user_invitation', 'job_description', 'resume', 'resume_batch', 'folder', 'assessment', 'role', 'user_role_assignment', 'permission', 'master_data', 'settings', 'subscription', 'session', 'scoring_batch',
   ];
 
   const fetchAuditLogs = useCallback(async () => {
