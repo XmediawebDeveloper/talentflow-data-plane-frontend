@@ -1,7 +1,11 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
-import { Video, Mic, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle, Circle } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import {
+  Video, Mic, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle,
+  Circle, Briefcase, MapPin, Building2, Award, ExternalLink,
+} from 'lucide-react';
 
 interface StepConsentProps {
   onAccept: (consents: {
@@ -12,6 +16,21 @@ interface StepConsentProps {
     consent_terms: boolean;
   }) => void;
   submitting?: boolean;
+  // JD props (shown above consent)
+  position?: string;
+  jdTitle?: string | null;
+  jdExperienceLevel?: string | null;
+  jdDescription?: string | null;
+  jdDepartment?: string | null;
+  jdLocation?: string | null;
+  jdEmploymentType?: string | null;
+  jdRemoteType?: string | null;
+  jdMustHaveSkills?: string[] | null;
+  jdNiceToHaveSkills?: string[] | null;
+  jdExperienceMin?: number | null;
+  jdExperienceMax?: number | null;
+  jdJobLevel?: string | null;
+  duration?: number;
 }
 
 type ConsentKey =
@@ -38,30 +57,9 @@ const CONSENT_ITEMS: { key: ConsentKey; label: string }[] = [
 ];
 
 const DATA_CARDS = [
-  {
-    icon: Video,
-    title: 'Video Recording',
-    description: 'Your video will be recorded throughout the interview',
-    color: 'from-purple-500 to-blue-500',
-    bg: 'bg-purple-50',
-    iconColor: 'text-purple-600',
-  },
-  {
-    icon: Mic,
-    title: 'Audio Recording',
-    description: 'Your audio will be captured for transcription and analysis',
-    color: 'from-blue-500 to-teal-500',
-    bg: 'bg-blue-50',
-    iconColor: 'text-blue-600',
-  },
-  {
-    icon: Eye,
-    title: 'Facial Analysis',
-    description: 'AI will analyze facial expressions for engagement metrics',
-    color: 'from-teal-500 to-green-500',
-    bg: 'bg-teal-50',
-    iconColor: 'text-teal-600',
-  },
+  { icon: Video, title: 'Video Recording', description: 'Your video will be recorded throughout the interview', bg: 'bg-gray-100', iconColor: 'text-gray-600' },
+  { icon: Mic, title: 'Audio Recording', description: 'Your audio will be captured for transcription and analysis', bg: 'bg-gray-100', iconColor: 'text-gray-600' },
+  { icon: Eye, title: 'Facial Analysis', description: 'AI will analyze facial expressions for engagement metrics', bg: 'bg-gray-100', iconColor: 'text-gray-600' },
 ];
 
 const GDPR_RIGHTS = [
@@ -75,7 +73,24 @@ const GDPR_RIGHTS = [
   'Right to lodge a complaint with a supervisory authority',
 ];
 
-export default function StepConsent({ onAccept, submitting = false }: StepConsentProps) {
+export default function StepConsent({
+  onAccept,
+  submitting = false,
+  position,
+  jdTitle,
+  jdExperienceLevel,
+  jdDescription,
+  jdDepartment,
+  jdLocation,
+  jdEmploymentType,
+  jdRemoteType,
+  jdMustHaveSkills,
+  jdNiceToHaveSkills,
+  jdExperienceMin,
+  jdExperienceMax,
+  jdJobLevel,
+  duration,
+}: StepConsentProps) {
   const [consents, setConsents] = useState<ConsentState>({
     consent_video: false,
     consent_audio: false,
@@ -83,6 +98,7 @@ export default function StepConsent({ onAccept, submitting = false }: StepConsen
     consent_ai_analysis: false,
     consent_terms: false,
   });
+  const [showFullDesc, setShowFullDesc] = useState(false);
 
   const allChecked = Object.values(consents).every(Boolean);
   const noneChecked = Object.values(consents).every((v) => !v);
@@ -108,116 +124,195 @@ export default function StepConsent({ onAccept, submitting = false }: StepConsen
     }
   }, [allChecked, submitting, consents, onAccept]);
 
+  const title = jdTitle || position || 'Interview Position';
+  const expStr = jdExperienceMin != null && jdExperienceMax != null
+    ? `${jdExperienceMin}-${jdExperienceMax} years`
+    : jdExperienceMin != null ? `${jdExperienceMin}+ years`
+    : jdExperienceMax != null ? `Up to ${jdExperienceMax} years`
+    : null;
+  const isLongDesc = jdDescription ? jdDescription.length > 500 : false;
+  const descToShow = isLongDesc && !showFullDesc
+    ? jdDescription!.slice(0, 500) + '...'
+    : jdDescription;
+
   return (
-    <div className="w-full max-w-4xl mx-auto px-4 py-8 space-y-8">
-      {/* Step Indicator */}
-      <div className="text-center">
-        <span className="inline-flex items-center gap-1.5 bg-purple-100 text-purple-700 text-xs font-semibold px-3 py-1 rounded-full">
-          <Shield className="w-3.5 h-3.5" />
-          Privacy &amp; Consent
-        </span>
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mt-3">
-          Consent &amp; Data Privacy
-        </h1>
-        <p className="text-gray-500 mt-2">
-          Please review the following information before proceeding with your interview.
-        </p>
+    <div className="w-full max-w-4xl mx-auto px-4 py-8 space-y-6">
+
+      {/* ── SECTION 1: Job Details ── */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        {/* Header */}
+        <div className="bg-gray-800 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
+              <Briefcase className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">{title}</h2>
+              {jdJobLevel && <p className="text-sm text-gray-300">{jdJobLevel} Level</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* Quick info row */}
+          <div className="flex flex-wrap gap-3 text-sm">
+            {jdDepartment && (
+              <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-1 rounded-full">
+                <Building2 className="w-3.5 h-3.5" /> {jdDepartment}
+              </span>
+            )}
+            {jdLocation && (
+              <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-1 rounded-full">
+                <MapPin className="w-3.5 h-3.5" /> {jdLocation}
+              </span>
+            )}
+            {(jdEmploymentType || jdRemoteType) && (
+              <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-1 rounded-full">
+                {[jdEmploymentType, jdRemoteType].filter(Boolean).join(' / ')}
+              </span>
+            )}
+            {expStr && (
+              <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-1 rounded-full">
+                <Award className="w-3.5 h-3.5" /> {expStr} experience
+              </span>
+            )}
+          </div>
+
+          {/* Interview info */}
+          <div className="flex gap-4 text-sm text-gray-600">
+            {duration != null && duration > 0 && (
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-gray-400" /> {duration} min interview
+              </span>
+            )}
+          </div>
+
+          {/* Description */}
+          {jdDescription && (
+            <div>
+              <div className="prose prose-sm prose-gray max-w-none text-gray-600 leading-relaxed">
+                <ReactMarkdown>{descToShow || ''}</ReactMarkdown>
+              </div>
+              {isLongDesc && (
+                <button
+                  type="button"
+                  onClick={() => setShowFullDesc(!showFullDesc)}
+                  className="text-sm text-gray-500 hover:text-gray-700 mt-1 underline underline-offset-2"
+                >
+                  {showFullDesc ? 'Show less' : 'Read more'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Skills */}
+          {jdMustHaveSkills && jdMustHaveSkills.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Required Skills</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {jdMustHaveSkills.map((skill) => (
+                  <span key={skill} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2.5 py-1 rounded-full">
+                    <CheckCircle className="w-3 h-3 text-gray-500" /> {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {jdNiceToHaveSkills && jdNiceToHaveSkills.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Nice to Have</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {jdNiceToHaveSkills.map((skill) => (
+                  <span key={skill} className="bg-gray-50 text-gray-600 text-xs px-2.5 py-1 rounded-full border border-gray-200">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* 1. GDPR/DPDP Notice */}
+      {/* ── Divider ── */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-gray-200" />
+        <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Privacy & Consent</span>
+        <div className="flex-1 h-px bg-gray-200" />
+      </div>
+
+      {/* ── SECTION 2: GDPR/DPDP Notice ── */}
       <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
         <div className="flex items-start gap-3">
           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
             <AlertTriangle className="w-4 h-4 text-amber-600" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-base font-semibold text-gray-900">
               Important Notice — Biometric Data Collection
             </h2>
-            <p className="text-gray-600 mt-2 text-sm leading-relaxed">
-              In accordance with the General Data Protection Regulation (GDPR) Article 9 and the
-              Digital Personal Data Protection Act (DPDP), we are required to obtain your explicit
-              consent before collecting and processing biometric data. This interview process
-              involves the collection of video, audio, and facial expression data which constitutes
-              special category data under GDPR. Your explicit consent is required before we can
-              proceed. You may withdraw your consent at any time.
+            <p className="text-gray-600 mt-1.5 text-sm leading-relaxed">
+              This interview involves collection of video, audio, and facial expression data (special category data under GDPR Art. 9).
+              Your explicit consent is required. You may withdraw consent at any time.
             </p>
           </div>
         </div>
       </div>
 
-      {/* 2. Data Collection During Interview */}
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">
-          Data Collection During Interview
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {DATA_CARDS.map((card) => {
-            const Icon = card.icon;
-            return (
-              <div
-                key={card.title}
-                className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col items-center text-center hover:shadow-md transition-shadow"
-              >
-                <div className={`w-10 h-10 rounded-full ${card.bg} flex items-center justify-center mb-3`}>
-                  <Icon className={`w-5 h-5 ${card.iconColor}`} />
-                </div>
-                <h3 className="text-sm font-semibold text-gray-900">{card.title}</h3>
-                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{card.description}</p>
+      {/* ── SECTION 3: Data Collection Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {DATA_CARDS.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.title} className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col items-center text-center">
+              <div className={`w-10 h-10 rounded-full ${card.bg} flex items-center justify-center mb-2`}>
+                <Icon className={`w-5 h-5 ${card.iconColor}`} />
               </div>
-            );
-          })}
-        </div>
+              <h3 className="text-sm font-medium text-gray-900">{card.title}</h3>
+              <p className="text-xs text-gray-500 mt-1">{card.description}</p>
+            </div>
+          );
+        })}
       </div>
 
-      {/* 3. Data Retention & Deletion */}
-      <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-5">
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Data Retention &amp; Deletion</h2>
-        <div className="space-y-3">
+      {/* ── SECTION 4: Data Retention ── */}
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
+        <h2 className="text-base font-semibold text-gray-900 mb-3">Data Retention & Deletion</h2>
+        <div className="space-y-2.5">
           <div className="flex items-start gap-3">
-            <Clock className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+            <Clock className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-gray-600">
-              All collected data will be retained for a period of <strong className="text-gray-900">90 days</strong> from the date of your interview.
+              Data retained for <strong className="text-gray-900">90 days</strong>, then automatically deleted.
             </p>
           </div>
           <div className="flex items-start gap-3">
-            <Trash2 className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+            <Trash2 className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-gray-600">
-              After the retention period, all personal and biometric data will be <strong className="text-gray-900">automatically and permanently deleted</strong> from our systems.
-            </p>
-          </div>
-          <div className="flex items-start gap-3">
-            <Shield className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-            <p className="text-sm text-gray-600">
-              You have the <strong className="text-gray-900">right to request early deletion</strong> of your data at any time by contacting our data protection team.
+              You may <strong className="text-gray-900">request early deletion</strong> at any time.
             </p>
           </div>
         </div>
       </div>
 
-      {/* 4. Consent Checkboxes */}
+      {/* ── SECTION 5: Consent Checkboxes ── */}
       <div className="bg-white border border-gray-200 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Your Consent</h2>
+          <h2 className="text-base font-semibold text-gray-900">Your Consent</h2>
           <button
             type="button"
             onClick={toggleAll}
-            className="text-sm font-medium text-purple-600 hover:text-purple-700 underline underline-offset-2 transition-colors"
+            className="text-sm font-medium text-gray-600 hover:text-gray-800 underline underline-offset-2 transition-colors"
           >
             {allChecked ? 'Deselect All' : 'Select All'}
           </button>
         </div>
         <div className="space-y-3">
           {CONSENT_ITEMS.map((item) => (
-            <label
-              key={item.key}
-              className="flex items-start gap-3 cursor-pointer group"
-            >
+            <label key={item.key} className="flex items-start gap-3 cursor-pointer group">
               <input
                 type="checkbox"
                 checked={consents[item.key]}
                 onChange={() => toggleConsent(item.key)}
-                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer flex-shrink-0"
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500 cursor-pointer flex-shrink-0"
               />
               <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors select-none">
                 {item.label}
@@ -225,25 +320,39 @@ export default function StepConsent({ onAccept, submitting = false }: StepConsen
             </label>
           ))}
         </div>
+
+        {/* Read full policy link */}
+        <div className="mt-4 pt-3 border-t border-gray-100">
+          <a
+            href="/privacy-policy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Read our Privacy Policy & Terms of Service
+          </a>
+        </div>
       </div>
 
-      {/* 5. Your Rights */}
-      <div className="bg-green-50/50 border border-green-100 rounded-xl p-5">
-        <h2 className="text-lg font-semibold text-gray-900 mb-3">Your Rights</h2>
-        <p className="text-sm text-gray-600 mb-3">
-          Under GDPR and applicable data protection laws, you have the following rights:
-        </p>
-        <ul className="space-y-2">
-          {GDPR_RIGHTS.map((right) => (
-            <li key={right} className="flex items-start gap-2">
-              <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-              <span className="text-sm text-gray-600">{right}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      {/* ── SECTION 6: Your Rights (collapsed) ── */}
+      <details className="bg-gray-50 border border-gray-200 rounded-xl">
+        <summary className="px-5 py-3 cursor-pointer text-sm font-medium text-gray-700 hover:text-gray-900">
+          Your GDPR Rights
+        </summary>
+        <div className="px-5 pb-4">
+          <ul className="space-y-1.5">
+            {GDPR_RIGHTS.map((right) => (
+              <li key={right} className="flex items-start gap-2">
+                <CheckCircle className="w-3.5 h-3.5 text-gray-500 mt-0.5 flex-shrink-0" />
+                <span className="text-sm text-gray-600">{right}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </details>
 
-      {/* 6. Recording Indicator Notice */}
+      {/* ── SECTION 7: Recording Notice ── */}
       <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex items-center gap-3">
         <Circle className="w-4 h-4 text-red-500 flex-shrink-0" />
         <p className="text-sm text-gray-700">
@@ -251,13 +360,13 @@ export default function StepConsent({ onAccept, submitting = false }: StepConsen
         </p>
       </div>
 
-      {/* Accept Button */}
+      {/* ── Accept Button ── */}
       <div className="pt-2 pb-4">
         <button
           type="button"
           onClick={handleSubmit}
           disabled={!allChecked || submitting}
-          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white font-semibold py-3 px-6 rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all shadow-md shadow-purple-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+          className="w-full bg-gray-900 text-white font-semibold py-3 px-6 rounded-xl hover:bg-gray-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
         >
           {submitting ? 'Submitting...' : 'Accept All & Continue'}
         </button>

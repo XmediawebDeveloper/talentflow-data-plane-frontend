@@ -13,7 +13,6 @@ import { InterviewEventBus } from '@/components/ai-interview/proctoring/Intervie
 // Pre-interview step components
 import PreInterviewLayout from '@/components/candidate/PreInterviewLayout';
 import StepConsent from '@/components/candidate/StepConsent';
-import StepJDReview from '@/components/candidate/StepJDReview';
 import StepIdentity from '@/components/candidate/StepIdentity';
 import StepSystemCheck from '@/components/candidate/StepSystemCheck';
 import StepIntroVideo from '@/components/candidate/StepIntroVideo';
@@ -23,7 +22,6 @@ import StepSamplePractice from '@/components/candidate/StepSamplePractice';
 type Step =
   | 'loading'
   | 'consent'
-  | 'jd_review'
   | 'identity'
   | 'system_check'
   | 'intro_video'
@@ -33,19 +31,18 @@ type Step =
   | 'completed'
   | 'error';
 
-// Map pre-interview steps to stepper numbers (1-7)
+// Map pre-interview steps to stepper numbers (1-6)
 const STEP_NUMBER: Record<string, number> = {
   consent: 1,
-  jd_review: 2,
-  identity: 3,
-  system_check: 4,
-  intro_video: 5,
-  language_select: 6,
-  sample_practice: 7,
+  identity: 2,
+  system_check: 3,
+  intro_video: 4,
+  language_select: 5,
+  sample_practice: 6,
 };
 
 const PRE_INTERVIEW_STEPS: Step[] = [
-  'consent', 'jd_review', 'identity', 'system_check',
+  'consent', 'identity', 'system_check',
   'intro_video', 'language_select', 'sample_practice',
 ];
 
@@ -147,7 +144,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     try {
       const result = await candidateAIInterviewService.recordConsent(token, consents);
       setInterview(result);
-      setStep('jd_review');
+      setStep('identity');
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || 'Failed to record consent. Please try again.');
     } finally {
@@ -247,9 +244,9 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== LOADING ==========
   if (step === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50/30 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+          <Loader2 className="w-8 h-8 text-gray-600 animate-spin" />
           <p className="text-sm text-gray-500">Loading interview...</p>
         </div>
       </div>
@@ -259,7 +256,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== ERROR ==========
   if (step === 'error') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50/30 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="max-w-md w-full text-center">
           <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
             <AlertTriangle className="w-8 h-8 text-red-500" />
@@ -268,7 +265,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           <p className="text-sm text-gray-600 mb-6">{errorMessage}</p>
           <button
             onClick={loadInterview}
-            className="inline-flex items-center gap-2 mx-auto px-6 py-2.5 text-sm bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-md shadow-purple-200"
+            className="inline-flex items-center gap-2 mx-auto px-6 py-2.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm"
           >
             <RefreshCw className="w-4 h-4" />
             Retry
@@ -294,7 +291,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // ========== COMPLETED ==========
   if (step === 'completed') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-blue-50/30 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="max-w-md w-full text-center">
           <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 text-green-600" />
@@ -346,23 +343,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     onBack: goBack,
   };
 
-  // Step 1: Consent
+  // Step 1: Job Details & Consent (merged)
   if (step === 'consent' && interview) {
     return (
       <PreInterviewLayout {...layoutProps} showNext={false} showFooter={false}>
         <StepConsent
           onAccept={handleConsentAccept}
           submitting={consentSubmitting}
-        />
-      </PreInterviewLayout>
-    );
-  }
-
-  // Step 2: JD Review
-  if (step === 'jd_review' && interview) {
-    return (
-      <PreInterviewLayout {...layoutProps} onNext={goNext} nextLabel="Continue">
-        <StepJDReview
           position={interview.position}
           jdTitle={interview.jd_title}
           jdExperienceLevel={interview.jd_experience_level}
@@ -376,16 +363,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           jdExperienceMin={interview.jd_experience_min}
           jdExperienceMax={interview.jd_experience_max}
           jdJobLevel={interview.jd_job_level}
-          jdIndustryType={interview.jd_industry_type}
           duration={interview.duration_minutes}
-          totalQuestions={interview.total_questions}
-          interviewType={interview.interview_type}
         />
       </PreInterviewLayout>
     );
   }
 
-  // Step 3: Identity Verification
+  // Step 2: Identity Verification
   if (step === 'identity' && interview) {
     return (
       <PreInterviewLayout {...layoutProps} showNext={false} showFooter={false}>
@@ -400,7 +384,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     );
   }
 
-  // Step 4: System Check (merged device + environment)
+  // Step 3: System Check
   if (step === 'system_check' && interview) {
     return (
       <PreInterviewLayout {...layoutProps} showNext={false} showFooter={false}>

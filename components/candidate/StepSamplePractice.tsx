@@ -281,7 +281,15 @@ export default function StepSamplePractice({
 
   // Auto-speak on mount (after voices load)
   useEffect(() => {
-    if (!window.speechSynthesis) return;
+    // Fallback: if TTS doesn't fire within 3s, show answer area anyway
+    const fallbackTimer = setTimeout(() => {
+      setAiSpoken(true);
+    }, 3000);
+
+    if (!window.speechSynthesis) {
+      setTtsSupported(false);
+      return () => clearTimeout(fallbackTimer);
+    }
 
     // Voices may load asynchronously
     const trySpeak = () => {
@@ -296,13 +304,14 @@ export default function StepSamplePractice({
     if (voices.length > 0) {
       // Small delay so user sees the UI first
       const timer = setTimeout(speakQuestion, 800);
-      return () => clearTimeout(timer);
+      return () => { clearTimeout(timer); clearTimeout(fallbackTimer); };
     }
 
     // Wait for voices to load
     window.speechSynthesis.addEventListener('voiceschanged', trySpeak);
     return () => {
       window.speechSynthesis.removeEventListener('voiceschanged', trySpeak);
+      clearTimeout(fallbackTimer);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -464,7 +473,7 @@ export default function StepSamplePractice({
   const checklistItems = [
     { color: 'bg-green-500', label: 'Microphone', desc: 'Verify audio input is working' },
     { color: 'bg-orange-400', label: 'Recording', desc: 'Ensure voice is captured properly' },
-    { color: 'bg-blue-500', label: 'Interface', desc: 'You understand how to answer questions' },
+    { color: 'bg-gray-500', label: 'Interface', desc: 'You understand how to answer questions' },
   ];
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -473,7 +482,7 @@ export default function StepSamplePractice({
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center space-y-3">
-        <span className="inline-block px-4 py-1.5 rounded-full bg-gradient-to-r from-purple-100 to-blue-100 text-purple-700 text-sm font-medium">
+        <span className="inline-block px-4 py-1.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
           Practice &amp; Final Check
         </span>
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
@@ -489,9 +498,9 @@ export default function StepSamplePractice({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Left Top: Video Preview ─────────────────────────────────── */}
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-5 py-3">
+          <div className="bg-gray-800 px-5 py-3">
             <h3 className="text-white font-semibold text-sm">Your Video Preview</h3>
-            <p className="text-purple-200 text-xs mt-0.5">
+            <p className="text-gray-300 text-xs mt-0.5">
               Make sure you&apos;re visible and well-lit
             </p>
           </div>
@@ -516,7 +525,7 @@ export default function StepSamplePractice({
             </div>
             {/* AI Speaking indicator */}
             {aiSpeaking && (
-              <div className="absolute top-3 left-3 flex items-center gap-2 bg-purple-600/90 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
+              <div className="absolute top-3 left-3 flex items-center gap-2 bg-gray-700/90 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
                 <div className="flex items-center gap-0.5">
                   <span className="w-1 h-3 bg-white rounded-full animate-pulse" />
                   <span className="w-1 h-4 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.15s' }} />
@@ -542,41 +551,41 @@ export default function StepSamplePractice({
 
         {/* ── Right Top: Practice Question ────────────────────────────── */}
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-5 py-3">
+          <div className="bg-gray-800 px-5 py-3">
             <h3 className="text-white font-semibold text-sm">Practice Question</h3>
-            <p className="text-purple-200 text-xs mt-0.5">
+            <p className="text-gray-300 text-xs mt-0.5">
               This won&apos;t be recorded — just a test run
             </p>
           </div>
           <div className="p-5 space-y-4 flex-1 flex flex-col">
             {/* AI interviewer prompt */}
             <div className="flex items-center gap-2 text-sm text-gray-500">
-              <MessageSquare className="w-4 h-4 text-purple-500" />
+              <MessageSquare className="w-4 h-4 text-gray-500" />
               <span>AI Interviewer asks:</span>
               {aiSpeaking && (
-                <span className="inline-flex items-center gap-1 text-xs text-purple-600 font-medium">
+                <span className="inline-flex items-center gap-1 text-xs text-gray-600 font-medium">
                   <span className="flex items-center gap-0.5">
-                    <span className="w-1 h-2 bg-purple-500 rounded-full animate-pulse" />
-                    <span className="w-1 h-3 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.15s' }} />
-                    <span className="w-1 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
+                    <span className="w-1 h-2 bg-gray-500 rounded-full animate-pulse" />
+                    <span className="w-1 h-3 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.15s' }} />
+                    <span className="w-1 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
                   </span>
                   Speaking...
                 </span>
               )}
             </div>
-            <div className="bg-purple-50 border border-purple-100 rounded-lg p-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <p className="text-gray-800 font-medium">
                 &ldquo;{PRACTICE_QUESTION}&rdquo;
               </p>
-              {/* Replay button */}
-              {ttsSupported && !aiSpeaking && aiSpoken && (
+              {/* Play / Replay button */}
+              {ttsSupported && !aiSpeaking && (
                 <button
                   type="button"
                   onClick={speakQuestion}
-                  className="mt-2 inline-flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 font-medium transition-colors"
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-800 font-medium transition-colors"
                 >
                   <Play className="w-3 h-3" />
-                  Replay Question
+                  {aiSpoken ? 'Replay Question' : 'Play Question'}
                 </button>
               )}
             </div>
@@ -586,7 +595,7 @@ export default function StepSamplePractice({
               <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold text-gray-700">Your Answer:</p>
                 {!isListening && !hasAnswer && speechSupported && (
-                  <span className="text-xs text-purple-600 animate-pulse">Your turn to answer!</span>
+                  <span className="text-xs text-gray-600 animate-pulse">Your turn to answer!</span>
                 )}
                 {hasAnswer && (
                   <button
@@ -609,7 +618,7 @@ export default function StepSamplePractice({
                     {[0, 1, 2, 3, 4].map((i) => (
                       <span
                         key={i}
-                        className="w-1.5 h-6 bg-purple-400 rounded-full animate-pulse"
+                        className="w-1.5 h-6 bg-gray-400 rounded-full animate-pulse"
                         style={{ animationDelay: `${i * 0.12}s`, animationDuration: '0.8s' }}
                       />
                     ))}
@@ -635,7 +644,7 @@ export default function StepSamplePractice({
                         ? 'Listening... speak now and your words will appear here'
                         : 'Click "Start Speaking" below or type your answer here...'
                     }
-                    className={`w-full h-full min-h-[80px] border rounded-lg p-3 text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-colors ${
+                    className={`w-full h-full min-h-[80px] border rounded-lg p-3 text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-colors ${
                       isListening
                         ? 'border-red-300 bg-red-50/30'
                         : 'border-gray-300 bg-white'
@@ -664,7 +673,7 @@ export default function StepSamplePractice({
                       className={`flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
                         isListening
                           ? 'bg-red-500 text-white hover:bg-red-600 shadow-md shadow-red-200'
-                          : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700 shadow-md shadow-purple-200'
+                          : 'bg-gray-900 text-white hover:bg-gray-800 shadow-md shadow-gray-200'
                       }`}
                     >
                       {isListening ? (
@@ -693,8 +702,8 @@ export default function StepSamplePractice({
             )}
 
             {/* Tip — always visible */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-auto">
-              <p className="text-xs text-blue-700 leading-relaxed">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-auto">
+              <p className="text-xs text-gray-700 leading-relaxed">
                 <span className="font-semibold">Tip:</span> During the actual interview,
                 the AI will speak each question aloud and transcribe your spoken
                 response in real-time using our own AI transcription.
@@ -736,7 +745,7 @@ export default function StepSamplePractice({
           </div>
 
           {/* What We're Testing */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5 border-l-4 border-l-purple-500">
+          <div className="bg-white border border-gray-200 rounded-xl p-5 border-l-4 border-l-gray-500">
             <h4 className="text-sm font-semibold text-gray-900 mb-3">
               What We&apos;re Testing
             </h4>
@@ -759,7 +768,7 @@ export default function StepSamplePractice({
         {/* ── Right Bottom: Selected Language ─────────────────────────── */}
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
-            <Globe className="w-4 h-4 text-purple-500" />
+            <Globe className="w-4 h-4 text-gray-500" />
             <h4 className="text-sm font-semibold text-gray-900">
               Selected Language
             </h4>
@@ -788,7 +797,7 @@ export default function StepSamplePractice({
           type="button"
           onClick={onStartInterview}
           disabled={submitting}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-md"
+          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-sm"
         >
           {submitting ? (
             <>

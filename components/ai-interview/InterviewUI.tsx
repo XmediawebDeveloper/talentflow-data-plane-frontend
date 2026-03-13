@@ -673,16 +673,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             if (wsRef.current?.readyState === WebSocket.OPEN) {
               startRecordingInternal();
             }
-          }, 600);
+          }, 150);
         });
         break;
       case "audio_end":
         // Backend finished SENDING audio — but TalkingHead may still be PLAYING it.
         // Do NOT call streamStop() here — that kills playback immediately.
-        // Just reveal all text; TalkingHead's onAudioEnd callback handles the transition.
+        // Signal worklet that no more chunks are coming — it will fire playback-ended
+        // after playing the remaining buffer (instead of waiting for 300ms silence timeout).
         setIsProcessing(false);
         audioEndReceivedRef.current = true;
         revealAllTokens();
+        talkingHeadRef.current?.notifyEnd();
         break;
       case "processing":
         setIsProcessing(true);

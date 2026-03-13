@@ -650,6 +650,41 @@ export default function AIInterviewClusters() {
   };
 
   /* ── Save & Navigate ── */
+  /** Build updated rounds_config with topics/topic_weights from clusters */
+  const buildUpdatedRoundsConfig = () => {
+    // Priority 1-5 → weight (higher priority = higher weight for time allocation)
+    const PRIORITY_WEIGHT: Record<number, number> = { 5: 60, 4: 50, 3: 40, 2: 30, 1: 20 };
+    const rounds = [...(config?.rounds_config ?? [])];
+
+    // Update must-have round with mth cluster topics
+    const mthIdx = rounds.findIndex(
+      (r: any) => r.type === 'must_have_skills' || r.type === 'must_have'
+    );
+    if (mthIdx >= 0 && mthClusters.length > 0) {
+      const topics = mthClusters.map((c) => c.name);
+      const topic_weights: Record<string, number> = {};
+      mthClusters.forEach((c) => {
+        topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40;
+      });
+      rounds[mthIdx] = { ...rounds[mthIdx], topics, topic_weights };
+    }
+
+    // Update nice-to-have round with nth cluster topics
+    const nthIdx = rounds.findIndex(
+      (r: any) => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have'
+    );
+    if (nthIdx >= 0 && nthClusters.length > 0) {
+      const topics = nthClusters.map((c) => c.name);
+      const topic_weights: Record<string, number> = {};
+      nthClusters.forEach((c) => {
+        topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40;
+      });
+      rounds[nthIdx] = { ...rounds[nthIdx], topics, topic_weights };
+    }
+
+    return rounds;
+  };
+
   const saveAndNavigate = async (target: string) => {
     if (!config || !id) return;
     setSaving(true);
@@ -659,6 +694,7 @@ export default function AIInterviewClusters() {
       si.nth_clusters = nthClusters;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
+        rounds_config: buildUpdatedRoundsConfig(),
       });
       router.push(target);
     } catch {
@@ -690,6 +726,7 @@ export default function AIInterviewClusters() {
       si.nth_clusters = nthClusters;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
+        rounds_config: buildUpdatedRoundsConfig(),
       });
       toast.success('Draft saved!');
       router.push('/recruitment/ai-interviews');
@@ -741,12 +778,12 @@ export default function AIInterviewClusters() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        {/* ── Top bar ── */}
-        <div className="bg-white border-b border-gray-200">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5">
+      <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        <div className="w-full">
+          {/* Header */}
+          <div className="mb-6">
             {/* Step indicator */}
-            <div className="flex items-center gap-2 mb-8">
+            <div className="flex items-center gap-2 mb-6">
               {STEPS.map((label, i) => {
                 const stepNum = i + 1;
                 const isCompleted = stepNum < CURRENT_STEP;
@@ -797,7 +834,7 @@ export default function AIInterviewClusters() {
               <button
                 onClick={handleGenerateClusters}
                 disabled={generating || saving}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {generating ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -808,15 +845,14 @@ export default function AIInterviewClusters() {
               </button>
             </div>
           </div>
-        </div>
 
-        {/* ── Main content ── */}
-        <div className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 space-y-6 pb-24">
+          {/* ── Main content ── */}
+          <div className="space-y-6 pb-24">
           {/* Generating overlay within content area */}
           {generating && (
             <div className="flex items-center justify-center py-16">
               <div className="flex flex-col items-center gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+                <Loader2 className="w-8 h-8 animate-spin text-gray-500" />
                 <p className="text-sm text-gray-500">AI is analyzing skills and generating clusters...</p>
               </div>
             </div>
@@ -864,8 +900,9 @@ export default function AIInterviewClusters() {
         </div>
 
         {/* ── Sticky footer ── */}
+        </div>
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+          <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <button
                 onClick={handleBack}

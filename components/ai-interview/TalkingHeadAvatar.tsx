@@ -24,6 +24,8 @@ export interface TalkingHeadHandle {
   streamStart(sampleRate: number, onAudioEnd: () => void): void;
   streamAudio(pcmData: ArrayBuffer): void;
   streamStop(): void;
+  /** Signal that no more audio chunks will arrive — worklet plays remaining buffer then ends */
+  notifyEnd(): void;
   /** Feed accumulated text so word-level visemes can be generated from audio timing */
   setText(text: string): void;
 }
@@ -409,10 +411,8 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
                 const isSpeaking = rawAmp > 0.005;
 
                 if (isSpeaking) {
-                  // Mark exact moment audio playback begins
-                  if (speechStartRef.current === null) {
-                    speechStartRef.current = performance.now();
-                  }
+                  // speechStart is anchored to first audio chunk in sendAudioChunk()
+                  // — NOT amplitude detection, which lags 50-100ms behind actual playback
 
                   const elapsed = performance.now() - speechStartRef.current;
                   const tl = visemeTimelineRef.current;
@@ -494,6 +494,10 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       if (!head) return;
       // Int16 samples @ 24kHz → ms
       totalAudioMsRef.current += (pcmData.byteLength / 2 / 24000) * 1000;
+      // Anchor lip sync timeline to first audio chunk arrival (not amplitude detection)
+      if (speechStartRef.current === null) {
+        speechStartRef.current = performance.now();
+      }
       head.streamAudio({ audio: pcmData });
     };
 
@@ -562,6 +566,11 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           return;
         }
         sendAudioChunk(pcmData);
+      },
+
+      notifyEnd() {
+        const head = headRef.current;
+        if (head) head.streamNotifyEnd();
       },
 
       setText(text: string) {

@@ -220,7 +220,7 @@ export default function AIInterviewPreview() {
             {/* Confetti dots */}
             <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
             <span className="absolute w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
-            <span className="absolute w-2 h-2 rounded-full bg-purple-400 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
+            <span className="absolute w-2 h-2 rounded-full bg-gray-400 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
             <span className="absolute w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping" style={{ bottom: 8, right: 6, animationDelay: '0.6s' }} />
             <span className="absolute w-1 h-1 rounded-full bg-pink-400 animate-ping" style={{ top: 2, right: 14, animationDelay: '0.3s' }} />
 
@@ -283,7 +283,7 @@ export default function AIInterviewPreview() {
 
   /* ───────────── Preview mode ───────────── */
   return (
-    <div className="max-w-4xl mx-auto pb-28">
+    <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto"><div className="w-full pb-28">
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-8">
         {STEPS.map((label, i) => {
@@ -331,7 +331,7 @@ export default function AIInterviewPreview() {
       <div className="space-y-5">
         {/* ── JD Info Card ── */}
         <div className="rounded-xl overflow-hidden border border-gray-200">
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-5 py-4">
+          <div className="bg-gray-800 px-5 py-4">
             <div className="flex items-center gap-2 mb-1">
               <FileText className="w-4 h-4 text-white/80" />
               <span className="text-xs font-medium text-white/80 uppercase tracking-wide">Job Description</span>
@@ -361,8 +361,8 @@ export default function AIInterviewPreview() {
           <div className="flex items-center gap-3">
             {mode === 'fixed' ? (
               <>
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <Timer className="w-5 h-5 text-purple-600" />
+                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
+                  <Timer className="w-5 h-5 text-gray-600" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Fixed — {duration} min</p>
@@ -394,7 +394,7 @@ export default function AIInterviewPreview() {
                 </div>
                 <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-purple-500 rounded-full transition-all"
+                    className="h-full bg-gray-700 rounded-full transition-all"
                     style={{ width: `${totalPercentage > 0 ? (mthRound.percentage / totalPercentage) * 100 : 0}%` }}
                   />
                 </div>
@@ -611,7 +611,7 @@ export default function AIInterviewPreview() {
 
       {/* ── Sticky Footer ── */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
               onClick={goBack}
@@ -666,6 +666,7 @@ export default function AIInterviewPreview() {
         cancelText="Cancel"
         variant="info"
       />
+    </div>
     </div>
   );
 }

@@ -213,7 +213,7 @@ export default function StepSystemCheck({
         detail: 'Checking device...',
         icon: <Monitor className="w-4 h-4" />,
         status: 'checking',
-        colorClass: 'text-blue-600',
+        colorClass: 'text-gray-600',
       },
       {
         id: 'webcam',
@@ -221,7 +221,7 @@ export default function StepSystemCheck({
         detail: 'Checking webcam...',
         icon: <Camera className="w-4 h-4" />,
         status: 'pending',
-        colorClass: 'text-purple-600',
+        colorClass: 'text-gray-600',
       },
       {
         id: 'microphone',
@@ -688,7 +688,7 @@ export default function StepSystemCheck({
 
         {/* Heading */}
         <div className="text-center">
-          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
             Device Requirement Verification
           </h1>
           <p className="text-gray-600 mt-2">
@@ -698,12 +698,12 @@ export default function StepSystemCheck({
 
         {/* Gradient header card */}
         <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gradient-to-r from-blue-600 to-teal-500 px-6 py-5 rounded-t-xl">
+          <div className="bg-gray-800 px-6 py-5 rounded-t-xl">
             <div className="flex items-center gap-2 text-white mb-1">
               <Monitor className="w-5 h-5" />
               <h2 className="text-lg font-semibold">System Requirements Check</h2>
             </div>
-            <p className="text-blue-100 text-sm">
+            <p className="text-gray-300 text-sm">
               Verifying device and browser compatibility for{' '}
               <span className="font-medium text-white">{position}</span>
             </p>
@@ -711,14 +711,14 @@ export default function StepSystemCheck({
 
           {/* Card body: Loading */}
           <div className="bg-white rounded-b-xl p-8 flex flex-col items-center justify-center min-h-[200px] space-y-4">
-            <div className="bg-blue-100 rounded-full p-3">
-              <Zap className="w-8 h-8 text-blue-600" />
+            <div className="bg-gray-100 rounded-full p-3">
+              <Zap className="w-8 h-8 text-gray-600" />
             </div>
             <p className="text-lg font-semibold text-gray-900">Checking Device Requirements...</p>
             <div className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
           </div>
         </div>
@@ -742,7 +742,7 @@ export default function StepSystemCheck({
 
         {/* Heading */}
         <div className="text-center">
-          <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
             Device Requirement Verification
           </h1>
           <p className="text-gray-600 mt-2">
@@ -752,12 +752,12 @@ export default function StepSystemCheck({
 
         {/* Gradient header card */}
         <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gradient-to-r from-blue-600 to-teal-500 px-6 py-5 rounded-t-xl">
+          <div className="bg-gray-800 px-6 py-5 rounded-t-xl">
             <div className="flex items-center gap-2 text-white mb-1">
               <Monitor className="w-5 h-5" />
               <h2 className="text-lg font-semibold">System Requirements Check</h2>
             </div>
-            <p className="text-blue-100 text-sm">
+            <p className="text-gray-300 text-sm">
               Verifying device and browser compatibility for{' '}
               <span className="font-medium text-white">{position}</span>
             </p>
@@ -781,8 +781,8 @@ export default function StepSystemCheck({
             {/* Device Type card */}
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Monitor className="w-5 h-5 text-purple-600" />
+                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Monitor className="w-5 h-5 text-gray-600" />
                 </div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-gray-900">Device Type</h3>
@@ -812,8 +812,8 @@ export default function StepSystemCheck({
             {/* Browser Compatibility card */}
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Globe className="w-5 h-5 text-purple-600" />
+                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Globe className="w-5 h-5 text-gray-600" />
                 </div>
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-gray-900">Browser Compatibility</h3>
@@ -901,7 +901,7 @@ export default function StepSystemCheck({
             <button
               type="button"
               onClick={() => setPhase('system_checks')}
-              className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-teal-500 text-white font-semibold py-3 px-6 rounded-lg hover:from-green-600 hover:to-teal-600 transition-all text-sm"
+              className="w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg hover:bg-gray-800 transition-all text-sm"
             >
               Continue to System Checks
               <ArrowRight className="w-4 h-4" />
@@ -928,7 +928,7 @@ export default function StepSystemCheck({
 
         {/* Gradient header */}
         <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gradient-to-r from-green-500 to-teal-500 px-6 py-5 rounded-t-xl">
+          <div className="bg-gray-900 px-6 py-5 rounded-t-xl">
             <div className="flex items-center gap-2 text-white mb-1">
               {isAnyChecking ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -951,7 +951,7 @@ export default function StepSystemCheck({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Left column: Camera Preview */}
               <div className="rounded-xl overflow-hidden border border-gray-200">
-                <div className="bg-gradient-to-r from-green-500 to-teal-500 px-4 py-3 flex items-center gap-2">
+                <div className="bg-gray-900 px-4 py-3 flex items-center gap-2">
                   <CircleDot className="w-4 h-4 text-white" />
                   <h3 className="text-sm font-semibold text-white">Camera Preview</h3>
                 </div>
@@ -1077,7 +1077,7 @@ export default function StepSystemCheck({
                 disabled={!allSystemPassed}
                 className={`w-full inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg text-sm transition-all ${
                   allSystemPassed
-                    ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white hover:from-green-600 hover:to-teal-600 cursor-pointer'
+                    ? 'bg-gray-900 text-white hover:bg-gray-800 cursor-pointer'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
               >

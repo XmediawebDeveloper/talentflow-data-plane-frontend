@@ -206,9 +206,9 @@ export default function StepIdentity({
 
   const whyWeNeedThisCard = (
     <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 bg-purple-50">
-        <Shield className="w-4 h-4 text-purple-600" />
-        <h4 className="text-sm font-semibold text-purple-900">Why We Need This</h4>
+      <div className="flex items-center gap-2 px-4 py-3 bg-gray-100">
+        <Shield className="w-4 h-4 text-gray-600" />
+        <h4 className="text-sm font-semibold text-gray-900">Why We Need This</h4>
       </div>
       <ul className="px-4 py-3 space-y-2">
         {[
@@ -252,12 +252,12 @@ export default function StepIdentity({
 
         {/* Gradient header card */}
         <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-5 rounded-t-xl">
+          <div className="bg-gray-800 px-6 py-5 rounded-t-xl">
             <div className="flex items-center gap-2 text-white mb-1">
               <Shield className="w-5 h-5" />
               <h2 className="text-lg font-semibold">Verify Your Identity</h2>
             </div>
-            <p className="text-purple-100 text-sm">
+            <p className="text-gray-300 text-sm">
               Please provide the following information to continue with your interview for{' '}
               <span className="font-medium text-white">{position}</span>
             </p>
@@ -266,26 +266,26 @@ export default function StepIdentity({
           {/* Card body */}
           <div className="bg-white rounded-b-xl p-6 space-y-6">
             {/* Important Instructions */}
-            <div className="border-l-4 border-purple-500 bg-purple-50/50 rounded-r-lg p-4">
+            <div className="border-l-4 border-gray-400 bg-gray-50 rounded-r-lg p-4">
               <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                  <AlertCircle className="w-4 h-4 text-purple-600" />
+                <div className="flex-shrink-0 w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                  <AlertCircle className="w-4 h-4 text-gray-600" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-purple-900 mb-2">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">
                     Important Instructions
                   </h3>
-                  <ul className="space-y-1.5 text-sm text-purple-800">
+                  <ul className="space-y-1.5 text-sm text-gray-700">
                     <li className="flex items-start gap-2">
-                      <span className="text-purple-400 mt-1">&#8226;</span>
+                      <span className="text-gray-400 mt-1">&#8226;</span>
                       Enter your name exactly as it appears on your government ID
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="text-purple-400 mt-1">&#8226;</span>
+                      <span className="text-gray-400 mt-1">&#8226;</span>
                       Provide a valid email address for interview notifications
                     </li>
                     <li className="flex items-start gap-2">
-                      <span className="text-purple-400 mt-1">&#8226;</span>
+                      <span className="text-gray-400 mt-1">&#8226;</span>
                       This information will be used for identity verification purposes
                     </li>
                   </ul>
@@ -305,7 +305,7 @@ export default function StepIdentity({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Example: John Michael Smith"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors"
               />
             </div>
 
@@ -322,7 +322,7 @@ export default function StepIdentity({
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Example: john.smith@example.com"
                 readOnly={!!candidateEmail}
-                className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors ${
+                className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors ${
                   candidateEmail ? 'bg-gray-50 cursor-not-allowed' : ''
                 }`}
               />
@@ -345,7 +345,7 @@ export default function StepIdentity({
             type="button"
             onClick={handleFormSubmit}
             disabled={!isFormValid || submitting}
-            className="inline-flex items-center gap-2 bg-purple-600 text-white font-semibold py-2.5 px-6 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className="inline-flex items-center gap-2 bg-gray-900 text-white font-semibold py-2.5 px-6 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             {submitting ? (
               <>
@@ -397,7 +397,7 @@ export default function StepIdentity({
             type="button"
             onClick={handleStartLiveness}
             disabled={cameraError}
-            className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-teal-500 text-white font-semibold py-3 px-6 rounded-lg hover:from-green-600 hover:to-teal-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className="w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             Start Liveness Check &rarr;
           </button>
@@ -492,12 +492,12 @@ export default function StepIdentity({
 
         {/* Gradient header + card */}
         <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gradient-to-r from-purple-600 to-blue-600 px-6 py-5 rounded-t-xl">
+          <div className="bg-gray-800 px-6 py-5 rounded-t-xl">
             <div className="flex items-center gap-2 text-white mb-1">
               <Shield className="w-5 h-5" />
               <h2 className="text-lg font-semibold">Live Identity Verification</h2>
             </div>
-            <p className="text-purple-100 text-sm">
+            <p className="text-gray-300 text-sm">
               Secure identity validation for{' '}
               <span className="font-medium text-white">{position}</span>
             </p>

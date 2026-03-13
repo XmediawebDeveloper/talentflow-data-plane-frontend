@@ -22,7 +22,7 @@ export default function StepLanguageSelect({
     <div className="w-full max-w-2xl mx-auto space-y-6">
       {/* Blue pill badge */}
       <div className="text-center space-y-3">
-        <span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full">
+        <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 text-xs font-semibold px-3 py-1 rounded-full">
           <Globe className="w-3.5 h-3.5" />
           Language Selection
         </span>
@@ -40,11 +40,11 @@ export default function StepLanguageSelect({
 
       {/* Card with blue gradient header */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-        <div className="bg-gradient-to-r from-blue-600 to-blue-500 px-6 py-4 flex items-center gap-3">
+        <div className="bg-gray-800 px-6 py-4 flex items-center gap-3">
           <MessageSquare className="w-5 h-5 text-white" />
           <div>
             <h3 className="text-white font-semibold">Interview Language</h3>
-            <p className="text-blue-100 text-xs">
+            <p className="text-gray-300 text-xs">
               Select the language you are most comfortable with
             </p>
           </div>
@@ -62,16 +62,16 @@ export default function StepLanguageSelect({
                   onClick={() => onSelectLanguage(lang)}
                   className={`relative border rounded-xl p-6 text-center transition-all ${
                     isSelected
-                      ? 'border-blue-500 bg-blue-50 shadow-sm'
-                      : 'border-gray-200 bg-white hover:border-blue-300'
+                      ? 'border-gray-800 bg-gray-50 shadow-sm'
+                      : 'border-gray-200 bg-white hover:border-gray-400'
                   }`}
                 >
                   {isSelected && (
-                    <CheckCircle className="w-5 h-5 text-blue-600 absolute top-2 right-2" />
+                    <CheckCircle className="w-5 h-5 text-gray-600 absolute top-2 right-2" />
                   )}
                   <span
                     className={`text-sm font-medium ${
-                      isSelected ? 'text-blue-700' : 'text-gray-700'
+                      isSelected ? 'text-gray-700' : 'text-gray-700'
                     }`}
                   >
                     {lang}
@@ -89,8 +89,8 @@ export default function StepLanguageSelect({
       </div>
 
       {/* Note */}
-      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
-        <p className="text-sm text-blue-700">
+      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <p className="text-sm text-gray-700">
           <span className="font-medium">Note:</span> The AI interviewer will
           conduct the entire interview in your selected language. You can change
           this before starting.
@@ -103,7 +103,7 @@ export default function StepLanguageSelect({
           type="button"
           onClick={onContinue}
           disabled={submitting}
-          className="px-8 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 text-white text-sm font-medium hover:from-blue-700 hover:to-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
+          className="px-8 py-3 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
         >
           {submitting ? 'Loading...' : 'Continue'}
           {!submitting && <ChevronRight className="w-4 h-4" />}

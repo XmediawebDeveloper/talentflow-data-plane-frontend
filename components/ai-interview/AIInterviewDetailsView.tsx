@@ -6,6 +6,7 @@ import {
   ArrowLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, Brain, Sparkles,
+  ExternalLink, Layers,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -59,6 +60,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
   const enabledRounds = useMemo(() => {
     return config.rounds_config?.filter((r) => r.enabled !== false) || [];
   }, [config.rounds_config]);
+
+  // Parse clusters from special_instructions
+  const { mthClusters, nthClusters } = useMemo(() => {
+    try {
+      const si = JSON.parse(config.special_instructions || '{}');
+      return {
+        mthClusters: (si.mth_clusters || []) as { id: string; name: string; priority: number; skills: string[]; reason?: string }[],
+        nthClusters: (si.nth_clusters || []) as { id: string; name: string; priority: number; skills: string[]; reason?: string }[],
+      };
+    } catch {
+      return { mthClusters: [], nthClusters: [] };
+    }
+  }, [config.special_instructions]);
 
   const formattedDuration = useMemo(() => {
     const mins = config.duration_minutes;
@@ -452,6 +466,125 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                   </div>
                 );
               })()}
+
+              {/* Generated Clusters */}
+              {(mthClusters.length > 0 || nthClusters.length > 0) && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-gray-600" />
+                      <h3 className="text-sm font-medium text-gray-900">Generated Clusters</h3>
+                      <span className="text-xs text-gray-400">({mthClusters.length + nthClusters.length} total)</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const clusterData = { mthClusters, nthClusters, title: config.jd_title || config.position || 'AI Interview' };
+                        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Clusters - ${clusterData.title}</title><style>
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:900px;margin:0 auto;padding:2rem;background:#f9fafb;color:#111827}
+h1{font-size:1.5rem;font-weight:700;margin-bottom:.5rem}
+h2{font-size:1.1rem;font-weight:600;margin:1.5rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid #e5e7eb}
+.cluster{border:1px solid #e5e7eb;border-radius:.75rem;padding:1rem;margin-bottom:.75rem;background:#fff}
+.cluster-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem}
+.cluster-name{font-weight:600;font-size:.95rem}
+.priority{padding:2px 8px;border-radius:9999px;font-size:.7rem;font-weight:500}
+.p5{background:#fee2e2;color:#b91c1c}.p4{background:#ffedd5;color:#c2410c}.p3{background:#fef9c3;color:#a16207}.p2{background:#dbeafe;color:#1d4ed8}.p1{background:#f3f4f6;color:#4b5563}
+.skills{display:flex;flex-wrap:wrap;gap:.375rem;margin-top:.5rem}
+.skill{padding:2px 10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:9999px;font-size:.8rem;color:#374151}
+.reason{font-size:.8rem;color:#6b7280;margin-top:.5rem;font-style:italic}
+.subtitle{font-size:.875rem;color:#6b7280;margin-bottom:1.5rem}
+</style></head><body>
+<h1>Clusters - ${clusterData.title}</h1>
+<p class="subtitle">Generated skill clusters for interview assessment</p>
+${mthClusters.length > 0 ? `<h2>Must-Have Skills (${mthClusters.length} clusters)</h2>${mthClusters.map(c => `<div class="cluster"><div class="cluster-header"><span class="cluster-name">${c.name}</span><span class="priority p${c.priority}">P${c.priority}</span></div><div class="skills">${c.skills.map(s => `<span class="skill">${s}</span>`).join('')}</div>${c.reason ? `<div class="reason">${c.reason}</div>` : ''}</div>`).join('')}` : ''}
+${nthClusters.length > 0 ? `<h2>Nice-to-Have Skills (${nthClusters.length} clusters)</h2>${nthClusters.map(c => `<div class="cluster"><div class="cluster-header"><span class="cluster-name">${c.name}</span><span class="priority p${c.priority}">P${c.priority}</span></div><div class="skills">${c.skills.map(s => `<span class="skill">${s}</span>`).join('')}</div>${c.reason ? `<div class="reason">${c.reason}</div>` : ''}</div>`).join('')}` : ''}
+</body></html>`;
+                        const blob = new Blob([html], { type: 'text/html' });
+                        const url = URL.createObjectURL(blob);
+                        window.open(url, '_blank');
+                        setTimeout(() => URL.revokeObjectURL(url), 5000);
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      View in New Tab
+                    </button>
+                  </div>
+
+                  {/* Must-Have Clusters */}
+                  {mthClusters.length > 0 && (
+                    <div className="mb-4">
+                      <div className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Must-Have Skills</div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {mthClusters.map((cluster) => {
+                          const pConfig: Record<number, { label: string; color: string }> = {
+                            5: { label: 'P5 Critical', color: 'bg-red-100 text-red-700' },
+                            4: { label: 'P4 High', color: 'bg-orange-100 text-orange-700' },
+                            3: { label: 'P3 Medium', color: 'bg-yellow-100 text-yellow-700' },
+                            2: { label: 'P2 Low', color: 'bg-blue-100 text-blue-700' },
+                            1: { label: 'P1 Optional', color: 'bg-gray-100 text-gray-600' },
+                          };
+                          const p = pConfig[cluster.priority] || pConfig[3];
+                          return (
+                            <div key={cluster.id} className="border border-gray-200 rounded-lg p-3 bg-white">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium text-sm text-gray-900">{cluster.name}</span>
+                                <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${p.color}`}>{p.label}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {cluster.skills.map((skill) => (
+                                  <span key={skill} className="px-2 py-0.5 bg-gray-50 text-gray-600 text-xs rounded-full border border-gray-200">
+                                    {skill}
+                                  </span>
+                                ))}
+                              </div>
+                              {cluster.reason && (
+                                <p className="text-xs text-gray-400 mt-2 italic">{cluster.reason}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Nice-to-Have Clusters */}
+                  {nthClusters.length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Nice-to-Have Skills</div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {nthClusters.map((cluster) => {
+                          const pConfig: Record<number, { label: string; color: string }> = {
+                            5: { label: 'P5 Critical', color: 'bg-red-100 text-red-700' },
+                            4: { label: 'P4 High', color: 'bg-orange-100 text-orange-700' },
+                            3: { label: 'P3 Medium', color: 'bg-yellow-100 text-yellow-700' },
+                            2: { label: 'P2 Low', color: 'bg-blue-100 text-blue-700' },
+                            1: { label: 'P1 Optional', color: 'bg-gray-100 text-gray-600' },
+                          };
+                          const p = pConfig[cluster.priority] || pConfig[3];
+                          return (
+                            <div key={cluster.id} className="border border-gray-200 rounded-lg p-3 bg-white">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium text-sm text-gray-900">{cluster.name}</span>
+                                <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${p.color}`}>{p.label}</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {cluster.skills.map((skill) => (
+                                  <span key={skill} className="px-2 py-0.5 bg-gray-50 text-gray-600 text-xs rounded-full border border-gray-200">
+                                    {skill}
+                                  </span>
+                                ))}
+                              </div>
+                              {cluster.reason && (
+                                <p className="text-xs text-gray-400 mt-2 italic">{cluster.reason}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Invitation Stats */}
               <div>

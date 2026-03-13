@@ -938,38 +938,42 @@ export default function AIInterviewConfig() {
       return;
     }
 
-    // 2. Generate clusters via API
-    setGeneratingClusters(true);
-    try {
-      const result = await aiInterviewService.generateClusters(
-        mth.skills.map(s => s.name),
-        nth.enabled ? nth.skills.map(s => s.name) : [],
-        selectedJd.title,
-        selectedJd.description,
-        fixedMthMin,
-        nth.enabled ? fixedNthMin : 0,
-      );
+    // 2. Generate clusters via API — only if none exist yet
+    const hasExistingClusters = (mth.clusters && mth.clusters.length > 0) || (nth.clusters && nth.clusters.length > 0);
 
-      // Save generated clusters to the draft
-      const siObj = JSON.parse(buildClusterJson());
-      siObj.mth_clusters = result.mth_clusters.map(c => ({
-        ...c,
-        priority: c.priority as Cluster['priority'],
-        reason: c.reason || '',
-      }));
-      siObj.nth_clusters = result.nth_clusters.map(c => ({
-        ...c,
-        priority: c.priority as Cluster['priority'],
-        reason: c.reason || '',
-      }));
-      await aiInterviewService.update(existingDraftIdRef.current, {
-        special_instructions: JSON.stringify(siObj),
-      });
-    } catch {
-      // Clusters generation failed — still navigate, user can generate on clusters page
-      console.warn('Cluster generation failed, navigating without pre-generated clusters');
-    } finally {
-      setGeneratingClusters(false);
+    if (!hasExistingClusters) {
+      setGeneratingClusters(true);
+      try {
+        const result = await aiInterviewService.generateClusters(
+          mth.skills.map(s => s.name),
+          nth.enabled ? nth.skills.map(s => s.name) : [],
+          selectedJd.title,
+          selectedJd.description,
+          fixedMthMin,
+          nth.enabled ? fixedNthMin : 0,
+        );
+
+        // Save generated clusters to the draft
+        const siObj = JSON.parse(buildClusterJson());
+        siObj.mth_clusters = result.mth_clusters.map(c => ({
+          ...c,
+          priority: c.priority as Cluster['priority'],
+          reason: c.reason || '',
+        }));
+        siObj.nth_clusters = result.nth_clusters.map(c => ({
+          ...c,
+          priority: c.priority as Cluster['priority'],
+          reason: c.reason || '',
+        }));
+        await aiInterviewService.update(existingDraftIdRef.current, {
+          special_instructions: JSON.stringify(siObj),
+        });
+      } catch {
+        // Clusters generation failed — still navigate, user can generate on clusters page
+        console.warn('Cluster generation failed, navigating without pre-generated clusters');
+      } finally {
+        setGeneratingClusters(false);
+      }
     }
 
     // 3. Navigate to clusters page
@@ -1028,7 +1032,7 @@ export default function AIInterviewConfig() {
 
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-      <div className="w-full max-w-6xl mx-auto">
+      <div className="w-full">
 
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">

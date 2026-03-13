@@ -4,8 +4,7 @@ import React from 'react';
 import { CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const STEP_LABELS = [
-  'Consent',
-  'Job Details',
+  'Job Details & Consent',
   'Identity',
   'System Check',
   'Intro Video',
@@ -31,7 +30,7 @@ interface PreInterviewLayoutProps {
 
 export default function PreInterviewLayout({
   currentStep,
-  totalSteps = 7,
+  totalSteps = 6,
   position,
   duration,
   children,
@@ -48,9 +47,9 @@ export default function PreInterviewLayout({
   const steps = STEP_LABELS.slice(0, totalSteps);
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
+    <div className="flex min-h-screen flex-col bg-gray-50">
       {/* Progress Stepper */}
-      <nav className="bg-white/80 backdrop-blur-sm px-4 py-5 sm:px-6 sm:py-6">
+      <nav className="bg-white/90 backdrop-blur-sm border-b border-gray-200 px-4 py-5 sm:px-6 sm:py-6">
         <div className="mx-auto max-w-3xl">
           <div className="flex items-center justify-between">
             {steps.map((label, index) => {
@@ -65,14 +64,14 @@ export default function PreInterviewLayout({
                     {/* Dot */}
                     <div className="relative flex items-center justify-center">
                       {isCompleted && (
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-purple-600 to-blue-600 shadow-md shadow-purple-200 sm:h-8 sm:w-8">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-800 shadow-sm sm:h-8 sm:w-8">
                           <CheckCircle className="h-4 w-4 text-white sm:h-5 sm:w-5" />
                         </div>
                       )}
                       {isCurrent && (
                         <div className="relative flex items-center justify-center">
-                          <span className="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-purple-400 opacity-25 sm:h-11 sm:w-11" />
-                          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-purple-600 to-blue-600 shadow-lg shadow-purple-300 sm:h-10 sm:w-10">
+                          <span className="absolute inline-flex h-10 w-10 animate-ping rounded-full bg-gray-400 opacity-20 sm:h-11 sm:w-11" />
+                          <div className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 shadow-md shadow-gray-300 sm:h-10 sm:w-10">
                             <span className="text-xs font-bold text-white sm:text-sm">
                               {stepNumber}
                             </span>
@@ -91,9 +90,9 @@ export default function PreInterviewLayout({
                     <span
                       className={`hidden text-center text-[11px] leading-tight sm:block ${
                         isCurrent
-                          ? 'font-semibold bg-gradient-to-r from-purple-700 to-blue-700 bg-clip-text text-transparent'
+                          ? 'font-semibold text-gray-900'
                           : isCompleted
-                            ? 'font-medium text-purple-600'
+                            ? 'font-medium text-gray-700'
                             : 'text-gray-400'
                       }`}
                     >
@@ -106,7 +105,7 @@ export default function PreInterviewLayout({
                     <div
                       className={`mx-1 h-0.5 flex-1 rounded-full sm:mx-2 ${
                         stepNumber < currentStep
-                          ? 'bg-gradient-to-r from-purple-500 to-blue-500'
+                          ? 'bg-gray-700'
                           : 'bg-gray-200'
                       }`}
                     />
@@ -147,7 +146,7 @@ export default function PreInterviewLayout({
                   type="button"
                   onClick={onNext}
                   disabled={nextDisabled}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-purple-200 transition-all hover:from-blue-700 hover:to-purple-700 hover:shadow-lg hover:shadow-purple-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none sm:px-6 sm:text-base"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none sm:px-6 sm:text-base"
                 >
                   {nextLabel}
                   <ChevronRight className="h-4 w-4" />
@@ -164,7 +163,7 @@ export default function PreInterviewLayout({
           Need help?{' '}
           <a
             href="mailto:support@talentflow.com"
-            className="font-medium text-purple-600 hover:text-purple-700 transition-colors"
+            className="font-medium text-gray-600 hover:text-gray-800 transition-colors"
           >
             Contact support@talentflow.com
           </a>
