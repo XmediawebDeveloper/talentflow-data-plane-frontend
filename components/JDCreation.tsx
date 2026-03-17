@@ -837,8 +837,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // If both are empty, no error
     if (minSalary === null && maxSalary === null) return undefined;
 
-    // If only one is filled, that's okay
-    if (minSalary === null || maxSalary === null) return undefined;
+    // If only min is filled, prompt for max
+    if (minSalary !== null && maxSalary === null) {
+      return 'Please enter the maximum salary to complete the range (e.g., 3 LPA to 4 LPA)';
+    }
+
+    // If only max is filled, prompt for min
+    if (minSalary === null && maxSalary !== null) {
+      return 'Please enter the minimum salary to complete the range (e.g., 3 LPA to 4 LPA)';
+    }
 
     // Both are filled - validate range
     if (minSalary >= maxSalary) {
@@ -847,6 +854,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     return undefined;
   };
+
 
   // Helper: mark extracted data as modified AND reset formatted flag so AI reformatting triggers
   const markExtractedDataModified = () => {
@@ -1111,6 +1119,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    // Validate salary: if prompt mentions a single salary (e.g., "3 LPA") without a range, ask user to provide a range
+    // Detect single salary value with salary keyword (e.g., "6 LPA", "3 lakh", "salary 500000")
+    const singleSalaryPattern = /\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|per\s*annum|ctc|package)/i;
+    // Detect salary RANGE: requires salary unit keyword on at least one side (e.g., "3 LPA to 5 LPA", "3 to 5 LPA")
+    // This avoids false matches on experience ranges like "3-5 years"
+    const salaryRangePattern = /\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|k|cr|crores?)\s*(?:to|-|–|~)\s*\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|k|cr|crores?)?/i;
+    const salaryRangePattern2 = /\d[\d,.\s]*\s*(?:to|-|–|~)\s*\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|k|cr|crores?)/i;
+
+    const hasSingleSalary = singleSalaryPattern.test(aiPrompt);
+    const hasSalaryRange = salaryRangePattern.test(aiPrompt) || salaryRangePattern2.test(aiPrompt);
+
+    if (hasSingleSalary && !hasSalaryRange) {
+      toast.error({
+        title: 'Salary Range Required',
+        description: 'Please enter a salary range instead of a single value. For example: "3 LPA to 4 LPA" instead of just "3 LPA".',
+      });
+      return;
+    }
+
     // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
     setIsStreaming(true);
@@ -1165,7 +1192,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
         employmentType: prev.employmentType,
         workModel: prev.workModel,
-        // Pre-fill salary from generation response, preserve existing values if extraction returns null
+        // Pre-fill salary from AI extraction
         salaryFrom: params.salary_min != null ? String(params.salary_min).split('.')[0] : (prev.salaryFrom || ''),
         salaryTo: params.salary_max != null ? String(params.salary_max).split('.')[0] : (prev.salaryTo || ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
@@ -1180,9 +1207,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         domainKeywords: params.domain_keywords?.length > 0 ? params.domain_keywords : (isEditMode ? prev.domainKeywords : []),
       }));
 
-      // Log what was pre-filled
+      // Log what was pre-filled and trigger validation
       if (params.salary_min || params.salary_max) {
         console.log('[TalentFlow] Salary pre-filled:', { min: params.salary_min, max: params.salary_max });
+        const fromVal = params.salary_min != null ? String(params.salary_min).split('.')[0] : '';
+        const toVal = params.salary_max != null ? String(params.salary_max).split('.')[0] : '';
+        const error = validateSalaryRange(fromVal, toVal);
+        setValidationErrors(prev => ({ ...prev, salaryRange: error }));
       }
     };
 
@@ -1727,7 +1758,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
         employmentType: params.job_type || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: params.work_mode || (isEditMode ? extractedData.workModel : 'onsite'),
-        // Preserve salary from generation step if extraction doesn't find it in the JD text
+        // Pre-fill salary from AI extraction
         salaryFrom: params.salary_min != null ? String(params.salary_min).split('.')[0] : (extractedData.salaryFrom || ''),
         salaryTo: params.salary_max != null ? String(params.salary_max).split('.')[0] : (extractedData.salaryTo || ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
@@ -1775,6 +1806,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       setExtractedDataModified(false);  // Reset after fresh extraction - no user modifications yet
       step2DataSnapshot.current = JSON.stringify(extraction);  // Snapshot for change detection
       setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
+
+      // Trigger salary validation so warning shows immediately if only one field is filled
+      if (extraction.salaryFrom || extraction.salaryTo) {
+        const salaryErr = validateSalaryRange(extraction.salaryFrom || '', extraction.salaryTo || '');
+        setValidationErrors(prev => ({ ...prev, salaryRange: salaryErr }));
+      }
 
       // Save original Stage 1 values to detect modifications if user returns from review
       setOriginalStage1Values({
@@ -2807,7 +2844,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Validate salary range
     const salaryError = validateSalaryRange(extractedData.salaryFrom || '', extractedData.salaryTo || '');
     if (salaryError) {
-      missingFields.push('Valid Salary Range (min must be less than max)');
+      missingFields.push('Salary Range - ' + salaryError);
     }
 
     // Debug logging
@@ -4515,7 +4552,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           const newValue = e.target.value;
                           setExtractedData(prev => ({ ...prev, salaryFrom: newValue }));
                           markExtractedDataModified();
-                          // Validate salary range
                           const error = validateSalaryRange(newValue, extractedData.salaryTo || '');
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
@@ -4537,7 +4573,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           const newValue = e.target.value;
                           setExtractedData(prev => ({ ...prev, salaryTo: newValue }));
                           markExtractedDataModified();
-                          // Validate salary range
                           const error = validateSalaryRange(extractedData.salaryFrom || '', newValue);
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
