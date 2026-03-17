@@ -407,6 +407,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           interviewType={interview.interview_type}
           duration={interview.duration_minutes}
           introductionVideoUrl={interview.introduction_video_url}
+          token={token}
           availableLanguages={availableLanguages}
           selectedLanguage={selectedLanguage}
           onSelectLanguage={setSelectedLanguage}

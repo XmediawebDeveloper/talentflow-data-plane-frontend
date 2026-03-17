@@ -23,6 +23,7 @@ interface StepIntroVideoProps {
   interviewType?: string;
   duration?: number;
   introductionVideoUrl?: string | null;
+  token: string;
   availableLanguages: string[];
   selectedLanguage: string;
   onSelectLanguage: (lang: string) => void;
@@ -55,12 +56,15 @@ const EXPECT_ITEMS = [
   },
 ];
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
 export default function StepIntroVideo({
   candidateName = 'Candidate',
   position = 'Open Position',
   interviewType = 'AI Interview',
   duration = 30,
   introductionVideoUrl,
+  token,
   availableLanguages,
   selectedLanguage,
   onSelectLanguage,
@@ -68,6 +72,10 @@ export default function StepIntroVideo({
   onSkip,
   submitting = false,
 }: StepIntroVideoProps) {
+  // Build the public intro video URL using the candidate token endpoint
+  const videoSrc = introductionVideoUrl
+    ? `${API_BASE_URL}/candidate/ai-interview/${token}/intro-video`
+    : null;
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6">
       {/* Blue gradient header card */}
@@ -82,11 +90,11 @@ export default function StepIntroVideo({
       </div>
 
       {/* Video section */}
-      {introductionVideoUrl ? (
+      {videoSrc ? (
         <div className="space-y-4 text-center">
           <div className="flex justify-center">
             <video
-              src={introductionVideoUrl}
+              src={videoSrc}
               controls
               className="w-full max-w-2xl rounded-xl border border-gray-200 shadow-sm"
             />
