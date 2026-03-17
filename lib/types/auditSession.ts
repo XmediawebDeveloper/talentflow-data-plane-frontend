@@ -19,7 +19,11 @@ export type TenantErrorCode =
   | 'TENANT_NETWORK_DISCONNECT'
   | 'TENANT_MANUAL_TERMINATION'
   | 'TENANT_SESSION_TIMEOUT'
-  | 'TENANT_DEVICE_FAILURE';
+  | 'TENANT_DEVICE_FAILURE'
+  // RBAC business-rule violations
+  | 'TENANT_DUPLICATE_ROLE_CODE'
+  | 'TENANT_INVALID_PERMISSION_ASSIGNMENT'
+  | 'TENANT_SYSTEM_ROLE_PROTECTED';
 
 /** 7.2 System-Side Error Codes — Full refund */
 export type SystemErrorCode =
@@ -67,6 +71,10 @@ export const ERROR_CODE_LABELS: Record<string, string> = {
   TENANT_MANUAL_TERMINATION: 'Manually Terminated',
   TENANT_SESSION_TIMEOUT: 'Session Timed Out',
   TENANT_DEVICE_FAILURE: 'Device Failure',
+  // RBAC business-rule violations
+  TENANT_DUPLICATE_ROLE_CODE: 'Duplicate Role Code',
+  TENANT_INVALID_PERMISSION_ASSIGNMENT: 'Invalid Permission Assignment',
+  TENANT_SYSTEM_ROLE_PROTECTED: 'System Role Protected',
   // System-side
   SYSTEM_SERVER_ERROR: 'Server Error',
   SYSTEM_DATABASE_FAILURE: 'Database Failure',
@@ -83,9 +91,29 @@ export const ERROR_ORIGIN_LABELS: Record<ErrorOrigin, string> = {
 };
 
 export const MODULE_TYPE_LABELS: Record<string, string> = {
-  AS: 'Assessment',
-  AIU: 'AI Interview',
-  RS: 'Resume Scoring',
+  AUTHENTICATION:    'Authentication',
+  SIGNUP:            'Signup',
+  USER_MANAGEMENT:   'User Management',
+  RBAC:              'Roles & Permissions',
+  FEATURE_MANAGEMENT: 'Feature Management',
+  JOB_MANAGEMENT:    'Job Descriptions',
+  RESUME_MANAGEMENT: 'Resume Management',
+  RESUME_UPLOAD:     'Resume Upload',
+  AI_PROCESSING:     'AI Processing',
+  FOLDER_MANAGEMENT: 'Folder Management',
+  RESUME_SCORING:    'Resume Scoring',
+  AI_TALENT_MATCH:   'AI Talent Match',
+  ASSESSMENT:        'Assessment',
+  AI_INTERVIEW:      'AI Interview',
+  BILLING:           'Billing',
+  USAGE_TRACKING:    'Usage Tracking',
+  TENANT_LIFECYCLE:  'Tenant Lifecycle',
+  ACCESS_CONTROL:    'Access Control',
+  SETTINGS:          'Settings',
+  TEAM_MANAGEMENT:   'Team Management',
+  REPORTS_EXPORT:    'Reports & Export',
+  MASTER_DATA:       'Master Data',
+  GENERAL:           'General',
 };
 
 // =========================================================================
@@ -105,6 +133,9 @@ export const ERROR_CODE_COLORS: Record<string, string> = {
   TENANT_MANUAL_TERMINATION: 'bg-amber-50 text-amber-700',
   TENANT_SESSION_TIMEOUT: 'bg-amber-50 text-amber-700',
   TENANT_DEVICE_FAILURE: 'bg-amber-50 text-amber-700',
+  TENANT_DUPLICATE_ROLE_CODE: 'bg-amber-50 text-amber-700',
+  TENANT_INVALID_PERMISSION_ASSIGNMENT: 'bg-amber-50 text-amber-700',
+  TENANT_SYSTEM_ROLE_PROTECTED: 'bg-amber-50 text-amber-700',
   // System-side — red
   SYSTEM_SERVER_ERROR: 'bg-red-50 text-red-700',
   SYSTEM_DATABASE_FAILURE: 'bg-red-50 text-red-700',
@@ -195,6 +226,9 @@ export const TENANT_ERROR_CODES: TenantErrorCode[] = [
   'TENANT_MANUAL_TERMINATION',
   'TENANT_SESSION_TIMEOUT',
   'TENANT_DEVICE_FAILURE',
+  'TENANT_DUPLICATE_ROLE_CODE',
+  'TENANT_INVALID_PERMISSION_ASSIGNMENT',
+  'TENANT_SYSTEM_ROLE_PROTECTED',
 ];
 
 /** All system error codes */

@@ -563,7 +563,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <div style={trustIndicatorsStyle}>
               <div style={trustItemStyle}>
                 <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E' }} />
-                <span>{trialDays}-day free trial</span>
+                <span>{trialDays}-{trialDays === 1 ? 'day' : 'days'} free trial</span>
               </div>
               <div style={trustItemStyle}>
                 <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E' }} />

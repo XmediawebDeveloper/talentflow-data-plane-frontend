@@ -1,5 +1,8 @@
 'use client';
 
+// ⚠️ MIRROR PAGE: This PlanSelectionModal is mirrored with app/(marketing)/pricing/page.tsx
+// Any changes to plan display, free-trial logic, or quota rendering MUST be applied to both files.
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -47,24 +50,25 @@ interface DisplayPlan {
   isFreeTrial?: boolean;
 }
 
+interface FreeTrialFeature {
+  feature_key: string;
+  feature_name: string;
+  feature_category: string;
+  icon_name?: string;
+  quota_key: string | null;
+  quota_limit: number | null;
+}
+
 interface FreeTrialData {
   trial_days: number;
-  features: {
-    // Support both uppercase (legacy) and lowercase (API) property names
-    MAX_JOBS?: number;
-    MAX_SEATS?: number;
-    ASSESSMENTS?: number;
-    AI_INTERVIEW?: number;
-    RESUME_SCORING?: number;
-    RESUME_STORAGE?: number;
-    max_jobs?: number;
-    max_seats?: number;
-    assessments?: number;
-    ai_interview?: number;
-    resume_scoring?: number;
-    resume_storage?: number;
+  features: FreeTrialFeature[];
+  quotas: {
+    MAX_SEATS?: number | string;
+    MAX_JOBS?: number | string;
+    STORAGE_GB?: number;
+    API_RATE_LIMIT?: number;
   };
-  trial_includes: string[];
+  trial_includes?: string[];
 }
 
 interface PlanSelectionModalProps {
@@ -262,28 +266,36 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
   if (!isOpen) return null;
 
   // Create free trial plan object for display
-  // Handle both uppercase (MAX_JOBS) and lowercase (max_jobs) property names from API
-  const trialFeatures = freeTrial?.features || {};
+  // Mirror of buildTrialQuotas in app/(marketing)/pricing/page.tsx
+  const buildTrialQuotas = (trial: FreeTrialData) => {
+    const q = trial.quotas || {};
+    const result: Record<string, number | undefined> = {
+      max_seats: typeof q.MAX_SEATS === 'number' ? q.MAX_SEATS : undefined,
+      max_jobs: typeof q.MAX_JOBS === 'number' ? q.MAX_JOBS : undefined,
+    };
+    for (const feature of trial.features || []) {
+      if (feature.quota_key && feature.quota_limit !== null) {
+        switch (feature.quota_key) {
+          case 'RU': result.RU = feature.quota_limit ?? undefined; break;
+          case 'RS': result.RS = feature.quota_limit ?? undefined; break;
+          case 'AS': result.AS = feature.quota_limit ?? undefined; break;
+          case 'AIU': result.AIU = feature.quota_limit ?? undefined; break;
+        }
+      }
+    }
+    return result;
+  };
+
   const freeTrialPlan: DisplayPlan | null = freeTrial ? {
     id: 'free_trial',
     name: 'Free Trial',
-    description: `${freeTrial.trial_days} days free to explore all features`,
+    description: `${freeTrial.trial_days} ${freeTrial.trial_days === 1 ? 'day' : 'days'} free • No credit card required`,
     monthlyPrice: 0,
     yearlyPrice: 0,
     currency: 'INR',
-    // Ensure features are strings
-    features: (freeTrial.trial_includes || []).map((f: any) =>
-      typeof f === 'string' ? f : (f?.feature_name || f?.name || String(f))
-    ),
+    features: (freeTrial.features || []).map(f => f.feature_name),
     trialDays: freeTrial.trial_days,
-    quotas: {
-      max_jobs: trialFeatures.MAX_JOBS ?? trialFeatures.max_jobs,
-      max_seats: trialFeatures.MAX_SEATS ?? trialFeatures.max_seats,
-      AS: trialFeatures.ASSESSMENTS ?? trialFeatures.assessments,
-      AIU: trialFeatures.AI_INTERVIEW ?? trialFeatures.ai_interview,
-      RS: trialFeatures.RESUME_SCORING ?? trialFeatures.resume_scoring,
-      RU: trialFeatures.RESUME_STORAGE ?? trialFeatures.resume_storage,
-    },
+    quotas: buildTrialQuotas(freeTrial),
     planSlug: 'free-trial',
     planTier: 'Trial',
     isFreeTrial: true,

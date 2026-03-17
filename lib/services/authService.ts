@@ -143,6 +143,8 @@ export interface User {
   suspended_at?: string;
   // Tenant subdomain - used to build org-aware login URL on logout
   tenant_subdomain?: string;
+  // Invite flow: if true, user must set a permanent password before accessing the dashboard
+  must_reset_password?: boolean;
 }
 
 export interface LoginResponse {
@@ -251,6 +253,22 @@ export const authService = {
     }
   },
 
+
+  /**
+   * Set first password for invited users (must_reset_password flow).
+   * Requires a valid Bearer token (user is already authenticated with temp password).
+   */
+  async setPassword(newPassword: string, confirmPassword: string): Promise<{ message: string }> {
+    try {
+      const response = await api.post('/auth/set-password', {
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
 
   /**
    * Change password

@@ -13,7 +13,8 @@ const publicRoutes = [
   '/faq',
   '/login',
   '/signup',
-  '/reset-password', // Invite-based first-login password setup
+  '/reset-password', // Forgot-password OTP reset flow
+  '/set-password',   // Invite-based first-login password setup
   '/assessment', // Candidate assessment portal (public)
   '/ai-interview', // Candidate AI interview portal (public)
 ];
@@ -148,6 +149,8 @@ export async function proxy(request: NextRequest) {
   const subdomainAllowedPaths = [
     '/login',
     '/reset-password',
+    '/set-password',
+    '/complete-payment',
     '/assessment',
     '/ai-interview',
     ...protectedRoutes,
@@ -283,15 +286,15 @@ export async function proxy(request: NextRequest) {
         maxAge: 300, // 5 minutes
       });
     }
-  } else if (!isProtectedRoute && pathname !== '/reset-password') {
+  } else if (!isProtectedRoute && pathname !== '/reset-password' && pathname !== '/set-password') {
     // Only clear on non-protected public routes — never on /dashboard etc.
-    // Also preserve on /reset-password: it's part of the invite auth flow,
-    // so the org context must survive the /login → /reset-password → /dashboard journey.
+    // Also preserve on /reset-password and /set-password: they are part of the invite auth flow,
+    // so the org context must survive the /login → /set-password → /dashboard journey.
     res.cookies.delete('tf-subdomain');
     res.cookies.delete('tf-subdomain-valid');
-  } else if (pathname === '/reset-password') {
+  } else if (pathname === '/reset-password' || pathname === '/set-password') {
     // Re-set the existing tf-subdomain cookie so it isn't lost during the
-    // invite flow (login → reset-password → dashboard).
+    // invite flow (login → set-password → dashboard).
     const existingSubdomain = request.cookies.get('tf-subdomain')?.value;
     if (existingSubdomain) {
       res.cookies.set('tf-subdomain', existingSubdomain, {

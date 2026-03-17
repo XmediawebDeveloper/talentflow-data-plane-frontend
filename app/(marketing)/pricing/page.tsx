@@ -1,5 +1,8 @@
 "use client";
 
+// ⚠️ MIRROR PAGE: This pricing page is mirrored with components/auth/PlanSelectionModal.tsx
+// Any changes to plan display, free-trial logic, or quota rendering MUST be applied to both files.
+
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Check, Sparkles, Building2, Users, Zap, Loader2 } from "lucide-react";
@@ -486,7 +489,7 @@ export default function PricingPage() {
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
             {freeTrial ? (
-              <>Start with a {freeTrial.trial_days}-day free trial. No credit card required.</>
+              <>Start with a {freeTrial.trial_days}-{freeTrial.trial_days === 1 ? 'day' : 'days'} free trial. No credit card required.</>
             ) : (
               <>Start with a free trial. No credit card required.</>
             )}
@@ -781,7 +784,6 @@ export default function PricingPage() {
                                     { label: 'Resume Scores', value: 'Unlimited' },
                                     { label: 'Assessments', value: 'Unlimited' },
                                     { label: 'AI Interviews', value: 'Unlimited' },
-                                    { label: 'Total Storage', value: 'Unlimited' },
                                   ].map((item) => (
                                     <div key={item.label} className="flex justify-between items-center">
                                       <span className="text-gray-500">{item.label}</span>
@@ -854,14 +856,6 @@ export default function PricingPage() {
                                     <span className="text-gray-500">AI Interviews</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
                                       {normalizedQuotas.AIU.toLocaleString()}
-                                    </span>
-                                  </div>
-                                )}
-                                {normalizedQuotas.total_resume_storage !== undefined && normalizedQuotas.total_resume_storage >= 1 && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-gray-500">Total Storage</span>
-                                    <span className="font-semibold text-gray-900 dark:text-white">
-                                      {normalizedQuotas.total_resume_storage.toLocaleString()}
                                     </span>
                                   </div>
                                 )}

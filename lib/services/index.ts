@@ -199,6 +199,7 @@ export type {
   QuestionOption,
   QuestionStatusInfo,
   StartAssessmentResponse,
+  AssessmentProctoringSettings,
   AnswerSubmission,
   SubmitAnswerResponse,
   CompleteAssessmentResponse,

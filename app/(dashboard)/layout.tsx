@@ -14,7 +14,7 @@ import { QuotaProvider } from '@/contexts/QuotaContext';
 import { PlanFeaturesProvider } from '@/components/providers/PlanFeaturesProvider';
 import { TermsProvider } from '@/components/providers/TermsProvider';
 import { PlanChangeProvider, usePlanChange } from '@/components/providers/PlanChangeProvider';
-import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail } from '@/lib/services/api';
+import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail, PAYMENT_PENDING_EVENT, PaymentPendingDetail, redirectToPaymentPage } from '@/lib/services/api';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 import TermsReminderBanner from '@/components/terms/TermsReminderBanner';
 import TermsBlockingOverlay from '@/components/terms/TermsBlockingOverlay';
@@ -87,6 +87,12 @@ export default function DashboardLayout({
   const { user, tenant, isAuthenticated, isLoading, logout, isTenantAdmin } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Synchronous guard: read pending_password_reset once on mount (lazy initializer runs
+  // before first paint). If set, block all dashboard rendering — AuthProvider handles redirect.
+  const [hasPendingPasswordReset] = useState<boolean>(() =>
+    typeof window !== 'undefined' && localStorage.getItem('pending_password_reset') === 'true'
+  );
 
   // Initialize as undefined to show locked state until we know for sure
   const [subscriptionExpired, setSubscriptionExpired] = useState<boolean | undefined>(undefined);
@@ -169,6 +175,19 @@ export default function DashboardLayout({
         handleSubscriptionInactive as EventListener
       );
     };
+  }, []);
+
+  // Listen for payment-pending events from API interceptor and redirect to complete-payment
+  // Uses shared redirectToPaymentPage() which has a module-level guard — so even if multiple
+  // concurrent 402 errors dispatch multiple events, only ONE hard redirect ever fires
+  useEffect(() => {
+    const handlePaymentPending = (event: CustomEvent<PaymentPendingDetail>) => {
+      console.log('[DASHBOARD] Payment pending detected, redirecting to complete-payment');
+      redirectToPaymentPage(event.detail.tenant_id, event.detail.plan_id);
+    };
+
+    window.addEventListener(PAYMENT_PENDING_EVENT, handlePaymentPending as EventListener);
+    return () => window.removeEventListener(PAYMENT_PENDING_EVENT, handlePaymentPending as EventListener);
   }, []);
 
   // Redirect to current-plan page when subscription is expired and user is on a non-allowed page
@@ -271,6 +290,13 @@ export default function DashboardLayout({
     const timer = setTimeout(checkPendingScoringBatch, 1500);
     return () => clearTimeout(timer);
   }, [isAuthenticated, isLoading, router]);
+
+  // If the pending_password_reset flag was set on mount, don't render any dashboard content.
+  // AuthProvider keeps isLoading=true and handles the /set-password redirect, so the user
+  // sees the loading skeleton instead of a flash of authenticated dashboard UI.
+  if (hasPendingPasswordReset) {
+    return null;
+  }
 
   if (isLoading) {
     console.log('[DASHBOARD] Still loading...');

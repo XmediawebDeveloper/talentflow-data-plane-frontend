@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, Building2 } from 'lucide-react';
+import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, Building2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { User } from '@/lib/types/tenant';
 import { authService, isTwoFactorRequired, LoginResponse } from '@/lib/services';
@@ -162,9 +162,6 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       tenantSubdomain: response.user.tenant_subdomain,
     };
 
-    // Pass tenant name from login response
-    login(user, response.tenant_name);
-
     // Save or clear email based on "Remember me" checkbox
     try {
       if (rememberMe) {
@@ -178,12 +175,8 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       console.error('Error saving remember me preference:', error);
     }
 
-    // First-time login (invite flow) — show a toast so user knows where to change their password
-    if (!response.user.last_login) {
-      toast.info('You are logged in with a temporary password. Please change it via Settings → Change Password.', {
-        duration: 8000,
-      });
-    }
+    // Normal login — populate auth store (triggers WebSocket, dashboard, etc.)
+    login(user, response.tenant_name);
 
     // Check if tenant has pending payment - redirect to payment page with encoded params
     if (response.pending_payment && response.pending_payment_redirect) {
@@ -235,7 +228,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         return;
       }
 
-      // Normal login success
+      // Normal login success — tokens are now stored.
+      // Call /auth/me to get authoritative must_reset_password flag.
+      const meData = await authService.getCurrentUser();
+      if (meData.must_reset_password) {
+        localStorage.setItem('pending_password_reset', 'true');
+        window.location.href = '/set-password';
+        return;
+      }
+
       handleLoginSuccess(response);
     } catch (err: any) {
       console.error('Login error:', err);
@@ -290,6 +291,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
     try {
       const response = await authService.verify2FALogin(tempToken, code);
+
+      // Tokens are now stored. Check /auth/me for must_reset_password.
+      const meData = await authService.getCurrentUser();
+      if (meData.must_reset_password) {
+        localStorage.setItem('pending_password_reset', 'true');
+        window.location.href = '/set-password';
+        return;
+      }
+
       handleLoginSuccess(response);
     } catch (err: any) {
       console.error('2FA verification error:', err);

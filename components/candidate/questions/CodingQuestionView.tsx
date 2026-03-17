@@ -22,6 +22,7 @@ interface CodingQuestionViewProps {
   allowLanguageChange?: boolean;
   isLocked?: boolean; // True if answer is submitted and cannot be edited
   attemptId?: string; // For code submission
+  copyPasteBlocking?: boolean;
 }
 
 /**
@@ -43,6 +44,7 @@ export function CodingQuestionView({
   allowLanguageChange = true,
   isLocked = false,
   attemptId,
+  copyPasteBlocking,
 }: CodingQuestionViewProps) {
   return (
     <MultiLanguageCodeEditor
@@ -52,6 +54,7 @@ export function CodingQuestionView({
       allowLanguageChange={allowLanguageChange}
       isLocked={isLocked}
       attemptId={attemptId}
+      copyPasteBlocking={copyPasteBlocking}
     />
   );
 }

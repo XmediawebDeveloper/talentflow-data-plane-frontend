@@ -77,6 +77,7 @@ interface AssessmentInterfaceProps {
   stream: MediaStream | null;
   isCameraActive?: boolean;
   isMicrophoneActive?: boolean;
+  copyPasteBlocking?: boolean;
 }
 
 export function AssessmentInterface({
@@ -93,7 +94,8 @@ export function AssessmentInterface({
   videoRef,
   stream,
   isCameraActive = true,
-  isMicrophoneActive = true
+  isMicrophoneActive = true,
+  copyPasteBlocking = true,
 }: AssessmentInterfaceProps) {
   type AnswerState = {
     text_response?: string;
@@ -1635,6 +1637,7 @@ export function AssessmentInterface({
                   allowLanguageChange={false}
                   isLocked={isCurrentAnswerLocked}
                   attemptId={assessmentInfo.attempt_id || ''}
+                  copyPasteBlocking={copyPasteBlocking}
                 />
               )}
             </div>

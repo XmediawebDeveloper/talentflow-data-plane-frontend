@@ -21,6 +21,16 @@ interface TopicSettings {
   coding_scoring_type: 'informational' | 'scored';
 }
 
+interface ProctoringSettings {
+  proctoring_enabled: boolean;
+  webcam_monitoring: boolean;
+  screen_recording: boolean;
+  tab_switch_detection: boolean;
+  copy_paste_blocking: boolean;
+  browser_lockdown: boolean;
+  ai_cheating_prevention: boolean;
+}
+
 interface AssessmentCreationProps {
   onBack: () => void;
   jobs: Job[];
@@ -29,6 +39,7 @@ interface AssessmentCreationProps {
   onJobsRefresh?: () => void;
   topicSettings?: TopicSettings;
   preSelectedJobId?: string;
+  proctoringSettings?: ProctoringSettings | null;
 }
 
 interface SectionConfig {
@@ -38,7 +49,7 @@ interface SectionConfig {
   enabled: boolean;
 }
 
-export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId }: AssessmentCreationProps) {
+export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings }: AssessmentCreationProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { available: assessmentAvailable } = usePlanFeature('assessment');
@@ -266,7 +277,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [newTopic, setNewTopic] = useState({ section: '' as 'HR' | 'Technical' | 'Coding', value: '' });
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedAssessment, setGeneratedAssessment] = useState<any>(null);
-  const [proctoringEnabled, setProctoringEnabled] = useState(true);
+  const [proctoringEnabled, setProctoringEnabled] = useState(initialProctoringSettings?.proctoring_enabled ?? true);
+
+  // Sync proctoringEnabled when settings load async (only before user manually toggles)
+  const [userToggledProctoring, setUserToggledProctoring] = useState(false);
+  useEffect(() => {
+    if (!userToggledProctoring && initialProctoringSettings != null) {
+      setProctoringEnabled(initialProctoringSettings.proctoring_enabled);
+    }
+  }, [initialProctoringSettings, userToggledProctoring]);
 
   const [localJobs, setLocalJobs] = useState<Job[]>(jobs);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
@@ -649,6 +668,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   const handleProctoringToggle = () => {
+    setUserToggledProctoring(true);
     setProctoringEnabled(!proctoringEnabled);
   };
 
