@@ -88,6 +88,12 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
 
+  // Synchronous guard: read pending_password_reset once on mount (lazy initializer runs
+  // before first paint). If set, block all dashboard rendering — AuthProvider handles redirect.
+  const [hasPendingPasswordReset] = useState<boolean>(() =>
+    typeof window !== 'undefined' && localStorage.getItem('pending_password_reset') === 'true'
+  );
+
   // Initialize as undefined to show locked state until we know for sure
   const [subscriptionExpired, setSubscriptionExpired] = useState<boolean | undefined>(undefined);
   const [accountSuspended, setAccountSuspended] = useState<boolean>(false);
@@ -284,6 +290,13 @@ export default function DashboardLayout({
     const timer = setTimeout(checkPendingScoringBatch, 1500);
     return () => clearTimeout(timer);
   }, [isAuthenticated, isLoading, router]);
+
+  // If the pending_password_reset flag was set on mount, don't render any dashboard content.
+  // AuthProvider keeps isLoading=true and handles the /set-password redirect, so the user
+  // sees the loading skeleton instead of a flash of authenticated dashboard UI.
+  if (hasPendingPasswordReset) {
+    return null;
+  }
 
   if (isLoading) {
     console.log('[DASHBOARD] Still loading...');

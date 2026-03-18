@@ -326,7 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         !window.location.pathname.startsWith('/set-password')
       ) {
         console.log('[AUTH] pending_password_reset flag set — redirecting to /set-password');
-        setIsLoading(false);
+        // Keep isLoading=true so the skeleton shows during redirect instead of a blank flash.
         window.location.href = '/set-password';
         return;
       }
@@ -367,6 +367,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (apiUserData.must_reset_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
             console.log('[AUTH] must_reset_password=true from API — redirecting to /set-password');
             localStorage.setItem('pending_password_reset', 'true');
+            // Reset auth state so the dashboard doesn't remain visible while navigating away.
+            setUser(null);
+            setIsLoading(true);
             window.location.href = '/set-password';
             return;
           }
@@ -455,7 +458,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (apiUserData.must_reset_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
             console.log('[AUTH] must_reset_password=true — redirecting to /set-password');
             localStorage.setItem('pending_password_reset', 'true');
-            setIsLoading(false);
+            // isLoading is still true here — keep it that way so skeleton shows during redirect.
             window.location.href = '/set-password';
             return;
           }

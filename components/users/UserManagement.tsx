@@ -2050,7 +2050,7 @@ export default function UserManagement() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell whitespace-nowrap">
                   User ID
                 </th>
                 <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">

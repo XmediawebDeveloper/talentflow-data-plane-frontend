@@ -7,6 +7,8 @@ import { getLoginUrl } from '@/lib/services/authService';
 import { userSettingsApi } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
 interface SessionTimeoutContextType {
   resetTimer: () => void;
   timeoutMinutes: number;
@@ -42,6 +44,19 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
 
+  // FIX: Use a ref for warning visibility so resetTimer doesn't need it as a dependency.
+  // Without this, isWarningVisible in resetTimer's deps caused resetTimer to get a new
+  // reference every time the warning showed, which re-ran the activity useEffect and
+  // immediately dismissed the warning via resetTimer() — making the timer never fire.
+  const isWarningVisibleRef = useRef(false);
+
+  // Keep a ref to timeoutMinutes so handleLogout can read the current value
+  // without being listed as a dep (which would cause showWarning/resetTimer to recreate too).
+  const timeoutMinutesRef = useRef(timeoutMinutes);
+  useEffect(() => {
+    timeoutMinutesRef.current = timeoutMinutes;
+  }, [timeoutMinutes]);
+
   // Load timeout setting from user settings
   useEffect(() => {
     // Skip if subscription expired (no need for timeout settings in renewal flow)
@@ -67,9 +82,33 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
     loadTimeoutSetting();
   }, [skipSettingsLoad]);
 
-  // Logout function
-  const handleLogout = useCallback(() => {
+  // Logout function — calls backend /auth/logout so the inactivity event is
+  // recorded in audit logs with full inactivity metadata.
+  const handleLogout = useCallback(async () => {
     console.log('[SessionTimeout] Auto-logout due to inactivity');
+
+    const inactiveSeconds = Math.floor((Date.now() - lastActivityRef.current) / 1000);
+
+    try {
+      const { accessToken } = getTokens();
+      if (accessToken) {
+        await fetch(`${API_URL}/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            logout_type: 'inactivity',
+            inactive_duration_seconds: inactiveSeconds,
+            configured_timeout_minutes: timeoutMinutesRef.current,
+          }),
+        });
+      }
+    } catch (error) {
+      console.warn('[SessionTimeout] Failed to log inactivity logout to backend:', error);
+    }
+
     const loginUrl = getLoginUrl();
     clearTokens();
     localStorage.removeItem('user');
@@ -84,6 +123,7 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
 
   // Show warning before logout
   const showWarning = useCallback(() => {
+    isWarningVisibleRef.current = true;
     setIsWarningVisible(true);
     setRemainingSeconds(WARNING_SECONDS);
 
@@ -104,7 +144,12 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
     }, WARNING_SECONDS * 1000);
   }, [handleLogout]);
 
-  // Reset the inactivity timer
+  // Reset the inactivity timer.
+  // FIX: reads isWarningVisibleRef.current (ref) instead of isWarningVisible (state)
+  // so this callback does NOT need isWarningVisible in its dependency array.
+  // Previously, having isWarningVisible as a dep caused this callback to be recreated
+  // every time the warning appeared, which re-triggered the activity useEffect and
+  // immediately dismissed the warning.
   const resetTimer = useCallback(() => {
     lastActivityRef.current = Date.now();
 
@@ -113,8 +158,9 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
     if (warningTimeoutRef.current) clearTimeout(warningTimeoutRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
 
-    // Hide warning if visible
-    if (isWarningVisible) {
+    // Hide warning if visible (using ref to avoid stale closure)
+    if (isWarningVisibleRef.current) {
+      isWarningVisibleRef.current = false;
       setIsWarningVisible(false);
       setRemainingSeconds(WARNING_SECONDS);
     }
@@ -129,7 +175,7 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
         showWarning();
       }, timeoutMs);
     }
-  }, [timeoutMinutes, isWarningVisible, showWarning]);
+  }, [timeoutMinutes, showWarning]); // isWarningVisible intentionally removed
 
   // Continue session (dismiss warning)
   const continueSession = useCallback(() => {

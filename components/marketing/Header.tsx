@@ -116,7 +116,7 @@ export function Header() {
             )}
             {!isLoggedIn && !isOrgLogin && (
               <Button className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200 text-sm xl:text-base whitespace-nowrap" asChild>
-                <Link href="/signup">Start Free Trial</Link>
+                <Link href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`}>Start Free Trial</Link>
               </Button>
             )}
           </div>
@@ -180,7 +180,7 @@ export function Header() {
                   <Link href="/signup" prefetch={false}>Sign Up</Link>
                 </Button>
                 <Button className="w-full bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
-                  <Link href="/signup" prefetch={false}>Start Free Trial</Link>
+                  <Link href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`} prefetch={false}>Start Free Trial</Link>
                 </Button>
               </div>
             </nav>
