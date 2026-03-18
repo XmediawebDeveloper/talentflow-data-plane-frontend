@@ -114,12 +114,11 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
     localStorage.removeItem('user');
     sessionStorage.clear();
     toast.error('Session expired due to inactivity. Please log in again.');
-    if (loginUrl.startsWith('http')) {
-      window.location.href = loginUrl;
-    } else {
-      router.push(loginUrl);
-    }
-  }, [router]);
+    // Use hard redirect (not router.push) so the full page reloads and all
+    // React state is cleared — router.push leaves the current page mounted
+    // and the user stays on the page with no operations allowed.
+    window.location.href = loginUrl;
+  }, []);
 
   // Show warning before logout
   const showWarning = useCallback(() => {

@@ -2022,13 +2022,14 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             <div style={{ padding: '20px 24px', borderTop: '2px solid #E5E7EB', backgroundColor: '#F9FAFB', borderRadius: '0 0 20px 20px', flexShrink: 0 }}>
               {/* Acceptance Checkboxes */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-                {/* Terms & Conditions checkbox — always enabled (modal opens on this tab) */}
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '10px 12px', backgroundColor: agreedToTerms ? '#F0FDF4' : '#fff', border: `1px solid ${agreedToTerms ? '#86EFAC' : '#D1D5DB'}`, borderRadius: 10, transition: 'all 0.2s' }}>
+                {/* Terms & Conditions checkbox — enabled only after content has loaded */}
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: termsConsentLoading ? 'not-allowed' : 'pointer', padding: '10px 12px', backgroundColor: termsConsentLoading ? '#F3F4F6' : agreedToTerms ? '#F0FDF4' : '#fff', border: `1px solid ${termsConsentLoading ? '#E5E7EB' : agreedToTerms ? '#86EFAC' : '#D1D5DB'}`, borderRadius: 10, transition: 'all 0.2s', opacity: termsConsentLoading ? 0.6 : 1 }}>
                   <input
                     type="checkbox"
                     checked={agreedToTerms}
+                    disabled={termsConsentLoading}
                     onChange={(e) => setAgreedToTerms(e.target.checked)}
-                    style={{ marginTop: 2, width: 17, height: 17, cursor: 'pointer', accentColor: '#2563EB', flexShrink: 0 }}
+                    style={{ marginTop: 2, width: 17, height: 17, cursor: termsConsentLoading ? 'not-allowed' : 'pointer', accentColor: '#2563EB', flexShrink: 0 }}
                   />
                   <span style={{ fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
                     I have read and agree to the{' '}
@@ -2039,17 +2040,17 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                   {agreedToTerms && <CheckCircle style={{ width: 18, height: 18, color: '#10B981', flexShrink: 0, marginLeft: 'auto' }} />}
                 </label>
 
-                {/* Privacy Policy checkbox — disabled until user clicks the Privacy Policy tab */}
+                {/* Privacy Policy checkbox — disabled until content loads and user clicks the Privacy Policy tab */}
                 <label
-                  title={!visitedTabs.has('privacy') ? 'Please read the Privacy Policy tab first' : undefined}
-                  style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: visitedTabs.has('privacy') ? 'pointer' : 'not-allowed', padding: '10px 12px', backgroundColor: !visitedTabs.has('privacy') ? '#F3F4F6' : agreedToPrivacy ? '#F0FDF4' : '#fff', border: `1px solid ${!visitedTabs.has('privacy') ? '#E5E7EB' : agreedToPrivacy ? '#86EFAC' : '#D1D5DB'}`, borderRadius: 10, transition: 'all 0.2s', opacity: visitedTabs.has('privacy') ? 1 : 0.6 }}
+                  title={termsConsentLoading ? 'Please wait for documents to load' : !visitedTabs.has('privacy') ? 'Please read the Privacy Policy tab first' : undefined}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: termsConsentLoading || !visitedTabs.has('privacy') ? 'not-allowed' : 'pointer', padding: '10px 12px', backgroundColor: termsConsentLoading || !visitedTabs.has('privacy') ? '#F3F4F6' : agreedToPrivacy ? '#F0FDF4' : '#fff', border: `1px solid ${termsConsentLoading || !visitedTabs.has('privacy') ? '#E5E7EB' : agreedToPrivacy ? '#86EFAC' : '#D1D5DB'}`, borderRadius: 10, transition: 'all 0.2s', opacity: termsConsentLoading || !visitedTabs.has('privacy') ? 0.6 : 1 }}
                 >
                   <input
                     type="checkbox"
                     checked={agreedToPrivacy}
-                    disabled={!visitedTabs.has('privacy')}
+                    disabled={termsConsentLoading || !visitedTabs.has('privacy')}
                     onChange={(e) => setAgreedToPrivacy(e.target.checked)}
-                    style={{ marginTop: 2, width: 17, height: 17, cursor: visitedTabs.has('privacy') ? 'pointer' : 'not-allowed', accentColor: '#2563EB', flexShrink: 0 }}
+                    style={{ marginTop: 2, width: 17, height: 17, cursor: termsConsentLoading || !visitedTabs.has('privacy') ? 'not-allowed' : 'pointer', accentColor: '#2563EB', flexShrink: 0 }}
                   />
                   <span style={{ fontSize: 14, color: visitedTabs.has('privacy') ? '#374151' : '#9CA3AF', lineHeight: 1.5 }}>
                     I have read and agree to the{' '}
@@ -2066,23 +2067,23 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               <button
                 type="button"
                 onClick={handleCreateAccount}
-                disabled={!agreedToTerms || !agreedToPrivacy || isLoading}
+                disabled={!agreedToTerms || !agreedToPrivacy || isLoading || termsConsentLoading}
                 style={{
                   width: '100%',
                   padding: '14px 24px',
-                  background: agreedToTerms && agreedToPrivacy ? 'linear-gradient(135deg, #2563EB, #4338CA)' : '#E5E7EB',
-                  color: agreedToTerms && agreedToPrivacy ? '#ffffff' : '#9CA3AF',
+                  background: agreedToTerms && agreedToPrivacy && !termsConsentLoading ? 'linear-gradient(135deg, #2563EB, #4338CA)' : '#E5E7EB',
+                  color: agreedToTerms && agreedToPrivacy && !termsConsentLoading ? '#ffffff' : '#9CA3AF',
                   fontSize: 16,
                   fontWeight: 600,
                   borderRadius: 12,
                   border: 'none',
-                  cursor: agreedToTerms && agreedToPrivacy && !isLoading ? 'pointer' : 'not-allowed',
+                  cursor: agreedToTerms && agreedToPrivacy && !isLoading && !termsConsentLoading ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 8,
                   transition: 'all 0.3s',
-                  boxShadow: agreedToTerms && agreedToPrivacy ? '0 8px 30px rgba(37, 99, 235, 0.35)' : 'none',
+                  boxShadow: agreedToTerms && agreedToPrivacy && !termsConsentLoading ? '0 8px 30px rgba(37, 99, 235, 0.35)' : 'none',
                 }}
               >
                 {isLoading ? (
