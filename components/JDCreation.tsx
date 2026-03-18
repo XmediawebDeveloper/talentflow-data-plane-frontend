@@ -2606,6 +2606,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
+            salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
+            salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+            compensation_type: extractedData.compensationType,
           };
 
           const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
@@ -6408,38 +6411,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             </p> */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 justify-center">
               <button
-                onClick={() => {
-                  setStep('create');
-                  setGeneratedJD('');
-                  setManualJD('');
-                  setJobTitle('');
-                  setIsPublished(false);
-                  setPublishedJdId(null);
-                  setPublishedJobCode(null);
-                  setPublishedVersion(null);
-                  setExtractedData({
-                    mustHaveSkills: [],
-                    mustHaveComments: [],
-                    niceToHaveSkills: [],
-                    education: '',
-                    educationRequired: false,
-                    experience: '',
-                    experienceRequired: false,
-                    industryType: '',
-                    industryTypeRequired: false,
-                    department: '',
-                    allowOverqualified: false,
-                    employmentType: 'full_time',
-                    workModel: 'onsite',
-                    salaryFrom: '',
-                    salaryTo: '',
-                    compensationType: 'yearly',
-                    locations: [],
-                    locationsRequired: false,
-                    assessmentGuidance: '',
-                    internalRecruiterComments: [],
-                  });
-                }}
+                onClick={() => { window.location.href = '/recruitment/jd-creation'; }}
                 className="px-4 sm:px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-black"
               >
                 Create Another JD

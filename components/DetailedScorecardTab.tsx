@@ -71,8 +71,6 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     'Must Have Comments': MessageSquare,
     'Must_have_comments': MessageSquare,
     'Comments': MessageSquare,
-    'Nice To Have Comments': MessageSquare,
-    'Nice_to_have_comments': MessageSquare,
     'Location': MapPin,
     'Job Hopping': TrendingUp,
     'Job_hobbing': TrendingUp,
@@ -150,7 +148,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         if (item.key === 'required_total') requiredSummary = item;
         else if (item.key === 'preferred_total') preferredSummary = item;
         else if (item.key === 'final_score') finalSummary = item;
-      } else {
+      } else if (item.key !== 'nice_to_have_comments') {
         regularItems.push(item);
       }
     });
@@ -203,7 +201,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     let preferredTotal = 0;
 
     criteriaScores = Object.entries(resume.criteriaScores)
-      .filter(([key]) => !key.startsWith('_'))  // Skip internal _match_status etc.
+      .filter(([key]) => !key.startsWith('_') && key !== 'nice_to_have_comments')  // Skip internal keys and nice_to_have_comments
       .map(([key, value]: [string, any]) => {
         if (!value || typeof value !== 'object') return null;
         const rawScore = value.score ?? 0;

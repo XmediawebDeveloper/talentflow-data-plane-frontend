@@ -229,7 +229,7 @@ export function LandingPageContent() {
                         onClick={() => setDemoModalOpen(false)}
                         asChild
                       >
-                        <Link href="/signup" prefetch={false}>
+                        <Link href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`} prefetch={false}>
                           Start Free Trial
                           <ArrowRight className="w-5 h-5 ml-2" />
                         </Link>
@@ -371,7 +371,7 @@ export function LandingPageContent() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-4 sm:pt-6 px-4 sm:px-0">
               <Link
-                href="/signup"
+                href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`}
                 prefetch={false}
                 className="w-full sm:w-auto inline-flex items-center justify-center h-12 sm:h-14 md:h-16 px-8 sm:px-10 md:px-12 text-base sm:text-lg rounded-xl sm:rounded-2xl bg-white text-gray-900 font-semibold hover:bg-gray-100 shadow-2xl transition-colors"
               >

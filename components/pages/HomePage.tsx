@@ -624,7 +624,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                   Watch how TalentFlow streamlines your entire recruiting process
                 </p>
                 <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 16, justifyContent: 'center' }}>
-                  <button onClick={() => { setDemoModalOpen(false); onNavigate("signup"); }} style={primaryButtonStyle}>
+                  <button onClick={() => { setDemoModalOpen(false); window.location.href = `https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`; }} style={primaryButtonStyle}>
                     Start Free Trial <ArrowRight style={{ width: 20, height: 20 }} />
                   </button>
                   <button onClick={() => { setDemoModalOpen(false); onNavigate("contact"); }}
@@ -733,7 +733,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             Join 2,500+ companies using TalentFlow to build amazing teams faster
           </p>
           <div style={ctaContainerStyle}>
-            <button onClick={() => onNavigate("signup")} style={ctaButtonPrimaryStyle}>
+            <button onClick={() => { window.location.href = `https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`; }} style={ctaButtonPrimaryStyle}>
               Start Free Trial
               <ArrowRight style={{ width: 20, height: 20 }} />
             </button>
