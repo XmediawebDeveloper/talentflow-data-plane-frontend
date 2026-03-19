@@ -66,6 +66,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
     { label: 'Terms & Consent', active: false, completed: true },
     { label: 'Assessment Details', active: true, completed: false },
     { label: 'System Check', active: false, completed: false },
+    { label: 'HR Questions', active: false, completed: false },
     { label: 'Assessment', active: false, completed: false }
   ];
 

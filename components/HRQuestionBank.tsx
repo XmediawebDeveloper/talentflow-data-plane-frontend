@@ -208,16 +208,7 @@ export default function HRQuestionBank() {
       toast.error({ title: 'Question text is required' });
       return;
     }
-    if (!formData.evaluation_criteria.trim()) {
-      toast.error({ title: 'Evaluation criteria is required' });
-      return;
-    }
-    // Filter out empty answer points
     const cleanedPoints = formData.expected_answer_points.filter(p => p.trim() !== '');
-    if (cleanedPoints.length === 0) {
-      toast.error({ title: 'At least one expected answer point is required' });
-      return;
-    }
 
     setSaving(true);
     try {
@@ -313,11 +304,7 @@ export default function HRQuestionBank() {
 
   // Filter questions
   const filteredQuestions = questions.filter(q => {
-    const matchesSearch = !searchQuery || q.question_text.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      q.category.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = filterCategory === 'all' || q.category === filterCategory;
-    const matchesDifficulty = filterDifficulty === 'all' || q.difficulty === filterDifficulty;
-    return matchesSearch && matchesCategory && matchesDifficulty;
+    return !searchQuery || q.question_text.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
   const getDifficultyColor = (difficulty: string) => {
@@ -357,38 +344,16 @@ export default function HRQuestionBank() {
         </button>
       </div>
 
-      {/* Search and Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search questions..."
-            className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
-          />
-        </div>
-        <select
-          value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
-        >
-          <option value="all">All Categories</option>
-          {HR_CATEGORIES.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-        <select
-          value={filterDifficulty}
-          onChange={(e) => setFilterDifficulty(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
-        >
-          <option value="all">All Difficulty</option>
-          <option value="easy">Easy</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
-        </select>
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search questions..."
+          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
+        />
       </div>
 
       {/* Add/Edit Form */}
@@ -406,122 +371,42 @@ export default function HRQuestionBank() {
           {/* Question Text */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Question Text *</label>
-            <textarea
+            <input
+              type="text"
               value={formData.question_text}
               onChange={(e) => setFormData(prev => ({ ...prev, question_text: e.target.value }))}
-              rows={3}
               placeholder="Enter the HR question..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
             />
           </div>
 
-          {/* Category, Difficulty, Type, Time - Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
-              <select
-                value={formData.category}
-                onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-black"
-              >
-                {HR_CATEGORIES.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Difficulty</label>
-              <select
-                value={formData.difficulty}
-                onChange={(e) => setFormData(prev => ({ ...prev, difficulty: e.target.value as 'easy' | 'medium' | 'hard' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-black"
-              >
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Question Type</label>
-              <select
-                value={formData.question_type}
-                onChange={(e) => setFormData(prev => ({ ...prev, question_type: e.target.value as 'behavioral' | 'situational' | 'competency' }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-black"
-              >
-                <option value="behavioral">Behavioral</option>
-                <option value="situational">Situational</option>
-                <option value="competency">Competency</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Answer Type</label>
-              <select
-                value={formData.answer_type}
-                onChange={(e) => {
-                  const type = e.target.value as 'text' | 'yes_no';
-                  setFormData(prev => ({
-                    ...prev,
-                    answer_type: type,
-                    time_minutes: type === 'yes_no' ? 1 : 3, // Auto-set time based on answer type
-                  }));
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-black"
-              >
-                <option value="text">Text Answer</option>
-                <option value="yes_no">Yes / No</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Time (minutes)</label>
-              <input
-                type="number"
-                value={formData.time_minutes}
-                onChange={(e) => setFormData(prev => ({ ...prev, time_minutes: parseInt(e.target.value) || 3 }))}
-                min={1}
-                max={10}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-black"
-              />
-            </div>
-          </div>
-
-          {/* Expected Answer Points */}
+          {/* Answer Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Expected Answer Points *</label>
-            {formData.expected_answer_points.map((point, index) => (
-              <div key={index} className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-gray-400 w-5">{index + 1}.</span>
-                <input
-                  type="text"
-                  value={point}
-                  onChange={(e) => updateAnswerPoint(index, e.target.value)}
-                  placeholder="Key point the candidate should cover..."
-                  className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm text-black"
-                />
-                {formData.expected_answer_points.length > 1 && (
-                  <button onClick={() => removeAnswerPoint(index)} className="text-red-400 hover:text-red-600">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
-            <button
-              onClick={addAnswerPoint}
-              className="text-xs text-gray-600 hover:text-gray-900 flex items-center gap-1 mt-1"
-            >
-              <Plus className="w-3 h-3" /> Add point
-            </button>
-          </div>
-
-          {/* Evaluation Criteria */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Evaluation Criteria *</label>
-            <textarea
-              value={formData.evaluation_criteria}
-              onChange={(e) => setFormData(prev => ({ ...prev, evaluation_criteria: e.target.value }))}
-              rows={2}
-              placeholder="What makes a strong answer to this question..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-600 text-black"
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Answer Type</label>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, answer_type: 'text', time_minutes: 3 }))}
+                className={`flex-1 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                  formData.answer_type === 'text'
+                    ? 'border-teal-500 bg-teal-50 text-teal-700'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                Text Answer (3 min)
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, answer_type: 'yes_no', time_minutes: 1 }))}
+                className={`flex-1 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                  formData.answer_type === 'yes_no'
+                    ? 'border-orange-500 bg-orange-50 text-orange-700'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                Yes / No (1 min)
+              </button>
+            </div>
           </div>
 
           {/* Save / Cancel */}
@@ -545,7 +430,7 @@ export default function HRQuestionBank() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border border-gray-200 rounded-lg p-3">
           <p className="text-xs text-gray-500">Total Questions</p>
           <p className="text-xl font-semibold text-gray-900">{questions.length}</p>
@@ -557,16 +442,6 @@ export default function HRQuestionBank() {
         <div className="bg-white border border-orange-200 rounded-lg p-3">
           <p className="text-xs text-orange-600">Yes / No</p>
           <p className="text-xl font-semibold text-orange-700">{questions.filter(q => q.answer_type === 'yes_no').length}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-3">
-          <p className="text-xs text-gray-500">Categories</p>
-          <p className="text-xl font-semibold text-gray-900">{new Set(questions.map(q => q.category)).size}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-3">
-          <p className="text-xs text-gray-500">Total Time</p>
-          <p className="text-xl font-semibold text-gray-900">
-            {questions.reduce((sum, q) => sum + q.time_minutes, 0)} min
-          </p>
         </div>
       </div>
 
@@ -588,23 +463,10 @@ export default function HRQuestionBank() {
               className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 transition-colors"
             >
               {/* Question Header */}
-              <div
-                className="flex items-start gap-3 p-4 cursor-pointer"
-                onClick={() => setExpandedId(expandedId === question.id ? null : question.id)}
-              >
+              <div className="flex items-start gap-3 p-4">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 leading-relaxed">{question.question_text}</p>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                      <Tag className="w-3 h-3" />
-                      {question.category}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getDifficultyColor(question.difficulty)}`}>
-                      {question.difficulty}
-                    </span>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getTypeColor(question.question_type)}`}>
-                      {question.question_type}
-                    </span>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                       question.answer_type === 'yes_no'
                         ? 'bg-orange-100 text-orange-700'
@@ -631,34 +493,8 @@ export default function HRQuestionBank() {
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
-                  {expandedId === question.id ? (
-                    <ChevronUp className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  )}
                 </div>
               </div>
-
-              {/* Expanded Details */}
-              {expandedId === question.id && (
-                <div className="border-t border-gray-100 px-4 py-3 bg-gray-50 space-y-3">
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-1">Expected Answer Points</p>
-                    <ul className="space-y-1">
-                      {question.expected_answer_points.map((point, idx) => (
-                        <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
-                          <span className="text-gray-400 mt-0.5">-</span>
-                          {point}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-500 mb-1">Evaluation Criteria</p>
-                    <p className="text-sm text-gray-700">{question.evaluation_criteria}</p>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
         </div>

@@ -499,6 +499,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     { label: 'Terms & Consent', active: false, completed: true },
     { label: 'Assessment Details', active: false, completed: true },
     { label: 'System Check', active: true, completed: false },
+    { label: 'HR Questions', active: false, completed: false },
     { label: 'Assessment', active: false, completed: false }
   ];
 
