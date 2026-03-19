@@ -28,6 +28,7 @@ interface HRQuestion {
   difficulty: 'easy' | 'medium' | 'hard';
   question_type: 'behavioral' | 'situational' | 'competency';
   answer_type: 'text' | 'yes_no';
+  correct_answer?: 'Yes' | 'No';  // Only for yes_no questions
   expected_answer_points: string[];
   evaluation_criteria: string;
   time_minutes: number;
@@ -41,6 +42,7 @@ const EMPTY_QUESTION: Omit<HRQuestion, 'id' | 'created_at'> = {
   difficulty: 'medium',
   question_type: 'behavioral',
   answer_type: 'text',
+  correct_answer: undefined,
   expected_answer_points: [''],
   evaluation_criteria: '',
   time_minutes: 3,
@@ -103,6 +105,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'easy',
     question_type: 'behavioral',
     answer_type: 'yes_no',
+    correct_answer: 'Yes',
     expected_answer_points: ['Clear yes/no answer', 'Flexibility and openness', 'Any conditions or preferences'],
     evaluation_criteria: 'Direct and honest response, shows flexibility if applicable to the role',
     time_minutes: 1,
@@ -115,6 +118,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'easy',
     question_type: 'behavioral',
     answer_type: 'yes_no',
+    correct_answer: 'Yes',
     expected_answer_points: ['Clear yes/no answer', 'Preference for work mode', 'Flexibility for hybrid/onsite'],
     evaluation_criteria: 'Direct response about onsite availability, shows flexibility if role requires it',
     time_minutes: 1,
@@ -127,6 +131,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'medium',
     question_type: 'situational',
     answer_type: 'yes_no',
+    correct_answer: 'Yes',
     expected_answer_points: ['Clear yes/no with examples', 'Strategies for handling pressure', 'Past experience under deadlines'],
     evaluation_criteria: 'Provides real examples of working under pressure, shows resilience and coping strategies',
     time_minutes: 1,
@@ -139,6 +144,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'easy',
     question_type: 'behavioral',
     answer_type: 'yes_no',
+    correct_answer: 'Yes',
     expected_answer_points: ['Clear yes/no answer', 'Examples of teamwork', 'Collaboration style'],
     evaluation_criteria: 'Shows willingness to collaborate, provides examples of successful teamwork',
     time_minutes: 1,
@@ -151,6 +157,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'easy',
     question_type: 'behavioral',
     answer_type: 'yes_no',
+    correct_answer: 'Yes',
     expected_answer_points: ['Clear yes/no answer', 'Examples of self-learning', 'Enthusiasm for growth'],
     evaluation_criteria: 'Shows growth mindset and willingness to upskill, provides examples if possible',
     time_minutes: 1,
@@ -163,6 +170,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     difficulty: 'easy',
     question_type: 'behavioral',
     answer_type: 'yes_no',
+    correct_answer: 'Yes',
     expected_answer_points: ['Clear availability date', 'Notice period details', 'Flexibility if needed'],
     evaluation_criteria: 'Provides specific timeline, honest about notice period obligations',
     time_minutes: 1,
@@ -272,6 +280,7 @@ export default function HRQuestionBank() {
       difficulty: question.difficulty,
       question_type: question.question_type,
       answer_type: question.answer_type || 'text',
+      correct_answer: question.correct_answer,
       expected_answer_points: question.expected_answer_points.length > 0 ? question.expected_answer_points : [''],
       evaluation_criteria: question.evaluation_criteria,
       time_minutes: question.time_minutes,
@@ -344,6 +353,11 @@ export default function HRQuestionBank() {
         </button>
       </div>
 
+      {/* Info */}
+      <div className="p-3 bg-gray-50 rounded-lg text-xs border border-gray-200">
+        <span className="text-gray-600">HR questions are <strong className="text-gray-800">informational only</strong> — not scored. Responses are shared with the recruiter for review. Only Technical and Coding questions are marked.</span>
+      </div>
+
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -409,6 +423,37 @@ export default function HRQuestionBank() {
             </div>
           </div>
 
+          {/* Correct Answer - Only for Yes/No questions */}
+          {formData.answer_type === 'yes_no' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Correct Answer *</label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, correct_answer: 'Yes' }))}
+                  className={`flex-1 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                    formData.correct_answer === 'Yes'
+                      ? 'border-green-500 bg-green-50 text-green-700'
+                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                  }`}
+                >
+                  Yes is correct
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, correct_answer: 'No' }))}
+                  className={`flex-1 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                    formData.correct_answer === 'No'
+                      ? 'border-green-500 bg-green-50 text-green-700'
+                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                  }`}
+                >
+                  No is correct
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Save / Cancel */}
           <div className="flex justify-end gap-3 pt-2">
             <button
@@ -473,6 +518,9 @@ export default function HRQuestionBank() {
                         : 'bg-teal-100 text-teal-700'
                     }`}>
                       {question.answer_type === 'yes_no' ? 'Yes / No' : 'Text Answer'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                      Not Scored
                     </span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                       <Clock className="w-3 h-3" />

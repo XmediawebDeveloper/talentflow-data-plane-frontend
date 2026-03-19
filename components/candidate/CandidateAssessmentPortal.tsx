@@ -565,9 +565,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       }
     }
 
-    console.log('[PORTAL] System check complete, showing HR questions...');
     setIsReadyToStart(true);
-    setStepSafe('hr_questions');
+
+    // Skip HR questions if none selected (hr_topics empty or has_hr_round is false)
+    const hasHRQuestions = assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0;
+    if (hasHRQuestions) {
+      console.log('[PORTAL] System check complete, showing HR questions...');
+      setStepSafe('hr_questions');
+    } else {
+      console.log('[PORTAL] System check complete, no HR questions - going to fullscreen...');
+      setStepSafe('fullscreen_prompt');
+    }
   };
 
   // NEW: Handler for when user enters fullscreen and is ready to start
@@ -1095,6 +1103,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                 </p>
               </div>
 
+
               <div className="space-y-4">
                 {(assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0
                   ? assessmentInfo.hr_topics
@@ -1110,36 +1119,34 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                     { text: 'Are you open to learning new technologies?', type: 'yes_no' },
                     { text: 'Can you join immediately or within notice period?', type: 'yes_no' },
                   ]
-                ).map((q: any, idx: number) => (
+                ).map((q: any, idx: number) => {
+                  const isYesNo = q.type === 'yes_no' || q.type === 'Yes/No';
+                  return (
                   <div key={idx} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex items-start gap-3">
                       <span className="w-6 h-6 flex items-center justify-center bg-gray-800 text-white rounded text-xs font-medium flex-shrink-0 mt-0.5">{idx + 1}</span>
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900 mb-2">{q.text}</p>
-                        {(q.type === 'yes_no' || q.type === 'Yes/No') ? (
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium text-gray-900">{q.text}</p>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ml-2 bg-gray-100 text-gray-500">
+                            {isYesNo ? 'Yes/No' : 'Text'}
+                          </span>
+                        </div>
+                        {isYesNo ? (
                           <div className="flex gap-3">
-                            <button
-                              onClick={(e) => {
-                                const btn = e.currentTarget;
-                                const container = btn.parentElement;
-                                container?.querySelectorAll('button').forEach(b => b.classList.remove('bg-gray-800', 'text-white', 'border-gray-800'));
-                                container?.querySelectorAll('button').forEach(b => { b.classList.add('bg-white', 'text-gray-700', 'border-gray-300'); });
-                                btn.classList.remove('bg-white', 'text-gray-700', 'border-gray-300');
-                                btn.classList.add('bg-gray-800', 'text-white', 'border-gray-800');
-                              }}
-                              className="flex-1 px-4 py-2 rounded-lg border-2 border-gray-300 bg-white text-gray-700 text-sm font-medium hover:border-gray-400 transition-all"
-                            >Yes</button>
-                            <button
-                              onClick={(e) => {
-                                const btn = e.currentTarget;
-                                const container = btn.parentElement;
-                                container?.querySelectorAll('button').forEach(b => b.classList.remove('bg-gray-800', 'text-white', 'border-gray-800'));
-                                container?.querySelectorAll('button').forEach(b => { b.classList.add('bg-white', 'text-gray-700', 'border-gray-300'); });
-                                btn.classList.remove('bg-white', 'text-gray-700', 'border-gray-300');
-                                btn.classList.add('bg-gray-800', 'text-white', 'border-gray-800');
-                              }}
-                              className="flex-1 px-4 py-2 rounded-lg border-2 border-gray-300 bg-white text-gray-700 text-sm font-medium hover:border-gray-400 transition-all"
-                            >No</button>
+                            {['Yes', 'No'].map((option) => (
+                              <button
+                                key={option}
+                                onClick={(e) => {
+                                  const container = e.currentTarget.parentElement;
+                                  container?.querySelectorAll('button').forEach(b => {
+                                    b.className = 'flex-1 px-4 py-2.5 rounded-lg border-2 border-gray-300 bg-white text-gray-700 text-sm font-medium hover:border-gray-400 transition-all';
+                                  });
+                                  e.currentTarget.className = 'flex-1 px-4 py-2.5 rounded-lg border-2 border-gray-800 bg-gray-800 text-white text-sm font-medium transition-all';
+                                }}
+                                className="flex-1 px-4 py-2.5 rounded-lg border-2 border-gray-300 bg-white text-gray-700 text-sm font-medium hover:border-gray-400 transition-all"
+                              >{option}</button>
+                            ))}
                           </div>
                         ) : (
                           <textarea
@@ -1151,7 +1158,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
