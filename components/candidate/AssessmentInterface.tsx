@@ -140,6 +140,8 @@ export function AssessmentInterface({
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
+  const [showHRSummary, setShowHRSummary] = useState(false);
+  const [hrSummaryData, setHRSummaryData] = useState<{ answered: number; total: number; skipped: number }>({ answered: 0, total: 0, skipped: 0 });
   // const [showUnansweredPopup, setShowUnansweredPopup] = useState(false); // REMOVED: Combined into showCompleteConfirm modal
   const [unansweredQuestions, setUnansweredQuestions] = useState<number[]>([]);
   const [skippedQuestions, setSkippedQuestions] = useState<number[]>([]);
@@ -941,6 +943,26 @@ export function AssessmentInterface({
         });
       }
 
+      // Check if this is the last HR question — show HR summary before moving to Technical
+      const hrRound = rounds.find(r => r.round_type === 'hr');
+      const hrCount = hrRound?.question_count || 0;
+      if (currentQuestion.round_type === 'hr' && currentQuestion.question_number === hrCount && hrCount < currentQuestion.total_questions) {
+        let answeredCount = 0;
+        answerStatuses.forEach((status, key) => {
+          const qNum = parseInt(key.replace('question_', ''));
+          if (qNum <= hrCount && (status.hasDraft || status.isLocked)) {
+            answeredCount++;
+          }
+        });
+        if (hasAnswer && !answerStatuses.has(`question_${currentQuestion.question_number}`)) {
+          answeredCount++;
+        }
+        setHRSummaryData({ answered: answeredCount, total: hrCount, skipped: hrCount - answeredCount });
+        setShowHRSummary(true);
+        setIsNavigating(false);
+        return;
+      }
+
       // Navigate to next question
       await onNavigate(currentQuestion.question_number + 1);
     } catch (error) {
@@ -1401,17 +1423,27 @@ export function AssessmentInterface({
 
             {/* Right Side - Timer, Progress, Camera */}
             <div className="flex items-center gap-1.5 sm:gap-3">
-              {/* Global Assessment Timer */}
-              <div className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ${
-                globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
-                globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-              }`}>
-                <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <div className="flex flex-col items-center">
-                  <span className="font-mono font-bold text-sm sm:text-lg">{formatTime(globalTimeRemaining)}</span>
-                  <span className="hidden sm:block text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+              {/* Global Assessment Timer - hidden during HR round */}
+              {currentQuestion.round_type === 'hr' ? (
+                <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-blue-100 text-blue-700">
+                  <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <div className="flex flex-col items-center">
+                    <span className="font-bold text-sm sm:text-lg">No Timer</span>
+                    <span className="hidden sm:block text-[10px] uppercase tracking-wide opacity-75">HR Round</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ${
+                  globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
+                  globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                }`}>
+                  <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <div className="flex flex-col items-center">
+                    <span className="font-mono font-bold text-sm sm:text-lg">{formatTime(globalTimeRemaining)}</span>
+                    <span className="hidden sm:block text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+                  </div>
+                </div>
+              )}
 
               {/* Question Timer */}
               {timeRemaining !== null && (
@@ -1612,12 +1644,26 @@ export function AssessmentInterface({
             {/* Question Content */}
             <div className="p-3 sm:p-6">
               {currentQuestion.round_type === 'hr' && (
-                <HRQuestionView
-                  question={currentQuestion}
-                  answer={answer}
-                  onAnswerChange={setAnswer}
-                  isLocked={isCurrentAnswerLocked}
-                />
+                <>
+                  {/* HR Round Info Banner */}
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2 text-sm text-blue-800">
+                        <Users className="w-4 h-4" />
+                        <span>HR Questions are <strong>optional</strong> — answer as many as you wish, then proceed to the timed assessment.</span>
+                      </div>
+                      <span className="text-xs text-blue-600 font-medium">
+                        No Timer
+                      </span>
+                    </div>
+                  </div>
+                  <HRQuestionView
+                    question={currentQuestion}
+                    answer={answer}
+                    onAnswerChange={setAnswer}
+                    isLocked={isCurrentAnswerLocked}
+                  />
+                </>
               )}
 
               {currentQuestion.round_type === 'technical' && (
@@ -1683,6 +1729,40 @@ export function AssessmentInterface({
                   </span>
                 )}
 
+                {/* Skip to Assessment button - only shown during HR round */}
+                {currentQuestion.round_type === 'hr' && (
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      // Save current answer as draft if any
+                      const hasAnswer = answer.text_response || answer.selected_options?.length;
+                      if (hasAnswer && !isCurrentAnswerLocked) {
+                        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+                      }
+                      // Calculate HR stats and show summary
+                      const hrRound = rounds.find(r => r.round_type === 'hr');
+                      const hrCount = hrRound?.question_count || 0;
+                      let answeredCount = 0;
+                      answerStatuses.forEach((status, key) => {
+                        const qNum = parseInt(key.replace('question_', ''));
+                        if (qNum <= hrCount && (status.hasDraft || status.isLocked)) {
+                          answeredCount++;
+                        }
+                      });
+                      if (hasAnswer && !answerStatuses.has(`question_${currentQuestion.question_number}`)) {
+                        answeredCount++;
+                      }
+                      setHRSummaryData({ answered: answeredCount, total: hrCount, skipped: hrCount - answeredCount });
+                      setShowHRSummary(true);
+                    }}
+                    disabled={isNavigating || isSubmitting}
+                    className="border-blue-500 text-blue-600 hover:bg-blue-50"
+                  >
+                    Skip to Assessment
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                )}
+
                 {/* Next button - auto-saves draft and moves to next */}
                 {!isLastQuestion ? (
                   <Button
@@ -1691,7 +1771,7 @@ export function AssessmentInterface({
                     loading={isNavigating}
                     disabled={isNavigating || isSubmitting}
                   >
-                    Next
+                    {currentQuestion.round_type === 'hr' ? 'Next Question' : 'Next'}
                     <ChevronRight className="w-4 h-4 ml-1" />
                   </Button>
                 ) : (
@@ -1784,6 +1864,65 @@ export function AssessmentInterface({
 
       {/* Unanswered Questions Popup */}
       {/* REMOVED: Separate unanswered popup - now combined with Complete Confirmation Modal */}
+
+      {/* HR Round Summary Modal - shown when transitioning from HR to Technical */}
+      {showHRSummary && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users className="w-8 h-8 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">HR Round Completed</h3>
+              <p className="text-sm text-gray-500">Here&apos;s a summary of your HR round</p>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <span className="text-sm text-gray-600">Total HR Questions</span>
+                <span className="text-sm font-semibold text-gray-900">{hrSummaryData.total}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                <span className="text-sm text-green-700">Answered</span>
+                <span className="text-sm font-semibold text-green-700">{hrSummaryData.answered}</span>
+              </div>
+              {hrSummaryData.skipped > 0 && (
+                <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                  <span className="text-sm text-yellow-700">Skipped</span>
+                  <span className="text-sm font-semibold text-yellow-700">{hrSummaryData.skipped}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6">
+              <p className="text-sm text-amber-800 text-center">
+                The <strong>30-minute timed assessment</strong> will start now.
+                <br />Make sure you are ready before proceeding.
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowHRSummary(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50"
+              >
+                Go Back to HR
+              </button>
+              <button
+                onClick={async () => {
+                  setShowHRSummary(false);
+                  const hrRound = rounds.find(r => r.round_type === 'hr');
+                  const hrCount = hrRound?.question_count || 0;
+                  await onNavigate(hrCount + 1);
+                }}
+                className="flex-1 px-4 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800"
+              >
+                Start Assessment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Complete Confirmation Modal - Combined with Unanswered Questions Warning */}
       {showCompleteConfirm && (

@@ -27,6 +27,7 @@ interface HRQuestion {
   category: string;
   difficulty: 'easy' | 'medium' | 'hard';
   question_type: 'behavioral' | 'situational' | 'competency';
+  answer_type: 'text' | 'yes_no';
   expected_answer_points: string[];
   evaluation_criteria: string;
   time_minutes: number;
@@ -39,6 +40,7 @@ const EMPTY_QUESTION: Omit<HRQuestion, 'id' | 'created_at'> = {
   category: 'Communication Skills',
   difficulty: 'medium',
   question_type: 'behavioral',
+  answer_type: 'text',
   expected_answer_points: [''],
   evaluation_criteria: '',
   time_minutes: 3,
@@ -52,6 +54,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     category: 'Communication Skills',
     difficulty: 'easy',
     question_type: 'behavioral',
+    answer_type: 'text',
     expected_answer_points: ['Brief professional background', 'Key skills relevant to the role', 'Career motivation and goals'],
     evaluation_criteria: 'Clear, concise self-introduction that highlights relevant experience and shows confidence',
     time_minutes: 3,
@@ -59,56 +62,61 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
   },
   {
     id: 'default-2',
-    question_text: 'Why do you want to join our company?',
-    category: 'Culture Fit',
-    difficulty: 'easy',
-    question_type: 'behavioral',
-    expected_answer_points: ['Knowledge about the company', 'Alignment with company values', 'How the role fits career goals'],
-    evaluation_criteria: 'Shows genuine interest and research about the company, not generic answers',
+    question_text: 'Describe your industry experience relevant to this role',
+    category: 'Communication Skills',
+    difficulty: 'medium',
+    question_type: 'competency',
+    answer_type: 'text',
+    expected_answer_points: ['Relevant industry background', 'Specific projects or achievements', 'How experience applies to this role'],
+    evaluation_criteria: 'Clearly connects past industry experience to the current role requirements, provides specific examples',
     time_minutes: 3,
     is_active: true,
   },
   {
     id: 'default-3',
-    question_text: 'What are your strengths?',
-    category: 'Communication Skills',
-    difficulty: 'easy',
-    question_type: 'competency',
-    expected_answer_points: ['Specific strengths with examples', 'Relevance to the job role', 'Self-awareness'],
-    evaluation_criteria: 'Provides concrete examples rather than vague claims, strengths are relevant to the position',
-    time_minutes: 3,
-    is_active: true,
-  },
-  {
-    id: 'default-4',
-    question_text: 'What are your weaknesses?',
-    category: 'Communication Skills',
-    difficulty: 'medium',
-    question_type: 'behavioral',
-    expected_answer_points: ['Honest self-assessment', 'Steps taken to improve', 'Growth mindset'],
-    evaluation_criteria: 'Shows self-awareness and active improvement efforts, avoids cliched non-answers',
-    time_minutes: 3,
-    is_active: true,
-  },
-  {
-    id: 'default-5',
     question_text: 'Why should we hire you?',
     category: 'Career Goals',
     difficulty: 'medium',
     question_type: 'competency',
+    answer_type: 'text',
     expected_answer_points: ['Unique value proposition', 'Relevant skills and experience', 'Enthusiasm for the role'],
     evaluation_criteria: 'Clearly articulates what sets them apart, connects their skills to job requirements',
     time_minutes: 3,
     is_active: true,
   },
   {
-    id: 'default-6',
+    id: 'default-4',
+    question_text: 'What is your expected salary?',
+    category: 'Salary Discussion',
+    difficulty: 'medium',
+    question_type: 'behavioral',
+    answer_type: 'text',
+    expected_answer_points: ['Research-backed salary range', 'Justification based on experience', 'Openness to negotiation'],
+    evaluation_criteria: 'Provides a reasonable range based on market research, shows professional approach to compensation',
+    time_minutes: 3,
+    is_active: true,
+  },
+  {
+    id: 'default-5',
     question_text: 'Are you willing to relocate?',
     category: 'Adaptability',
     difficulty: 'easy',
     question_type: 'behavioral',
+    answer_type: 'yes_no',
     expected_answer_points: ['Clear yes/no answer', 'Flexibility and openness', 'Any conditions or preferences'],
     evaluation_criteria: 'Direct and honest response, shows flexibility if applicable to the role',
+    time_minutes: 1,
+    is_active: true,
+  },
+  {
+    id: 'default-6',
+    question_text: 'Are you available for onsite work?',
+    category: 'Adaptability',
+    difficulty: 'easy',
+    question_type: 'behavioral',
+    answer_type: 'yes_no',
+    expected_answer_points: ['Clear yes/no answer', 'Preference for work mode', 'Flexibility for hybrid/onsite'],
+    evaluation_criteria: 'Direct response about onsite availability, shows flexibility if role requires it',
     time_minutes: 1,
     is_active: true,
   },
@@ -118,6 +126,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     category: 'Stress Management',
     difficulty: 'medium',
     question_type: 'situational',
+    answer_type: 'yes_no',
     expected_answer_points: ['Clear yes/no with examples', 'Strategies for handling pressure', 'Past experience under deadlines'],
     evaluation_criteria: 'Provides real examples of working under pressure, shows resilience and coping strategies',
     time_minutes: 1,
@@ -129,6 +138,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     category: 'Team Collaboration',
     difficulty: 'easy',
     question_type: 'behavioral',
+    answer_type: 'yes_no',
     expected_answer_points: ['Clear yes/no answer', 'Examples of teamwork', 'Collaboration style'],
     evaluation_criteria: 'Shows willingness to collaborate, provides examples of successful teamwork',
     time_minutes: 1,
@@ -140,6 +150,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     category: 'Adaptability',
     difficulty: 'easy',
     question_type: 'behavioral',
+    answer_type: 'yes_no',
     expected_answer_points: ['Clear yes/no answer', 'Examples of self-learning', 'Enthusiasm for growth'],
     evaluation_criteria: 'Shows growth mindset and willingness to upskill, provides examples if possible',
     time_minutes: 1,
@@ -151,6 +162,7 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
     category: 'Adaptability',
     difficulty: 'easy',
     question_type: 'behavioral',
+    answer_type: 'yes_no',
     expected_answer_points: ['Clear availability date', 'Notice period details', 'Flexibility if needed'],
     evaluation_criteria: 'Provides specific timeline, honest about notice period obligations',
     time_minutes: 1,
@@ -268,6 +280,7 @@ export default function HRQuestionBank() {
       category: question.category,
       difficulty: question.difficulty,
       question_type: question.question_type,
+      answer_type: question.answer_type || 'text',
       expected_answer_points: question.expected_answer_points.length > 0 ? question.expected_answer_points : [''],
       evaluation_criteria: question.evaluation_criteria,
       time_minutes: question.time_minutes,
@@ -403,7 +416,7 @@ export default function HRQuestionBank() {
           </div>
 
           {/* Category, Difficulty, Type, Time - Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Category</label>
               <select
@@ -438,6 +451,24 @@ export default function HRQuestionBank() {
                 <option value="behavioral">Behavioral</option>
                 <option value="situational">Situational</option>
                 <option value="competency">Competency</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Answer Type</label>
+              <select
+                value={formData.answer_type}
+                onChange={(e) => {
+                  const type = e.target.value as 'text' | 'yes_no';
+                  setFormData(prev => ({
+                    ...prev,
+                    answer_type: type,
+                    time_minutes: type === 'yes_no' ? 1 : 3, // Auto-set time based on answer type
+                  }));
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white text-black"
+              >
+                <option value="text">Text Answer</option>
+                <option value="yes_no">Yes / No</option>
               </select>
             </div>
             <div>
@@ -514,24 +545,28 @@ export default function HRQuestionBank() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-white border border-gray-200 rounded-lg p-3">
           <p className="text-xs text-gray-500">Total Questions</p>
           <p className="text-xl font-semibold text-gray-900">{questions.length}</p>
+        </div>
+        <div className="bg-white border border-teal-200 rounded-lg p-3">
+          <p className="text-xs text-teal-600">Text Answer</p>
+          <p className="text-xl font-semibold text-teal-700">{questions.filter(q => q.answer_type !== 'yes_no').length}</p>
+        </div>
+        <div className="bg-white border border-orange-200 rounded-lg p-3">
+          <p className="text-xs text-orange-600">Yes / No</p>
+          <p className="text-xl font-semibold text-orange-700">{questions.filter(q => q.answer_type === 'yes_no').length}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-3">
           <p className="text-xs text-gray-500">Categories</p>
           <p className="text-xl font-semibold text-gray-900">{new Set(questions.map(q => q.category)).size}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-3">
-          <p className="text-xs text-gray-500">Avg Time</p>
+          <p className="text-xs text-gray-500">Total Time</p>
           <p className="text-xl font-semibold text-gray-900">
-            {questions.length > 0 ? (questions.reduce((sum, q) => sum + q.time_minutes, 0) / questions.length).toFixed(1) : 0} min
+            {questions.reduce((sum, q) => sum + q.time_minutes, 0)} min
           </p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-3">
-          <p className="text-xs text-gray-500">Active</p>
-          <p className="text-xl font-semibold text-gray-900">{questions.filter(q => q.is_active).length}</p>
         </div>
       </div>
 
@@ -569,6 +604,13 @@ export default function HRQuestionBank() {
                     </span>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getTypeColor(question.question_type)}`}>
                       {question.question_type}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      question.answer_type === 'yes_no'
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-teal-100 text-teal-700'
+                    }`}>
+                      {question.answer_type === 'yes_no' ? 'Yes / No' : 'Text Answer'}
                     </span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                       <Clock className="w-3 h-3" />
