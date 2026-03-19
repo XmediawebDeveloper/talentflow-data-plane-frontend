@@ -65,6 +65,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // 5-minute buffer state (MOM: buffer when allocated time expires)
   const [isInBuffer, setIsInBuffer] = useState(false);
 
+  // Timed mode — per-question 2-min timer
+  const [questionTimerSeconds, setQuestionTimerSeconds] = useState<number | null>(null);
+  const [questionTimerExpired, setQuestionTimerExpired] = useState(false);
+  const questionTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Pending: timer duration received but interval not started yet (waiting for Linda to stop)
+  const questionTimerPendingRef = useRef<number | null>(null);
+
+  // Skill coverage (real-time, timed mode only)
+  const [skillCoverage, setSkillCoverage] = useState<{
+    round: string;
+    round_name?: string;
+    covered: string[];
+    medium_covered: string[];
+    uncovered: string[];
+    nice_to_have_skills: string[];
+    total_questions: number;
+    questions_asked: number;
+  } | null>(null);
+
   // Figma UI state
   const [waveHeights, setWaveHeights] = useState<number[]>(Array(30).fill(4));
   const [isMuted, setIsMuted] = useState(false);
@@ -86,6 +105,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     if (!isConnected || isClosing) return;
     timerIntervalRef.current = setInterval(() => {
+      // Pause global timer while Linda is speaking
+      if (isAiSpeakingRef.current) return;
       setRemainingSeconds(prev => {
         if (isFlexibleMode) return prev + 1; // count up
         if (prev <= 1) {
@@ -337,6 +358,29 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Keep refs in sync with state — refs are always current inside stale closures
   useEffect(() => { isAiSpeakingRef.current = isAiSpeaking; }, [isAiSpeaking]);
   useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
+
+  // Start pending per-question countdown the moment Linda stops speaking
+  useEffect(() => {
+    if (isAiSpeaking) return; // still speaking — nothing to do
+    const pendingDur = questionTimerPendingRef.current;
+    if (pendingDur === null) return; // no pending timer
+    questionTimerPendingRef.current = null;
+    if (questionTimerIntervalRef.current) {
+      clearInterval(questionTimerIntervalRef.current);
+    }
+    questionTimerIntervalRef.current = setInterval(() => {
+      setQuestionTimerSeconds(prev => {
+        if (prev === null || prev <= 1) {
+          if (questionTimerIntervalRef.current) {
+            clearInterval(questionTimerIntervalRef.current);
+            questionTimerIntervalRef.current = null;
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, [isAiSpeaking]);
 
   // VAD settings
   const silenceStartRef = useRef<number | null>(null);
@@ -698,6 +742,61 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setIsInBuffer(true);
         setRemainingSeconds((data.buffer_minutes ?? 5) * 60);
         setStatus(`Buffer time: ${data.buffer_minutes ?? 5} minutes remaining`);
+        // Clear question timer when buffer kicks in
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        setQuestionTimerSeconds(null);
+        break;
+      case "question_timer_started": {
+        const dur = data.duration_seconds ?? 120;
+        setQuestionTimerSeconds(dur);
+        setQuestionTimerExpired(false);
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        if (isAiSpeakingRef.current) {
+          // Linda is still speaking — store duration and wait until she stops
+          questionTimerPendingRef.current = dur;
+        } else {
+          // Linda already stopped — start countdown immediately
+          questionTimerPendingRef.current = null;
+          questionTimerIntervalRef.current = setInterval(() => {
+            setQuestionTimerSeconds(prev => {
+              if (prev === null || prev <= 1) {
+                if (questionTimerIntervalRef.current) {
+                  clearInterval(questionTimerIntervalRef.current);
+                  questionTimerIntervalRef.current = null;
+                }
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+        }
+        break;
+      }
+      case "question_timer_expired":
+        setQuestionTimerExpired(true);
+        setQuestionTimerSeconds(0);
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        break;
+      case "skill_coverage_update":
+        setSkillCoverage({
+          round: data.round ?? "",
+          round_name: data.round_name ?? "",
+          covered: data.covered ?? [],
+          medium_covered: data.medium_covered ?? [],
+          uncovered: data.uncovered ?? [],
+          nice_to_have_skills: data.nice_to_have_skills ?? [],
+          total_questions: data.total_questions ?? 0,
+          questions_asked: data.questions_asked ?? 0,
+        });
         break;
       case "interview_closing":
         setIsClosing(true); isClosingRef.current = true;
@@ -1181,6 +1280,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return () => {
       isUnmountedRef.current = true;
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
+      if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
       wsRef.current?.close(3001, 'Component unmounted');
       try { audioContextRef.current?.close(); } catch {}
       audioContextRef.current = null;
@@ -1507,6 +1607,51 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     </span>
                   </div>
                 )}
+
+                {/* Question timer (timed mode only) */}
+                {questionTimerSeconds !== null && (
+                  <div
+                    className="absolute bottom-2 sm:bottom-3 right-2 sm:right-3 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full backdrop-blur-md border"
+                    style={{
+                      backgroundColor: questionTimerExpired
+                        ? 'rgba(239,68,68,0.30)'
+                        : questionTimerSeconds <= 30
+                        ? 'rgba(239,68,68,0.20)'
+                        : questionTimerSeconds <= 60
+                        ? 'rgba(245,158,11,0.20)'
+                        : 'rgba(16,185,129,0.15)',
+                      borderColor: questionTimerExpired
+                        ? 'rgba(239,68,68,0.50)'
+                        : questionTimerSeconds <= 30
+                        ? 'rgba(239,68,68,0.35)'
+                        : questionTimerSeconds <= 60
+                        ? 'rgba(245,158,11,0.35)'
+                        : 'rgba(16,185,129,0.30)',
+                    }}
+                  >
+                    <Clock
+                      className={`w-3 h-3 ${
+                        questionTimerExpired || questionTimerSeconds <= 30
+                          ? 'text-[#EF4444]'
+                          : questionTimerSeconds <= 60
+                          ? 'text-[#F59E0B]'
+                          : 'text-[#10B981]'
+                      }`}
+                    />
+                    <span
+                      className={`tabular-nums ${
+                        questionTimerExpired || questionTimerSeconds <= 30
+                          ? 'text-[#EF4444]'
+                          : questionTimerSeconds <= 60
+                          ? 'text-[#F59E0B]'
+                          : 'text-[#10B981]'
+                      } ${questionTimerExpired ? 'animate-pulse' : ''}`}
+                      style={{ fontSize: 11, fontWeight: 700 }}
+                    >
+                      {questionTimerExpired ? 'Time Up' : formatTime(questionTimerSeconds)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Controls toolbar */}
@@ -1567,6 +1712,99 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 </div>
               </div>
             </div>
+
+            {/* Skill coverage panel (timed mode only) */}
+            {skillCoverage && (
+              <div className="px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[#64748B] truncate mr-2" style={{ fontSize: 10, fontWeight: 500 }}>
+                    Skills — {skillCoverage.round_name || skillCoverage.round}
+                  </span>
+                  <span className="text-[#94A3B8] shrink-0" style={{ fontSize: 10, fontWeight: 600 }}>
+                    {skillCoverage.covered.length + skillCoverage.medium_covered.length}/{skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.uncovered.length} covered
+                  </span>
+                </div>
+                {/* Progress bar — green for fully covered, amber segment for medium */}
+                <div className="w-full h-1 bg-white/[0.06] rounded-full mb-1.5 overflow-hidden flex">
+                  <div
+                    className="h-full bg-[#10B981] transition-all duration-500"
+                    style={{
+                      width: skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.uncovered.length > 0
+                        ? `${(skillCoverage.covered.length / (skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.uncovered.length)) * 100}%`
+                        : '0%',
+                    }}
+                  />
+                  <div
+                    className="h-full bg-[#F59E0B]/60 transition-all duration-500"
+                    style={{
+                      width: skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.uncovered.length > 0
+                        ? `${(skillCoverage.medium_covered.length / (skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.uncovered.length)) * 100}%`
+                        : '0%',
+                    }}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {/* Covered skills — green */}
+                  {skillCoverage.covered.map(skill => (
+                    <span
+                      key={`covered-${skill}`}
+                      className="px-1.5 py-0.5 rounded-full bg-[#10B981]/15 border border-[#10B981]/25 text-[#10B981]"
+                      style={{ fontSize: 9, fontWeight: 600 }}
+                    >
+                      ✓ {skill}
+                    </span>
+                  ))}
+                  {/* Medium-covered skills — amber partial */}
+                  {skillCoverage.medium_covered.map(skill => (
+                    <span
+                      key={`medium-${skill}`}
+                      className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/12 border border-[#F59E0B]/35 text-[#D97706]"
+                      style={{ fontSize: 9, fontWeight: 600 }}
+                      title="Adequately covered — moving on"
+                    >
+                      ~ {skill}
+                    </span>
+                  ))}
+                  {/* Uncovered must-have skills — muted */}
+                  {skillCoverage.uncovered
+                    .filter(skill => !skillCoverage.nice_to_have_skills.includes(skill))
+                    .map(skill => (
+                      <span
+                        key={`uncovered-${skill}`}
+                        className="px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.12] text-[#64748B]"
+                        style={{ fontSize: 9, fontWeight: 600 }}
+                        title="Must-have skill"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  {/* Uncovered nice-to-have skills — amber dashed */}
+                  {skillCoverage.uncovered
+                    .filter(skill => skillCoverage.nice_to_have_skills.includes(skill))
+                    .map(skill => (
+                      <span
+                        key={`nice-${skill}`}
+                        className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/10 border border-dashed border-[#F59E0B]/30 text-[#92400E]"
+                        style={{ fontSize: 9, fontWeight: 600 }}
+                        title="Nice-to-have — skippable"
+                      >
+                        {skill} ○
+                      </span>
+                    ))}
+                </div>
+                {/* Legend */}
+                {(skillCoverage.medium_covered.length > 0 || skillCoverage.uncovered.some(s => skillCoverage.nice_to_have_skills.includes(s))) && (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    {skillCoverage.medium_covered.length > 0 && (
+                      <span className="text-[#475569]" style={{ fontSize: 8 }}>~ partial</span>
+                    )}
+                    {skillCoverage.uncovered.some(s => skillCoverage.nice_to_have_skills.includes(s)) && (
+                      <span className="text-[#475569]" style={{ fontSize: 8 }}>○ optional</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
