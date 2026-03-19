@@ -4,12 +4,13 @@ import {
   ArrowLeft, Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
   MessageSquare, Info, AlertCircle, Timer, Zap,
-  Video, Upload, Layers, ChevronRight,
+  Video, Upload, Layers, ChevronRight, Camera, Play,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD, AIInterviewRoundConfig, AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -106,6 +107,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
   const [skillToDelete, setSkillToDelete] = useState<string | null>(null);
+  const [weightError, setWeightError] = useState(false);
 
   const jdSet = new Set(jdSkillNames.map(s => s.toLowerCase()));
   const color = category === 'mth'
@@ -243,17 +245,32 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
             <div className="flex items-center">
               <input
                 type="number"
-                min={0}
+                min={10}
                 max={100}
                 value={config.percentage}
                 onChange={e => {
-                  const v = parseInt(e.target.value);
-                  if (!isNaN(v) && v >= 0 && v <= 100) onChange({ percentage: v });
+                  const raw = e.target.value;
+                  if (raw === '') return;
+                  const v = Math.min(100, parseInt(raw));
+                  if (!isNaN(v) && v >= 0) {
+                    setWeightError(v < 10);
+                    onChange({ percentage: v });
+                  }
                 }}
-                className="w-14 text-center text-sm font-semibold border border-gray-300 rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                onBlur={() => {
+                  if (config.percentage < 10) setWeightError(true);
+                }}
+                className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 ${
+                  weightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-gray-400'
+                }`}
               />
-              <span className="px-2 py-0.5 text-sm border border-l-0 border-gray-300 rounded-r-md bg-gray-50 text-gray-600">%</span>
+              <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-gray-50 ${
+                weightError ? 'border-red-400 text-red-600' : 'border-gray-300 text-gray-600'
+              }`}>%</span>
             </div>
+            {weightError && (
+              <span className="text-[11px] text-red-500 ml-1">Min 10%</span>
+            )}
           </div>
         </div>
       </div>
@@ -401,6 +418,7 @@ interface HRSectionProps {
 }
 
 function HRSection({ percentage, mode, enabled, onToggle, onPctChange }: HRSectionProps) {
+  const [hrWeightError, setHrWeightError] = useState(false);
   const hrFocusAreas = [
     { icon: MessageSquare, label: 'Behavioural', desc: 'Past behaviour & situational responses' },
     { icon: Shield,        label: 'Cultural Fit', desc: 'Values, work-style & team alignment' },
@@ -433,16 +451,31 @@ function HRSection({ percentage, mode, enabled, onToggle, onPctChange }: HRSecti
             <div className="flex items-center">
               <input
                 type="number"
-                min={0}
+                min={10}
                 max={100}
                 value={percentage}
                 onChange={e => {
-                  const v = parseInt(e.target.value);
-                  if (!isNaN(v) && v >= 0 && v <= 100) onPctChange(v);
+                  const raw = e.target.value;
+                  if (raw === '') return;
+                  const v = Math.min(100, parseInt(raw));
+                  if (!isNaN(v) && v >= 0) {
+                    setHrWeightError(v < 10);
+                    onPctChange(v);
+                  }
                 }}
-                className="w-14 text-center text-sm font-semibold border border-gray-300 rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-gray-400"
+                onBlur={() => {
+                  if (percentage < 10) setHrWeightError(true);
+                }}
+                className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 ${
+                  hrWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-gray-400'
+                }`}
               />
-              <span className="px-2 py-0.5 text-sm border border-l-0 border-gray-300 rounded-r-md bg-gray-50 text-gray-600">%</span>
+              <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-gray-50 ${
+                hrWeightError ? 'border-red-400 text-red-600' : 'border-gray-300 text-gray-600'
+              }`}>%</span>
+              {hrWeightError && (
+                <span className="text-[11px] text-red-500 ml-1">Min 10%</span>
+              )}
             </div>
           </div>
         )}
@@ -510,6 +543,97 @@ export default function AIInterviewConfig() {
   const [introVideoFile, setIntroVideoFile] = useState<File | null>(null);
   const [introVideoUrl, setIntroVideoUrl] = useState<string>('');
   const [uploadingVideo, setUploadingVideo] = useState(false);
+  const [videoMode, setVideoMode] = useState<'upload' | 'record'>('upload');
+  const [videoDurationError, setVideoDurationError] = useState<string>('');
+  const [showVideoPreview, setShowVideoPreview] = useState(false);
+  const [videoPreviewSrc, setVideoPreviewSrc] = useState<string>('');
+
+  /* Recording state */
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordedPreviewUrl, setRecordedPreviewUrl] = useState<string>('');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const videoPreviewRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const startCamera = useCallback(async () => {
+    setCameraError('');
+    setCameraReady(false);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      streamRef.current = stream;
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = stream;
+      }
+      setCameraReady(true);
+    } catch {
+      setCameraError('Unable to access camera. Please allow camera permissions.');
+    }
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+    setCameraReady(false);
+  }, []);
+
+  const stopRecordingAndSave = useCallback(() => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+  }, []);
+
+  const startRecording = useCallback(() => {
+    if (!streamRef.current) return;
+    recordedChunksRef.current = [];
+    setRecordingSeconds(0);
+    setRecordedPreviewUrl('');
+
+    const mr = new MediaRecorder(streamRef.current, { mimeType: 'video/webm' });
+    mediaRecorderRef.current = mr;
+
+    mr.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+    };
+
+    mr.onstop = () => {
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+      const file = new File([blob], `intro-recording-${Date.now()}.webm`, { type: 'video/webm' });
+      const previewUrl = URL.createObjectURL(blob);
+      setRecordedPreviewUrl(previewUrl);
+      stopCamera();
+      // Auto-upload the recorded file (skip duration check — timer already enforces ≤60s)
+      handleVideoUpload(file, true);
+    };
+
+    mr.start(100);
+    setIsRecording(true);
+
+    // Timer: count up and auto-stop at 60s
+    let seconds = 0;
+    timerRef.current = setInterval(() => {
+      seconds += 1;
+      setRecordingSeconds(seconds);
+      if (seconds >= 60) {
+        stopRecordingAndSave();
+      }
+    }, 1000);
+  }, [stopCamera, stopRecordingAndSave]);
+
+  // Cleanup camera on unmount or mode change
+  useEffect(() => {
+    return () => {
+      stopCamera();
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [stopCamera]);
 
   /* Action states */
   const [savingDraft, setSavingDraft] = useState(false);
@@ -762,8 +886,34 @@ export default function AIInterviewConfig() {
   const pctValid = totalPct === 100;
 
   /* ── Video handlers ── */
-  const handleVideoUpload = async (file: File) => {
+  const handleVideoUpload = async (file: File, skipDurationCheck = false) => {
+    setVideoDurationError('');
+    // Validate video duration (max 1 minute) — skip for recorded videos (timer already enforces limit)
+    if (!skipDurationCheck) {
+      const isValid = await new Promise<boolean>((resolve) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.onloadedmetadata = () => {
+          URL.revokeObjectURL(video.src);
+          if (video.duration > 60) {
+            setVideoDurationError('Video must be 1 minute or less');
+            toast.error('Video must be 1 minute or less');
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        };
+        video.onerror = () => {
+          URL.revokeObjectURL(video.src);
+          resolve(true); // Allow upload if duration can't be read
+        };
+        video.src = URL.createObjectURL(file);
+      });
+      if (!isValid) return;
+    }
+
     setIntroVideoFile(file);
+    setVideoPreviewSrc(URL.createObjectURL(file));
     setUploadingVideo(true);
     try {
       const result = await aiInterviewService.uploadIntroVideo(file);
@@ -772,12 +922,15 @@ export default function AIInterviewConfig() {
     } catch {
       toast.error('Failed to upload video');
       setIntroVideoFile(null);
+      setVideoPreviewSrc('');
     } finally {
       setUploadingVideo(false);
     }
   };
 
   const handleRemoveVideo = () => {
+    if (videoPreviewSrc) URL.revokeObjectURL(videoPreviewSrc);
+    setVideoPreviewSrc('');
     setIntroVideoFile(null);
     setIntroVideoUrl('');
   };
@@ -1202,11 +1355,12 @@ export default function AIInterviewConfig() {
               <div className="flex items-center gap-2">
                 <Video className="w-4 h-4 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">Introduction Video</span>
-                <span className="text-xs text-gray-400">(Optional)</span>
+                <span className="text-xs text-gray-400">(Optional · max 1 min)</span>
               </div>
               <p className="text-xs text-gray-500">
-                Upload a short video introducing the role. Candidates will see this before the interview starts.
+                Upload or record a short video introducing the role. Candidates will see this before the interview starts.
               </p>
+
               {introVideoFile || introVideoUrl ? (
                 <div className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <Video className="w-5 h-5 text-gray-500 flex-shrink-0" />
@@ -1219,25 +1373,194 @@ export default function AIInterviewConfig() {
                   {uploadingVideo ? (
                     <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
                   ) : (
-                    <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 transition-colors">
-                      <X className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={async () => {
+                          if (videoPreviewSrc) {
+                            setShowVideoPreview(true);
+                          } else if (introVideoUrl) {
+                            try {
+                              const res = await api.get(`/ai-interview/intro-video/${introVideoUrl}`, { responseType: 'blob' });
+                              const blobUrl = URL.createObjectURL(res.data);
+                              setVideoPreviewSrc(blobUrl);
+                              setShowVideoPreview(true);
+                            } catch {
+                              toast.error('Failed to load video preview');
+                            }
+                          }
+                        }}
+                        className="p-1 text-gray-400 hover:text-gray-700 transition-colors"
+                        title="Preview video"
+                      >
+                        <Play className="w-4 h-4" />
+                      </button>
+                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 transition-colors" title="Remove video">
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : (
-                <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
-                  <Upload className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-500">Click to upload an introduction video</span>
-                  <input
-                    type="file"
-                    accept="video/*"
-                    className="hidden"
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (file) handleVideoUpload(file);
-                    }}
-                  />
-                </label>
+                <>
+                  {/* Upload / Record toggle */}
+                  <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                    <button
+                      onClick={() => setVideoMode('upload')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
+                        videoMode === 'upload'
+                          ? 'bg-gray-900 text-white'
+                          : 'bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      Upload Video
+                    </button>
+                    <button
+                      onClick={() => setVideoMode('record')}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors border-l border-gray-200 ${
+                        videoMode === 'record'
+                          ? 'bg-gray-900 text-white'
+                          : 'bg-white text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      Record Video
+                    </button>
+                  </div>
+
+                  {videoMode === 'upload' ? (
+                    <div>
+                      <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors">
+                        <Upload className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-500">Click to upload a video (max 1 min)</span>
+                        <input
+                          type="file"
+                          accept="video/*"
+                          className="hidden"
+                          onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) handleVideoUpload(file);
+                          }}
+                        />
+                      </label>
+                      {videoDurationError && (
+                        <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          {videoDurationError}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {/* Camera preview */}
+                      <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-black aspect-video">
+                        <video
+                          ref={videoPreviewRef}
+                          autoPlay
+                          muted
+                          playsInline
+                          className={`w-full h-full object-cover ${recordedPreviewUrl ? 'hidden' : ''}`}
+                        />
+                        {recordedPreviewUrl && (
+                          <video
+                            src={recordedPreviewUrl}
+                            controls
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+
+                        {/* Timer overlay */}
+                        {isRecording && (
+                          <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm">
+                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                            <span className="text-xs font-mono text-white">
+                              {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')} / 01:00
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Remaining time bar */}
+                        {isRecording && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
+                            <div
+                              className="h-full bg-red-500 transition-all duration-1000 ease-linear"
+                              style={{ width: `${(recordingSeconds / 60) * 100}%` }}
+                            />
+                          </div>
+                        )}
+
+                        {/* Camera not started overlay */}
+                        {!cameraReady && !recordedPreviewUrl && !cameraError && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
+                            <Camera className="w-8 h-8 text-gray-500 mb-2" />
+                            <p className="text-xs text-gray-400">Camera preview will appear here</p>
+                          </div>
+                        )}
+
+                        {/* Camera error */}
+                        {cameraError && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
+                            <AlertCircle className="w-6 h-6 text-red-400 mb-1" />
+                            <p className="text-xs text-red-400 text-center px-4">{cameraError}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Controls */}
+                      <div className="flex items-center justify-center gap-2">
+                        {!cameraReady && !isRecording && !recordedPreviewUrl && (
+                          <button
+                            onClick={startCamera}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            Open Camera
+                          </button>
+                        )}
+                        {cameraReady && !isRecording && (
+                          <button
+                            onClick={startRecording}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                          >
+                            <span className="w-2.5 h-2.5 rounded-full bg-white" />
+                            Start Recording
+                          </button>
+                        )}
+                        {isRecording && (
+                          <button
+                            onClick={stopRecordingAndSave}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+                          >
+                            <span className="w-2.5 h-2.5 rounded-sm bg-white" />
+                            Stop & Save
+                          </button>
+                        )}
+                        {recordedPreviewUrl && !uploadingVideo && (
+                          <button
+                            onClick={() => {
+                              setRecordedPreviewUrl('');
+                              setRecordingSeconds(0);
+                              startCamera();
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            Re-record
+                          </button>
+                        )}
+                        {cameraReady && !isRecording && (
+                          <button
+                            onClick={stopCamera}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-400 text-center">Recording auto-stops at 1 minute</p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -1271,25 +1594,7 @@ export default function AIInterviewConfig() {
                 ))}
               </div>
 
-              {/* Add language */}
-              <div className="relative">
-                <select
-                  value={languageInput}
-                  onChange={e => {
-                    const val = e.target.value;
-                    if (val && !availableLanguages.includes(val)) {
-                      setAvailableLanguages(prev => [...prev, val].sort());
-                    }
-                    setLanguageInput('');
-                  }}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-gray-400 bg-white text-gray-700"
-                >
-                  <option value="">Add a language...</option>
-                  {SUPPORTED_LANGUAGES.filter(l => !availableLanguages.includes(l)).map(lang => (
-                    <option key={lang} value={lang}>{lang}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Add language – hidden */}
             </div>
           </div>
 
@@ -1400,6 +1705,29 @@ export default function AIInterviewConfig() {
           </div>
         </div>
       </div>
+
+      {/* Video Preview Dialog */}
+      <Dialog open={showVideoPreview} onOpenChange={setShowVideoPreview}>
+        <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle className="text-sm font-semibold">Video Preview</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">Introduction video for candidates</DialogDescription>
+          </DialogHeader>
+          <div className="px-4 pb-4">
+            <div className="rounded-lg overflow-hidden bg-black aspect-video">
+              {showVideoPreview && videoPreviewSrc && (
+                <video
+                  key={videoPreviewSrc}
+                  controls
+                  autoPlay
+                  className="w-full h-full object-contain"
+                  ref={el => { if (el) { el.src = videoPreviewSrc; el.load(); el.play().catch(() => {}); } }}
+                />
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Unsaved Changes Dialog */}
       <Dialog open={showUnsavedDialog} onOpenChange={open => !open && setShowUnsavedDialog(false)}>

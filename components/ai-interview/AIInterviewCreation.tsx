@@ -62,6 +62,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
   const [publishing, setPublishing] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [suggestingTopics, setSuggestingTopics] = useState<string | null>(null);
+  const [topicWeightErrors, setTopicWeightErrors] = useState<Record<string, boolean>>({});
 
   // Load published JDs
   const loadJDs = useCallback(async () => {
@@ -143,8 +144,11 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
     setRounds(prev => prev.map((r, i) => i === index ? { ...r, enabled: !r.enabled } : r));
   };
 
+  const [roundWeightErrors, setRoundWeightErrors] = useState<Record<number, boolean>>({});
   const handleRoundPercentage = (index: number, value: number) => {
-    setRounds(prev => prev.map((r, i) => i === index ? { ...r, percentage: value } : r));
+    const clamped = Math.min(100, Math.max(0, value));
+    setRoundWeightErrors(prev => ({ ...prev, [index]: clamped < 10 }));
+    setRounds(prev => prev.map((r, i) => i === index ? { ...r, percentage: clamped } : r));
   };
 
   const handleAddTopic = (roundIndex: number, topic: string) => {
@@ -168,9 +172,12 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
   };
 
   const handleTopicWeight = (roundIndex: number, topic: string, weight: number) => {
+    const clamped = Math.max(0, Math.min(100, weight));
+    const errorKey = `${roundIndex}:${topic}`;
+    setTopicWeightErrors(prev => ({ ...prev, [errorKey]: clamped < 10 }));
     setRounds(prev => prev.map((r, i) =>
       i === roundIndex
-        ? { ...r, topicWeights: { ...r.topicWeights, [topic]: Math.max(0, Math.min(100, weight)) } }
+        ? { ...r, topicWeights: { ...r.topicWeights, [topic]: clamped } }
         : r
     ));
   };
@@ -496,15 +503,18 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                 <div className="flex items-center gap-2">
                                   <input
                                     type="range"
-                                    min={0}
+                                    min={10}
                                     max={100}
                                     step={5}
                                     value={round.percentage}
                                     onChange={e => handleRoundPercentage(index, parseInt(e.target.value))}
                                     className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
                                   />
-                                  <span className="text-sm font-medium text-gray-900 w-10 text-right">{round.percentage}%</span>
+                                  <span className={`text-sm font-medium w-10 text-right ${roundWeightErrors[index] ? 'text-red-500' : 'text-gray-900'}`}>{round.percentage}%</span>
                                 </div>
+                                {roundWeightErrors[index] && (
+                                  <p className="text-[11px] text-red-500 mt-0.5">Minimum weight is 10%</p>
+                                )}
                               </div>
 
                               {/* Skills / Topics */}
@@ -550,6 +560,8 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                       const skillTime = round.percentage > 0
                                         ? ((skillWeight / 100) * getRoundDuration(round.percentage)).toFixed(1)
                                         : '0.0';
+                                      const topicErrorKey = `${index}:${topic}`;
+                                      const hasTopicWeightError = topicWeightErrors[topicErrorKey];
                                       return (
                                         <div key={topic} className="px-3 py-2">
                                           <div className="flex items-center gap-2">
@@ -557,13 +569,15 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                             <div className="flex items-center gap-1.5 flex-shrink-0">
                                               <input
                                                 type="number"
-                                                min={0}
+                                                min={10}
                                                 max={100}
                                                 value={skillWeight}
                                                 onChange={e => handleTopicWeight(index, topic, parseInt(e.target.value) || 0)}
-                                                className="w-12 px-1.5 py-0.5 text-xs text-center border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-gray-400"
+                                                className={`w-12 px-1.5 py-0.5 text-xs text-center border rounded focus:outline-none focus:ring-1 ${
+                                                  hasTopicWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
+                                                }`}
                                               />
-                                              <span className="text-xs text-gray-400 w-4">%</span>
+                                              <span className={`text-xs w-4 ${hasTopicWeightError ? 'text-red-500' : 'text-gray-400'}`}>%</span>
                                               <span className="text-xs text-gray-400 w-14 text-right">{skillTime} min</span>
                                               <button
                                                 onClick={() => toggleComment(round.type, topic)}
@@ -582,6 +596,9 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                               </button>
                                             </div>
                                           </div>
+                                          {hasTopicWeightError && (
+                                            <p className="text-[11px] text-red-500 mt-0.5 text-right">Minimum weight is 10%</p>
+                                          )}
                                           {isCommentOpen && (
                                             <div className="mt-1.5">
                                               <input
