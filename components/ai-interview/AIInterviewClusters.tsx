@@ -22,7 +22,7 @@ type SkillType = 'Skill' | 'Command' | 'Certification';
 interface Cluster {
   id: string;
   name: string;
-  priority: 1 | 2 | 3 | 4 | 5;
+  priority: 2 | 3 | 4 | 5;
   skills: string[];
   reason?: string;
 }
@@ -63,11 +63,10 @@ const FIXED_TIME = { mth: 20, nth: 7, hr: 3 } as const;
 const DEFAULT_PCT = { mth: 70, nth: 20, hr: 10 } as const;
 
 const PRIORITY_LABELS: Record<number, { label: string; short: string; color: string; dot: string }> = {
-  5: { label: 'P5 \u2013 Critical',   short: 'Critical',  color: 'bg-red-100 text-red-700 border-red-200',       dot: 'bg-red-500' },
-  4: { label: 'P4 \u2013 High',       short: 'High',      color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+  5: { label: 'P1 \u2013 Critical',   short: 'Critical',  color: 'bg-red-100 text-red-700 border-red-200',       dot: 'bg-red-500' },
+  4: { label: 'P2 \u2013 High',       short: 'High',      color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
   3: { label: 'P3 \u2013 Medium',     short: 'Medium',    color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
-  2: { label: 'P2 \u2013 Low',        short: 'Low',       color: 'bg-blue-100 text-blue-700 border-blue-200',     dot: 'bg-blue-500' },
-  1: { label: 'P1 \u2013 Optional',   short: 'Optional',  color: 'bg-gray-100 text-gray-600 border-gray-200',     dot: 'bg-gray-400' },
+  2: { label: 'P4 \u2013 Low',        short: 'Low',       color: 'bg-blue-100 text-blue-700 border-blue-200',     dot: 'bg-blue-500' },
 };
 
 const STEPS = ['Select JD', 'Configure', 'Clusters', 'Preview & Publish'];
@@ -263,7 +262,7 @@ function ClusterRow({
               onChange={(e) => onUpdate(cluster.id, { priority: Number(e.target.value) as Cluster['priority'] })}
               className="mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 bg-white"
             >
-              {[5, 4, 3, 2, 1].map(p => (
+              {[5, 4, 3, 2].map(p => (
                 <option key={p} value={p}>{PRIORITY_LABELS[p].label}</option>
               ))}
             </select>
