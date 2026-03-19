@@ -140,6 +140,8 @@ export function AssessmentInterface({
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
+  const [showHRSummary, setShowHRSummary] = useState(false);
+  const [hrSummaryData, setHRSummaryData] = useState<{ answered: number; total: number; skipped: number }>({ answered: 0, total: 0, skipped: 0 });
   // const [showUnansweredPopup, setShowUnansweredPopup] = useState(false); // REMOVED: Combined into showCompleteConfirm modal
   const [unansweredQuestions, setUnansweredQuestions] = useState<number[]>([]);
   const [skippedQuestions, setSkippedQuestions] = useState<number[]>([]);
@@ -1146,6 +1148,7 @@ export function AssessmentInterface({
     { label: 'Terms & Consent', active: false, completed: true },
     { label: 'Assessment Details', active: false, completed: true },
     { label: 'System Check', active: false, completed: true },
+    { label: 'HR Questions', active: false, completed: true },
     { label: 'Assessment', active: true, completed: false }
   ];
 
@@ -1403,15 +1406,15 @@ export function AssessmentInterface({
             <div className="flex items-center gap-1.5 sm:gap-3">
               {/* Global Assessment Timer */}
               <div className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ${
-                globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
-                globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-              }`}>
-                <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <div className="flex flex-col items-center">
-                  <span className="font-mono font-bold text-sm sm:text-lg">{formatTime(globalTimeRemaining)}</span>
-                  <span className="hidden sm:block text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+                  globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
+                  globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                }`}>
+                  <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <div className="flex flex-col items-center">
+                    <span className="font-mono font-bold text-sm sm:text-lg">{formatTime(globalTimeRemaining)}</span>
+                    <span className="hidden sm:block text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+                  </div>
                 </div>
-              </div>
 
               {/* Question Timer */}
               {timeRemaining !== null && (
@@ -1609,17 +1612,8 @@ export function AssessmentInterface({
               </div>
             </div>
 
-            {/* Question Content */}
+            {/* Question Content - Technical + Coding only (HR handled in Step 4) */}
             <div className="p-3 sm:p-6">
-              {currentQuestion.round_type === 'hr' && (
-                <HRQuestionView
-                  question={currentQuestion}
-                  answer={answer}
-                  onAnswerChange={setAnswer}
-                  isLocked={isCurrentAnswerLocked}
-                />
-              )}
-
               {currentQuestion.round_type === 'technical' && (
                 <TechnicalQuestionView
                   question={currentQuestion}

@@ -10,6 +10,7 @@ import ShareAssessmentModal from './ShareAssessmentModal';
 import AssessmentAuditTrail from './AssessmentAuditTrail';
 import ConsentLogs from './compliance/ConsentLogs';
 import AssessmentPreviewModal from './AssessmentPreviewModal';
+import HRQuestionBank from './HRQuestionBank';
 import AssessmentEditModal from './AssessmentEditModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
 import { Job } from '@/lib/types/types';
@@ -45,7 +46,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
   const canDownloadAssessmentPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
 
-  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings' | 'question-bank'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
   const [showCreation, setShowCreation] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -1236,6 +1237,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Settings
                 </button>
+                <button
+                  onClick={() => setActiveTab('question-bank')}
+                  className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+                    activeTab === 'question-bank'
+                      ? 'border-gray-800 text-gray-800'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">HR Question Bank</span>
+                  <span className="sm:hidden">Q Bank</span>
+                </button>
               </div>
               {/* Grid/List View Toggle - positioned absolute right so tabs get full scroll width */}
               <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-1 border border-gray-200 rounded-lg p-1 bg-white">
@@ -1273,6 +1286,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             ) : activeTab === 'consent' ? (
               /* Consent Logs Tab */
               <ConsentLogs />
+            ) : activeTab === 'question-bank' ? (
+              /* HR Question Bank Tab */
+              <HRQuestionBank />
             ) : activeTab === 'settings' ? (
               /* Settings Tab with Sub-tabs */
               <div className="space-y-6">
