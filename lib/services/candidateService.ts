@@ -161,6 +161,7 @@ export interface AssessmentInfo {
   has_technical_round: boolean;
   has_coding_round: boolean;
   hr_percentage: number;
+  hr_topics?: any[];  // Selected HR questions from Question Bank
   technical_percentage: number;
   coding_percentage: number;
   invitation_status: string;
