@@ -9,7 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye } from 'lucide-react';
+import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye, ShieldAlert, AudioLines } from 'lucide-react';
 import { InterviewEventBus, ProctoringEvent, ProctoringEventType } from './InterviewEventBus';
 
 interface WarningItem {
@@ -39,6 +39,10 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   face_missing: <UserX className="w-6 h-6" />,
   multiple_faces: <Users className="w-6 h-6" />,
   gaze_away: <ScanEye className="w-6 h-6" />,
+  face_mismatch: <ShieldAlert className="w-6 h-6" />,
+  face_identity_changed: <ShieldAlert className="w-6 h-6" />,
+  voice_mismatch: <AudioLines className="w-6 h-6" />,
+  voice_identity_changed: <AudioLines className="w-6 h-6" />,
 };
 
 const EVENT_NAMES: Record<ProctoringEventType, string> = {
@@ -57,6 +61,10 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   face_missing: 'Face Not Detected',
   multiple_faces: 'Multiple Faces Detected',
   gaze_away: 'Looking Away Detected',
+  face_mismatch: 'Face Verification Warning',
+  face_identity_changed: 'Identity Changed',
+  voice_mismatch: 'Voice Verification Warning',
+  voice_identity_changed: 'Speaker Changed',
 };
 
 const SEVERITY_COLORS: Record<'low' | 'medium' | 'high', { bg: string; border: string; text: string; icon: string }> = {
