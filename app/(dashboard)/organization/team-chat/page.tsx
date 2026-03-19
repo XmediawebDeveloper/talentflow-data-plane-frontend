@@ -883,21 +883,16 @@ export default function TeamChatPage() {
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{member.name}</p>
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {member.name}
+                    {member.user_id === currentUser?.id && (
+                      <span className="text-gray-400 font-normal"> (You)</span>
+                    )}
+                  </p>
                   <p className="text-xs text-gray-500 truncate">{member.role}</p>
                 </div>
               </div>
             ))}
-          </div>
-
-          <div className="p-3 border-t border-gray-200">
-            <button
-              onClick={openAddMembersModal}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Members
-            </button>
           </div>
         </div>
       )}

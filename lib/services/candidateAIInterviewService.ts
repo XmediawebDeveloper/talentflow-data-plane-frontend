@@ -16,6 +16,7 @@ const candidateApi = axios.create({
 export interface CandidateInterviewInfo {
   id: string;
   candidate_name: string;
+  candidate_email: string;
   position: string;
   interview_type: string;
   duration_minutes: number;
@@ -23,6 +24,38 @@ export interface CandidateInterviewInfo {
   status: string;
   consent_accepted_at?: string;
   system_check_passed: boolean;
+  available_languages?: string[];
+  selected_language?: string | null;
+  // JD info for Step 2 (JD Review)
+  jd_title?: string | null;
+  jd_experience_level?: string | null;
+  jd_description?: string | null;
+  jd_department?: string | null;
+  jd_location?: string | null;
+  jd_employment_type?: string | null;
+  jd_remote_type?: string | null;
+  jd_must_have_skills?: string[] | null;
+  jd_nice_to_have_skills?: string[] | null;
+  jd_experience_min?: number | null;
+  jd_experience_max?: number | null;
+  jd_job_level?: string | null;
+  jd_industry_type?: string | null;
+  // Introduction video for Step 6
+  introduction_video_url?: string | null;
+  // Identity verification for Step 3
+  identity_verified?: boolean;
+  identity_name?: string | null;
+}
+
+export interface AvailableLanguagesResponse {
+  available_languages: string[];
+  selected_language: string | null;
+}
+
+export interface LanguageSelectionResponse {
+  success: boolean;
+  selected_language: string;
+  message: string;
 }
 
 export interface CandidateConsentRequest {
@@ -104,6 +137,38 @@ export const candidateAIInterviewService = {
     formData.append('file', blob, 'recording.webm');
     const response = await candidateApi.post(
       `/candidate/ai-interview/${token}/upload-recording`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return response.data;
+  },
+
+  async getAvailableLanguages(token: string): Promise<AvailableLanguagesResponse> {
+    const response = await candidateApi.get<AvailableLanguagesResponse>(
+      `/candidate/ai-interview/${token}/languages`,
+    );
+    return response.data;
+  },
+
+  async selectLanguage(token: string, language: string): Promise<LanguageSelectionResponse> {
+    const response = await candidateApi.post<LanguageSelectionResponse>(
+      `/candidate/ai-interview/${token}/select-language`,
+      { language },
+    );
+    return response.data;
+  },
+
+  async verifyIdentity(
+    token: string,
+    data: { name: string; email: string; candidate_id?: string; photo?: Blob },
+  ): Promise<CandidateInterviewInfo> {
+    const formData = new FormData();
+    formData.append('name', data.name);
+    formData.append('email', data.email);
+    if (data.candidate_id) formData.append('candidate_id', data.candidate_id);
+    if (data.photo) formData.append('photo', data.photo, 'identity.jpg');
+    const response = await candidateApi.post<CandidateInterviewInfo>(
+      `/candidate/ai-interview/${token}/identity-verify`,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } },
     );

@@ -421,31 +421,39 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     }
   };
   
-  // Calculate total units across all quota types (RU + RS + AS + AIU + max_seats)
+  // Calculate total units across all quota types (RU + RS + AS + AIU) — max_seats excluded
   const calculateTotalUnits = () => {
     if (!quotaData?.quotas) return { remaining: 0, limit: 0, used: 0 };
 
     const quotas = quotaData.quotas;
-    // Include all unit types: Resume Upload, Resume Scoring, Assessment, AI Interview, Max Users
-    const allUnitTypes = ['RU', 'RS', 'AS', 'AIU', 'max_seats'];
+    // Exclude max_seats from totals — it is shown separately in the dropdown
+    const unitTypes = ['RU', 'RS', 'AS', 'AIU'];
 
     let totalRemaining = 0;
     let totalLimit = 0;
     let totalUsed = 0;
 
-    allUnitTypes.forEach(quotaType => {
+    unitTypes.forEach(quotaType => {
       if (quotas[quotaType]) {
         const quota = quotas[quotaType];
         // Skip unlimited quotas in the calculation
-        if (quota.is_unlimited) return;
+        if ((quota as any).is_unlimited) return;
 
-        totalRemaining += quota.total_remaining || 0;
-        totalLimit += (quota.subscription?.limit || 0) + (quota.addon?.total_purchased || 0);
+        totalRemaining += (quota.total_remaining as number) || 0;
+        totalLimit += (quota.subscription?.limit as number || 0) + (quota.addon?.total_purchased || 0);
         totalUsed += quota.subscription?.used || 0;
       }
     });
 
     return { remaining: totalRemaining, limit: totalLimit, used: totalUsed };
+  };
+
+  // Labels for each quota key shown in the plan dropdown
+  const quotaLabels: Record<string, string> = {
+    RU: 'Resume Uploads',
+    RS: 'Resume Scoring',
+    AS: 'Assessments',
+    AIU: 'AI Interviews',
   };
 
   const totalUnits = calculateTotalUnits();
@@ -534,38 +542,140 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
           </button>
         )}
 
-        {/* Plan & Unit Balance Display - Moved before icons - Only show if user has permission - Hidden on mobile */}
+        {/* Plan & Unit Balance Display - Clickable to show breakdown dropdown */}
         {hasQuotaPermission && (
-          <div className="hidden md:flex items-center gap-2 lg:gap-3 px-2 sm:px-3 lg:px-4 py-2 lg:py-2.5 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl">
-            <div className="w-7 h-7 lg:w-9 lg:h-9 bg-white rounded-lg flex items-center justify-center shadow-sm border border-gray-200">
-              <CreditCard className="w-4 h-4 lg:w-5 lg:h-5 text-gray-600" />
-            </div>
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-xs lg:text-sm font-semibold text-gray-900 truncate max-w-[100px] lg:max-w-[140px]" title={loadingQuota ? 'Loading...' : planName}>
-                {loadingQuota ? 'Loading...' : planName}
-              </span>
-              {!loadingQuota && !quotaError && !isPendingStatus && (
-                <div className="flex items-center gap-1 lg:gap-1.5">
-                  <span className="text-xs lg:text-sm font-bold text-gray-700">{totalUnits.remaining.toLocaleString()}</span>
-                  <span className="text-[10px] lg:text-xs text-gray-500">units left</span>
+          <div className="relative hidden md:block">
+            <button
+              onClick={() => {
+                setShowPlanMenu(!showPlanMenu);
+                setShowHelpMenu(false);
+                setShowNotifications(false);
+                setShowUserMenu(false);
+              }}
+              className="flex items-center gap-2 lg:gap-3 px-2 sm:px-3 lg:px-4 py-2 lg:py-2.5 bg-gradient-to-r from-gray-50 to-gray-100 border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all"
+            >
+              <div className="w-7 h-7 lg:w-9 lg:h-9 bg-white rounded-lg flex items-center justify-center shadow-sm border border-gray-200">
+                <CreditCard className="w-4 h-4 lg:w-5 lg:h-5 text-gray-600" />
+              </div>
+              <div className="flex flex-col gap-0.5 min-w-0 text-left">
+                <span className="text-xs lg:text-sm font-semibold text-gray-900 truncate max-w-[100px] lg:max-w-[140px]" title={loadingQuota ? 'Loading...' : planName}>
+                  {loadingQuota ? 'Loading...' : planName}
+                </span>
+                {!loadingQuota && !quotaError && !isPendingStatus && (
+                  <div className="flex items-center gap-1 lg:gap-1.5">
+                    <span className="text-xs lg:text-sm font-bold text-gray-700">{totalUnits.remaining.toLocaleString()}</span>
+                    <span className="text-[10px] lg:text-xs text-gray-500">units left</span>
+                  </div>
+                )}
+                {isPendingStatus && (
+                  <span className="text-[10px] lg:text-xs text-orange-600 font-medium">
+                    {tenantStatus}
+                  </span>
+                )}
+              </div>
+              {!loadingQuota && !quotaError && !isPendingStatus && totalUnits.limit > 0 && (
+                <div className="w-12 lg:w-16 h-2 bg-white/60 rounded-full overflow-hidden border border-gray-200">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      usagePercentage > 90 ? 'bg-red-500' :
+                      usagePercentage > 70 ? 'bg-yellow-500' : 'bg-gray-600'
+                    }`}
+                    style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                  />
                 </div>
               )}
-              {isPendingStatus && (
-                <span className="text-[10px] lg:text-xs text-orange-600 font-medium">
-                  {tenantStatus}
-                </span>
-              )}
-            </div>
-            {!loadingQuota && !quotaError && !isPendingStatus && totalUnits.limit > 0 && (
-              <div className="w-12 lg:w-16 h-2 bg-white/60 rounded-full overflow-hidden border border-gray-200">
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    usagePercentage > 90 ? 'bg-red-500' :
-                    usagePercentage > 70 ? 'bg-yellow-500' : 'bg-gray-600'
-                  }`}
-                  style={{ width: `${Math.min(usagePercentage, 100)}%` }}
-                />
-              </div>
+              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showPlanMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showPlanMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowPlanMenu(false)} />
+                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-20">
+                  {/* Header */}
+                  <div className="px-4 py-3 bg-gray-800 text-white">
+                    <h3 className="font-medium flex items-center gap-2 text-sm">
+                      <CreditCard className="w-4 h-4" />
+                      {planName}
+                    </h3>
+                    <p className="text-xs text-gray-300 mt-0.5">Unit balance breakdown</p>
+                  </div>
+
+                  {/* Quota rows */}
+                  <div className="p-3 space-y-2">
+                    {quotaData?.quotas && (['RU', 'RS', 'AS', 'AIU'] as const).map(key => {
+                      const quota = quotaData.quotas![key];
+                      if (!quota) return null;
+                      const isUnlimited = !!(quota as any).is_unlimited;
+                      const remaining = isUnlimited ? null : ((quota.total_remaining as number) || 0);
+                      const limit = isUnlimited ? null : ((quota.subscription?.limit as number || 0) + (quota.addon?.total_purchased || 0));
+                      const used = (limit != null && remaining != null) ? limit - remaining : 0;
+                      const pct = limit && limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
+                      return (
+                        <div key={key} className="flex flex-col gap-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600">{quotaLabels[key]}</span>
+                            <span className="text-xs font-semibold text-gray-800">
+                              {isUnlimited ? (
+                                <span className="text-green-600">Unlimited</span>
+                              ) : (
+                                <span className="flex items-center gap-1.5">
+                                  <span className="text-gray-500 font-normal">{used.toLocaleString()} used</span>
+                                  <span className="text-gray-300">·</span>
+                                  <span className="text-gray-800">Left {(remaining ?? 0).toLocaleString()}</span>
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          {!isUnlimited && limit && limit > 0 && (
+                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-[width] ${pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-yellow-500' : 'bg-gray-500'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Total */}
+                    {!loadingQuota && !quotaError && totalUnits.limit > 0 && (
+                      <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-gray-700">Total Remaining</span>
+                        <span className="text-sm font-bold text-gray-900">{totalUnits.remaining.toLocaleString()}</span>
+                      </div>
+                    )}
+
+                    {/* Users limit — excluded from total */}
+                    {quotaData?.quotas?.max_seats && (() => {
+                      const seats = quotaData.quotas!.max_seats!;
+                      const isUnlimited = !!(seats as any).is_unlimited;
+                      const remaining = isUnlimited ? null : ((seats.total_remaining as number) || 0);
+                      const limit = isUnlimited ? null : ((seats.subscription?.limit as number || 0) + (seats.addon?.total_purchased || 0));
+                      const used = (limit != null && remaining != null) ? limit - remaining : 0;
+                      return (
+                        <div className="pt-2 border-t border-dashed border-gray-200 flex flex-col gap-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500 font-medium">Users</span>
+                            <span className="text-xs font-semibold text-gray-600">
+                              {isUnlimited ? (
+                                <span className="text-green-600">Unlimited</span>
+                              ) : (
+                                <span className="flex items-center gap-1.5">
+                                  <span className="text-gray-500 font-normal">{used.toLocaleString()} used</span>
+                                  <span className="text-gray-300">·</span>
+                                  <span className="text-gray-600">Left {(remaining ?? 0).toLocaleString()}</span>
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <span className="text-[10px] italic text-gray-400">Excluded from the above total</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}

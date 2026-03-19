@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft, Award, Clock, MessageSquare, ThumbsUp, ThumbsDown,
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import api from '@/lib/services/api';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface CandidateResultsViewProps {
@@ -24,7 +25,29 @@ type TabKey = 'overview' | 'sentiment' | 'qa' | 'recording' | 'transcript';
 export default function CandidateResultsView({ interview, onBack }: CandidateResultsViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [videoError, setVideoError] = useState(false);
+  const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
+  const [videoLoading, setVideoLoading] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
+
+  // Fetch recording with auth headers and create blob URL
+  useEffect(() => {
+    if (activeTab !== 'recording' || !interview.recording_file_path || videoBlobUrl) return;
+    let cancelled = false;
+    setVideoLoading(true);
+    api.get(`/ai-interview/${interview.id}/recording`, { responseType: 'blob' })
+      .then((res) => {
+        if (cancelled) return;
+        const url = URL.createObjectURL(res.data);
+        setVideoBlobUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setVideoError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setVideoLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, interview.recording_file_path, interview.id, videoBlobUrl]);
 
   const eval_ = interview.ai_evaluation || {};
   const isCompleted = interview.status === 'completed';
@@ -526,16 +549,21 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         <p className="text-gray-500">Recording could not be loaded</p>
                         <p className="text-xs text-gray-400 mt-1">The file may have been moved or deleted</p>
                       </div>
-                    ) : (
+                    ) : videoLoading ? (
+                      <div className="text-center py-16">
+                        <div className="w-8 h-8 border-4 border-gray-300 border-t-gray-600 rounded-full animate-spin mx-auto mb-3" />
+                        <p className="text-sm text-gray-500">Loading recording...</p>
+                      </div>
+                    ) : videoBlobUrl ? (
                       <video
                         controls
                         className="w-full max-h-[500px] rounded-lg bg-black"
-                        src={aiInterviewService.getRecordingUrl(interview.id)}
+                        src={videoBlobUrl}
                         onError={() => setVideoError(true)}
                       >
                         Your browser does not support video playback.
                       </video>
-                    )
+                    ) : null
                   ) : (
                     <div className="text-center py-16">
                       <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
