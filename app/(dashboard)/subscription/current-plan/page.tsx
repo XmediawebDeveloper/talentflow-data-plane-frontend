@@ -250,10 +250,19 @@ const getGradientForPlan = (planName: string, tier: string): string => {
 };
 
 /**
- * Compare plan tiers to determine upgrade/downgrade
- * Returns: 1 if targetTier is higher (upgrade), -1 if lower (downgrade), 0 if same
+ * Compare plan tiers (and billing interval within the same tier) to determine upgrade/downgrade.
+ * Returns: 1 if target is higher (upgrade), -1 if lower (downgrade), 0 if identical.
+ *
+ * Same-tier billing interval rules:
+ *   ANNUAL  → MONTHLY  = downgrade (-1)
+ *   MONTHLY → ANNUAL   = upgrade   (+1)
  */
-const comparePlanTiers = (currentTier: string | undefined, targetTier: string | undefined): number => {
+const comparePlanTiers = (
+  currentTier: string | undefined,
+  targetTier: string | undefined,
+  currentInterval?: string,
+  targetInterval?: string,
+): number => {
   if (!currentTier || !targetTier) return 0;
 
   const tierOrder: Record<string, number> = {
@@ -267,7 +276,16 @@ const comparePlanTiers = (currentTier: string | undefined, targetTier: string | 
 
   if (targetLevel > currentLevel) return 1;  // Upgrade
   if (targetLevel < currentLevel) return -1; // Downgrade
-  return 0; // Same tier
+
+  // Same tier — check billing interval
+  if (currentInterval && targetInterval) {
+    const cur = currentInterval.toUpperCase();
+    const tgt = targetInterval.toUpperCase();
+    if (cur === 'ANNUAL' && tgt === 'MONTHLY') return -1; // Downgrade
+    if (cur === 'MONTHLY' && tgt === 'ANNUAL') return 1;  // Upgrade
+  }
+
+  return 0; // Same tier, same interval
 };
 
 const formatCurrency = (amount: number | undefined | null, currency: string): string => {
@@ -1206,10 +1224,12 @@ function CurrentPlanContent() {
       return;
     }
 
-    // Check if this is a downgrade
+    // Check if this is a downgrade (tier or billing interval)
     const tierComparison = comparePlanTiers(
       companySettings?.current_plan_tier || currentPlan?.tier,
-      plan.tier
+      plan.tier,
+      currentPlanBillingPeriod,          // current: ANNUAL or MONTHLY
+      isYearly ? 'ANNUAL' : 'MONTHLY',   // target: what the user toggled to
     );
 
     if (tierComparison === -1) {
@@ -1545,17 +1565,17 @@ function CurrentPlanContent() {
         // Handle both string and object error formats
         const errorDetail = data.detail;
 
-        // Check if this is a downgrade blocked error
+        // DOWNGRADE_BLOCKED_USER_LIMIT: backend no longer blocks downgrade,
+        // but handle gracefully in case it's ever returned.
         if (errorDetail && typeof errorDetail === 'object' && errorDetail.error === 'DOWNGRADE_BLOCKED_USER_LIMIT') {
-          setDowngradeWarningData({
-            activeUsers: errorDetail.active_users || 0,
-            newPlanMaxSeats: errorDetail.new_plan_max_seats || 0,
-            usersToDeactivate: errorDetail.users_to_deactivate || 0,
-            newPlanName: errorDetail.new_plan_name || 'selected plan',
-            actionRequired: errorDetail.action_required,
+          const active = errorDetail.active_users || 0;
+          const limit = errorDetail.new_plan_max_seats || 0;
+          const toDeactivate = errorDetail.users_to_deactivate || 0;
+          toast.error('Downgrade requires user reduction', {
+            description: `You have ${active} active users but the new plan allows ${limit}. Please deactivate ${toDeactivate} user(s) in User Management, then retry the downgrade.`,
+            duration: 8000,
           });
-          setShowDowngradeWarning(true);
-          return; // Don't show generic error toast
+          return;
         }
 
         let errorMessage = typeof errorDetail === 'string'
@@ -2122,111 +2142,60 @@ function CurrentPlanContent() {
             </div>
           )}
 
-          {/* Admin Plan Metadata - Collapsible, visible only to tenant admins */}
-          {isTenantAdmin && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <button
-                onClick={() => setShowAdminMeta(!showAdminMeta)}
-                className="flex w-full items-center justify-between text-left group"
-              >
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-indigo-600" />
-                  <h3 className="text-sm font-medium text-gray-700">Plan Details (Admin)</h3>
-                </div>
-                {showAdminMeta ? (
-                  <ChevronUp className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
-                )}
-              </button>
-              {showAdminMeta && (
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {companySettings?.current_plan_id && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Plan ID</p>
-                      <p className="text-sm font-medium text-gray-900">{companySettings.current_plan_id}</p>
-                    </div>
-                  )}
-                  {currentPlan?.planSlug && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Plan Slug</p>
-                      <p className="text-sm font-medium text-gray-900">{currentPlan.planSlug}</p>
-                    </div>
-                  )}
-                  {sharedQuotaData?.plan_info?.plan_tier && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Plan Tier</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.plan_tier}</p>
-                    </div>
-                  )}
-                  <div className="p-3 bg-gray-50 rounded-lg">
-                    <p className="text-xs text-gray-500 mb-0.5">Billing Period</p>
-                    <p className="text-sm font-medium text-gray-900 capitalize">{currentPlanBillingPeriod?.toLowerCase() || '-'}</p>
+          {/* Plan Features - non-quota features only (Teams, API Access, SSO, etc.) */}
+          {(() => {
+            const QUOTA_FEATURE_KEYS = new Set([
+              'resume_upload', 'resume_storage', 'resume_scoring',
+              'assessment', 'assessments', 'ai_interview', 'ai_interviews',
+              'seats', 'storage', 'jobs',
+            ]);
+            // Also filter by feature_category if available (category 'quota' or 'metered')
+            const QUOTA_CATEGORIES = new Set(['quota', 'metered', 'usage']);
+            const seen = new Set<string>();
+            const nonQuotaFeatures = (sharedQuotaData?.features ?? []).filter(f => {
+              if (QUOTA_FEATURE_KEYS.has(f.feature_key)) return false;
+              if (f.feature_category && QUOTA_CATEGORIES.has(f.feature_category.toLowerCase())) return false;
+              // deduplicate by feature_key
+              if (seen.has(f.feature_key)) return false;
+              seen.add(f.feature_key);
+              return true;
+            });
+            if (nonQuotaFeatures.length === 0) return null;
+            return (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                  <h3 className="text-xs sm:text-sm font-medium text-gray-700">Plan Features</h3>
+                  <div className="flex items-center gap-3">
+                    {sharedQuotaData?.plan_info?.plan_tier && (
+                      <span className="text-xs text-gray-500">
+                        Tier: <span className="font-medium text-gray-800 capitalize">{sharedQuotaData.plan_info.plan_tier}</span>
+                      </span>
+                    )}
+                    {sharedQuotaData?.plan_info?.isolation_type && (
+                      <span className="text-xs text-gray-500">
+                        Isolation: <span className="font-medium text-gray-800 capitalize">{sharedQuotaData.plan_info.isolation_type.toLowerCase()}</span>
+                      </span>
+                    )}
                   </div>
-                  {sharedQuotaData?.plan_info?.billing_interval && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Billing Interval</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.billing_interval.toLowerCase()}</p>
-                    </div>
-                  )}
-                  {sharedQuotaData?.plan_info?.isolation_type && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Isolation Type</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{sharedQuotaData.plan_info.isolation_type.toLowerCase()}</p>
-                    </div>
-                  )}
-                  {companySettings?.max_seats !== undefined && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Included Seats</p>
-                      <p className="text-sm font-medium text-gray-900">{formatQuotaValue(companySettings.max_seats)}</p>
-                    </div>
-                  )}
-                  {sharedQuotaData?.quota_source && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Quota Source</p>
-                      <p className="text-sm font-medium text-gray-900">{sharedQuotaData.quota_source.replace(/_/g, ' ')}</p>
-                    </div>
-                  )}
-                  {companySettings?.subscription_status && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Subscription Status</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.subscription_status.toLowerCase().replace(/_/g, ' ')}</p>
-                    </div>
-                  )}
-                  {companySettings?.payment_status && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Payment Status</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.payment_status.toLowerCase().replace(/_/g, ' ')}</p>
-                    </div>
-                  )}
-                  {companySettings?.payment_method && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Payment Method</p>
-                      <p className="text-sm font-medium text-gray-900 capitalize">{companySettings.payment_method}</p>
-                    </div>
-                  )}
-                  {companySettings?.payment_reference && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Payment Reference</p>
-                      <p className="text-sm font-mono text-gray-900 text-xs">{companySettings.payment_reference}</p>
-                    </div>
-                  )}
-                  {sharedQuotaData?.tenant_id && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Tenant ID</p>
-                      <p className="text-sm font-mono text-gray-900 text-xs truncate" title={sharedQuotaData.tenant_id}>{sharedQuotaData.tenant_id}</p>
-                    </div>
-                  )}
-                  {companySettings?.last_synced_at && (
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 mb-0.5">Last Synced</p>
-                      <p className="text-sm font-medium text-gray-900">{formatISTDate(companySettings.last_synced_at)}</p>
-                    </div>
-                  )}
                 </div>
-              )}
-            </div>
-          )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {nonQuotaFeatures.map(f => (
+                    <div key={f.feature_key} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
+                      {f.is_enabled ? (
+                        <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                      )}
+                      <span className={`text-xs font-medium ${f.is_enabled ? 'text-gray-800' : 'text-gray-400'}`}>
+                        {f.feature_name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
         </div>
 
         {/* Queued Upgrades Section */}
@@ -2691,7 +2660,7 @@ function CurrentPlanContent() {
       {/* Plan Selection Modal */}
       {showPaymentModal && selectedPlanForPayment && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
@@ -2702,7 +2671,12 @@ function CurrentPlanContent() {
                       : (isDowngradePayment ? 'Downgrade Plan' : 'Upgrade Plan')}
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}/month
+                    {selectedPlanForPayment.name} - {formatCurrency(
+                      isYearly && selectedPlanForPayment.annualPrice != null
+                        ? selectedPlanForPayment.annualPrice
+                        : (selectedPlanForPayment.monthlyPrice ?? selectedPlanForPayment.price ?? 0),
+                      selectedPlanForPayment.currency
+                    )}{isYearly && selectedPlanForPayment.annualPrice != null ? '/year' : '/month'}
                   </p>
                 </div>
                 <button
@@ -2727,16 +2701,18 @@ function CurrentPlanContent() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">
-                        {/* Show correct billing label based on what's available */}
                         {isYearly
                           ? (selectedPlanForPayment?.annualPrice ? 'Annual Price:' : 'Monthly Price:')
                           : (selectedPlanForPayment?.monthlyPrice ? 'Monthly Price:' : 'Annual Price:')}
                       </span>
                       <span className="font-medium text-gray-900">
                         {formatCurrency(
-                          isYearly
-                            ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
-                            : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0),
+                          isYearly && selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice
+                            // Show full undiscounted price (monthly × 12) so savings row is meaningful
+                            ? selectedPlanForPayment.monthlyPrice * 12
+                            : isYearly
+                              ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
+                              : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
@@ -2773,7 +2749,7 @@ function CurrentPlanContent() {
                           Annual Savings:
                         </span>
                         <span className="font-medium">
-                          {formatCurrency(
+                          -{formatCurrency(
                             (selectedPlanForPayment.monthlyPrice * 12) - selectedPlanForPayment.annualPrice,
                             selectedPlanForPayment?.currency || 'INR'
                           )}
@@ -2899,8 +2875,12 @@ function CurrentPlanContent() {
                         : 'Get your own dedicated database for enhanced isolation and performance'}
                     </p>
                     <p className="text-sm text-amber-600 font-medium mt-1">
-                      +{formatCurrency(planSettings?.databasePerTenantMonthlyPrice || 5000, selectedPlanForPayment?.currency || 'INR')}/month
-                      {isYearly && ` (${formatCurrency((planSettings?.databasePerTenantMonthlyPrice || 5000) * 12, selectedPlanForPayment?.currency || 'INR')}/year)`}
+                      +{formatCurrency(
+                        isYearly
+                          ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12
+                          : (planSettings?.databasePerTenantMonthlyPrice || 5000),
+                        selectedPlanForPayment?.currency || 'INR'
+                      )}{isYearly ? '/year' : '/month'}
                     </p>
                   </div>
                 </label>
@@ -3156,7 +3136,7 @@ function CurrentPlanContent() {
       {/* Terms & Conditions Modal for Applying Queued Upgrade */}
       {showTCModal && selectedQueuedUpgrade && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">

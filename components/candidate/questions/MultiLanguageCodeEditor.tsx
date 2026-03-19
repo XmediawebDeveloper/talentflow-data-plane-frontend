@@ -50,6 +50,7 @@ interface MultiLanguageCodeEditorProps {
   allowLanguageChange?: boolean; // If false, language is locked to what's assigned
   isLocked?: boolean; // True if answer is submitted and cannot be edited
   attemptId?: string; // For code submission
+  copyPasteBlocking?: boolean; // From tenant proctoring settings
 }
 
 interface TestResult {
@@ -74,6 +75,7 @@ export function MultiLanguageCodeEditor({
   allowLanguageChange = true,
   isLocked = false,
   attemptId,
+  copyPasteBlocking = true,
 }: MultiLanguageCodeEditorProps) {
   const dialog = useGlobalDialog();
 
@@ -254,10 +256,12 @@ export function MultiLanguageCodeEditor({
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     editor.focus();
-    // Block copy/paste/cut inside Monaco to enforce proctoring restrictions
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {});
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {});
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {});
+    // Block copy/paste/cut inside Monaco only when proctoring requires it
+    if (copyPasteBlocking) {
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, () => {});
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, () => {});
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, () => {});
+    }
   };
 
   const handleCodeChange: OnChange = (value) => {
@@ -880,8 +884,9 @@ export function MultiLanguageCodeEditor({
             {/* Reset Button */}
             <button
               onClick={handleResetCode}
-              className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
-              title="Reset to starter code"
+              disabled={isLocked}
+              className={`p-2 rounded-lg transition-colors ${isLocked ? 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-40' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+              title={isLocked ? 'Cannot reset after submission' : 'Reset to starter code'}
             >
               <RotateCcw className="w-4 h-4" />
             </button>

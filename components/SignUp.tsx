@@ -526,7 +526,7 @@ export default function SignUp({ onSignUp, onSwitchToLogin, onBackToPublic }: Si
                 <CheckCircle style={{ width: 20, height: 20, color: '#16A34A' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>{trialDays}-Day Free Trial</div>
+                <div style={{ color: '#111827', fontWeight: 500 }}>{trialDays}-{trialDays === 1 ? 'Day' : 'Days'} Free Trial</div>
                 <div style={{ fontSize: 14, color: '#6B7280' }}>No credit card required</div>
               </div>
             </div>

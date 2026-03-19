@@ -424,6 +424,19 @@ api.interceptors.response.use(
   (error) => Promise.reject(error)
 );
 
+// Guard flag: prevent multiple simultaneous PAYMENT_PENDING redirects firing from concurrent 402 errors
+// Exported so layout.tsx listener uses the SAME guard — prevents duplicate hard reloads
+let paymentRedirectInProgress = false;
+
+export const redirectToPaymentPage = (tenant_id: string, plan_id: string) => {
+  if (!paymentRedirectInProgress && typeof window !== 'undefined' && !window.location.pathname.includes('/complete-payment')) {
+    paymentRedirectInProgress = true;
+    const t = encodeParam(tenant_id);
+    const p = encodePlanId(plan_id);
+    window.location.href = `/complete-payment?t=${encodeURIComponent(t)}&p=${encodeURIComponent(p)}`;
+  }
+};
+
 // Response interceptor - handle token refresh and subscription errors
 api.interceptors.response.use(
   (response) => response,
@@ -437,13 +450,9 @@ api.interceptors.response.use(
         console.log('[API] Payment pending detected, redirecting to payment page...');
         // Dispatch event for global UI handling
         dispatchPaymentPendingEvent(detail.detail);
-        // Redirect to payment completion page (only if not already on that page)
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/complete-payment')) {
-          const { tenant_id, plan_id } = detail.detail;
-          const t = encodeParam(tenant_id);
-          const p = encodePlanId(plan_id);
-          window.location.href = `/complete-payment?t=${encodeURIComponent(t)}&p=${encodeURIComponent(p)}`;
-        }
+        // Use shared redirect function — if layout listener already fired this (synchronously,
+        // during dispatchPaymentPendingEvent above), the guard is already set and this is a no-op
+        redirectToPaymentPage(detail.detail.tenant_id, detail.detail.plan_id);
         return Promise.reject(error);
       }
     }

@@ -71,6 +71,9 @@ interface UseProctoringMonitorOptions {
   voiceDetectionSensitivity?: number;
   obstructionThreshold?: number;
   reportEvent?: (token: string, event: { event_type: string; timestamp: string; details: Record<string, any> }) => Promise<any>;
+  // Per-feature flags from tenant proctoring settings
+  copyPasteBlocking?: boolean;
+  tabSwitchDetection?: boolean;
 }
 
 interface ProctoringState {
@@ -228,6 +231,8 @@ export function useProctoringMonitor({
   voiceDetectionSensitivity = 50,
   obstructionThreshold = 30,
   reportEvent,
+  copyPasteBlocking = true,
+  tabSwitchDetection = true,
 }: UseProctoringMonitorOptions) {
   // Minimal React state — only what InterviewUI overlays need
   const [state, setState] = useState<ProctoringState>({
@@ -915,9 +920,10 @@ export function useProctoringMonitor({
     setState(prev => ({ ...prev, isMonitoring: true }));
 
     // Event-driven detections (lightweight, main thread)
+    // Only activate features that are enabled in tenant proctoring settings
     const cleanups = [
-      setupTabSwitchDetection(),
-      setupCopyPasteDetection(),
+      tabSwitchDetection ? setupTabSwitchDetection() : () => {},
+      copyPasteBlocking ? setupCopyPasteDetection() : () => {},
       setupScreenshotDetection(),
       setupScreenRecordingDetection(),
       setupFullscreenDetection(),

@@ -71,8 +71,6 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     'Must Have Comments': MessageSquare,
     'Must_have_comments': MessageSquare,
     'Comments': MessageSquare,
-    'Nice To Have Comments': MessageSquare,
-    'Nice_to_have_comments': MessageSquare,
     'Location': MapPin,
     'Job Hopping': TrendingUp,
     'Job_hobbing': TrendingUp,
@@ -135,9 +133,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     preferredMax: number;
   } | null = null;
 
-  // Try to use scoreBreakdown from API first
+  // Single source of truth: scoreBreakdown (from API score_breakdown array)
+  // This is built by build_criteria_breakdown() in the router from scoring_details,
+  // ensuring consistent data. criteriaScores (raw dict) is NOT used for display.
   if (resume.scoreBreakdown && resume.scoreBreakdown.length > 0) {
-    // Filter out summary rows and extract summary data
+    // Separate summary rows from regular criteria rows
     const regularItems: ScoreBreakdownItem[] = [];
     let requiredSummary: ScoreBreakdownItem | undefined;
     let preferredSummary: ScoreBreakdownItem | undefined;
@@ -148,115 +148,90 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         if (item.key === 'required_total') requiredSummary = item;
         else if (item.key === 'preferred_total') preferredSummary = item;
         else if (item.key === 'final_score') finalSummary = item;
-      } else {
+      } else if (item.key !== 'nice_to_have_comments') {
         regularItems.push(item);
       }
     });
 
-    // Extract summary data if available
+    // Build summary data from summary rows
     if (requiredSummary || preferredSummary || finalSummary) {
       summaryData = {
         requiredPercentage: requiredSummary?.raw_percentage ?? requiredSummary?.percentage ?? 0,
         preferredPercentage: preferredSummary?.raw_percentage ?? preferredSummary?.percentage ?? 0,
         finalPercentage: finalSummary?.percentage || resume.scorePercentage,
         requiredTotal: requiredSummary?.rating || 0,
-        requiredMax: requiredSummary?.max_rating || 20,
+        requiredMax: requiredSummary?.max_rating || 60,
         preferredTotal: preferredSummary?.rating || 0,
-        preferredMax: preferredSummary?.max_rating || 80,
+        preferredMax: preferredSummary?.max_rating || 40,
       };
     } else {
-      // Fallback: Calculate summary from regular items if summary rows not found
-      const requiredItems = regularItems.filter(item =>
-        item.requirement === 'Required' ||
-        item.category?.toLowerCase().includes('must have')
-      );
-      const preferredItems = regularItems.filter(item =>
-        item.requirement === 'Preferred' ||
-        (!item.category?.toLowerCase().includes('must have'))
-      );
-
+      // Fallback: calculate from regular items using Odoo formula
+      // Essential (6 criteria) = 60% weight, Non-Essential (4 criteria) = 40% weight
+      const requiredItems = regularItems.filter(item => item.requirement === 'Required' || item.is_essential);
+      const preferredItems = regularItems.filter(item => item.requirement === 'Preferred' || !item.is_essential);
       const requiredTotal = requiredItems.reduce((sum, item) => sum + (item.rating || 0), 0);
       const preferredTotal = preferredItems.reduce((sum, item) => sum + (item.rating || 0), 0);
-      const requiredMax = requiredItems.length * 10 || 20;
-      const preferredMax = preferredItems.length * 10 || 80;
-
-      const requiredPct = requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0;
-      const preferredPct = preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0;
-
+      const requiredMax = requiredItems.length * 10 || 60;
+      const preferredMax = preferredItems.length * 10 || 40;
       summaryData = {
-        requiredPercentage: requiredPct,
-        preferredPercentage: preferredPct,
-        finalPercentage: resume.scorePercentage, // Always use API's overall_score, don't recalculate
-        requiredTotal: requiredTotal,
-        requiredMax: requiredMax,
-        preferredTotal: preferredTotal,
-        preferredMax: preferredMax,
+        requiredPercentage: requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0,
+        preferredPercentage: preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0,
+        finalPercentage: resume.scorePercentage,
+        requiredTotal,
+        requiredMax,
+        preferredTotal,
+        preferredMax,
       };
     }
 
+    // Build criteria rows — use rating (0-10) and requirement from score_breakdown
     criteriaScores = regularItems.map((item: ScoreBreakdownItem) => ({
       name: item.category,
-      rating: item.rating || convertToRating(item.score),
+      rating: item.rating ?? convertToRating(item.score),
       icon: iconMap[item.category] || Target,
-      criteriaType: item.requirement || (item.eligible === false ? 'Required' : 'Preferred'),
-      aiReasoning: item.reasoning || generateReasoning(item.category, item.score)
+      criteriaType: item.requirement || (item.is_essential ? 'Required' : 'Preferred'),
+      aiReasoning: item.reasoning || generateReasoning(item.category, item.score),
     }));
   }
-  // Try to use criteriaScores object from API
+  // Fallback: build from criteriaScores dict if no scoreBreakdown
   else if (resume.criteriaScores && Object.keys(resume.criteriaScores).length > 0) {
-    // Required criteria keys
-    const requiredKeys = ['must_have_skills', 'must_have_comments'];
-
-    // Calculate summary from criteriaScores
+    // Odoo essential criteria keys (6 essential, 4 non-essential)
+    const essentialKeys = ['job_title', 'experience', 'must_have_skills', 'must_have_comments', 'education', 'job_hopping'];
     let requiredTotal = 0;
     let preferredTotal = 0;
 
-    criteriaScores = Object.entries(resume.criteriaScores).map(([key, value]: [string, any]) => {
-      // Skip if value is null/undefined
-      if (!value || typeof value !== 'object') return null;
-      // API returns scores 0-10, convert to rating directly
-      const rawScore = value.score ?? 0;
-      const rating = rawScore <= 10 ? Math.round(rawScore) : convertToRating(rawScore);
-      const displayName = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
-      // Use is_essential flag from backend API
-      const isEssential = value.is_essential === true || requiredKeys.includes(key);
+    criteriaScores = Object.entries(resume.criteriaScores)
+      .filter(([key]) => !key.startsWith('_') && key !== 'nice_to_have_comments')  // Skip internal keys and nice_to_have_comments
+      .map(([key, value]: [string, any]) => {
+        if (!value || typeof value !== 'object') return null;
+        const rawScore = value.score ?? 0;
+        const rating = rawScore <= 10 ? Math.round(rawScore) : convertToRating(rawScore);
+        const displayName = key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ');
+        const isEssential = value.is_essential === true || essentialKeys.includes(key);
+        if (isEssential) requiredTotal += rating; else preferredTotal += rating;
+        return {
+          name: displayName,
+          rating,
+          icon: iconMap[displayName] || iconMap[key] || Target,
+          criteriaType: isEssential ? 'Required' : 'Preferred',
+          aiReasoning: value.reasoning || generateReasoning(key, rawScore <= 10 ? rawScore * 10 : rawScore),
+        };
+      }).filter((item): item is NonNullable<typeof item> => item !== null);
 
-      // Accumulate totals
-      if (isEssential) {
-        requiredTotal += rating;
-      } else {
-        preferredTotal += rating;
-      }
-
-      return {
-        name: displayName,
-        rating: rating,
-        icon: iconMap[displayName] || iconMap[key] || Target,
-        criteriaType: isEssential ? 'Required' : 'Preferred',
-        aiReasoning: value.reasoning || generateReasoning(key, rawScore <= 10 ? rawScore * 10 : rawScore)
-      };
-    }).filter((item): item is NonNullable<typeof item> => item !== null);
-
-    // Calculate percentages for summary - use dynamic counts based on actual is_essential flags
     const requiredItems = criteriaScores.filter(item => item.criteriaType === 'Required');
     const preferredItems = criteriaScores.filter(item => item.criteriaType === 'Preferred');
-    const requiredMax = requiredItems.length * 10 || 20;  // Dynamic based on actual required criteria count
-    const preferredMax = preferredItems.length * 10 || 80; // Dynamic based on actual preferred criteria count
-    const requiredPct = requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0;
-    const preferredPct = preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0;
-
+    const requiredMax = requiredItems.length * 10 || 60;
+    const preferredMax = preferredItems.length * 10 || 40;
     summaryData = {
-      requiredPercentage: requiredPct,
-      preferredPercentage: preferredPct,
-      finalPercentage: resume.scorePercentage, // Use API's overall_score, don't recalculate
-      requiredTotal: requiredTotal,
-      requiredMax: requiredMax,
-      preferredTotal: preferredTotal,
-      preferredMax: preferredMax,
+      requiredPercentage: requiredMax > 0 ? Math.round((requiredTotal / requiredMax) * 100) : 0,
+      preferredPercentage: preferredMax > 0 ? Math.round((preferredTotal / preferredMax) * 100) : 0,
+      finalPercentage: resume.scorePercentage,
+      requiredTotal,
+      requiredMax,
+      preferredTotal,
+      preferredMax,
     };
-  }
-  // Fallback to detailedScores - REMOVED static data, only show if real API data exists
-  else {
+  } else {
     criteriaScores = [];
   }
 

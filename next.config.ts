@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
     'three', '@react-three/fiber', '@react-three/drei',
   ],
   reactStrictMode: false,
+  turbopack: {},
 
   experimental: {
     // Optimize barrel file imports — avoids bundling entire libraries when only a few exports are used.
