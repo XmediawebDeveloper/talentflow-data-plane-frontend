@@ -24,7 +24,11 @@ export type ProctoringEventType =
   | 'fullscreen_exit'
   | 'face_missing'
   | 'multiple_faces'
-  | 'gaze_away';
+  | 'gaze_away'
+  | 'face_mismatch'
+  | 'face_identity_changed'
+  | 'voice_mismatch'
+  | 'voice_identity_changed';
 
 export interface ProctoringEvent {
   id: string;
@@ -52,6 +56,10 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   face_missing: 'No face detected. Please ensure your face is visible to the camera.',
   multiple_faces: 'Multiple faces detected. Please ensure you are alone.',
   gaze_away: 'Looking away detected. Please keep your attention on the screen.',
+  face_mismatch: 'Face verification warning. Please ensure you are the registered candidate.',
+  face_identity_changed: 'A different person has been detected. Identity verification failed.',
+  voice_mismatch: 'Voice verification warning. Voice pattern does not match the registered speaker.',
+  voice_identity_changed: 'A different speaker has been detected. Voice verification failed.',
 };
 
 // Severity mapping
@@ -71,6 +79,10 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'low' | 'medium' | 'high'> = {
   face_missing: 'high',
   multiple_faces: 'high',
   gaze_away: 'medium',
+  face_mismatch: 'medium',
+  face_identity_changed: 'high',
+  voice_mismatch: 'medium',
+  voice_identity_changed: 'high',
 };
 
 type Listener = (event: ProctoringEvent) => void;

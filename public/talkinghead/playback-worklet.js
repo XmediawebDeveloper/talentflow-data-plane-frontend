@@ -12,7 +12,7 @@ class PlaybackWorklet extends AudioWorkletProcessor {
     this._scale = 1 / 32768; // PCM16 -> float
 
     // Silence detection threshold (1 second) as a fallback safety net
-    const silenceDurationSeconds = 1.0;
+    const silenceDurationSeconds = 0.3;
     this._silenceThresholdBlocks = Math.ceil((this._sampleRate * silenceDurationSeconds) / 128);
 
     // Metrics configuration via options
