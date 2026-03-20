@@ -2036,7 +2036,8 @@ function CurrentPlanContent() {
               const expiryDate = new Date(companySettings!.plan_expiry_date!);
               const now = new Date();
               const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              const isExpired = daysUntilExpiry < 0 || isExpiredSubscription;
+              const daysSinceExpiry = Math.floor((now.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
+              const isExpired = daysUntilExpiry <= 0 || isExpiredSubscription;
               const isExpiringSoon = !isExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
 
               if (isExpired || isExpiringSoon) {
@@ -2061,7 +2062,9 @@ function CurrentPlanContent() {
                             isExpired ? 'text-red-700' : 'text-amber-700'
                           }`}>
                             {isExpired
-                              ? `Your ${planName} plan expired ${Math.abs(daysUntilExpiry)} days ago. Please renew to continue using all features.`
+                              ? daysSinceExpiry === 0
+                                ? `Your ${planName} plan expired today. Please renew to continue using all features.`
+                                : `Your ${planName} plan expired ${daysSinceExpiry} day${daysSinceExpiry !== 1 ? 's' : ''} ago. Please renew to continue using all features.`
                               : `Your ${planName} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
                             }
                           </p>

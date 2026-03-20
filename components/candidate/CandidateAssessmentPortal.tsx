@@ -116,6 +116,7 @@ type AssessmentStep =
   | 'landing'
   | 'consent'
   | 'system_check'
+  | 'hr_questions'
   | 'fullscreen_prompt'
   | 'generating_questions'
   | 'assessment'
@@ -564,9 +565,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       }
     }
 
-    console.log('[PORTAL] System check complete, showing fullscreen prompt...');
     setIsReadyToStart(true);
-    setStepSafe('fullscreen_prompt');
+
+    // Skip HR questions if none selected (hr_topics empty or has_hr_round is false)
+    const hasHRQuestions = assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0;
+    if (hasHRQuestions) {
+      console.log('[PORTAL] System check complete, showing HR questions...');
+      setStepSafe('hr_questions');
+    } else {
+      console.log('[PORTAL] System check complete, no HR questions - going to fullscreen...');
+      setStepSafe('fullscreen_prompt');
+    }
   };
 
   // NEW: Handler for when user enters fullscreen and is ready to start
@@ -1047,6 +1056,124 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             setStepSafe('landing');
           }}
         />
+      );
+
+    case 'hr_questions':
+      return (
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+          {/* Header */}
+          <header className="w-full bg-white border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+              <h1 className="text-lg font-semibold text-gray-900">HR Questions</h1>
+              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">No Timer</span>
+            </div>
+          </header>
+
+          {/* Progress Steps */}
+          <div className="w-full bg-white border-b border-gray-100">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3">
+              <div className="flex items-center justify-center gap-2 sm:gap-4">
+                {[
+                  { label: 'Terms & Consent', completed: true },
+                  { label: 'Assessment Details', completed: true },
+                  { label: 'System Check', completed: true },
+                  { label: 'HR Questions', active: true },
+                  { label: 'Assessment', completed: false },
+                ].map((s, i) => (
+                  <div key={i} className="flex items-center gap-1 sm:gap-2">
+                    {i > 0 && <div className={`w-6 sm:w-12 h-0.5 ${s.completed || (s as any).active ? 'bg-green-500' : 'bg-gray-200'}`} />}
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                      s.completed ? 'bg-green-500 text-white' : (s as any).active ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
+                    }`}>{s.completed ? '✓' : i + 1}</div>
+                    <span className={`hidden sm:block text-xs ${(s as any).active ? 'text-blue-700 font-medium' : s.completed ? 'text-green-700' : 'text-gray-400'}`}>{s.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* HR Questions Content */}
+          <div className="flex-1 max-w-3xl mx-auto px-4 sm:px-6 py-6 w-full">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">HR Questions</h2>
+                <p className="text-sm text-gray-500">
+                  Please answer the following questions. These are optional and not timed.
+                  Your responses will be shared with the recruiter.
+                </p>
+              </div>
+
+
+              <div className="space-y-4">
+                {(assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0
+                  ? assessmentInfo.hr_topics
+                  : [
+                    { text: 'Tell me about yourself', type: 'text' },
+                    { text: 'Describe your industry experience relevant to this role', type: 'text' },
+                    { text: 'Why should we hire you?', type: 'text' },
+                    { text: 'What is your expected salary?', type: 'text' },
+                    { text: 'Are you willing to relocate?', type: 'yes_no' },
+                    { text: 'Are you available for onsite work?', type: 'yes_no' },
+                    { text: 'Can you work under pressure?', type: 'yes_no' },
+                    { text: 'Are you comfortable working in a team?', type: 'yes_no' },
+                    { text: 'Are you open to learning new technologies?', type: 'yes_no' },
+                    { text: 'Can you join immediately or within notice period?', type: 'yes_no' },
+                  ]
+                ).map((q: any, idx: number) => {
+                  const isYesNo = q.type === 'yes_no' || q.type === 'Yes/No';
+                  return (
+                  <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-800 text-white rounded text-xs font-medium flex-shrink-0 mt-0.5">{idx + 1}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium text-gray-900">{q.text}</p>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ml-2 bg-gray-100 text-gray-500">
+                            {isYesNo ? 'Yes/No' : 'Text'}
+                          </span>
+                        </div>
+                        {isYesNo ? (
+                          <div className="flex gap-3">
+                            {['Yes', 'No'].map((option) => (
+                              <button
+                                key={option}
+                                onClick={(e) => {
+                                  const container = e.currentTarget.parentElement;
+                                  container?.querySelectorAll('button').forEach(b => {
+                                    b.className = 'flex-1 px-4 py-2.5 rounded-lg border-2 border-gray-300 bg-white text-gray-700 text-sm font-medium hover:border-gray-400 transition-all';
+                                  });
+                                  e.currentTarget.className = 'flex-1 px-4 py-2.5 rounded-lg border-2 border-gray-800 bg-gray-800 text-white text-sm font-medium transition-all';
+                                }}
+                                className="flex-1 px-4 py-2.5 rounded-lg border-2 border-gray-300 bg-white text-gray-700 text-sm font-medium hover:border-gray-400 transition-all"
+                              >{option}</button>
+                            ))}
+                          </div>
+                        ) : (
+                          <textarea
+                            placeholder="Type your answer here..."
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 text-black"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setStepSafe('fullscreen_prompt')}
+                className="px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800"
+              >
+                Continue to Assessment
+              </button>
+            </div>
+          </div>
+        </div>
       );
 
     case 'fullscreen_prompt':
