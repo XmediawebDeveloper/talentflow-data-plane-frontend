@@ -287,7 +287,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       items: [
         { id: 'user-management', label: 'Users', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
-        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canManageUsers', planFeature: 'teams' },
+        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permissions: ['canManageUsers', 'canViewTeams', 'canViewTeamUsage', 'canViewAnalytics'], planFeature: 'teams' },
         { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat' },
       ]
     },

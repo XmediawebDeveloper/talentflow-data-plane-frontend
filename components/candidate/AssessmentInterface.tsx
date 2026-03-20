@@ -533,21 +533,29 @@ export function AssessmentInterface({
       }
     };
 
-    // Prevent right-click context menu
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []); // Empty deps - only register once on mount
+
+  // SECURITY: Block right-click context menu only when copy-paste blocking is enabled
+  useEffect(() => {
+    if (!copyPasteBlocking) return;
+
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       console.warn('[LOCKDOWN] Right-click blocked');
       return false;
     };
 
-    document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, []); // Empty deps - only register once on mount
+  }, [copyPasteBlocking]);
 
   // SECURITY: Detect DevTools opening (by checking window size changes)
   useEffect(() => {
@@ -645,6 +653,8 @@ export function AssessmentInterface({
 
   // 🛡️ PROCTORING: 5️⃣ Block Copy/Paste/Right-Click
   useEffect(() => {
+    if (!copyPasteBlocking) return;
+
     const handleCopy = (e: ClipboardEvent) => {
       e.preventDefault();
       console.warn('[PROCTORING] ⚠️ Copy blocked');
@@ -669,7 +679,7 @@ export function AssessmentInterface({
       document.removeEventListener('paste', handlePaste);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, []);
+  }, [copyPasteBlocking]);
 
   // Global timer countdown - runs independently of question timer
   useEffect(() => {

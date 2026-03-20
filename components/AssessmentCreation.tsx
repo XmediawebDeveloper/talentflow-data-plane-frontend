@@ -1646,7 +1646,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                                 {isAutoEnabled ? (
                                   <span className="px-1.5 sm:px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Auto (IT Job)</span>
                                 ) : (
-                                  <span className="px-1.5 sm:px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">Manual</span>
+                                  <span className="px-1.5 sm:px-2 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">Auto (Not Required)</span>
                                 )}
                               </div>
                               <p className="text-xs text-gray-500 mt-0.5 leading-snug truncate">
@@ -1657,25 +1657,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               </p>
                             </div>
                           </div>
-                          {isAutoEnabled ? (
-                            /* IT Job — locked ON, can't disable */
-                            <span
-                              className="relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full bg-gray-800 cursor-not-allowed"
-                              title="Auto-enabled for IT jobs (coding languages detected in JD)"
-                            >
-                              <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-6" />
-                            </span>
-                          ) : (
-                            /* Non-IT Job — manual toggle */
-                            <button
-                              onClick={() => handleCodingToggle()}
-                              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-                                codingEnabled ? 'bg-gray-800' : 'bg-gray-300'
-                              }`}
-                            >
-                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                            </button>
-                          )}
+                          {/* Always auto-configured — never manually togglable */}
+                          <span
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full cursor-not-allowed ${isAutoEnabled ? 'bg-gray-800' : 'bg-gray-300'}`}
+                            title={isAutoEnabled ? 'Auto-enabled: coding languages detected in JD' : 'Auto-disabled: no coding languages detected in JD'}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white ${isAutoEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </span>
                         </div>
                       </div>
                     );

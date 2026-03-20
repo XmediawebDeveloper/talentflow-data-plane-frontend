@@ -2562,7 +2562,7 @@ export default function UserManagement() {
                       <span className="ml-2 text-sm text-gray-400">Loading permissions...</span>
                     </div>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="space-y-4">
                       {CUSTOM_PERMISSION_CATEGORIES.map(category => {
                         // Hide categories for features not in the tenant's plan
                         if (!isCategoryVisible(category.id)) return null;
@@ -2643,216 +2643,250 @@ export default function UserManagement() {
                           });
                         };
 
+                        // Badge color + letter derived from permission code action segment
+                        const getActionBadge = (code: string) => {
+                          const action = code.split(':').pop() || '';
+                          if (action === 'read') return { cls: 'bg-blue-100 text-blue-600', letter: 'R' };
+                          if (action === 'create') return { cls: 'bg-green-100 text-green-600', letter: 'C' };
+                          if (action === 'update') return { cls: 'bg-yellow-100 text-yellow-600', letter: 'U' };
+                          if (action === 'delete') return { cls: 'bg-red-100 text-red-600', letter: 'D' };
+                          return { cls: 'bg-purple-100 text-purple-600', letter: (action[0] || 'A').toUpperCase() };
+                        };
+
+                        const allCodes = [
+                          ...(category.viewCode ? [category.viewCode] : []),
+                          ...(category.actions?.map(a => a.code) || []),
+                          ...(category.subCategories?.flatMap(s => [
+                            ...(s.viewCode ? [s.viewCode] : []),
+                            ...s.actions.map(a => a.code),
+                          ]) || []),
+                        ];
+                        const selectedCount = allCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
+
                         return (
-                          <div
-                            key={category.id}
-                            className={`rounded-lg border transition-colors ${
-                              isCategoryActive ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50/50'
-                            }`}
-                          >
-                            {/* Category Header */}
+                          <div key={category.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                            {/* Module Header */}
                             <div
-                              className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 cursor-pointer select-none"
+                              className="bg-gray-100 px-3 sm:px-4 py-2 border-b border-gray-200 flex items-center justify-between select-none"
                               onClick={category.viewCode ? toggleCategory : undefined}
+                              style={category.viewCode ? { cursor: 'pointer' } : undefined}
                             >
                               <div className="flex items-center gap-3">
                                 {category.viewCode && (
-                                  <div className={`w-8 h-[18px] rounded-full relative transition-colors ${isCategoryActive ? 'bg-gray-900' : 'bg-gray-300'}`}>
+                                  <div className={`w-8 h-[18px] rounded-full relative transition-colors flex-shrink-0 ${isCategoryActive ? 'bg-gray-900' : 'bg-gray-300'}`}>
                                     <div className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white shadow-sm transition-transform ${isCategoryActive ? 'left-[17px]' : 'left-[2px]'}`} />
                                   </div>
                                 )}
-                                <span className={`text-sm font-medium ${isCategoryActive ? 'text-gray-900' : 'text-gray-400'}`}>
-                                  {category.name}
-                                </span>
+                                <h4 className={`font-semibold capitalize text-xs sm:text-sm ${isCategoryActive ? 'text-gray-900' : 'text-gray-400'}`}>
+                                  {category.name} ({allCodes.length})
+                                </h4>
                                 {category.isMenuToggle && isCategoryActive && (
                                   <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full font-medium">
                                     Menu
                                   </span>
                                 )}
                               </div>
-                              {isCategoryActive && (
-                                <span className="text-[10px] text-gray-400">
-                                  {[
-                                    ...(category.actions || []),
-                                    ...(category.subCategories?.flatMap(s => s.actions) || []),
-                                  ].filter(a => editSelectedPermissionCodes.has(a.code)).length} selected
-                                </span>
-                              )}
+                              <span className="text-[10px] text-gray-500">{selectedCount} selected</span>
                             </div>
 
-                            {/* Action Pills - shown when category is active */}
-                            {isCategoryActive && (
-                              <div className="px-3 sm:px-4 pb-2.5 sm:pb-3 space-y-2 sm:space-y-2.5">
-                                {/* View pill for categories with only sub-categories (no direct actions) */}
-                                {(!category.actions || category.actions.length === 0) && category.viewCode && editSelectedPermissionCodes.has(category.viewCode) && (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    <span className="px-3 py-1 rounded-md text-xs font-medium bg-emerald-600 text-white">
-                                      View
-                                    </span>
+                            {/* Permission Cards Grid */}
+                            <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                              {/* View card */}
+                              {category.viewCode && (() => {
+                                const badge = getActionBadge(category.viewCode);
+                                const isOn = editSelectedPermissionCodes.has(category.viewCode);
+                                return (
+                                  <div
+                                    key={category.viewCode}
+                                    onClick={() => toggleCode(category.viewCode!)}
+                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-gray-50 border-gray-200' : 'bg-gray-50/50 border-gray-100 opacity-40 hover:opacity-70 hover:border-gray-200'}`}
+                                  >
+                                    <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
+                                      <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium text-xs sm:text-sm text-gray-900">View {category.name}</div>
+                                      <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{category.viewCode}</div>
+                                    </div>
                                   </div>
-                                )}
-                                {/* Direct actions with View pill */}
-                                {category.actions && category.actions.length > 0 && (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {/* Show View pill when viewCode is active */}
-                                    {category.viewCode && editSelectedPermissionCodes.has(category.viewCode) && (
-                                      <span className="px-3 py-1 rounded-md text-xs font-medium bg-emerald-600 text-white">
-                                        View
+                                );
+                              })()}
+                              {/* Direct action cards */}
+                              {category.actions?.map(action => {
+                                const badge = getActionBadge(action.code);
+                                const isOn = editSelectedPermissionCodes.has(action.code);
+                                return (
+                                  <div
+                                    key={action.code}
+                                    onClick={() => toggleCode(action.code)}
+                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-gray-50 border-gray-200' : 'bg-gray-50/50 border-gray-100 opacity-40 hover:opacity-70 hover:border-gray-200'}`}
+                                  >
+                                    <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
+                                      <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="font-medium text-xs sm:text-sm text-gray-900">{action.label}</div>
+                                      <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{action.code}</div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Sub-categories */}
+                            {category.subCategories?.map(sub => {
+                              if (!isCategoryVisible(category.id, sub.name)) return null;
+
+                              const isSubActive = sub.viewCode
+                                ? editSelectedPermissionCodes.has(sub.viewCode) || sub.actions.some(a => editSelectedPermissionCodes.has(a.code))
+                                : sub.actions.some(a => editSelectedPermissionCodes.has(a.code));
+
+                              const toggleSub = () => {
+                                setEditSelectedPermissionCodes(prev => {
+                                  const next = new Set(prev);
+                                  if (isSubActive) {
+                                    if (sub.viewCode) next.delete(sub.viewCode);
+                                    sub.actions.forEach(a => next.delete(a.code));
+                                    if (category.viewCode) {
+                                      const anyOtherSub = category.subCategories?.some(s =>
+                                        s !== sub && (
+                                          (s.viewCode && next.has(s.viewCode)) ||
+                                          s.actions.some(a => next.has(a.code))
+                                        )
+                                      );
+                                      const anyDirectAction = category.actions?.some(a => next.has(a.code));
+                                      if (!anyOtherSub && !anyDirectAction) {
+                                        next.delete(category.viewCode);
+                                      }
+                                    }
+                                  } else {
+                                    if (sub.viewCode) {
+                                      next.add(sub.viewCode);
+                                    } else {
+                                      sub.actions.forEach(a => next.add(a.code));
+                                    }
+                                    if (category.viewCode) next.add(category.viewCode);
+                                  }
+                                  return next;
+                                });
+                              };
+
+                              const subAllCodes = [
+                                ...(sub.viewCode ? [sub.viewCode] : []),
+                                ...sub.actions.map(a => a.code),
+                              ];
+                              const subSelectedCount = subAllCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
+
+                              return (
+                                <div key={sub.name} className="border-t border-gray-100">
+                                  {/* Sub-category header */}
+                                  <div
+                                    className="px-3 sm:px-4 py-1.5 bg-gray-50 flex items-center justify-between cursor-pointer select-none"
+                                    onClick={toggleSub}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <div className={`w-6 h-[14px] rounded-full relative transition-colors flex-shrink-0 ${isSubActive ? 'bg-gray-700' : 'bg-gray-300'}`}>
+                                        <div className={`absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white shadow-sm transition-transform ${isSubActive ? 'left-[13px]' : 'left-[2px]'}`} />
+                                      </div>
+                                      <span className={`text-xs font-medium ${isSubActive ? 'text-gray-700' : 'text-gray-400'}`}>
+                                        {sub.name} ({subAllCodes.length})
                                       </span>
-                                    )}
-                                    {category.actions.map(action => {
+                                    </div>
+                                    <span className="text-[10px] text-gray-400">{subSelectedCount} selected</span>
+                                  </div>
+                                  {/* Sub-category cards */}
+                                  <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                                    {sub.viewCode && (() => {
+                                      const badge = getActionBadge(sub.viewCode);
+                                      const isOn = editSelectedPermissionCodes.has(sub.viewCode);
+                                      return (
+                                        <div
+                                          key={sub.viewCode}
+                                          onClick={() => {
+                                            if (editSelectedPermissionCodes.has(sub.viewCode!)) {
+                                              const blockers = getBlockingPermissions(sub.viewCode!, editSelectedPermissionCodes);
+                                              if (blockers.length > 0) {
+                                                toast.warning(`Cannot disable "${getPermissionDisplayName(sub.viewCode!)}" — it's required by ${blockers.join(', ')}. Disable that permission first.`);
+                                                return;
+                                              }
+                                              setEditSelectedPermissionCodes(prev => { const next = new Set(prev); next.delete(sub.viewCode!); return next; });
+                                            } else {
+                                              setEditSelectedPermissionCodes(prev => { const next = new Set(prev); next.add(sub.viewCode!); if (category.viewCode) next.add(category.viewCode); return next; });
+                                            }
+                                          }}
+                                          className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-gray-50 border-gray-200' : 'bg-gray-50/50 border-gray-100 opacity-40 hover:opacity-70 hover:border-gray-200'}`}
+                                        >
+                                          <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
+                                            <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-xs sm:text-sm text-gray-900">View {sub.name}</div>
+                                            <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{sub.viewCode}</div>
+                                          </div>
+                                        </div>
+                                      );
+                                    })()}
+                                    {sub.actions.map(action => {
+                                      const badge = getActionBadge(action.code);
                                       const isOn = editSelectedPermissionCodes.has(action.code);
                                       return (
-                                        <button
+                                        <div
                                           key={action.code}
-                                          type="button"
-                                          onClick={() => toggleCode(action.code)}
-                                          className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                                            isOn
-                                              ? 'bg-gray-900 text-white'
-                                              : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
-                                          }`}
+                                          onClick={() => {
+                                            if (editSelectedPermissionCodes.has(action.code)) {
+                                              const blockers = getBlockingPermissions(action.code, editSelectedPermissionCodes);
+                                              if (blockers.length > 0) {
+                                                toast.warning(`Cannot disable "${getPermissionDisplayName(action.code)}" — it's required by ${blockers.join(', ')}. Disable that permission first.`);
+                                                return;
+                                              }
+                                              setEditSelectedPermissionCodes(prev => {
+                                                const next = new Set(prev);
+                                                next.delete(action.code);
+                                                if (sub.viewCode && !sub.actions.some(a => a.code !== action.code && next.has(a.code))) {
+                                                  next.delete(sub.viewCode);
+                                                }
+                                                if (category.viewCode) {
+                                                  const anyLeft = [
+                                                    ...(category.actions || []),
+                                                    ...(category.subCategories?.flatMap(s => s.actions) || []),
+                                                  ].some(a => a.code !== action.code && next.has(a.code));
+                                                  if (!anyLeft) next.delete(category.viewCode);
+                                                }
+                                                return next;
+                                              });
+                                            } else {
+                                              const deps = getPermissionDependencies(action.code);
+                                              const newlyEnabled = deps.filter(dep => !editSelectedPermissionCodes.has(dep));
+                                              setEditSelectedPermissionCodes(prev => {
+                                                const next = new Set(prev);
+                                                next.add(action.code);
+                                                if (sub.viewCode) next.add(sub.viewCode);
+                                                if (category.viewCode) next.add(category.viewCode);
+                                                deps.forEach(dep => next.add(dep));
+                                                return next;
+                                              });
+                                              if (newlyEnabled.length > 0) {
+                                                const depLabels = newlyEnabled.map(d => getPermissionDisplayName(d)).join(' and ');
+                                                toast.info(`"${depLabels}" auto-enabled — required for "${getPermissionDisplayName(action.code)}"`);
+                                              }
+                                            }
+                                          }}
+                                          className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-gray-50 border-gray-200' : 'bg-gray-50/50 border-gray-100 opacity-40 hover:opacity-70 hover:border-gray-200'}`}
                                         >
-                                          {action.label}
-                                        </button>
+                                          <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
+                                            <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
+                                          </div>
+                                          <div className="flex-1 min-w-0">
+                                            <div className="font-medium text-xs sm:text-sm text-gray-900">{action.label}</div>
+                                            <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{action.code}</div>
+                                          </div>
+                                        </div>
                                       );
                                     })}
                                   </div>
-                                )}
-
-                                {/* Sub-categories */}
-                                {category.subCategories?.map(sub => {
-                                  // Hide sub-categories for features not in the tenant's plan
-                                  if (!isCategoryVisible(category.id, sub.name)) return null;
-
-                                  const isSubActive = sub.viewCode
-                                    ? editSelectedPermissionCodes.has(sub.viewCode) || sub.actions.some(a => editSelectedPermissionCodes.has(a.code))
-                                    : sub.actions.some(a => editSelectedPermissionCodes.has(a.code));
-
-                                  const toggleSub = () => {
-                                    setEditSelectedPermissionCodes(prev => {
-                                      const next = new Set(prev);
-                                      if (isSubActive) {
-                                        if (sub.viewCode) next.delete(sub.viewCode);
-                                        sub.actions.forEach(a => next.delete(a.code));
-                                        // Remove parent viewCode if no siblings active
-                                        if (category.viewCode) {
-                                          const anyOtherSub = category.subCategories?.some(s =>
-                                            s !== sub && (
-                                              (s.viewCode && next.has(s.viewCode)) ||
-                                              s.actions.some(a => next.has(a.code))
-                                            )
-                                          );
-                                          const anyDirectAction = category.actions?.some(a => next.has(a.code));
-                                          if (!anyOtherSub && !anyDirectAction) {
-                                            next.delete(category.viewCode);
-                                          }
-                                        }
-                                      } else {
-                                        // Enable sub: add viewCode if present, otherwise add all actions
-                                        if (sub.viewCode) {
-                                          next.add(sub.viewCode);
-                                        } else {
-                                          // No viewCode — enable all actions so pills become visible
-                                          sub.actions.forEach(a => next.add(a.code));
-                                        }
-                                        if (category.viewCode) next.add(category.viewCode);
-                                      }
-                                      return next;
-                                    });
-                                  };
-
-                                  return (
-                                    <div key={sub.name} className="pt-1">
-                                      <div className="flex items-center gap-2 mb-1.5">
-                                        <button
-                                          type="button"
-                                          onClick={toggleSub}
-                                          className={`w-6 h-[14px] rounded-full relative transition-colors flex-shrink-0 ${isSubActive ? 'bg-gray-700' : 'bg-gray-300'}`}
-                                        >
-                                          <div className={`absolute top-[2px] w-[10px] h-[10px] rounded-full bg-white shadow-sm transition-transform ${isSubActive ? 'left-[13px]' : 'left-[2px]'}`} />
-                                        </button>
-                                        <span className={`text-xs font-medium ${isSubActive ? 'text-gray-700' : 'text-gray-400'}`}>
-                                          {sub.name}
-                                        </span>
-                                      </div>
-                                      {isSubActive && (
-                                        <div className="flex flex-wrap gap-1.5 ml-8">
-                                          {/* Show View pill for sub-category when viewCode is active */}
-                                          {sub.viewCode && editSelectedPermissionCodes.has(sub.viewCode) && (
-                                            <span className="px-3 py-1 rounded-md text-xs font-medium bg-emerald-600 text-white">
-                                              View
-                                            </span>
-                                          )}
-                                          {sub.actions.map(action => {
-                                            const isOn = editSelectedPermissionCodes.has(action.code);
-                                            return (
-                                              <button
-                                                key={action.code}
-                                                type="button"
-                                                onClick={() => {
-                                                  if (editSelectedPermissionCodes.has(action.code)) {
-                                                    // Disabling — block if another enabled permission depends on this one
-                                                    const blockers = getBlockingPermissions(action.code, editSelectedPermissionCodes);
-                                                    if (blockers.length > 0) {
-                                                      toast.warning(
-                                                        `Cannot disable "${getPermissionDisplayName(action.code)}" — it's required by ${blockers.join(', ')}. Disable that permission first.`
-                                                      );
-                                                      return;
-                                                    }
-                                                    setEditSelectedPermissionCodes(prev => {
-                                                      const next = new Set(prev);
-                                                      next.delete(action.code);
-                                                      // Remove sub viewCode if no actions left
-                                                      if (sub.viewCode && !sub.actions.some(a => a.code !== action.code && next.has(a.code))) {
-                                                        next.delete(sub.viewCode);
-                                                      }
-                                                      // Remove parent viewCode if nothing left
-                                                      if (category.viewCode) {
-                                                        const anyLeft = [
-                                                          ...(category.actions || []),
-                                                          ...(category.subCategories?.flatMap(s => s.actions) || []),
-                                                        ].some(a => a.code !== action.code && next.has(a.code));
-                                                        if (!anyLeft) next.delete(category.viewCode);
-                                                      }
-                                                      return next;
-                                                    });
-                                                  } else {
-                                                    // Enabling — collect deps not yet enabled so we can notify
-                                                    const deps = getPermissionDependencies(action.code);
-                                                    const newlyEnabled = deps.filter(dep => !editSelectedPermissionCodes.has(dep));
-                                                    setEditSelectedPermissionCodes(prev => {
-                                                      const next = new Set(prev);
-                                                      next.add(action.code);
-                                                      if (sub.viewCode) next.add(sub.viewCode);
-                                                      if (category.viewCode) next.add(category.viewCode);
-                                                      deps.forEach(dep => next.add(dep));
-                                                      return next;
-                                                    });
-                                                    // Notify admin which dependencies were auto-enabled
-                                                    if (newlyEnabled.length > 0) {
-                                                      const depLabels = newlyEnabled.map(d => getPermissionDisplayName(d)).join(' and ');
-                                                      toast.info(`"${depLabels}" auto-enabled — required for "${getPermissionDisplayName(action.code)}"`);
-                                                    }
-                                                  }
-                                                }}
-                                                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                                                  isOn
-                                                    ? 'bg-gray-800 text-white'
-                                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
-                                                }`}
-                                              >
-                                                {action.label}
-                                              </button>
-                                            );
-                                          })}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            )}
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       })}

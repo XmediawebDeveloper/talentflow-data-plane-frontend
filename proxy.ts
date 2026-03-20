@@ -318,7 +318,11 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - logos (logo files)
+     * - talkinghead (TalkingHead avatar .mjs and assets)
+     * - workers (audio worklet JS files)
+     * - models (3D avatar .glb files)
+     * - three (Three.js assets)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|logos).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|logos|talkinghead|workers|models|three).*)',
   ],
 };

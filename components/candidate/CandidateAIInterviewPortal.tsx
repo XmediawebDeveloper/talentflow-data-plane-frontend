@@ -456,6 +456,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     return (
       <PreInterviewLayout {...layoutProps} showNext={false} showFooter={false}>
         <StepSamplePractice
+          token={token}
           onStartInterview={handleStartInterview}
           onGoBack={goBack}
           selectedLanguage={selectedLanguage}

@@ -476,7 +476,11 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
         } catch (err) {
           console.error("[TalkingHead] Failed to load avatar:", err);
-          if (mounted) setStatus("error");
+          if (mounted) {
+            setStatus("error");
+            // Still signal ready so the WebSocket connects even without the avatar
+            onReady?.();
+          }
         }
       })();
 

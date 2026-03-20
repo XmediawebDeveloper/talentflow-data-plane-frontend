@@ -293,6 +293,8 @@ export default function TeamManagementPage() {
   // Computed values
   const isTenantAdmin = currentUser?.role === 'tenant_admin';
   const canCreateTeams = isTenantAdmin;
+  const canViewUsageTab = isTenantAdmin || !!currentUser?.permissions?.can_view_team_usage;
+  const canViewAnalyticsTab = isTenantAdmin || !!currentUser?.permissions?.can_view_analytics;
 
   if (isLoading) {
     return (
@@ -341,7 +343,7 @@ export default function TeamManagementPage() {
           </div>
         </div>
 
-        {/* Tabs — Usage and Analytics are admin-only */}
+        {/* Tabs — Usage and Analytics visible based on permissions */}
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => setActiveTab('teams')}
@@ -354,31 +356,31 @@ export default function TeamManagementPage() {
             <Users className="w-4 h-4" />
             Teams
           </button>
-          {isTenantAdmin && (
-            <>
-              <button
-                onClick={() => setActiveTab('usage')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                  activeTab === 'usage'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <BarChart3 className="w-4 h-4" />
-                Team Usage
-              </button>
-              <button
-                onClick={() => setActiveTab('analytics')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                  activeTab === 'analytics'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <TrendingUp className="w-4 h-4" />
-                Analytics
-              </button>
-            </>
+          {canViewUsageTab && (
+            <button
+              onClick={() => setActiveTab('usage')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                activeTab === 'usage'
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              Team Usage
+            </button>
+          )}
+          {canViewAnalyticsTab && (
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                activeTab === 'analytics'
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              Analytics
+            </button>
           )}
         </div>
 

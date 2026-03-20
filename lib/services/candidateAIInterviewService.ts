@@ -129,6 +129,17 @@ export const candidateAIInterviewService = {
     await candidateApi.post(`/candidate/ai-interview/${token}/practice-complete`).catch(() => {});
   },
 
+  async transcribePracticeAudio(token: string, audioBlob: Blob): Promise<string> {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'practice.webm');
+    const response = await candidateApi.post<{ transcript: string }>(
+      `/candidate/ai-interview/${token}/transcribe-practice`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return response.data.transcript || '';
+  },
+
   async startInterview(token: string): Promise<CandidateInterviewInfo> {
     const response = await candidateApi.post<CandidateInterviewInfo>(
       `/candidate/ai-interview/${token}/start`,
