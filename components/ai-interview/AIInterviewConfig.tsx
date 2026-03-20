@@ -892,7 +892,7 @@ export default function AIInterviewConfig() {
         video.onloadedmetadata = () => {
           clearTimeout(timeout);
           URL.revokeObjectURL(video.src);
-          if (video.duration > 60) {
+          if (isFinite(video.duration) && Math.floor(video.duration) > 60) {
             setVideoDurationError('Video must be 1 minute or less');
             toast.error('Video must be 1 minute or less');
             resolve(false);
