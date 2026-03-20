@@ -270,6 +270,31 @@ const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       },
     ],
   },
+  // 10. Teams
+  {
+    id: 'teams',
+    name: 'Teams',
+    description: 'Team management and usage permissions',
+    isMenuToggle: true,
+    viewCode: 'teams:read',
+    subCategories: [
+      {
+        name: 'Teams',
+        viewCode: 'teams:read',
+        actions: [
+          { code: 'teams:create', label: 'Create' },
+          { code: 'teams:update', label: 'Edit' },
+          { code: 'teams:delete', label: 'Delete' },
+        ],
+      },
+      {
+        name: 'Team Usage',
+        actions: [
+          { code: 'team_usage:read', label: 'View' },
+        ],
+      },
+    ],
+  },
 ];
 
 // Helper to get dependencies for a permission code
