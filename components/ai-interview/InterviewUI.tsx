@@ -78,6 +78,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     round_name?: string;
     covered: string[];
     medium_covered: string[];
+    low_covered: string[];
     uncovered: string[];
     nice_to_have_skills: string[];
     total_questions: number;
@@ -792,11 +793,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           round_name: data.round_name ?? "",
           covered: data.covered ?? [],
           medium_covered: data.medium_covered ?? [],
+          low_covered: data.low_covered ?? [],
           uncovered: data.uncovered ?? [],
           nice_to_have_skills: data.nice_to_have_skills ?? [],
           total_questions: data.total_questions ?? 0,
           questions_asked: data.questions_asked ?? 0,
         });
+        break;
+      case "question_timer_nudge":
+        // Candidate has been silent for 45s — show a gentle prompt in the status bar
+        setStatus("Take your time — share whatever comes to mind, or say 'skip' to move on.");
         break;
       case "interview_closing":
         setIsClosing(true); isClosingRef.current = true;
@@ -1721,28 +1727,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     Skills — {skillCoverage.round_name || skillCoverage.round}
                   </span>
                   <span className="text-[#94A3B8] shrink-0" style={{ fontSize: 10, fontWeight: 600 }}>
-                    {skillCoverage.covered.length + skillCoverage.medium_covered.length}/{skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.uncovered.length} covered
+                    {skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.low_covered.length}/{skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.low_covered.length + skillCoverage.uncovered.length} covered
                   </span>
                 </div>
-                {/* Progress bar — green for fully covered, amber segment for medium */}
-                <div className="w-full h-1 bg-white/[0.06] rounded-full mb-1.5 overflow-hidden flex">
-                  <div
-                    className="h-full bg-[#10B981] transition-all duration-500"
-                    style={{
-                      width: skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.uncovered.length > 0
-                        ? `${(skillCoverage.covered.length / (skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.uncovered.length)) * 100}%`
-                        : '0%',
-                    }}
-                  />
-                  <div
-                    className="h-full bg-[#F59E0B]/60 transition-all duration-500"
-                    style={{
-                      width: skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.uncovered.length > 0
-                        ? `${(skillCoverage.medium_covered.length / (skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.uncovered.length)) * 100}%`
-                        : '0%',
-                    }}
-                  />
-                </div>
+                {/* Progress bar — green (thorough), amber (adequate), orange (weak), gray (uncovered) */}
+                {(() => {
+                  const total = skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.low_covered.length + skillCoverage.uncovered.length;
+                  return (
+                    <div className="w-full h-1 bg-white/[0.06] rounded-full mb-1.5 overflow-hidden flex">
+                      <div className="h-full bg-[#10B981] transition-all duration-500" style={{ width: total > 0 ? `${(skillCoverage.covered.length / total) * 100}%` : '0%' }} />
+                      <div className="h-full bg-[#F59E0B]/60 transition-all duration-500" style={{ width: total > 0 ? `${(skillCoverage.medium_covered.length / total) * 100}%` : '0%' }} />
+                      <div className="h-full bg-[#F97316]/50 transition-all duration-500" style={{ width: total > 0 ? `${(skillCoverage.low_covered.length / total) * 100}%` : '0%' }} />
+                    </div>
+                  );
+                })()}
                 <div className="flex flex-wrap gap-1">
                   {/* Covered skills — green */}
                   {skillCoverage.covered.map(skill => (
@@ -1763,6 +1761,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       title="Adequately covered — moving on"
                     >
                       ~ {skill}
+                    </span>
+                  ))}
+                  {/* Low-covered skills — orange, briefly touched */}
+                  {skillCoverage.low_covered.map(skill => (
+                    <span
+                      key={`low-${skill}`}
+                      className="px-1.5 py-0.5 rounded-full bg-[#F97316]/10 border border-[#F97316]/30 text-[#C2410C]"
+                      style={{ fontSize: 9, fontWeight: 600 }}
+                      title="Briefly touched — needs more depth"
+                    >
+                      ≈ {skill}
                     </span>
                   ))}
                   {/* Uncovered must-have skills — muted */}
@@ -1793,10 +1802,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     ))}
                 </div>
                 {/* Legend */}
-                {(skillCoverage.medium_covered.length > 0 || skillCoverage.uncovered.some(s => skillCoverage.nice_to_have_skills.includes(s))) && (
+                {(skillCoverage.medium_covered.length > 0 || skillCoverage.low_covered.length > 0 || skillCoverage.uncovered.some(s => skillCoverage.nice_to_have_skills.includes(s))) && (
                   <div className="flex items-center gap-2 mt-1.5">
                     {skillCoverage.medium_covered.length > 0 && (
                       <span className="text-[#475569]" style={{ fontSize: 8 }}>~ partial</span>
+                    )}
+                    {skillCoverage.low_covered.length > 0 && (
+                      <span className="text-[#475569]" style={{ fontSize: 8 }}>≈ weak</span>
                     )}
                     {skillCoverage.uncovered.some(s => skillCoverage.nice_to_have_skills.includes(s)) && (
                       <span className="text-[#475569]" style={{ fontSize: 8 }}>○ optional</span>
