@@ -525,43 +525,51 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         // Rebuild viseme timeline from current text
         lastBuiltTextRef.current = "";
 
-        // Resume AudioContext if suspended
-        try {
-          if (head.audioCtx?.state === "suspended") {
-            head.audioCtx.resume();
+        // Pre-resume AudioContext if suspended BEFORE calling head.streamStart.
+        // TalkingHead's streamStart has a 1-second resume timeout — if we don't
+        // pre-resume it returns early WITHOUT setting up the worklet, so
+        // streamNotifyEnd() is a no-op and onAudioEnd is never called (interview hangs).
+        const preResumeCtx = async () => {
+          const ctx = head.audioCtx as AudioContext | undefined;
+          if (ctx && ctx.state !== "running") {
+            try { await ctx.resume(); } catch { /* ignore */ }
           }
-        } catch {}
+        };
 
         const lm = head.lipsync?.["en"];
         console.log("[TalkingHead] streamStart — phoneme-based lip sync, lipsync module:", lm ? "loaded" : "NOT loaded");
 
-        head
-          .streamStart(
-            {
-              gain: 1,
-              lipsyncLang: "en",
-              waitForAudioChunks: 0,
-            },
-            null,
-            () => {
-              console.log("[TalkingHead] stream complete — audio finished");
-              streamReadyRef.current = false;
+        preResumeCtx().then(() => {
+          head
+            .streamStart(
+              {
+                gain: 1,
+                lipsyncLang: "en",
+                waitForAudioChunks: 0,
+              },
+              null,
+              () => {
+                console.log("[TalkingHead] stream complete — audio finished");
+                streamReadyRef.current = false;
+                onAudioEndRef.current?.();
+              },
+            )
+            .then(() => {
+              if (!headRef.current) return;
+              streamReadyRef.current = true;
+              const queued = pendingRef.current.splice(0);
+              console.log("[TalkingHead] streamStart ready, flushing", queued.length, "queued chunks");
+              for (const buf of queued) {
+                sendAudioChunk(buf);
+              }
+            })
+            .catch((e: Error) => {
+              console.error("[TalkingHead] streamStart failed:", e);
+              streamReadyRef.current = true;
+              // Fallback: fire onAudioEnd so the mic starts even if TalkingHead failed
               onAudioEndRef.current?.();
-            },
-          )
-          .then(() => {
-            if (!headRef.current) return;
-            streamReadyRef.current = true;
-            const queued = pendingRef.current.splice(0);
-            console.log("[TalkingHead] streamStart ready, flushing", queued.length, "queued chunks");
-            for (const buf of queued) {
-              sendAudioChunk(buf);
-            }
-          })
-          .catch((e: Error) => {
-            console.error("[TalkingHead] streamStart failed:", e);
-            streamReadyRef.current = true;
-          });
+            });
+        });
       },
 
       streamAudio(pcmData: ArrayBuffer) {

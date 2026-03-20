@@ -148,6 +148,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const handleNoResponseRef = useRef<() => void>(() => {});
   const stopRecordingSilentRef = useRef<() => void>(() => {});
 
+  // Safety-net: if TalkingHead's onAudioEnd callback never fires (e.g., AudioContext
+  // suspended after streamStart returns early), start the mic after a short delay.
+  const audioEndFallbackRef = useRef<NodeJS.Timeout | null>(null);
+
   // Webcam ref for hand detection
   const webcamRef = useRef<WebcamRef>(null);
   const [webcamReady, setWebcamReady] = useState(false);
@@ -704,6 +708,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // The onAudioEnd callback fires when TalkingHead finishes playing ALL buffered audio.
         talkingHeadRef.current?.streamStart(24000, () => {
           console.log("[TalkingHead] playback-ended — all audio played");
+          // Clear safety-net fallback — normal path fired, no fallback needed
+          if (audioEndFallbackRef.current) {
+            clearTimeout(audioEndFallbackRef.current);
+            audioEndFallbackRef.current = null;
+          }
           isPlayingRef.current = false;
           setIsAiSpeaking(false);
           avatarState.onAiStopSpeaking();
@@ -721,7 +730,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           }, 150);
         });
         break;
-      case "audio_end":
+      case "audio_end": {
         // Backend finished SENDING audio — but TalkingHead may still be PLAYING it.
         // Do NOT call streamStop() here — that kills playback immediately.
         // Signal worklet that no more chunks are coming — it will fire playback-ended
@@ -730,7 +739,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         audioEndReceivedRef.current = true;
         revealAllTokens();
         talkingHeadRef.current?.notifyEnd();
+        // Safety-net: if TalkingHead's onAudioEnd callback doesn't fire within 3 s
+        // (e.g., AudioContext was suspended and worklet was never set up), start the
+        // mic manually so the interview doesn't hang.
+        if (audioEndFallbackRef.current) clearTimeout(audioEndFallbackRef.current);
+        audioEndFallbackRef.current = setTimeout(() => {
+          audioEndFallbackRef.current = null;
+          if (!isRecordingRef.current && !shouldDisconnectAfterAudioRef.current
+              && wsRef.current?.readyState === WebSocket.OPEN) {
+            console.warn("[Safety-net] TalkingHead onAudioEnd never fired — starting mic manually");
+            isPlayingRef.current = false;
+            setIsAiSpeaking(false);
+            avatarState.onAiStopSpeaking();
+            saveAiMessage();
+            setStatus("Your turn - speak now...");
+            startRecordingInternal();
+          }
+        }, 3000);
         break;
+      }
       case "processing":
         setIsProcessing(true);
         setStatus("Processing your speech...");
@@ -1287,6 +1314,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       isUnmountedRef.current = true;
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
+      if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
       wsRef.current?.close(3001, 'Component unmounted');
       try { audioContextRef.current?.close(); } catch {}
       audioContextRef.current = null;
