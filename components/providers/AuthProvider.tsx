@@ -207,6 +207,10 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canManageSecuritySettings: apiUser.permissions.can_manage_security_settings,
       // Teams
       canViewTeams: apiUser.permissions.can_view_teams,
+      canCreateTeams: apiUser.permissions.can_create_teams,
+      canUpdateTeams: apiUser.permissions.can_update_teams,
+      canDeleteTeams: apiUser.permissions.can_delete_teams,
+      canViewTeamUsage: apiUser.permissions.can_view_team_usage,
       // RBAC06: Feature permissions
       canViewScoring: apiUser.permissions.can_view_scoring,
       canRunScoring: apiUser.permissions.can_run_scoring,
@@ -233,6 +237,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     suspensionNotes: apiUser.suspension_notes,
     suspendedAt: apiUser.suspended_at,
     tenantSubdomain: apiUser.tenant_subdomain,
+    tenantAdminEmail: apiUser.tenant_admin_email,
   };
 }
 

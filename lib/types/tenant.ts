@@ -79,6 +79,10 @@ export interface Permission {
 
   // Teams
   canViewTeams?: boolean;
+  canCreateTeams?: boolean;
+  canUpdateTeams?: boolean;
+  canDeleteTeams?: boolean;
+  canViewTeamUsage?: boolean;
 
   // RBAC06: Feature flags
   canViewScoring?: boolean;      // NEW: View resume scoring page/results
@@ -170,6 +174,7 @@ export interface User {
   suspensionNotes?: string;
   suspendedAt?: string;
   tenantSubdomain?: string;
+  tenantAdminEmail?: string;
 }
 
 export interface PlanLimits {
