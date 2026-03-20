@@ -56,6 +56,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   useEffect(() => { stepRef.current = step; }, [step]);
   const [interview, setInterview] = useState<CandidateInterviewInfo | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isExpiredError, setIsExpiredError] = useState(false);
 
   // Submitting states
   const [consentSubmitting, setConsentSubmitting] = useState(false);
@@ -113,7 +114,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         setStep('consent');
       }
     } catch (err: any) {
-      setErrorMessage(err?.response?.data?.detail || err?.message || 'Failed to load interview');
+      // AIU19: HTTP 410 = auto-expired (past scheduled_at) — show specific message, no retry
+      const status = err?.response?.status;
+      const detail = err?.response?.data?.detail || err?.message || 'Failed to load interview';
+      if (status === 410) {
+        setIsExpiredError(true);
+        setErrorMessage('This interview link has expired and is no longer available.');
+      } else {
+        setIsExpiredError(false);
+        setErrorMessage(detail);
+      }
       setStep('error');
     }
   }, [token]);
@@ -226,6 +236,9 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     }
 
     try {
+      // AIU26: log that candidate completed the practice step before starting
+      await candidateAIInterviewService.recordPracticeComplete(token);
+
       const result = await candidateAIInterviewService.startInterview(token);
       setInterview(result);
       setStep('interview');
@@ -261,15 +274,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
             <AlertTriangle className="w-8 h-8 text-red-500" />
           </div>
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">Unable to Load Interview</h1>
+          <h1 className="text-xl font-semibold text-gray-900 mb-2">
+            {isExpiredError ? 'Interview Expired' : 'Unable to Load Interview'}
+          </h1>
           <p className="text-sm text-gray-600 mb-6">{errorMessage}</p>
-          <button
-            onClick={loadInterview}
-            className="inline-flex items-center gap-2 mx-auto px-6 py-2.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Retry
-          </button>
+          {!isExpiredError && (
+            <button
+              onClick={loadInterview}
+              className="inline-flex items-center gap-2 mx-auto px-6 py-2.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+          )}
         </div>
       </div>
     );

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { UserCog, Plus, Search, Edit2, Trash2, X, Mail, Calendar, Loader2 } from 'lucide-react';
+import { UserCog, Plus, Search, Edit2, Trash2, X, Mail, Calendar, Loader2, Eye, Shield, Lock, Check } from 'lucide-react';
 import { User, UserRole } from '@/lib/types/tenant';
 import { userService, ApiUser, UserPermissions } from '../services/userService';
+import rbacService from '@/lib/services/rbacService';
+import { Permission, RoleListItem } from '@/lib/types/rbac';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -327,9 +329,16 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
     permissions: { ...defaultPermissions },
   });
 
+  // RBAC role viewer state
+  const [rbacRoles, setRbacRoles] = useState<RoleListItem[]>([]);
+  const [viewingRole, setViewingRole] = useState<RoleListItem | null>(null);
+  const [viewingRolePermissions, setViewingRolePermissions] = useState<Permission[]>([]);
+  const [isViewingPermsLoading, setIsViewingPermsLoading] = useState(false);
+
   // Load users from API
   useEffect(() => {
     loadUsers();
+    loadRbacRoles();
   }, []);
 
   const loadUsers = async () => {
@@ -344,6 +353,45 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
       setIsLoading(false);
     }
   };
+
+  const loadRbacRoles = async () => {
+    try {
+      const roles = await rbacService.getRoles();
+      setRbacRoles(roles.filter((r: RoleListItem) => ['viewer', 'recruiter', 'admin'].includes(r.code)));
+    } catch {
+      // fail silently — role cards fall back to static list
+    }
+  };
+
+  const rbacCodeToUserRole = (code: string): UserRole => {
+    if (code === 'admin') return 'tenant_admin';
+    return code as UserRole;
+  };
+
+  const handleViewRolePermissions = async (role: RoleListItem) => {
+    setViewingRole(role);
+    setIsViewingPermsLoading(true);
+    setViewingRolePermissions([]);
+    try {
+      const details = await rbacService.getRoleById(role.id);
+      setViewingRolePermissions(details.permissions || []);
+    } catch {
+      setViewingRolePermissions([]);
+    } finally {
+      setIsViewingPermsLoading(false);
+    }
+  };
+
+  // Display roles: use RBAC roles if loaded, otherwise fall back to static list
+  const FALLBACK_ROLES = [
+    { id: 0, code: 'viewer',    name: 'Viewer',    description: 'Read-only access to view data',                               permission_count: 0, user_count: 0, is_system: false, is_default: false, priority: 10 },
+    { id: 0, code: 'recruiter', name: 'Recruiter', description: 'Can manage job descriptions, resumes, and assessments',        permission_count: 0, user_count: 0, is_system: false, is_default: true,  priority: 50 },
+    { id: 0, code: 'admin',     name: 'Admin',     description: 'Full access to all features and settings',                     permission_count: 0, user_count: 0, is_system: true,  is_default: false, priority: 100 },
+  ] as RoleListItem[];
+
+  const displayRoles: RoleListItem[] = rbacRoles.length > 0
+    ? ['viewer', 'recruiter', 'admin'].map(code => rbacRoles.find(r => r.code === code)!).filter(Boolean)
+    : FALLBACK_ROLES;
 
   const filteredUsers = users.filter(user =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1018,18 +1066,47 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Role
                 </label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => handleRoleChange(e.target.value as UserRole)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                >
-                  <option value="viewer">Viewer</option>
-                  <option value="recruiter">Recruiter</option>
-                  <option value="tenant_admin">Admin</option>
-                </select>
+                <div className="grid grid-cols-3 gap-2">
+                  {displayRoles.map((role) => {
+                    const userRole = rbacCodeToUserRole(role.code);
+                    const isSelected = newUser.role === userRole;
+                    return (
+                      <div
+                        key={role.code}
+                        onClick={() => handleRoleChange(userRole)}
+                        className={`relative flex flex-col p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                          isSelected
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 hover:border-gray-300 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-sm font-semibold ${isSelected ? 'text-blue-700' : 'text-gray-900'}`}>
+                            {role.name}
+                          </span>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" />}
+                        </div>
+                        <p className="text-xs text-gray-500 line-clamp-2 flex-1">{role.description}</p>
+                        {role.permission_count > 0 && (
+                          <div className="mt-1.5 text-xs text-gray-400">{role.permission_count} permissions</div>
+                        )}
+                        {role.id > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleViewRolePermissions(role); }}
+                            className="mt-1.5 self-start flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors"
+                          >
+                            <Eye className="w-3 h-3" />
+                            View
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Permissions */}
@@ -1212,6 +1289,123 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* View Role Permissions Modal */}
+      {viewingRole && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <Eye className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-base sm:text-xl font-bold text-white truncate">{viewingRole.name}</h2>
+                  <p className="text-blue-100 text-xs sm:text-sm truncate">{viewingRole.description}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setViewingRole(null); setViewingRolePermissions([]); }}
+                className="p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-3 sm:p-6 overflow-y-auto flex-1">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <div className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
+                  <div className="font-medium text-gray-900 text-xs sm:text-base truncate">{viewingRole.code}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
+                  <div className="font-medium text-gray-900 text-xs sm:text-base">{viewingRole.user_count}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                  <div className="font-medium text-gray-900 text-xs sm:text-base">{viewingRolePermissions.length}</div>
+                </div>
+              </div>
+
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3 sm:mb-4">
+                Allocated Permissions ({viewingRolePermissions.length})
+              </h3>
+
+              {isViewingPermsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                </div>
+              ) : viewingRolePermissions.length === 0 ? (
+                <div className="text-center py-10 sm:py-12">
+                  <Shield className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 text-sm">No permissions allocated</p>
+                </div>
+              ) : (
+                <div className="space-y-4 sm:space-y-6">
+                  {Object.entries(
+                    viewingRolePermissions.reduce((acc, perm) => {
+                      const module = perm.module || 'other';
+                      if (!acc[module]) acc[module] = [];
+                      acc[module].push(perm);
+                      return acc;
+                    }, {} as Record<string, Permission[]>)
+                  ).map(([module, perms]) => (
+                    <div key={module} className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-gray-100 px-3 sm:px-4 py-2 border-b border-gray-200">
+                        <h4 className="font-semibold text-gray-900 capitalize text-xs sm:text-sm">
+                          {module.replace(/_/g, ' ')} ({perms.length})
+                        </h4>
+                      </div>
+                      <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                        {perms.map((perm) => (
+                          <div
+                            key={perm.id}
+                            className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg border border-gray-200"
+                          >
+                            <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${
+                              perm.action === 'read'   ? 'bg-blue-100 text-blue-600' :
+                              perm.action === 'create' ? 'bg-green-100 text-green-600' :
+                              perm.action === 'update' ? 'bg-yellow-100 text-yellow-600' :
+                              perm.action === 'delete' ? 'bg-red-100 text-red-600' :
+                              'bg-purple-100 text-purple-600'
+                            }`}>
+                              <span className="text-[10px] sm:text-xs font-bold uppercase">{perm.action[0]}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-xs sm:text-sm text-gray-900">{perm.name}</div>
+                              <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{perm.code}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 border-t border-gray-200">
+              <div className="text-sm text-gray-500">
+                {viewingRole.is_system && (
+                  <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-gray-200 text-gray-700 rounded-full text-[10px] sm:text-xs font-medium">
+                    <Lock className="w-3 h-3" />
+                    System Role (Read-Only)
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => { setViewingRole(null); setViewingRolePermissions([]); }}
+                className="w-full sm:w-auto px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-xs sm:text-sm"
+              >
+                Close
               </button>
             </div>
           </div>

@@ -530,6 +530,7 @@ function CurrentPlanContent() {
 
   // Plan settings from admin API (yearly discount, database extra charge)
   const [planSettings, setPlanSettings] = useState<PlanSettings | null>(null);
+  const [planSettingsError, setPlanSettingsError] = useState(false);
 
   // Billing period toggle
   const [isYearly, setIsYearly] = useState(true);
@@ -816,24 +817,25 @@ function CurrentPlanContent() {
       console.log('[CurrentPlan] isExpired check:', isSubscriptionExpired, 'localSubscriptionStatus:', localSubscriptionStatus);
 
       // Fetch plan settings (yearly discount, database extra charge)
-      // Skip if expired to reduce wasteful API calls logged in Admin Panel
-      if (!isSubscriptionExpired) {
-        try {
-          const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
-          if (planSettingsResponse.ok) {
-            const planSettingsResult = await planSettingsResponse.json();
-            const settings = planSettingsResult.data || planSettingsResult;
+      try {
+        const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
+        if (planSettingsResponse.ok) {
+          const planSettingsResult = await planSettingsResponse.json();
+          const settings = planSettingsResult.data || planSettingsResult;
+          if (settings.databasePerTenantMonthlyPrice == null) {
+            setPlanSettingsError(true);
+          } else {
             setPlanSettings({
               yearlyDiscountPercentage: settings.yearlyDiscountPercentage,
               databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice,
             });
             console.log('[CurrentPlan] Plan settings:', settings);
           }
-        } catch (planSettingsError) {
-          console.log('Could not fetch plan settings');
+        } else {
+          setPlanSettingsError(true);
         }
-      } else {
-        console.log('[CurrentPlan] Skipping plan-settings API call - subscription expired');
+      } catch {
+        setPlanSettingsError(true);
       }
 
       // NOTE: All plan data now comes from /usage/quota-status API (Admin API) or previous-plan API (for expired users)
@@ -1702,7 +1704,7 @@ function CurrentPlanContent() {
     const yearlyPrice = selectedPlanForPayment?.annualPrice || 0;
     const yearlyFullPrice = monthlyPrice * 12;
     const planPrice = isYearly ? yearlyPrice : monthlyPrice;
-    const dbExtraCharge = isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0;
+    const dbExtraCharge = isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) : 0;
     const dbChargeTotal = isYearly ? dbExtraCharge * 12 : dbExtraCharge;
     const totalAmount = planPrice + dbChargeTotal;
     return { basePrice: monthlyPrice, monthlyPrice, yearlyPrice, yearlyFullPrice, planPrice, dbExtraCharge, dbChargeTotal, totalAmount };
@@ -2036,7 +2038,8 @@ function CurrentPlanContent() {
               const expiryDate = new Date(companySettings!.plan_expiry_date!);
               const now = new Date();
               const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              const isExpired = daysUntilExpiry < 0 || isExpiredSubscription;
+              const daysSinceExpiry = Math.floor((now.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
+              const isExpired = daysUntilExpiry <= 0 || isExpiredSubscription;
               const isExpiringSoon = !isExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
 
               if (isExpired || isExpiringSoon) {
@@ -2061,7 +2064,9 @@ function CurrentPlanContent() {
                             isExpired ? 'text-red-700' : 'text-amber-700'
                           }`}>
                             {isExpired
-                              ? `Your ${planName} plan expired ${Math.abs(daysUntilExpiry)} days ago. Please renew to continue using all features.`
+                              ? daysSinceExpiry === 0
+                                ? `Your ${planName} plan expired today. Please renew to continue using all features.`
+                                : `Your ${planName} plan expired ${daysSinceExpiry} day${daysSinceExpiry !== 1 ? 's' : ''} ago. Please renew to continue using all features.`
                               : `Your ${planName} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
                             }
                           </p>
@@ -2734,8 +2739,8 @@ function CurrentPlanContent() {
                         <span className="font-medium">
                           +{formatCurrency(
                             isYearly
-                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12
-                              : (planSettings?.databasePerTenantMonthlyPrice || 5000),
+                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * 12
+                              : (planSettings?.databasePerTenantMonthlyPrice ?? 0),
                             selectedPlanForPayment?.currency || 'INR'
                           )}
                         </span>
@@ -2766,7 +2771,7 @@ function CurrentPlanContent() {
                               ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
                               : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
                             const dbFee = isolationType === 'database'
-                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
+                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
                               : 0;
                             return basePrice + dbFee;
                           })(),
@@ -2784,7 +2789,7 @@ function CurrentPlanContent() {
                               ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
                               : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
                             const dbFee = isolationType === 'database'
-                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
+                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
                               : 0;
                             return (basePrice + dbFee) * 0.18;
                           })()),
@@ -2819,7 +2824,7 @@ function CurrentPlanContent() {
                               ? (selectedPlanForPayment?.annualPrice ?? 0)
                               : (selectedPlanForPayment?.monthlyPrice ?? 0);
                             const dbFee = isolationType === 'database'
-                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (useYearlyPrice ? 12 : 1)
+                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (useYearlyPrice ? 12 : 1)
                               : 0;
                             const subtotal = basePrice + dbFee;
                             return subtotal + Math.round(subtotal * 0.18);
@@ -2842,8 +2847,8 @@ function CurrentPlanContent() {
 
                 {/* Dedicated Database Checkbox - Available for both Monthly and Annual */}
                 <label className={`flex items-start gap-3 p-4 border-2 rounded-xl transition-colors ${
-                  hasDedicatedDatabase
-                    ? 'border-amber-500 bg-amber-50 cursor-not-allowed opacity-80'
+                  hasDedicatedDatabase || planSettingsError
+                    ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
                     : isolationType === 'database'
                       ? 'border-amber-500 bg-amber-50 cursor-pointer'
                       : 'border-gray-200 hover:bg-gray-50 cursor-pointer'
@@ -2852,11 +2857,11 @@ function CurrentPlanContent() {
                     type="checkbox"
                     checked={isolationType === 'database'}
                     onChange={(e) => {
-                      if (!hasDedicatedDatabase) {
+                      if (!hasDedicatedDatabase && !planSettingsError) {
                         setIsolationType(e.target.checked ? 'database' : 'schema');
                       }
                     }}
-                    disabled={hasDedicatedDatabase}
+                    disabled={hasDedicatedDatabase || planSettingsError}
                     className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500 disabled:cursor-not-allowed"
                   />
                   <div className="flex-1">
@@ -2874,14 +2879,21 @@ function CurrentPlanContent() {
                         ? 'Your organization already uses a dedicated database. This cannot be changed.'
                         : 'Get your own dedicated database for enhanced isolation and performance'}
                     </p>
-                    <p className="text-sm text-amber-600 font-medium mt-1">
-                      +{formatCurrency(
-                        isYearly
-                          ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12
-                          : (planSettings?.databasePerTenantMonthlyPrice || 5000),
-                        selectedPlanForPayment?.currency || 'INR'
-                      )}{isYearly ? '/year' : '/month'}
-                    </p>
+                    {planSettingsError ? (
+                      <p className="text-sm text-red-500 font-medium mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-4 h-4" />
+                        Pricing unavailable — unable to load from server
+                      </p>
+                    ) : (
+                      <p className="text-sm text-amber-600 font-medium mt-1">
+                        +{formatCurrency(
+                          isYearly
+                            ? (planSettings!.databasePerTenantMonthlyPrice) * 12
+                            : (planSettings!.databasePerTenantMonthlyPrice),
+                          selectedPlanForPayment?.currency || 'INR'
+                        )}{isYearly ? '/year' : '/month'}
+                      </p>
+                    )}
                   </div>
                 </label>
 
@@ -2914,9 +2926,9 @@ function CurrentPlanContent() {
                         (() => {
                           const subtotal = isYearly
                             ? (selectedPlanForPayment?.annualPrice || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * 12 : 0)
                             : (selectedPlanForPayment?.monthlyPrice || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0);
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) : 0);
                           return subtotal + Math.round(subtotal * 0.18);
                         })(),
                         selectedPlanForPayment?.currency || 'INR'

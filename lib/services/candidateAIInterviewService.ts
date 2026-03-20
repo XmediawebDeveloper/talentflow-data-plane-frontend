@@ -125,6 +125,10 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  async recordPracticeComplete(token: string): Promise<void> {
+    await candidateApi.post(`/candidate/ai-interview/${token}/practice-complete`).catch(() => {});
+  },
+
   async startInterview(token: string): Promise<CandidateInterviewInfo> {
     const response = await candidateApi.post<CandidateInterviewInfo>(
       `/candidate/ai-interview/${token}/start`,
