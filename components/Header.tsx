@@ -21,9 +21,10 @@ interface HeaderProps {
   onOpenSettings?: () => void;
   onMenuClick?: () => void;
   isMobileMenuOpen?: boolean;
+  subscriptionExpired?: boolean;
 }
 
-export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen }: HeaderProps) {
+export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen, subscriptionExpired }: HeaderProps) {
   if (!user) return null;
   const router = useRouter();
   const { refreshUser } = useAuth();
@@ -1111,10 +1112,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 <div className="py-2">
                   <button
                     onClick={() => {
+                      if (subscriptionExpired) return;
                       setShowUserMenu(false);
                       router.push('/settings/general-settings');
                     }}
-                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                    disabled={subscriptionExpired}
+                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
                       <User className="w-4 h-4 text-gray-600" />
@@ -1126,10 +1129,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   </button>
                   <button
                     onClick={() => {
+                      if (subscriptionExpired) return;
                       setShowUserMenu(false);
                       router.push('/settings/security');
                     }}
-                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                    disabled={subscriptionExpired}
+                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
                       <Shield className="w-4 h-4 text-gray-600" />
@@ -1141,10 +1146,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   </button>
                   <button
                     onClick={() => {
+                      if (subscriptionExpired) return;
                       setShowUserMenu(false);
                       router.push('/audits/activity');
                     }}
-                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                    disabled={subscriptionExpired}
+                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
                       <Activity className="w-4 h-4 text-gray-600" />

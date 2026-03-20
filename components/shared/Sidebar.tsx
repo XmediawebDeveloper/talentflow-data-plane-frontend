@@ -60,10 +60,7 @@ interface SidebarProps {
 const SUBSCRIPTION_ALLOWED_PATHS = [
   '/subscription/current-plan',
   '/subscription/payment-methods',
-  '/audits/trail',
-  '/audits/activity',
   '/support-tickets',
-  '/settings/general-settings',
 ];
 
 interface NavItem {
