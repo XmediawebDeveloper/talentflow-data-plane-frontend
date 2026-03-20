@@ -432,6 +432,7 @@ export default function DashboardLayout({
                 onOpenSettings={() => router.push('/settings')}
                 onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 isMobileMenuOpen={isMobileMenuOpen}
+                subscriptionExpired={subscriptionExpired === true}
               />
 
               <TermsReminderBanner />
