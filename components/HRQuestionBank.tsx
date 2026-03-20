@@ -198,13 +198,26 @@ export default function HRQuestionBank() {
   const loadQuestions = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/assessments/hr-question-bank');
+      const response = await api.get('/hr-question-bank');
       const data = response.data || [];
-      // If API returns data, use it; otherwise fall back to defaults
-      setQuestions(data.length > 0 ? data : DEFAULT_HR_QUESTIONS);
+      // Map backend fields to frontend format
+      const mapped = data.map((q: any) => ({
+        id: q.id,
+        question_text: q.question_text,
+        category: 'HR',
+        difficulty: 'easy' as const,
+        question_type: 'behavioral' as const,
+        answer_type: q.answer_type || 'text',
+        correct_answer: q.correct_answer,
+        expected_answer_points: [],
+        evaluation_criteria: '',
+        time_minutes: q.answer_type === 'yes_no' ? 1 : 3,
+        is_active: q.is_active ?? true,
+        created_at: q.created_at,
+      }));
+      setQuestions(mapped.length > 0 ? mapped : DEFAULT_HR_QUESTIONS);
     } catch (error: any) {
-      // If API doesn't exist yet, use default questions
-      console.log('[HRQuestionBank] API not available yet, loading default questions');
+      console.log('[HRQuestionBank] API error, loading defaults:', error?.message);
       setQuestions(DEFAULT_HR_QUESTIONS);
     } finally {
       setLoading(false);
@@ -220,43 +233,26 @@ export default function HRQuestionBank() {
 
     setSaving(true);
     try {
-      const payload = { ...formData, expected_answer_points: cleanedPoints };
+      const apiPayload = {
+        question_text: formData.question_text,
+        answer_type: formData.answer_type,
+        correct_answer: formData.answer_type === 'yes_no' ? (formData.correct_answer || 'Yes') : null,
+      };
 
       if (editingId) {
-        await api.put(`/assessments/hr-question-bank/${editingId}`, payload);
-        setQuestions(prev => prev.map(q => q.id === editingId ? { ...q, ...payload } : q));
+        await api.put(`/hr-question-bank/${editingId}`, apiPayload);
         toast.success({ title: 'Question updated' });
       } else {
-        const response = await api.post('/assessments/hr-question-bank', payload);
-        const newQuestion = response.data || { ...payload, id: crypto.randomUUID(), created_at: new Date().toISOString() };
-        setQuestions(prev => [newQuestion, ...prev]);
+        await api.post('/hr-question-bank', apiPayload);
         toast.success({ title: 'Question added to bank' });
       }
 
       setShowAddForm(false);
       setEditingId(null);
       setFormData(EMPTY_QUESTION);
+      await loadQuestions(); // Reload from API
     } catch (error: any) {
-      // If API doesn't exist, save locally
-      if (error?.response?.status === 404) {
-        const newQuestion: HRQuestion = {
-          ...formData,
-          expected_answer_points: cleanedPoints,
-          id: editingId || crypto.randomUUID(),
-          created_at: new Date().toISOString(),
-        };
-        if (editingId) {
-          setQuestions(prev => prev.map(q => q.id === editingId ? newQuestion : q));
-        } else {
-          setQuestions(prev => [newQuestion, ...prev]);
-        }
-        toast.success({ title: editingId ? 'Question updated (local)' : 'Question added (local)' });
-        setShowAddForm(false);
-        setEditingId(null);
-        setFormData(EMPTY_QUESTION);
-      } else {
-        toast.error({ title: 'Failed to save question', description: error?.message });
-      }
+      toast.error({ title: 'Failed to save question', description: error?.message });
     } finally {
       setSaving(false);
     }
@@ -265,12 +261,16 @@ export default function HRQuestionBank() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this question?')) return;
     try {
-      await api.delete(`/assessments/hr-question-bank/${id}`);
-    } catch {
-      // API may not exist yet
+      await api.delete(`/hr-question-bank/${id}`);
+      toast.success({ title: 'Question deleted' });
+      await loadQuestions(); // Reload from API
+    } catch (error: any) {
+      if (error?.response?.status === 400) {
+        toast.error({ title: 'Cannot delete default questions' });
+      } else {
+        toast.error({ title: 'Failed to delete question' });
+      }
     }
-    setQuestions(prev => prev.filter(q => q.id !== id));
-    toast.success({ title: 'Question deleted' });
   };
 
   const handleEdit = (question: HRQuestion) => {
