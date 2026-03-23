@@ -1295,8 +1295,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Mic permission already granted during system check — no need to re-acquire here.
   // Re-requesting getUserMedia in fullscreen causes a browser popup overlay.
 
-  // Connect WebSocket once avatar is ready
+  // Connect WebSocket once avatar is ready (or after timeout fallback)
   const hasConnectedRef = useRef(false);
+
+  // Fallback: if avatar hasn't signalled ready within 10 s, unblock the WebSocket anyway.
+  // Prevents the interview hanging when the 3D scene is slow to initialise.
+  useEffect(() => {
+    const fallback = setTimeout(() => {
+      if (!avatarReady) {
+        console.warn('[InterviewUI] Avatar load timeout — connecting WebSocket without avatar');
+        setAvatarReady(true);
+      }
+    }, 5000);
+    return () => clearTimeout(fallback);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!avatarReady || hasConnectedRef.current) return;
     hasConnectedRef.current = true;

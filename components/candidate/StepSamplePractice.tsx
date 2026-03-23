@@ -209,9 +209,15 @@ export default function StepSamplePractice({
         setTranscribeError('No speech detected. Try again or type your answer below.');
       }
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Transcription failed. Please try again or type your answer.';
+      const axiosErr = err as { message?: string; response?: { data?: { detail?: string } } };
+      // ERR_BLOCKED_BY_CLIENT — ad blocker or browser extension intercepted the request
+      const isBlocked =
+        !axiosErr.response &&
+        (axiosErr.message === 'Network Error' || axiosErr.message?.includes('ERR_BLOCKED'));
+      const msg = isBlocked
+        ? 'Request blocked by your browser or an ad-blocker extension. Please disable any ad-blockers for this page and try again, or type your answer below.'
+        : axiosErr.response?.data?.detail ||
+          'Transcription failed. Please try again or type your answer.';
       setTranscribeError(msg);
     } finally {
       setIsTranscribing(false);
@@ -262,6 +268,7 @@ export default function StepSamplePractice({
   const speakQuestion = useCallback(() => {
     if (!window.speechSynthesis) {
       setTtsSupported(false);
+      setAiSpoken(true);
       return;
     }
 
@@ -286,18 +293,29 @@ export default function StepSamplePractice({
       }
     };
 
-    utterance.onerror = () => {
+    utterance.onerror = (e) => {
+      // 'interrupted' fires when cancelled intentionally — ignore it
+      if ((e as SpeechSynthesisErrorEvent).error === 'interrupted') return;
       setAiSpeaking(false);
       setAiSpoken(true);
     };
 
     utteranceRef.current = utterance;
     window.speechSynthesis.speak(utterance);
+
+    // Chrome sometimes silently drops speech when there's no prior user gesture.
+    // If nothing has happened after 1.5 s, assume TTS was blocked and reveal the UI.
+    setTimeout(() => {
+      if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+        setAiSpeaking(false);
+        setAiSpoken(true);
+      }
+    }, 1500);
   }, [startRecording]);
 
   // Auto-speak on mount
   useEffect(() => {
-    const fallbackTimer = setTimeout(() => setAiSpoken(true), 3000);
+    const fallbackTimer = setTimeout(() => setAiSpoken(true), 1500);
 
     if (!window.speechSynthesis) {
       setTtsSupported(false);

@@ -32,10 +32,26 @@ const QUOTA_LABELS: Record<string, string> = {
   max_seats: 'Team Seats',
   max_jobs: 'Job Postings',
   storage_gb: 'Storage (GB)',
+  support_level: 'Support Level',
+};
+
+const FEATURE_LABELS: Record<string, string> = {
+  resume_upload: 'Resume Upload',
+  resume_scoring: 'Resume Scoring',
+  api_access_: 'API Access',
+  assessments: 'Assessments',
+  ai_interviews: 'AI Interviews',
+  ai_talent_match: 'AI Talent Match',
+  'sso_(single_sign-on)': 'SSO (Single Sign-On)',
+  priority_support: 'Priority Support',
+  teams: 'Teams',
 };
 
 function PriceChangeCard({ priceChange }: { priceChange: NonNullable<PlanChangeSummary['price_change']> }) {
-  const increase = priceChange.new_price > priceChange.old_price;
+  const oldPrice = priceChange.old_price ?? 0;
+  const newPrice = priceChange.new_price ?? 0;
+  const increase = newPrice > oldPrice;
+  const diff = Math.abs(newPrice - oldPrice);
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">
       <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
@@ -46,29 +62,31 @@ function PriceChangeCard({ priceChange }: { priceChange: NonNullable<PlanChangeS
         <div className="text-center">
           <p className="text-xs text-gray-500">Current</p>
           <p className="text-lg font-bold text-gray-900">
-            ₹{priceChange.old_price.toLocaleString()}
+            ₹{oldPrice.toLocaleString()}
           </p>
         </div>
         <ArrowRight className={`w-5 h-5 ${increase ? 'text-red-500' : 'text-green-500'}`} />
         <div className="text-center">
           <p className="text-xs text-gray-500">New</p>
           <p className={`text-lg font-bold ${increase ? 'text-red-600' : 'text-green-600'}`}>
-            ₹{priceChange.new_price.toLocaleString()}
+            ₹{newPrice.toLocaleString()}
           </p>
         </div>
-        <div className="ml-auto">
-          {increase ? (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700">
-              <TrendingUp className="w-3 h-3" />
-              +₹{(priceChange.new_price - priceChange.old_price).toLocaleString()}
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700">
-              <TrendingDown className="w-3 h-3" />
-              -₹{(priceChange.old_price - priceChange.new_price).toLocaleString()}
-            </span>
-          )}
-        </div>
+        {diff > 0 && (
+          <div className="ml-auto">
+            {increase ? (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700">
+                <TrendingUp className="w-3 h-3" />
+                +₹{diff.toLocaleString()}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                <TrendingDown className="w-3 h-3" />
+                -₹{diff.toLocaleString()}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -93,26 +111,26 @@ function QuotaChangesTable({ changes }: { changes: NonNullable<PlanChangeSummary
           </thead>
           <tbody className="divide-y divide-gray-100">
             {changes.map((change, i) => {
-              const decrease = change.new_limit < change.old_limit;
+              const decrease = change.direction === 'decrease';
               return (
                 <tr key={i}>
                   <td className="px-3 py-2 text-gray-900">
-                    {QUOTA_LABELS[change.quota_type] || change.quota_type}
+                    {QUOTA_LABELS[change.key] || change.key}
                   </td>
-                  <td className="px-3 py-2 text-center text-gray-600">{change.old_limit}</td>
+                  <td className="px-3 py-2 text-center text-gray-600">{change.old}</td>
                   <td className={`px-3 py-2 text-center font-medium ${decrease ? 'text-red-600' : 'text-green-600'}`}>
-                    {change.new_limit}
+                    {change.new}
                   </td>
                   <td className="px-3 py-2 text-center">
                     {decrease ? (
                       <span className="inline-flex items-center gap-0.5 text-red-600 text-xs font-medium">
                         <Minus className="w-3 h-3" />
-                        {change.old_limit - change.new_limit}
+                        {change.old - change.new}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-0.5 text-green-600 text-xs font-medium">
                         <Plus className="w-3 h-3" />
-                        {change.new_limit - change.old_limit}
+                        {change.new - change.old}
                       </span>
                     )}
                   </td>
@@ -145,7 +163,7 @@ function FeatureBadges({ features, type }: { features: string[]; type: 'removed'
             }`}
           >
             {isRemoved ? <Minus className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-            {feature}
+            {FEATURE_LABELS[feature] || feature.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
           </span>
         ))}
       </div>

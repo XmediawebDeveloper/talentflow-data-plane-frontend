@@ -76,7 +76,7 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
     try {
       const changes = await planChangeService.getPendingChanges();
       const pending = Array.isArray(changes)
-        ? changes.filter((c) => c.status === 'pending')
+        ? changes.filter((c) => c.status?.toLowerCase() === 'pending')
         : [];
       setPendingChanges(pending);
 

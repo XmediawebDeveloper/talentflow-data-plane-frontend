@@ -7,8 +7,8 @@ export interface PlanChangeDetail {
 }
 
 export interface PlanChangeSummary {
-  price_change?: { old_price: number; new_price: number };
-  quota_changes?: Array<{ quota_type: string; old_limit: number; new_limit: number }>;
+  price_change?: { old_price: number | null; new_price: number | null };
+  quota_changes?: Array<{ key: string; old: number; new: number; direction: string }>;
   features_removed?: string[];
   features_added?: string[];
 }
