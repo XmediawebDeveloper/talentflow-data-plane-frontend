@@ -514,6 +514,8 @@ export default function AIInterviewConfig() {
 
   /* Interview mode */
   const [mode, setMode] = useState<InterviewMode>('fixed');
+  /* Per-question time limit (timed mode only), in seconds */
+  const [perQuestionSeconds, setPerQuestionSeconds] = useState<number>(120);
 
   /* Category configs */
   const [mth, setMth] = useState<CategoryConfig>({
@@ -734,6 +736,11 @@ export default function AIInterviewConfig() {
               const nthComments: Record<string, string> = parsed.skill_comments?.nth || {};
               const mthTypes: Record<string, string> = parsed.skill_types?.mth || {};
               const nthTypes: Record<string, string> = parsed.skill_types?.nth || {};
+
+              // Restore per-question time limit
+              if (parsed.per_question_seconds) {
+                setPerQuestionSeconds(Number(parsed.per_question_seconds));
+              }
 
               // Restore clusters
               if (parsed.mth_clusters?.length) {
@@ -1026,6 +1033,7 @@ export default function AIInterviewConfig() {
   /* Cluster config as JSON for special_instructions */
   const buildClusterJson = () => JSON.stringify({
     interview_mode: mode,
+    per_question_seconds: mode === 'fixed' ? perQuestionSeconds : undefined,
     mth_clusters: mth.clusters,
     nth_clusters: nth.clusters,
     skill_comments: {
@@ -1267,6 +1275,7 @@ export default function AIInterviewConfig() {
                     </div>
                   </button>
                 </div>
+
               </div>
             </div>
 
