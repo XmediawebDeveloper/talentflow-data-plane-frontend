@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 
 const RAZORPAY_KEY_ID = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '';
+const RAZORPAY_SCRIPT_URL = 'https://checkout.razorpay.com/v1/checkout.js';
 
 interface CheckoutParams {
   orderId: string;
@@ -19,26 +20,54 @@ interface UseRazorpayReturn {
   isProcessing: boolean;
 }
 
+/** Inject the Razorpay script tag and wait for it to load.
+ *  No-ops if the script is already present or Razorpay is already on window. */
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined') { resolve(false); return; }
+    if (window.Razorpay) { resolve(true); return; }
+
+    // Avoid double-injecting
+    if (document.querySelector(`script[src="${RAZORPAY_SCRIPT_URL}"]`)) {
+      // Script tag exists but may not have finished loading yet — poll briefly
+      const poll = setInterval(() => {
+        if (window.Razorpay) { clearInterval(poll); resolve(true); }
+      }, 100);
+      setTimeout(() => { clearInterval(poll); resolve(!!window.Razorpay); }, 5000);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = RAZORPAY_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+}
+
 /**
  * Hook to open Razorpay checkout modal and return payment details.
+ * Loads the Razorpay SDK on-demand (only when openCheckout is called)
+ * so it never loads on pages that don't need it.
  * Resolves with RazorpayResponse on success, rejects on failure/dismiss.
  */
 export function useRazorpay(): UseRazorpayReturn {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const openCheckout = useCallback(
-    (params: CheckoutParams): Promise<RazorpayResponse> => {
+    async (params: CheckoutParams): Promise<RazorpayResponse> => {
+      // Load SDK on demand — no global <Script> tag required
+      const loaded = await loadRazorpayScript();
+      if (!loaded || !window.Razorpay) {
+        throw new Error('Razorpay SDK could not be loaded. Please check your connection and try again.');
+      }
+
+      if (!RAZORPAY_KEY_ID) {
+        throw new Error('Razorpay key not configured.');
+      }
+
       return new Promise((resolve, reject) => {
-        if (!window.Razorpay) {
-          reject(new Error('Razorpay SDK not loaded. Please refresh the page.'));
-          return;
-        }
-
-        if (!RAZORPAY_KEY_ID) {
-          reject(new Error('Razorpay key not configured.'));
-          return;
-        }
-
         setIsProcessing(true);
 
         const options: RazorpayOptions = {

@@ -9,6 +9,7 @@ import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { PlanFeatureKey } from '@/lib/types/planFeatures';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import api from '@/lib/services/api';
 
 // Addon interface
 interface Addon {
@@ -216,6 +217,30 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
+  // Expired plan credits — fetched when subscription is expired/inactive
+  const [expiredPlanCredits, setExpiredPlanCredits] = useState<Record<string, number> | null>(null);
+  const [expiredPlanName, setExpiredPlanName] = useState<string | null>(null);
+
+  // Fetch previous-plan data when plan is expired
+  useEffect(() => {
+    const tenantId = contextQuotaData?.tenant_id;
+    const status = (contextQuotaData?.subscription_status || '').toLowerCase();
+    const isExpired = ['expired', 'inactive', 'suspended'].includes(status);
+    if (!tenantId || !isExpired) return;
+
+    api.get(`/subscription/${tenantId}/previous-plan`)
+      .then(res => {
+        const data = res.data?.data || res.data;
+        const expiredPlan = data?.expired_plan;
+        if (expiredPlan) {
+          if (expiredPlan.plan_name) setExpiredPlanName(expiredPlan.plan_name.replace(/\s*\(.*?\)\s*/g, '').trim());
+          if (expiredPlan.credits) setExpiredPlanCredits(expiredPlan.credits);
+          console.log('[UsageDashboard] Loaded expired plan:', expiredPlan.plan_name, expiredPlan.credits);
+        }
+      })
+      .catch(err => console.warn('[UsageDashboard] Could not load previous-plan:', err));
+  }, [contextQuotaData?.tenant_id, contextQuotaData?.subscription_status]);
+
   // Fetch addons on mount
   useEffect(() => {
     fetchAddons();
@@ -329,18 +354,31 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       ...allQuotaTypes.filter(qt => !preferredOrder.includes(qt))
     ];
 
+    const isExpiredPlan = ['expired', 'inactive', 'suspended'].includes(
+      (contextQuotaData.subscription_status || '').toLowerCase()
+    );
+
     for (const quotaType of sortedQuotaTypes) {
       const q = quotasMap[quotaType as keyof typeof quotasMap];
       if (q) {
         // NOT_PROVISIONED means the feature is not available for this tenant — skip entirely
-        if (q.status === 'NOT_PROVISIONED') continue;
+        // EXCEPTION: for expired plans, show quotas that have actual usage (historical view)
+        if (q.status === 'NOT_PROVISIONED' && !isExpiredPlan) continue;
+        if (q.status === 'NOT_PROVISIONED' && isExpiredPlan && (q.subscription?.used || 0) === 0) continue;
 
         const sub = q.subscription || {};
         const addon = q.addon || {};
-        const isUnlimited = sub.limit === 'unlimited' || sub.limit === -1;
+
+        // For expired plans: use original plan credits as the limit if the API returns 0/null
+        const creditLimit = isExpiredPlan ? (expiredPlanCredits?.[quotaType] ?? null) : null;
+        const effectiveLimit = (creditLimit !== null && (sub.limit === 0 || sub.limit == null || sub.limit === ''))
+          ? creditLimit
+          : sub.limit;
+
+        const isUnlimited = effectiveLimit === 'unlimited' || effectiveLimit === -1;
 
         // Subscription breakdown values
-        const subLimit = isUnlimited ? -1 : (typeof sub.limit === 'number' ? sub.limit : 0);
+        const subLimit = isUnlimited ? -1 : (typeof effectiveLimit === 'number' ? effectiveLimit : 0);
         const subUsed = sub.used || 0;
         // sub.remaining removed from API — derive it
         const subRemaining = isUnlimited ? -1 : Math.max(0, subLimit - subUsed);
@@ -416,10 +454,11 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       quotas: quotasList,
       billing_period: contextQuotaData.billing_period,
     };
-  }, [contextQuotaData]);
+  }, [contextQuotaData, expiredPlanCredits]);
 
   // Derive subscriptionSummary from context data
   const subscriptionSummary = useMemo((): SubscriptionSummary | null => {
+    void expiredPlanName; // reactive dependency
     if (!contextQuotaData) return null;
 
     const isTrial = contextQuotaData.is_trial || false;
@@ -451,7 +490,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       trial_days_remaining: isTrial ? daysRemaining : undefined,
       plan: {
         id: contextQuotaData.plan_info?.plan_id || 0,
-        name: (contextQuotaData.plan_name && contextQuotaData.plan_name.toLowerCase() !== 'no plan' ? contextQuotaData.plan_name : null)
+        name: expiredPlanName
+          || (contextQuotaData.plan_name && contextQuotaData.plan_name.toLowerCase() !== 'no plan' ? contextQuotaData.plan_name : null)
           || contextQuotaData.plan_info?.plan_name
           || (isTrial ? 'Free Trial' : 'Professional'),
         price: basePrice,
@@ -469,7 +509,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       },
       isolation_type: contextQuotaData.isolation_type || null,
     };
-  }, [contextQuotaData]);
+  }, [contextQuotaData, expiredPlanName]);
 
   // Derive usageData from context
   const usageData = useMemo(() => {
@@ -906,8 +946,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               )}
             </div>
 
-            {/* Low Quota Warning */}
-            {quotaSummary.has_low_quotas && (
+            {/* Low Quota Warning — hide for expired/inactive plans */}
+            {quotaSummary.has_low_quotas && !['expired', 'inactive', 'suspended'].includes(subscriptionSummary?.status?.toLowerCase() || '') && (
               <div className="bg-gradient-to-r from-gray-100 to-gray-50 border-2 border-gray-300 rounded-xl sm:rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6 shadow-sm">
                 <div className="flex items-start gap-3 sm:gap-4">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -997,9 +1037,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mb-6">
               {quotaSummary.quotas?.filter((quota: QuotaInfo) => {
                 if (quota.quota_type === 'storage_gb') return false;
-                // Gate quota cards by plan feature
-                const featureKey = quotaFeatureMap[quota.quota_type];
-                if (featureKey && !hasPlanFeature(featureKey)) return false;
+                // Gate quota cards by plan feature — but always show for expired/inactive plans (historical usage view)
+                const isExpiredOrInactive = ['expired', 'inactive', 'suspended'].includes(
+                  subscriptionSummary?.status?.toLowerCase() || ''
+                );
+                if (!isExpiredOrInactive) {
+                  const featureKey = quotaFeatureMap[quota.quota_type];
+                  if (featureKey && !hasPlanFeature(featureKey)) return false;
+                }
                 return true;
               }).map((quota: QuotaInfo) => {
                 const isUnlimited = quota.limit === -1 || quota.remaining === -1;

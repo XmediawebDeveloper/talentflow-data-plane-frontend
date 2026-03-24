@@ -898,20 +898,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => { handleMessageRef.current = handleMessage; }, [handleMessage]);
 
   // Upload recording
-  const uploadRecording = useCallback(async () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
-    // Wait for final chunks
-    await new Promise(r => setTimeout(r, 500));
-    if (recordedChunksRef.current.length > 0) {
-      const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+  // Waits for MediaRecorder.onstop (all ondataavailable chunks flushed) before
+  // uploading — prevents the race-condition where the final chunk was still
+  // in the encoder buffer when we read recordedChunksRef.
+  const uploadRecording = useCallback((): Promise<void> => {
+    const recorder = mediaRecorderRef.current;
+
+    const doUpload = async () => {
+      const chunks = recordedChunksRef.current;
+      if (chunks.length === 0) return;
+      // Use the recorder's negotiated mimeType; strip codec suffix for Blob constructor
+      const mimeType = (recorder?.mimeType || 'video/webm').split(';')[0];
+      const blob = new Blob(chunks, { type: mimeType });
       try {
         await candidateAIInterviewService.uploadRecording(token, blob);
       } catch (err) {
-        console.error("Failed to upload recording:", err);
+        console.error('[Recording] Upload failed:', err);
       }
+    };
+
+    // Recorder already stopped — upload whatever chunks we have now
+    if (!recorder || recorder.state === 'inactive') {
+      return doUpload();
     }
+
+    // Recorder still running — stop it and wait for onstop before uploading
+    return new Promise<void>((resolve) => {
+      recorder.onstop = () => { doUpload().then(resolve); };
+      recorder.stop();
+    });
   }, [token]);
 
   // Clear no-response timer helper
@@ -1178,9 +1193,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
     speakViaTTS(closingMsg, () => {
       disconnect();
-      onInterviewComplete?.();
+      // onInterviewComplete is called by ws.onclose after recording upload completes
     });
-  }, [disconnect, onInterviewComplete, speakViaTTS]);
+  }, [disconnect, speakViaTTS]);
 
   const handleMicPopupYes = useCallback(async () => {
     setShowMicPopup(false);
@@ -1276,8 +1291,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (event.code === 1000 || shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
         setStatus("Interview completed. Thank you!");
-        uploadRecording();
-        onInterviewComplete?.();
+        // Upload FIRST, then navigate — prevents the page change from killing the in-flight request
+        uploadRecording().then(() => {
+          onInterviewComplete?.();
+        });
       } else if (event.code !== 3001 && !isUnmountedRef.current && !isClosingRef.current) {
         // Unexpected disconnection — attempt auto-reconnect (max 3 times)
         const attempt = ++reconnectAttemptsRef.current;
@@ -2174,7 +2191,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
                   }
                   disconnect();
-                  onInterviewComplete?.();
+                  // onInterviewComplete is called by ws.onclose after recording upload completes
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-[#DC2626] hover:bg-[#B91C1C] text-white transition-all duration-200 shadow-lg shadow-red-500/20"
                 style={{ fontSize: 13, fontWeight: 600 }}
