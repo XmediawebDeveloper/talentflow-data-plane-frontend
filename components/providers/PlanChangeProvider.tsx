@@ -99,6 +99,27 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
     fetchPendingChanges();
   }, [fetchPendingChanges]);
 
+  // Polling fallback — catches changes when WebSocket is unavailable (e.g. Firefox/Safari)
+  useEffect(() => {
+    const POLL_INTERVAL = 5 * 60 * 1000; // 5 minutes
+    const timer = setInterval(() => {
+      fetchPendingChanges();
+    }, POLL_INTERVAL);
+    return () => clearInterval(timer);
+  }, [fetchPendingChanges]);
+
+  // Re-fetch when the tab becomes visible — handles Firefox private mode where the
+  // initial fetch may have silently failed due to localStorage/storage restrictions
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchPendingChanges();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [fetchPendingChanges]);
+
   // Listen for plan change events (from WebSocket or API interceptor)
   useEffect(() => {
     const handlePlanChangeEvent = () => {

@@ -37,6 +37,7 @@ const adminRoutes = [
 const SUBSCRIPTION_ALLOWED_PATHS = [
   '/subscription/current-plan',
   '/subscription/payment-methods',
+  '/subscription/usage-quotas',
   '/audits/trail',
   '/audits/activity',
   '/support-tickets',

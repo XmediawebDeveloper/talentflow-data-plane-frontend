@@ -58,6 +58,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [isClosing, setIsClosing] = useState(false);
   const isClosingRef = useRef(false);
   const [closingReason, setClosingReason] = useState<string>("");
+
+  // Silence detection — "Are you there?" banner (Req 14b)
+  const [showSilenceBanner, setShowSilenceBanner] = useState(false);
+  const silenceBannerTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Interview completion modal (Req 16)
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [completionMessage, setCompletionMessage] = useState("");
   const [questionCount, setQuestionCount] = useState(0);
   const [duration, setDuration] = useState(0);
   const shouldDisconnectAfterAudioRef = useRef(false);
@@ -106,8 +114,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     if (!isConnected || isClosing) return;
     timerIntervalRef.current = setInterval(() => {
-      // Pause global timer while Linda is speaking
-      if (isAiSpeakingRef.current) return;
+      // Pause global timer while Linda is speaking OR processing candidate response
+      if (isAiSpeakingRef.current || isProcessingRef.current) return;
       setRemainingSeconds(prev => {
         if (isFlexibleMode) return prev + 1; // count up
         if (prev <= 1) {
@@ -760,6 +768,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
       case "processing":
         setIsProcessing(true);
+        setShowSilenceBanner(false); // candidate responded — hide silence banner
         setStatus("Processing your speech...");
         tokenBufferRef.current = "";
         revealedCharsRef.current = 0;
@@ -827,9 +836,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           questions_asked: data.questions_asked ?? 0,
         });
         break;
+      case "silence_detected":
+        // Backend sent "Are you there?" TTS at 25s of silence — also show UI banner
+        setShowSilenceBanner(true);
+        if (silenceBannerTimerRef.current) clearTimeout(silenceBannerTimerRef.current);
+        silenceBannerTimerRef.current = setTimeout(() => setShowSilenceBanner(false), 8000);
+        break;
       case "question_timer_nudge":
         // Candidate has been silent for 45s — show a gentle prompt in the status bar
+        setShowSilenceBanner(false); // clear earlier banner if still showing
         setStatus("Take your time — share whatever comes to mind, or say 'skip' to move on.");
+        break;
+      case "interview_completion_message":
+        // Show the official completion message before disconnect (Req 16)
+        setCompletionMessage(data.message || "Thank you for completing the interview. Your responses have been recorded successfully.");
+        setShowCompletionModal(true);
         break;
       case "interview_closing":
         setIsClosing(true); isClosingRef.current = true;
@@ -1415,6 +1436,47 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         </div>
       )}
 
+      {/* ── Silence detection banner (Req 14b) ── */}
+      {showSilenceBanner && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-3 duration-300">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-2xl border border-[#F59E0B]/30 bg-[#0A1020]/95 backdrop-blur-xl shadow-2xl">
+            <div className="w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse shrink-0" />
+            <span className="text-[#F59E0B] font-medium" style={{ fontSize: 14 }}>
+              Are you still there? Take your time — or say &quot;skip&quot; to move on.
+            </span>
+            <button
+              onClick={() => setShowSilenceBanner(false)}
+              className="text-[#475569] hover:text-white ml-1 shrink-0"
+              style={{ fontSize: 16, lineHeight: 1 }}
+            >×</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Interview completion modal (Req 16) ── */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-[#0A1020] border border-[#10B981]/30 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
+            <div className="w-16 h-16 rounded-full bg-[#10B981]/15 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-white font-bold mb-3" style={{ fontSize: 20 }}>Interview Complete</h2>
+            <p className="text-[#94A3B8] mb-6" style={{ fontSize: 15, lineHeight: 1.6 }}>
+              {completionMessage}
+            </p>
+            <button
+              onClick={() => setShowCompletionModal(false)}
+              className="px-8 py-3 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white font-semibold transition-colors"
+              style={{ fontSize: 15 }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Main interview UI (Figma design) ── */}
       <div className="flex flex-col h-screen overflow-hidden transition-colors duration-500 bg-[#080D18]">
 
@@ -1656,7 +1718,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   </div>
                 )}
 
-                {/* Question timer (timed mode only) */}
+                {/* Question timer overlay — compact corner badge */}
                 {questionTimerSeconds !== null && (
                   <div
                     className="absolute bottom-2 sm:bottom-3 right-2 sm:right-3 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full backdrop-blur-md border"
@@ -1874,10 +1936,60 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 <MessageSquare className="w-3.5 h-3.5 text-[#3B82F6]" />
                 <span className="text-[#94A3B8]" style={{ fontSize: 11, fontWeight: 600 }}>Live Transcript</span>
               </div>
-              <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#EF4444]/10 border border-[#EF4444]/15">
-                <ShieldCheck className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#EF4444]" />
-                <span className="text-[#EF4444] hidden sm:inline" style={{ fontSize: 10, fontWeight: 600 }}>Recording</span>
-                <span className="text-[#EF4444] sm:hidden" style={{ fontSize: 9, fontWeight: 600 }}>REC</span>
+              <div className="flex items-center gap-2">
+                {/* Prominent per-question timer — shown when it's user's turn */}
+                {questionTimerSeconds !== null && (
+                  <div
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all duration-300 ${
+                      questionTimerExpired
+                        ? 'bg-[#EF4444]/20 border-[#EF4444]/40 animate-pulse'
+                        : questionTimerSeconds <= 30
+                        ? 'bg-[#EF4444]/15 border-[#EF4444]/30'
+                        : questionTimerSeconds <= 60
+                        ? 'bg-[#F59E0B]/15 border-[#F59E0B]/30'
+                        : 'bg-[#10B981]/10 border-[#10B981]/25'
+                    }`}
+                  >
+                    <Clock
+                      className={`w-3.5 h-3.5 ${
+                        questionTimerExpired || questionTimerSeconds <= 30
+                          ? 'text-[#EF4444]'
+                          : questionTimerSeconds <= 60
+                          ? 'text-[#F59E0B]'
+                          : 'text-[#10B981]'
+                      }`}
+                    />
+                    <span
+                      className={`tabular-nums font-bold ${
+                        questionTimerExpired || questionTimerSeconds <= 30
+                          ? 'text-[#EF4444]'
+                          : questionTimerSeconds <= 60
+                          ? 'text-[#F59E0B]'
+                          : 'text-[#10B981]'
+                      }`}
+                      style={{ fontSize: 13, letterSpacing: 0.5 }}
+                    >
+                      {questionTimerExpired ? 'TIME UP' : formatTime(questionTimerSeconds)}
+                    </span>
+                    <span
+                      className={`hidden sm:inline ${
+                        questionTimerExpired || questionTimerSeconds <= 30
+                          ? 'text-[#EF4444]/70'
+                          : questionTimerSeconds <= 60
+                          ? 'text-[#F59E0B]/70'
+                          : 'text-[#10B981]/70'
+                      }`}
+                      style={{ fontSize: 9, fontWeight: 600 }}
+                    >
+                      {questionTimerExpired ? '' : 'TO ANSWER'}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#EF4444]/10 border border-[#EF4444]/15">
+                  <ShieldCheck className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#EF4444]" />
+                  <span className="text-[#EF4444] hidden sm:inline" style={{ fontSize: 10, fontWeight: 600 }}>Recording</span>
+                  <span className="text-[#EF4444] sm:hidden" style={{ fontSize: 9, fontWeight: 600 }}>REC</span>
+                </div>
               </div>
             </div>
 

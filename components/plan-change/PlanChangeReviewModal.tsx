@@ -48,9 +48,9 @@ const FEATURE_LABELS: Record<string, string> = {
 };
 
 function PriceChangeCard({ priceChange }: { priceChange: NonNullable<PlanChangeSummary['price_change']> }) {
-  const oldPrice = priceChange.old_price ?? 0;
-  const newPrice = priceChange.new_price ?? 0;
-  const increase = newPrice > oldPrice;
+  const oldPrice = priceChange.old ?? 0;
+  const newPrice = priceChange.new ?? 0;
+  const increase = priceChange.direction === 'increase' || newPrice > oldPrice;
   const diff = Math.abs(newPrice - oldPrice);
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4">

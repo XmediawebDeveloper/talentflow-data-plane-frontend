@@ -451,7 +451,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       trial_days_remaining: isTrial ? daysRemaining : undefined,
       plan: {
         id: contextQuotaData.plan_info?.plan_id || 0,
-        name: contextQuotaData.plan_name || 'Professional',
+        name: (contextQuotaData.plan_name && contextQuotaData.plan_name.toLowerCase() !== 'no plan' ? contextQuotaData.plan_name : null)
+          || contextQuotaData.plan_info?.plan_name
+          || (isTrial ? 'Free Trial' : 'Professional'),
         price: basePrice,
         billing_interval: billingInterval,
       },
@@ -1190,7 +1192,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             </div>
           </div>
 
-          {/* Trial / blocked banner */}
+          {/* Trial banner */}
           {isAddonPurchaseBlocked && subscriptionSummary?.is_trial && (
             <div className="mx-4 sm:mx-6 mt-4 mb-1 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5">
               <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
@@ -1205,6 +1207,25 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 className="flex-shrink-0 flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
               >
                 Upgrade <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Expired plan banner */}
+          {isAddonPurchaseBlocked && !subscriptionSummary?.is_trial && (subscriptionSummary?.status?.toLowerCase() === 'expired' || subscriptionSummary?.status?.toLowerCase() === 'inactive') && (
+            <div className="mx-4 sm:mx-6 mt-4 mb-1 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5">
+              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-red-800">Add-on Purchase Unavailable — Plan Expired</p>
+                <p className="text-sm text-red-700 mt-0.5">
+                  Renew your subscription to purchase add-on units.
+                </p>
+              </div>
+              <button
+                onClick={handleUpgradeClick}
+                className="flex-shrink-0 flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Renew Plan <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
