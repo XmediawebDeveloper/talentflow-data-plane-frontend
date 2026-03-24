@@ -150,10 +150,12 @@ export const candidateAIInterviewService = {
   async uploadRecording(token: string, blob: Blob): Promise<{ message: string; path: string }> {
     const formData = new FormData();
     formData.append('file', blob, 'recording.webm');
+    // Do NOT set Content-Type manually — axios auto-sets multipart/form-data with the
+    // correct boundary when given a FormData object. Overriding it drops the boundary
+    // and the server cannot parse the request.
     const response = await candidateApi.post(
       `/candidate/ai-interview/${token}/upload-recording`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
     );
     return response.data;
   },
