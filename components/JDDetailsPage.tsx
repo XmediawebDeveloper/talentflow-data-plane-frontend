@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDVersion, JDAssessmentResultsResponse, AssessmentResultItem } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -660,6 +661,8 @@ export default function JDDetailsPage() {
   const jdId = searchParams.get('id');
   const tabParam = searchParams.get('tab') as TabType | null;
   const jdPerms = useModulePermissions('jd');
+  const { isTenantAdmin, user } = useAuth();
+  const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
 
   const [jd, setJd] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -846,7 +849,7 @@ export default function JDDetailsPage() {
                   Publish
                 </button>
               )}
-              {jd.status === 'published' && (
+              {jd.status === 'published' && canRunScoring && (
                 <button
                   onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${jd.id}&mode=new`)}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"

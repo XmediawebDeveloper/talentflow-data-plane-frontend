@@ -277,7 +277,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       label: 'EVALUATION',
       items: [
         { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permissions: ['canViewAssessments', 'canCreateAssessments', 'canUpdateAssessments', 'canDeleteAssessments'], planFeature: 'assessment' },
-        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canViewResumes', 'canRunAiInterviews'], planFeature: 'ai_interview' },
+        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canRunAiInterviews'], planFeature: 'ai_interview' },
       ]
     },
 

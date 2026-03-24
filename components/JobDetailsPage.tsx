@@ -512,13 +512,15 @@ ${job.certifications?.join(', ') || 'N/A'}
                     <Target className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No scored resumes yet</h3>
                     <p className="text-gray-500 mb-4">Start scoring resumes against this job description</p>
-                    <button
-                      onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
-                    >
-                      <Target className="w-4 h-4" />
-                      Score Resumes
-                    </button>
+                    {permissions.canRunScoring && (
+                      <button
+                        onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                      >
+                        <Target className="w-4 h-4" />
+                        Score Resumes
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <p className="text-gray-600">{job.scored_resumes_count} resumes have been scored</p>

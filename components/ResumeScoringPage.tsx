@@ -1203,25 +1203,15 @@ export default function ResumeScoringPage({
                 </div>
               </div>
 
-              <button
-                onClick={() => {
-                  if (!canRunScoring) {
-                    toast.error('You do not have permission to run scoring operations');
-                    return;
-                  }
-                  setViewMode('new');
-                }}
-                disabled={!canRunScoring}
-                className={`w-full sm:w-auto px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 shadow-sm ${
-                  canRunScoring
-                    ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                }`}
-                title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
-              >
-                <Target className="w-4 h-4" />
-                Score New Resumes
-              </button>
+              {canRunScoring && (
+                <button
+                  onClick={() => setViewMode('new')}
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 shadow-sm bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer"
+                >
+                  <Target className="w-4 h-4" />
+                  Score New Resumes
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1537,29 +1527,21 @@ export default function ResumeScoringPage({
               <span>{isGlobalView ? 'View by Job' : 'View All Candidates'}</span>
             </button>
 
-            {/* Score Resumes Button */}
-            <button
-              onClick={() => {
-                if (!canRunScoring) {
-                  toast.error('You do not have permission to run scoring operations');
-                  return;
-                }
-                setViewMode('new');
-                setSelectedJob('');
-                setResumeSource(null);
-                setSelectedResumes([]);
-              }}
-              disabled={!canRunScoring}
-              className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm ${
-                canRunScoring
-                  ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-              }`}
-              title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
-            >
-              <Target className="w-4 h-4" />
-              Score Resumes
-            </button>
+            {/* Score Resumes Button - only shown to users with run scoring permission */}
+            {canRunScoring && (
+              <button
+                onClick={() => {
+                  setViewMode('new');
+                  setSelectedJob('');
+                  setResumeSource(null);
+                  setSelectedResumes([]);
+                }}
+                className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer"
+              >
+                <Target className="w-4 h-4" />
+                Score Resumes
+              </button>
+            )}
           </div>
         </div>
 
@@ -2187,28 +2169,20 @@ export default function ResumeScoringPage({
               <p className="text-gray-600 mb-6">
                 Start scoring resumes against job descriptions to see your results here. Our AI will analyze and rank candidates based on job fit.
               </p>
-              <button
-                onClick={() => {
-                  if (!canRunScoring) {
-                    toast.error('You do not have permission to run scoring operations');
-                    return;
-                  }
-                  setViewMode('new');
-                  setSelectedJob('');
-                  setResumeSource(null);
-                  setSelectedResumes([]);
-                }}
-                disabled={!canRunScoring}
-                className={`px-6 py-3 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 ${
-                  canRunScoring
-                    ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                }`}
-                title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
-              >
-                <Target className="w-5 h-5" />
-                Score Resumes Now
-              </button>
+              {canRunScoring && (
+                <button
+                  onClick={() => {
+                    setViewMode('new');
+                    setSelectedJob('');
+                    setResumeSource(null);
+                    setSelectedResumes([]);
+                  }}
+                  className="px-6 py-3 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer"
+                >
+                  <Target className="w-5 h-5" />
+                  Score Resumes Now
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -2602,25 +2576,15 @@ export default function ResumeScoringPage({
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  if (!canRunScoring) {
-                    toast.error('You do not have permission to run scoring operations');
-                    return;
-                  }
-                  setShowResumeSelectionModal(true);
-                }}
-                disabled={!canRunScoring}
-                className={`w-full sm:w-auto px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 ${
-                  canRunScoring
-                    ? 'bg-gray-800 text-white hover:bg-gray-700 cursor-pointer'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                }`}
-                title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
-              >
-                <Target className="w-4 h-4" />
-                Select Resumes
-              </button>
+              {canRunScoring && (
+                <button
+                  onClick={() => setShowResumeSelectionModal(true)}
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 bg-gray-800 text-white hover:bg-gray-700 cursor-pointer"
+                >
+                  <Target className="w-4 h-4" />
+                  Select Resumes
+                </button>
+              )}
             </div>
           </div>
         )}

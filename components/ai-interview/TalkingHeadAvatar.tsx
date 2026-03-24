@@ -428,26 +428,16 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
                 }
               }
 
-              // Detect audio playback via analyser
-              const analyser = h.audioAnalyzerNode;
-              if (analyser && mt) {
-                if (!ampDataRef.current || ampDataRef.current.length !== analyser.frequencyBinCount) {
-                  ampDataRef.current = new Uint8Array(analyser.frequencyBinCount);
-                }
-                analyser.getByteFrequencyData(ampDataRef.current);
-                const data = ampDataRef.current;
-                let sum = 0;
-                for (let i = 0; i < data.length; i++) sum += data[i];
-                const rawAmp = sum / (data.length * 255);
-                // Instant detection — no smoothing delay
-                smoothAmpRef.current = rawAmp;
-                const isSpeaking = rawAmp > 0.005;
+              // Detect audio playback via speechStartRef (anchored to first PCM chunk).
+              // We do NOT use the AnalyserNode for speaking detection because streaming
+              // audio goes through audioStreamGainNode → reverb, bypassing audioAnalyzerNode.
+              // speechStartRef.current is set in sendAudioChunk() and reset to null by
+              // streamStart() / streamStop() when the session ends.
+              if (mt) {
+                const isSpeaking = speechStartRef.current !== null;
 
                 if (isSpeaking) {
-                  // speechStart is anchored to first audio chunk in sendAudioChunk()
-                  // — NOT amplitude detection, which lags 50-100ms behind actual playback
-
-                  const elapsed = performance.now() - speechStartRef.current;
+                  const elapsed = performance.now() - speechStartRef.current!;
                   const tl = visemeTimelineRef.current;
                   const tlTotal = timelineTotalMsRef.current;
                   const audioTotal = totalAudioMsRef.current;

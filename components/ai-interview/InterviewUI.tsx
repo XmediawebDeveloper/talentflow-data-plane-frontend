@@ -714,6 +714,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         noResponseRetryRef.current = 0;
         setStatus("Linda is speaking...");
         startRevealingTokens();
+        // Clear any stale expired timer from the previous question so it
+        // doesn't show "0:00" while Linda is speaking the next question.
+        // The timer will re-appear (fresh) when question_timer_started arrives
+        // after Linda finishes speaking.
+        if (questionTimerExpired) {
+          setQuestionTimerSeconds(null);
+          setQuestionTimerExpired(false);
+          if (questionTimerIntervalRef.current) {
+            clearInterval(questionTimerIntervalRef.current);
+            questionTimerIntervalRef.current = null;
+          }
+        }
         // Feed accumulated text for phoneme lip sync before starting audio
         talkingHeadRef.current?.setText(tokenBufferRef.current);
         // Start TalkingHead lip sync + audio stream.
