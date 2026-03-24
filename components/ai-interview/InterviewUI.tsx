@@ -79,6 +79,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const questionTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // Pending: timer duration received but interval not started yet (waiting for Linda to stop)
   const questionTimerPendingRef = useRef<number | null>(null);
+  // Question progress counter (sent with question_timer_started)
+  const [questionNumber, setQuestionNumber] = useState<number | null>(null);
+  const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
 
   // Skill coverage (real-time, timed mode only)
   const [skillCoverage, setSkillCoverage] = useState<{
@@ -790,6 +793,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         const dur = data.seconds ?? data.duration_seconds ?? 120;
         setQuestionTimerSeconds(dur);
         setQuestionTimerExpired(false);
+        if (data.question_number != null) setQuestionNumber(data.question_number);
+        if (data.total_questions != null) setTotalQuestions(data.total_questions);
         if (questionTimerIntervalRef.current) {
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
@@ -1342,15 +1347,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Connect WebSocket once avatar is ready (or after timeout fallback)
   const hasConnectedRef = useRef(false);
 
-  // Fallback: if avatar hasn't signalled ready within 10 s, unblock the WebSocket anyway.
-  // Prevents the interview hanging when the 3D scene is slow to initialise.
+  // Fallback: if avatar hasn't signalled ready within 22 s, unblock the WebSocket anyway.
+  // The showAvatar timeout in TalkingHeadAvatar is 20 s, so this fires shortly after
+  // the error-path onReady() call, preventing the interview from hanging indefinitely.
   useEffect(() => {
     const fallback = setTimeout(() => {
       if (!avatarReady) {
         console.warn('[InterviewUI] Avatar load timeout — connecting WebSocket without avatar');
         setAvatarReady(true);
       }
-    }, 5000);
+    }, 22000);
     return () => clearTimeout(fallback);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1960,6 +1966,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 <span className="text-[#94A3B8]" style={{ fontSize: 11, fontWeight: 600 }}>Live Transcript</span>
               </div>
               <div className="flex items-center gap-2">
+                {/* Question progress counter */}
+                {questionNumber !== null && totalQuestions !== null && (
+                  <span className="text-[#64748B] tabular-nums" style={{ fontSize: 10, fontWeight: 600 }}>
+                    Q {questionNumber}/{totalQuestions}
+                  </span>
+                )}
                 {/* Prominent per-question timer — shown when it's user's turn */}
                 {questionTimerSeconds !== null && (
                   <div
@@ -2007,6 +2019,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       {questionTimerExpired ? '' : 'TO ANSWER'}
                     </span>
                   </div>
+                )}
+                {/* Next Question button — visible when timer is running and Linda isn't speaking */}
+                {questionTimerSeconds !== null && !questionTimerExpired && !isAiSpeaking && !isClosing && (
+                  <button
+                    onClick={() => {
+                      if (wsRef.current?.readyState === WebSocket.OPEN) {
+                        wsRef.current.send(JSON.stringify({ type: 'skip_question', source: 'candidate' }));
+                      }
+                      if (questionTimerIntervalRef.current) {
+                        clearInterval(questionTimerIntervalRef.current);
+                        questionTimerIntervalRef.current = null;
+                      }
+                      setQuestionTimerSeconds(null);
+                      setQuestionTimerExpired(false);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#1D4ED8]/20 hover:bg-[#1D4ED8]/35 border border-[#1D4ED8]/30 transition-all duration-200"
+                    style={{ fontSize: 10, fontWeight: 600 }}
+                    title="Move to next question"
+                  >
+                    <span className="text-[#93C5FD]">Next</span>
+                    <span className="text-[#93C5FD]">→</span>
+                  </button>
                 )}
                 <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#EF4444]/10 border border-[#EF4444]/15">
                   <ShieldCheck className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#EF4444]" />

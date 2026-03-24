@@ -243,16 +243,16 @@ export function usePermissions(): UsePermissionsReturn {
     // Standard user and recruiter - based on permissions and feature flags
     return {
       canViewDashboard: true,
-      canViewJD: hasPermission('canCreateJD') || hasPermission('canManageJD') || hasFeature('jd_create') || hasFeature('jd_manage'),
-      canViewResumes: hasPermission('canUploadResumes') || hasPermission('canViewResumes') || hasFeature('resume_upload'),
-      canViewScoring: hasPermission('canViewResumes') || hasFeature('resume_scoring'),
-      canViewAIMatch: hasFeature('ai_talent_match') || hasPermission('canViewResumes'),
-      canViewAssessments: hasPermission('canCreateAssessments') || hasFeature('assessment'),
-      canViewReports: hasPermission('canViewAnalytics') || hasFeature('reporting'),
+      canViewJD: hasPermission('canReadJD') || hasPermission('canManageJD'),
+      canViewResumes: hasPermission('canUploadResumes') || hasPermission('canViewResumes'),
+      canViewScoring: hasPermission('canViewScoring') || hasPermission('canRunScoring'),
+      canViewAIMatch: hasPermission('canViewAiMatch') || hasPermission('canRunAiMatch'),
+      canViewAssessments: hasPermission('canViewAssessments') || hasPermission('canCreateAssessments'),
+      canViewReports: hasPermission('canViewAnalytics'),
       canViewSettings: hasPermission('canManageSettings'),
       canViewUserManagement: hasPermission('canManageUsers'),
       canViewBilling: hasPermission('canViewBilling') ?? false,
-      canViewInternalDB: hasPermission('canAccessInternalDB') || hasFeature('resume_database_access'),
+      canViewInternalDB: hasPermission('canAccessInternalDB') || hasPermission('canViewInternalDB'),
     };
   }, [
     isTenantAdmin,
