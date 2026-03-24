@@ -58,6 +58,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [isClosing, setIsClosing] = useState(false);
   const isClosingRef = useRef(false);
   const [closingReason, setClosingReason] = useState<string>("");
+
+  // Silence detection — "Are you there?" banner (Req 14b)
+  const [showSilenceBanner, setShowSilenceBanner] = useState(false);
+  const silenceBannerTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Interview completion modal (Req 16)
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [completionMessage, setCompletionMessage] = useState("");
   const [questionCount, setQuestionCount] = useState(0);
   const [duration, setDuration] = useState(0);
   const shouldDisconnectAfterAudioRef = useRef(false);
@@ -71,6 +79,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const questionTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // Pending: timer duration received but interval not started yet (waiting for Linda to stop)
   const questionTimerPendingRef = useRef<number | null>(null);
+  // Question progress counter (sent with question_timer_started)
+  const [questionNumber, setQuestionNumber] = useState<number | null>(null);
+  const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
 
   // Skill coverage (real-time, timed mode only)
   const [skillCoverage, setSkillCoverage] = useState<{
@@ -106,8 +117,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     if (!isConnected || isClosing) return;
     timerIntervalRef.current = setInterval(() => {
-      // Pause global timer while Linda is speaking
-      if (isAiSpeakingRef.current) return;
+      // Pause global timer while Linda is speaking OR processing candidate response
+      if (isAiSpeakingRef.current || isProcessingRef.current) return;
       setRemainingSeconds(prev => {
         if (isFlexibleMode) return prev + 1; // count up
         if (prev <= 1) {
@@ -390,6 +401,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // VAD settings
   const silenceStartRef = useRef<number | null>(null);
   const speechDetectedRef = useRef(false);
+  const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.008);
   const silenceDurationMsRef = useRef(5000);
 
@@ -760,6 +772,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
       case "processing":
         setIsProcessing(true);
+        setShowSilenceBanner(false); // candidate responded — hide silence banner
         setStatus("Processing your speech...");
         tokenBufferRef.current = "";
         revealedCharsRef.current = 0;
@@ -778,9 +791,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setQuestionTimerSeconds(null);
         break;
       case "question_timer_started": {
-        const dur = data.duration_seconds ?? 120;
+        const dur = data.seconds ?? data.duration_seconds ?? 120;
         setQuestionTimerSeconds(dur);
         setQuestionTimerExpired(false);
+        if (data.question_number != null) setQuestionNumber(data.question_number);
+        if (data.total_questions != null) setTotalQuestions(data.total_questions);
         if (questionTimerIntervalRef.current) {
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
@@ -813,6 +828,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
         }
+        setStatus("Time's up — moving to the next question...");
         break;
       case "skill_coverage_update":
         setSkillCoverage({
@@ -827,9 +843,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           questions_asked: data.questions_asked ?? 0,
         });
         break;
+      case "silence_detected":
+        // Backend sent "Are you there?" TTS at 25s of silence — also show UI banner
+        setShowSilenceBanner(true);
+        if (silenceBannerTimerRef.current) clearTimeout(silenceBannerTimerRef.current);
+        silenceBannerTimerRef.current = setTimeout(() => setShowSilenceBanner(false), 8000);
+        break;
       case "question_timer_nudge":
         // Candidate has been silent for 45s — show a gentle prompt in the status bar
+        setShowSilenceBanner(false); // clear earlier banner if still showing
         setStatus("Take your time — share whatever comes to mind, or say 'skip' to move on.");
+        break;
+      case "interview_completion_message":
+        // Show the official completion message before disconnect (Req 16)
+        setCompletionMessage(data.message || "Thank you for completing the interview. Your responses have been recorded successfully.");
+        setShowCompletionModal(true);
         break;
       case "interview_closing":
         setIsClosing(true); isClosingRef.current = true;
@@ -877,20 +905,41 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => { handleMessageRef.current = handleMessage; }, [handleMessage]);
 
   // Upload recording
-  const uploadRecording = useCallback(async () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    }
-    // Wait for final chunks
-    await new Promise(r => setTimeout(r, 500));
-    if (recordedChunksRef.current.length > 0) {
-      const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
+  // Waits for MediaRecorder.onstop (all ondataavailable chunks flushed) before
+  // uploading — prevents the race-condition where the final chunk was still
+  // in the encoder buffer when we read recordedChunksRef.
+  const uploadRecording = useCallback((): Promise<void> => {
+    const recorder = mediaRecorderRef.current;
+
+    const doUpload = async () => {
+      const chunks = recordedChunksRef.current;
+      console.log(`[Recording] Upload: ${chunks.length} chunks, recorder=${recorder?.state ?? 'null'}`);
+      if (chunks.length === 0) {
+        console.warn('[Recording] No chunks to upload — recording may not have started');
+        return;
+      }
+      // Use the recorder's negotiated mimeType; strip codec suffix for Blob constructor
+      const mimeType = (recorder?.mimeType || 'video/webm').split(';')[0];
+      const blob = new Blob(chunks, { type: mimeType });
+      console.log(`[Recording] Uploading blob: ${blob.size} bytes, type=${mimeType}`);
       try {
         await candidateAIInterviewService.uploadRecording(token, blob);
+        console.log('[Recording] Upload succeeded');
       } catch (err) {
-        console.error("Failed to upload recording:", err);
+        console.error('[Recording] Upload failed:', err);
       }
+    };
+
+    // Recorder already stopped — upload whatever chunks we have now
+    if (!recorder || recorder.state === 'inactive') {
+      return doUpload();
     }
+
+    // Recorder still running — stop it and wait for onstop before uploading
+    return new Promise<void>((resolve) => {
+      recorder.onstop = () => { doUpload().then(resolve); };
+      recorder.stop();
+    });
   }, [token]);
 
   // Clear no-response timer helper
@@ -1015,6 +1064,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
       silenceStartRef.current = null;
       speechDetectedRef.current = false;
+      speechStartSentRef.current = false;
 
       processor.onaudioprocess = (e) => {
         if (!isRecordingRef.current) return;
@@ -1032,6 +1082,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (avgLevel > silenceThresholdRef.current) {
           speechDetectedRef.current = true;
           silenceStartRef.current = null;
+          // Notify backend on first actual speech — resets question timer to full duration
+          if (!speechStartSentRef.current) {
+            speechStartSentRef.current = true;
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: "speech_started" }));
+            }
+          }
           // Clear no-response timer — candidate is speaking
           clearNoResponseTimer();
           noResponseRetryRef.current = 0;
@@ -1157,9 +1214,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
     speakViaTTS(closingMsg, () => {
       disconnect();
-      onInterviewComplete?.();
+      // onInterviewComplete is called by ws.onclose after recording upload completes
     });
-  }, [disconnect, onInterviewComplete, speakViaTTS]);
+  }, [disconnect, speakViaTTS]);
 
   const handleMicPopupYes = useCallback(async () => {
     setShowMicPopup(false);
@@ -1255,8 +1312,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (event.code === 1000 || shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
         setStatus("Interview completed. Thank you!");
-        uploadRecording();
-        onInterviewComplete?.();
+        // Upload FIRST, then navigate — prevents the page change from killing the in-flight request
+        uploadRecording().then(() => {
+          onInterviewComplete?.();
+        });
       } else if (event.code !== 3001 && !isUnmountedRef.current && !isClosingRef.current) {
         // Unexpected disconnection — attempt auto-reconnect (max 3 times)
         const attempt = ++reconnectAttemptsRef.current;
@@ -1295,8 +1354,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Mic permission already granted during system check — no need to re-acquire here.
   // Re-requesting getUserMedia in fullscreen causes a browser popup overlay.
 
-  // Connect WebSocket once avatar is ready
+  // Connect WebSocket once avatar is ready (or after timeout fallback)
   const hasConnectedRef = useRef(false);
+
+  // Fallback: if avatar hasn't signalled ready within 22 s, unblock the WebSocket anyway.
+  // The showAvatar timeout in TalkingHeadAvatar is 20 s, so this fires shortly after
+  // the error-path onReady() call, preventing the interview from hanging indefinitely.
+  useEffect(() => {
+    const fallback = setTimeout(() => {
+      if (!avatarReady) {
+        console.warn('[InterviewUI] Avatar load timeout — connecting WebSocket without avatar');
+        setAvatarReady(true);
+      }
+    }, 22000);
+    return () => clearTimeout(fallback);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!avatarReady || hasConnectedRef.current) return;
     hasConnectedRef.current = true;
@@ -1397,6 +1471,47 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               <button onClick={handleMicPopupNo} className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">No, End Interview</button>
             </div>
             <p className="text-xs text-gray-500 mt-3">Auto-closing in 3 seconds...</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Silence detection banner (Req 14b) ── */}
+      {showSilenceBanner && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-3 duration-300">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-2xl border border-[#F59E0B]/30 bg-[#0A1020]/95 backdrop-blur-xl shadow-2xl">
+            <div className="w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse shrink-0" />
+            <span className="text-[#F59E0B] font-medium" style={{ fontSize: 14 }}>
+              Are you still there? Take your time — or say &quot;skip&quot; to move on.
+            </span>
+            <button
+              onClick={() => setShowSilenceBanner(false)}
+              className="text-[#475569] hover:text-white ml-1 shrink-0"
+              style={{ fontSize: 16, lineHeight: 1 }}
+            >×</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Interview completion modal (Req 16) ── */}
+      {showCompletionModal && (
+        <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-[#0A1020] border border-[#10B981]/30 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
+            <div className="w-16 h-16 rounded-full bg-[#10B981]/15 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-white font-bold mb-3" style={{ fontSize: 20 }}>Interview Complete</h2>
+            <p className="text-[#94A3B8] mb-6" style={{ fontSize: 15, lineHeight: 1.6 }}>
+              {completionMessage}
+            </p>
+            <button
+              onClick={() => setShowCompletionModal(false)}
+              className="px-8 py-3 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white font-semibold transition-colors"
+              style={{ fontSize: 15 }}
+            >
+              Done
+            </button>
           </div>
         </div>
       )}
@@ -1642,7 +1757,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   </div>
                 )}
 
-                {/* Question timer (timed mode only) */}
+                {/* Question timer overlay — compact corner badge */}
                 {questionTimerSeconds !== null && (
                   <div
                     className="absolute bottom-2 sm:bottom-3 right-2 sm:right-3 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full backdrop-blur-md border"
@@ -1860,10 +1975,88 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 <MessageSquare className="w-3.5 h-3.5 text-[#3B82F6]" />
                 <span className="text-[#94A3B8]" style={{ fontSize: 11, fontWeight: 600 }}>Live Transcript</span>
               </div>
-              <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#EF4444]/10 border border-[#EF4444]/15">
-                <ShieldCheck className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#EF4444]" />
-                <span className="text-[#EF4444] hidden sm:inline" style={{ fontSize: 10, fontWeight: 600 }}>Recording</span>
-                <span className="text-[#EF4444] sm:hidden" style={{ fontSize: 9, fontWeight: 600 }}>REC</span>
+              <div className="flex items-center gap-2">
+                {/* Question progress counter */}
+                {questionNumber !== null && totalQuestions !== null && (
+                  <span className="text-[#64748B] tabular-nums" style={{ fontSize: 10, fontWeight: 600 }}>
+                    Q {questionNumber}/{totalQuestions}
+                  </span>
+                )}
+                {/* Prominent per-question timer — shown when it's user's turn */}
+                {questionTimerSeconds !== null && (
+                  <div
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all duration-300 ${
+                      questionTimerExpired
+                        ? 'bg-[#EF4444]/20 border-[#EF4444]/40 animate-pulse'
+                        : questionTimerSeconds <= 30
+                        ? 'bg-[#EF4444]/15 border-[#EF4444]/30'
+                        : questionTimerSeconds <= 60
+                        ? 'bg-[#F59E0B]/15 border-[#F59E0B]/30'
+                        : 'bg-[#10B981]/10 border-[#10B981]/25'
+                    }`}
+                  >
+                    <Clock
+                      className={`w-3.5 h-3.5 ${
+                        questionTimerExpired || questionTimerSeconds <= 30
+                          ? 'text-[#EF4444]'
+                          : questionTimerSeconds <= 60
+                          ? 'text-[#F59E0B]'
+                          : 'text-[#10B981]'
+                      }`}
+                    />
+                    <span
+                      className={`tabular-nums font-bold ${
+                        questionTimerExpired || questionTimerSeconds <= 30
+                          ? 'text-[#EF4444]'
+                          : questionTimerSeconds <= 60
+                          ? 'text-[#F59E0B]'
+                          : 'text-[#10B981]'
+                      }`}
+                      style={{ fontSize: 13, letterSpacing: 0.5 }}
+                    >
+                      {questionTimerExpired ? 'TIME UP' : formatTime(questionTimerSeconds)}
+                    </span>
+                    <span
+                      className={`hidden sm:inline ${
+                        questionTimerExpired || questionTimerSeconds <= 30
+                          ? 'text-[#EF4444]/70'
+                          : questionTimerSeconds <= 60
+                          ? 'text-[#F59E0B]/70'
+                          : 'text-[#10B981]/70'
+                      }`}
+                      style={{ fontSize: 9, fontWeight: 600 }}
+                    >
+                      {questionTimerExpired ? '' : 'TO ANSWER'}
+                    </span>
+                  </div>
+                )}
+                {/* Next Question button — visible when timer is running and Linda isn't speaking */}
+                {questionTimerSeconds !== null && !questionTimerExpired && !isAiSpeaking && !isClosing && (
+                  <button
+                    onClick={() => {
+                      if (wsRef.current?.readyState === WebSocket.OPEN) {
+                        wsRef.current.send(JSON.stringify({ type: 'skip_question', source: 'candidate' }));
+                      }
+                      if (questionTimerIntervalRef.current) {
+                        clearInterval(questionTimerIntervalRef.current);
+                        questionTimerIntervalRef.current = null;
+                      }
+                      setQuestionTimerSeconds(null);
+                      setQuestionTimerExpired(false);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#1D4ED8]/20 hover:bg-[#1D4ED8]/35 border border-[#1D4ED8]/30 transition-all duration-200"
+                    style={{ fontSize: 10, fontWeight: 600 }}
+                    title="Move to next question"
+                  >
+                    <span className="text-[#93C5FD]">Next</span>
+                    <span className="text-[#93C5FD]">→</span>
+                  </button>
+                )}
+                <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#EF4444]/10 border border-[#EF4444]/15">
+                  <ShieldCheck className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#EF4444]" />
+                  <span className="text-[#EF4444] hidden sm:inline" style={{ fontSize: 10, fontWeight: 600 }}>Recording</span>
+                  <span className="text-[#EF4444] sm:hidden" style={{ fontSize: 9, fontWeight: 600 }}>REC</span>
+                </div>
               </div>
             </div>
 
@@ -2048,7 +2241,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
                   }
                   disconnect();
-                  onInterviewComplete?.();
+                  // onInterviewComplete is called by ws.onclose after recording upload completes
                 }}
                 className="flex-1 py-2.5 rounded-xl bg-[#DC2626] hover:bg-[#B91C1C] text-white transition-all duration-200 shadow-lg shadow-red-500/20"
                 style={{ fontSize: 13, fontWeight: 600 }}

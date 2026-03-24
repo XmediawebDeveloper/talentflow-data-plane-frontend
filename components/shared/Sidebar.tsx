@@ -60,6 +60,7 @@ interface SidebarProps {
 const SUBSCRIPTION_ALLOWED_PATHS = [
   '/subscription/current-plan',
   '/subscription/payment-methods',
+  '/subscription/usage-quotas',
   '/support-tickets',
 ];
 

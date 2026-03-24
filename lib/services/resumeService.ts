@@ -304,7 +304,10 @@ export const resumeService = {
   },
 
   /**
-   * Retry stuck/failed items in a batch (units are NOT re-deducted)
+   * Retry stuck/failed items in a batch.
+   * Unit deduction on retry is handled by the backend:
+   *   - If a unit was already deducted for this item (e.g. stuck/processing) → unit is NOT charged again
+   *   - If no unit was deducted yet (e.g. item failed before charge) → 1 unit IS deducted on retry
    */
   async retryItem(batchId: string, itemId: string): Promise<any> {
     try {
@@ -324,6 +327,11 @@ export const resumeService = {
     }
   },
 
+  /**
+   * Retry all failed/stuck items in a batch.
+   * Same unit deduction logic as retryItem — backend charges only for items
+   * that had no unit previously deducted.
+   */
   async retryBatchItems(batchId: string): Promise<any> {
     try {
       const response = await api.post(`/resumes/upload/batch/${batchId}/retry`);

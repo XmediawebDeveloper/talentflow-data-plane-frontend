@@ -539,7 +539,7 @@ export default function MyResumesPage() {
           statuses: batch.items?.map((item: any) => ({
             id: item.id,
             fileName: item.file_name,
-            status: item.status,
+            status: item.status === 'duplicated' ? 'duplicate' : item.status,
             errorMessage: item.error_message,
             candidateName: item.candidate_name,
             resumeId: item.resume_id,
@@ -696,7 +696,7 @@ export default function MyResumesPage() {
                 statuses: status.items?.map((item: any) => ({
                   id: item.id,
                   fileName: item.file_name,
-                  status: item.status,
+                  status: item.status === 'duplicated' ? 'duplicate' : item.status,
                   errorMessage: item.error_message,
                   candidateName: item.candidate_name,
                   resumeId: item.resume_id,
@@ -1990,7 +1990,7 @@ export default function MyResumesPage() {
         initialStatuses = fullStatus.items?.map((item: any) => ({
           id: item.id,
           fileName: item.file_name,
-          status: item.status,
+          status: item.status === 'duplicated' ? 'duplicate' : item.status,
           errorMessage: item.error_message,
           candidateName: item.candidate_name,
           resumeId: item.resume_id,
@@ -2040,7 +2040,7 @@ export default function MyResumesPage() {
                   statuses: status.items?.map((item: any) => ({
                     id: item.id,
                     fileName: item.file_name,
-                    status: item.status,
+                    status: item.status === 'duplicated' ? 'duplicate' : item.status,
                     errorMessage: item.error_message,
                     candidateName: item.candidate_name,
                     resumeId: item.resume_id,
@@ -3598,7 +3598,7 @@ export default function MyResumesPage() {
                                           </span>
                                           <span className="flex items-center gap-1 text-red-600">
                                             <AlertCircle className="w-3 h-3" />
-                                            {record.statuses.filter((f: any) => f.status === 'error' || f.status === 'duplicate').length}
+                                            {record.statuses.filter((f: any) => f.status === 'error' || f.status === 'duplicate' || f.status === 'duplicated').length}
                                           </span>
                                         </div>
                                       </div>

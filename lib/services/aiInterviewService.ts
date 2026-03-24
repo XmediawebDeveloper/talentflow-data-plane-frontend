@@ -142,6 +142,7 @@ export interface AIInterviewResponse {
   ai_evaluation?: Record<string, any>;
   conversation_transcript?: Record<string, any>[];
   recording_file_path?: string;
+  recording_url?: string;
   introduction_video_url?: string;
   invitation_sent: boolean;
   created_by: string;

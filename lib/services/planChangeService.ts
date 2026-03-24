@@ -8,7 +8,7 @@ import type {
 export const planChangeService = {
   async getPendingChanges(): Promise<PlanChangeNotification[]> {
     const response = await api.get('/plan-changes/pending');
-    return response.data;
+    return response.data?.data ?? response.data;
   },
 
   async getChangeDetails(notificationId: string): Promise<PlanChangeNotification> {

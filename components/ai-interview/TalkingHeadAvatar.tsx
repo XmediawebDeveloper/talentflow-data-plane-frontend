@@ -46,6 +46,13 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
     const streamReadyRef = useRef(false);
     const pendingRef     = useRef<ArrayBuffer[]>([]);
     const onAudioEndRef  = useRef<(() => void) | null>(null);
+
+    // ── Fallback Web Audio API player (used when TalkingHead isn't ready) ──
+    const fbCtxRef         = useRef<AudioContext | null>(null);
+    const fbNextTimeRef    = useRef(0);
+    const fbPendingRef     = useRef(0);     // scheduled-but-not-finished buffers
+    const fbNoMoreDataRef  = useRef(false);
+    const fbActiveRef      = useRef(false); // fallback mode is active this session
     // Phoneme-based lip sync: visemes from text, scaled to actual audio duration
     const fullTextRef          = useRef("");
     const lastBuiltTextRef     = useRef("");
@@ -61,6 +68,10 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       if (!containerRef.current) return;
       let mounted = true;
       let rafId: number | null = null;
+      // Track head locally so cleanup can stop it even before headRef is set.
+      // Without this, React StrictMode's double-invoke creates two TalkingHead
+      // instances on the same canvas and the first one is never stopped.
+      let localHead: any = null;
 
       (async () => {
         try {
@@ -92,48 +103,70 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             lightDirectIntensity: 40,           // strong front light for subject pop
             lightSpotIntensity: 0,              // no harsh spot
           });
+          localHead = head; // register immediately so cleanup can stop it
 
-          await head.showAvatar({
-            url: avatarUrl,
-            body: "F",
-            lipsyncLang: "en",
-          });
-
-          if (!mounted) return;
-
-          // ── Inject user-gesture AudioContext (24kHz) so browser doesn't block audio ──
-          // Must happen AFTER showAvatar so TalkingHead's own init is complete.
+          // ── Inject user-gesture AudioContext (24kHz) BEFORE showAvatar ──
+          // TalkingHead creates a suspended AudioContext in its constructor.
+          // By injecting the pre-created running context, showAvatar() and the
+          // subsequent start() call use a context that is already running, avoiding
+          // autoplay-policy hangs.
+          // Node graph mirrors TalkingHead's initAudioGraph() exactly so that
+          // streamStart / streamAudio / streamNotifyEnd all work correctly.
           try {
             const preCreated = (window as any).__interviewAudioContext as AudioContext | undefined;
             if (preCreated && preCreated.state !== "closed") {
-              // Close TalkingHead's auto-created (suspended) AudioContext
-              if (head.audioCtx && head.audioCtx !== preCreated) {
+              // Close TalkingHead's auto-created context (not needed anymore)
+              if (head.audioCtx && head.audioCtx !== preCreated && head.audioCtx.state !== "closed") {
                 try { head.audioCtx.close(); } catch {}
               }
               head.audioCtx = preCreated;
-              (window as any).__interviewAudioContext = null;
-              // Rebuild audio graph nodes on the 24kHz context
-              head.audioSpeechSource = preCreated.createBufferSource();
-              head.audioBackgroundSource = preCreated.createBufferSource();
+              // NOTE: keep __interviewAudioContext set so a StrictMode second mount
+              // can also inject it (it will be resumed by showAvatar → start() anyway)
+
+              // ── Replicate initAudioGraph node setup with correct connections ──
+              head.audioSpeechSource       = preCreated.createBufferSource();
+              head.audioBackgroundSource   = preCreated.createBufferSource();
               head.audioBackgroundGainNode = preCreated.createGain();
-              head.audioSpeechGainNode = preCreated.createGain();
-              head.audioStreamGainNode = preCreated.createGain();
-              head.audioAnalyzerNode = preCreated.createAnalyser();
+              head.audioSpeechGainNode     = preCreated.createGain();
+              head.audioStreamGainNode     = preCreated.createGain();
+              head.audioAnalyzerNode       = preCreated.createAnalyser();
               head.audioAnalyzerNode.fftSize = 256;
               head.audioAnalyzerNode.smoothingTimeConstant = 0.1;
-              // Re-wire: stream gain → analyzer → speech gain → destination
-              head.audioStreamGainNode.connect(head.audioAnalyzerNode);
+              head.audioAnalyzerNode.minDecibels = -70;
+              head.audioAnalyzerNode.maxDecibels = -10;
+              // ConvolverNode (reverb) — used as dry pass-through
+              head.audioReverbNode = preCreated.createConvolver();
+              // Connections matching TalkingHead's initAudioGraph:
+              //   analyser → speechGain → reverb → destination
+              //   streamGain → reverb → destination
+              //   backgroundGain → reverb → destination
+              head.audioBackgroundGainNode.connect(head.audioReverbNode);
               head.audioAnalyzerNode.connect(head.audioSpeechGainNode);
-              head.audioSpeechGainNode.connect(preCreated.destination);
-              head.audioBackgroundGainNode.connect(preCreated.destination);
-              // Force worklet rebuild on next streamStart
-              head.workletLoaded = false;
+              head.audioSpeechGainNode.connect(head.audioReverbNode);
+              head.audioStreamGainNode.connect(head.audioReverbNode);
+              head.audioReverbNode.connect(preCreated.destination);
+              // Dry impulse so reverb is a pass-through
+              const impulse = preCreated.createBuffer(2, preCreated.sampleRate, preCreated.sampleRate);
+              impulse.getChannelData(0)[0] = 1;
+              impulse.getChannelData(1)[0] = 1;
+              head.audioReverbNode.buffer = impulse;
+
+              head.workletLoaded    = false;
               head.streamWorkletNode = null;
-              console.log("[TalkingHead] Injected 24kHz AudioContext, state:", preCreated.state, "sampleRate:", preCreated.sampleRate);
+              console.log("[TalkingHead] Pre-injected 24kHz AudioContext with correct graph, state:", preCreated.state);
             }
           } catch (e) {
-            console.warn("[TalkingHead] AudioContext injection failed:", e);
+            console.warn("[TalkingHead] AudioContext pre-injection failed:", e);
           }
+
+          await Promise.race([
+            head.showAvatar({ url: avatarUrl, body: "F", lipsyncLang: "en" }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("showAvatar timeout after 20 s")), 20000)
+            ),
+          ]);
+
+          if (!mounted) return;
 
           // ══════════════════════════════════════════════════════════
           // PROFESSIONAL INTERVIEWER BEHAVIOR
@@ -487,8 +520,12 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       return () => {
         mounted = false;
         if (rafId !== null) cancelAnimationFrame(rafId);
+        // Stop via localHead (set immediately after construction) so we can
+        // clean up even if showAvatar() is still in-flight and headRef isn't set yet.
+        try { localHead?.stop?.(); } catch {}
         try { headRef.current?.stop?.(); } catch {}
         headRef.current = null;
+        localHead = null;
       };
     }, [avatarUrl]);
 
@@ -505,25 +542,76 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       head.streamAudio({ audio: pcmData });
     };
 
+    // ── Fallback: play Int16 PCM via Web Audio API when TalkingHead isn't ready ──
+    const fbPlayChunk = (pcmData: ArrayBuffer) => {
+      const ctx = fbCtxRef.current;
+      if (!ctx) return;
+      // Decode Int16 @ 24kHz → Float32
+      const samples = new Int16Array(pcmData);
+      const buf = ctx.createBuffer(1, samples.length, 24000);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < samples.length; i++) ch[i] = samples[i] / 32768;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      // Gapless scheduling
+      const now = ctx.currentTime;
+      const startAt = Math.max(now, fbNextTimeRef.current);
+      src.start(startAt);
+      fbNextTimeRef.current = startAt + buf.duration;
+      fbPendingRef.current++;
+      src.onended = () => {
+        fbPendingRef.current--;
+        if (fbPendingRef.current <= 0 && fbNoMoreDataRef.current) {
+          fbPendingRef.current = 0;
+          fbNoMoreDataRef.current = false;
+          fbActiveRef.current = false;
+          console.log("[FallbackAudio] All audio played");
+          onAudioEndRef.current?.();
+        }
+      };
+    };
+
     useImperativeHandle(ref, () => ({
 
       streamStart(_sampleRate: number, onAudioEnd: () => void) {
         const head = headRef.current;
-        if (!head) {
-          console.warn("[TalkingHead] streamStart called but head not ready");
-          return;
-        }
-
-        streamReadyRef.current = false;
-        pendingRef.current = [];
         onAudioEndRef.current = onAudioEnd;
+        pendingRef.current = [];
+        streamReadyRef.current = false;
         smoothAmpRef.current = 0;
         speechStartRef.current = null;
         currentMorphsRef.current = {};
         totalAudioMsRef.current = 0;
         timelineTotalMsRef.current = 0;
-        // Rebuild viseme timeline from current text
         lastBuiltTextRef.current = "";
+        fbNoMoreDataRef.current = false;
+        fbPendingRef.current = 0;
+        fbActiveRef.current = false;
+
+        if (!head) {
+          // ── Fallback: play audio directly via Web Audio API ──
+          console.warn("[TalkingHead] head not ready — using Web Audio API fallback");
+          fbActiveRef.current = true;
+          try {
+            // Reuse or create fallback AudioContext
+            const preCreated = (window as any).__interviewAudioContext as AudioContext | undefined;
+            if (preCreated && preCreated.state !== "closed") {
+              fbCtxRef.current = preCreated;
+              (window as any).__interviewAudioContext = null;
+            } else if (!fbCtxRef.current || fbCtxRef.current.state === "closed") {
+              fbCtxRef.current = new AudioContext({ sampleRate: 24000 });
+            }
+            const ctx = fbCtxRef.current;
+            if (ctx.state === "suspended") ctx.resume().catch(() => {});
+          } catch {}
+          fbNextTimeRef.current = 0;
+          // Mark ready immediately — no worklet setup needed
+          streamReadyRef.current = true;
+          const queued = pendingRef.current.splice(0);
+          for (const buf of queued) fbPlayChunk(buf);
+          return;
+        }
 
         // Pre-resume AudioContext if suspended BEFORE calling head.streamStart.
         // TalkingHead's streamStart has a 1-second resume timeout — if we don't
@@ -566,13 +654,22 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             .catch((e: Error) => {
               console.error("[TalkingHead] streamStart failed:", e);
               streamReadyRef.current = true;
-              // Fallback: fire onAudioEnd so the mic starts even if TalkingHead failed
+              // Fire onAudioEnd so the mic starts even if TalkingHead failed
               onAudioEndRef.current?.();
             });
         });
       },
 
       streamAudio(pcmData: ArrayBuffer) {
+        if (fbActiveRef.current) {
+          // Fallback mode: play directly
+          if (!streamReadyRef.current) {
+            pendingRef.current.push(pcmData);
+          } else {
+            fbPlayChunk(pcmData);
+          }
+          return;
+        }
         if (!streamReadyRef.current) {
           pendingRef.current.push(pcmData);
           return;
@@ -581,6 +678,16 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       },
 
       notifyEnd() {
+        if (fbActiveRef.current) {
+          fbNoMoreDataRef.current = true;
+          // If all buffers already finished, fire immediately
+          if (fbPendingRef.current <= 0) {
+            fbNoMoreDataRef.current = false;
+            fbActiveRef.current = false;
+            onAudioEndRef.current?.();
+          }
+          return;
+        }
         const head = headRef.current;
         if (head) head.streamNotifyEnd();
       },
@@ -596,6 +703,15 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         speechStartRef.current = null;
         currentMorphsRef.current = {};
         totalAudioMsRef.current = 0;
+        // Fallback mode: close context to stop playback immediately
+        if (fbActiveRef.current) {
+          fbActiveRef.current = false;
+          fbNoMoreDataRef.current = false;
+          fbPendingRef.current = 0;
+          try { fbCtxRef.current?.close(); } catch {}
+          fbCtxRef.current = null;
+          return;
+        }
 
         const h = headRef.current as any;
         if (h?.mtAvatar) {

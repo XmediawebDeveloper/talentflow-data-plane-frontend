@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, CheckCircle2, Loader2, Shield, Star, Plus, X,
   Sparkles, GripVertical, ChevronDown, ChevronUp, Layers, Clock,
-  Trash2,
+  Trash2, AlertTriangle, CheckCheck, SlidersHorizontal, Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -91,6 +91,257 @@ function PriorityBadge({ p }: { p: number }) {
       <span className={`w-1.5 h-1.5 rounded-full ${info.dot}`} />
       {info.short}
     </span>
+  );
+}
+
+/* ── Skill Weight Panel ── */
+const WEIGHT_OPTIONS: { value: 'high' | 'medium' | 'low'; label: string; activeCls: string }[] = [
+  { value: 'high',   label: 'High', activeCls: 'bg-red-100 text-red-700 border-red-300' },
+  { value: 'medium', label: 'Med',  activeCls: 'bg-yellow-100 text-yellow-700 border-yellow-300' },
+  { value: 'low',    label: 'Low',  activeCls: 'bg-gray-100 text-gray-600 border-gray-300' },
+];
+
+function SkillWeightRow({
+  skill,
+  weights,
+  onWeightChange,
+}: {
+  skill: SkillEntry;
+  weights: Record<string, 'high' | 'medium' | 'low'>;
+  onWeightChange: (skill: string, w: 'high' | 'medium' | 'low') => void;
+}) {
+  const current = weights[skill.name] ?? 'medium';
+  return (
+    <div className="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0">
+      <span className="text-xs text-gray-700 truncate flex-1 mr-3">{skill.name}</span>
+      <div className="flex items-center gap-1">
+        {WEIGHT_OPTIONS.map(opt => (
+          <button
+            key={opt.value}
+            onClick={() => onWeightChange(skill.name, opt.value)}
+            className={`px-2 py-0.5 text-[10px] font-medium rounded border transition-colors ${
+              current === opt.value
+                ? opt.activeCls
+                : 'bg-white text-gray-400 border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SkillWeightPanel({
+  mthSkills,
+  nthSkills,
+  weights,
+  onWeightChange,
+}: {
+  mthSkills: SkillEntry[];
+  nthSkills: SkillEntry[];
+  weights: Record<string, 'high' | 'medium' | 'low'>;
+  onWeightChange: (skill: string, w: 'high' | 'medium' | 'low') => void;
+}) {
+  return (
+    <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
+        <SlidersHorizontal className="w-4 h-4 text-gray-500" />
+        <span className="text-sm font-semibold text-gray-800">Skill Importance</span>
+        <span className="text-xs text-gray-400 ml-1">— guides AI cluster generation</span>
+      </div>
+      <div className="px-5 py-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+        {mthSkills.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Must-To-Have</p>
+            {mthSkills.map(s => <SkillWeightRow key={s.name} skill={s} weights={weights} onWeightChange={onWeightChange} />)}
+          </div>
+        )}
+        {nthSkills.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Nice-To-Have</p>
+            {nthSkills.map(s => <SkillWeightRow key={s.name} skill={s} weights={weights} onWeightChange={onWeightChange} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Time Allocation Summary ── */
+function TimeAllocationSummary({
+  mthClusters,
+  nthClusters,
+  fixedMthMin,
+  fixedNthMin,
+  isFixed,
+}: {
+  mthClusters: Cluster[];
+  nthClusters: Cluster[];
+  fixedMthMin: number;
+  fixedNthMin: number;
+  isFixed: boolean;
+}) {
+  if (!isFixed || (mthClusters.length === 0 && nthClusters.length === 0)) return null;
+
+  const rows: { name: string; priority: number; mins: number; category: string }[] = [];
+  const mthTotalWeight = mthClusters.reduce((s, c) => s + c.priority, 0);
+  mthClusters.forEach(c => rows.push({
+    name: c.name || 'Unnamed',
+    priority: c.priority,
+    mins: mthTotalWeight > 0 ? Math.round((c.priority / mthTotalWeight) * fixedMthMin) : 0,
+    category: 'MTH',
+  }));
+  const nthTotalWeight = nthClusters.reduce((s, c) => s + c.priority, 0);
+  nthClusters.forEach(c => rows.push({
+    name: c.name || 'Unnamed',
+    priority: c.priority,
+    mins: nthTotalWeight > 0 ? Math.round((c.priority / nthTotalWeight) * fixedNthMin) : 0,
+    category: 'NTH',
+  }));
+
+  return (
+    <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center gap-2">
+        <Clock className="w-4 h-4 text-gray-500" />
+        <span className="text-sm font-semibold text-gray-800">Estimated Time per Cluster</span>
+        <span className="text-xs text-gray-400 ml-1">— based on priority</span>
+      </div>
+      <div className="px-5 py-3 space-y-2">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${
+              r.category === 'MTH'
+                ? 'bg-red-50 text-red-600 border-red-200'
+                : 'bg-amber-50 text-amber-600 border-amber-200'
+            }`}>{r.category}</span>
+            <span className="text-xs text-gray-700 flex-1 truncate">{r.name}</span>
+            <PriorityBadge p={r.priority} />
+            <span className="text-xs font-semibold text-gray-900 w-14 text-right">~{r.mins} min</span>
+            <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gray-600 rounded-full"
+                style={{ width: `${Math.min(100, (r.priority / 5) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── Finalize Confirmation Modal ── */
+function FinalizeModal({
+  mthClusters,
+  nthClusters,
+  unassignedMth,
+  unassignedNth,
+  emptyClusters,
+  saving,
+  onConfirm,
+  onCancel,
+}: {
+  mthClusters: Cluster[];
+  nthClusters: Cluster[];
+  unassignedMth: SkillEntry[];
+  unassignedNth: SkillEntry[];
+  emptyClusters: Cluster[];
+  saving: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const hasIssues = unassignedMth.length > 0 || unassignedNth.length > 0 || emptyClusters.length > 0;
+  const totalClusters = mthClusters.length + nthClusters.length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        <div className={`px-6 py-4 border-b ${hasIssues ? 'border-yellow-100 bg-yellow-50' : 'border-green-100 bg-green-50'}`}>
+          <div className="flex items-center gap-3">
+            {hasIssues
+              ? <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
+              : <CheckCheck className="w-5 h-5 text-green-600 flex-shrink-0" />
+            }
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">
+                {hasIssues ? 'Review Before Finalizing' : 'Confirm Cluster Structure'}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {hasIssues
+                  ? 'Some issues found. You can still proceed.'
+                  : 'Your cluster structure looks good and is ready to finalize.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <p className="text-xl font-bold text-gray-900">{totalClusters}</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">Clusters</p>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <p className="text-xl font-bold text-gray-900">{mthClusters.reduce((s, c) => s + c.skills.length, 0)}</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">MTH Skills</p>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <p className="text-xl font-bold text-gray-900">{nthClusters.reduce((s, c) => s + c.skills.length, 0)}</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">NTH Skills</p>
+            </div>
+          </div>
+
+          {emptyClusters.length > 0 && (
+            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-red-700">Empty clusters ({emptyClusters.length})</p>
+                <p className="text-xs text-red-600 mt-0.5">{emptyClusters.map(c => c.name || 'Unnamed').join(', ')}</p>
+              </div>
+            </div>
+          )}
+          {(unassignedMth.length > 0 || unassignedNth.length > 0) && (
+            <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <Info className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-yellow-700">Unassigned skills</p>
+                {unassignedMth.length > 0 && (
+                  <p className="text-xs text-yellow-600 mt-0.5">MTH: {unassignedMth.map(s => s.name).join(', ')}</p>
+                )}
+                {unassignedNth.length > 0 && (
+                  <p className="text-xs text-yellow-600 mt-0.5">NTH: {unassignedNth.map(s => s.name).join(', ')}</p>
+                )}
+              </div>
+            </div>
+          )}
+          {!hasIssues && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <CheckCheck className="w-4 h-4 text-green-600 flex-shrink-0" />
+              <p className="text-xs text-green-700 font-medium">All skills are assigned. No issues found.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Go Back &amp; Edit
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
+            {saving ? 'Saving...' : 'Finalize & Continue'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -220,6 +471,11 @@ function ClusterRow({
           <GripVertical className="w-4 h-4 text-gray-300" />
         </div>
         <PriorityBadge p={cluster.priority} />
+        {cluster.skills.length === 0 && (
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-100 text-red-600 border border-red-200 flex-shrink-0">
+            <AlertTriangle className="w-2.5 h-2.5" /> Empty
+          </span>
+        )}
         <span className="text-sm font-medium text-gray-800 flex-1 truncate">
           {cluster.name || 'Unnamed Cluster'}
         </span>
@@ -440,6 +696,15 @@ export default function AIInterviewClusters() {
 
   /* UI state */
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [showWeightPanel, setShowWeightPanel] = useState(false);
+  const [showFinalizeModal, setShowFinalizeModal] = useState(false);
+
+  /* Skill importance weights */
+  const [skillWeights, setSkillWeights] = useState<Record<string, 'high' | 'medium' | 'low'>>({});
+
+  const setSkillWeight = useCallback((skill: string, w: 'high' | 'medium' | 'low') => {
+    setSkillWeights(prev => ({ ...prev, [skill]: w }));
+  }, []);
 
   /* ── Parse skill entries from round config ── */
   const toSkillEntries = useCallback((names: string[], comments?: Record<string, string>, types?: Record<string, string>): SkillEntry[] => {
@@ -531,6 +796,10 @@ export default function AIInterviewClusters() {
             priority: c.priority as Cluster['priority'],
           })));
         }
+        // Restore skill weights
+        if (si.skill_weights) {
+          setSkillWeights(si.skill_weights as Record<string, 'high' | 'medium' | 'low'>);
+        }
       } catch (err) {
         toast.error('Failed to load interview configuration');
         console.error(err);
@@ -618,9 +887,17 @@ export default function AIInterviewClusters() {
   const handleGenerateClusters = async () => {
     setGenerating(true);
     try {
+      // Sort skills by importance weight so AI prioritizes them in clustering
+      const weightOrder = { high: 0, medium: 1, low: 2 };
+      const sortedMth = [...mthSkills].sort(
+        (a, b) => (weightOrder[skillWeights[a.name] ?? 'medium']) - (weightOrder[skillWeights[b.name] ?? 'medium'])
+      );
+      const sortedNth = [...nthSkills].sort(
+        (a, b) => (weightOrder[skillWeights[a.name] ?? 'medium']) - (weightOrder[skillWeights[b.name] ?? 'medium'])
+      );
       const result = await aiInterviewService.generateClusters(
-        mthSkills.map(s => s.name),
-        nthSkills.map(s => s.name),
+        sortedMth.map(s => s.name),
+        sortedNth.map(s => s.name),
         config?.position,
         undefined,
         fixedMthMin,
@@ -691,6 +968,7 @@ export default function AIInterviewClusters() {
       const si = JSON.parse(config.special_instructions || '{}');
       si.mth_clusters = mthClusters;
       si.nth_clusters = nthClusters;
+      si.skill_weights = skillWeights;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
@@ -710,7 +988,13 @@ export default function AIInterviewClusters() {
     );
   };
 
+  /* Show finalize modal instead of navigating directly */
   const handleContinue = () => {
+    setShowFinalizeModal(true);
+  };
+
+  const handleFinalizeConfirm = () => {
+    setShowFinalizeModal(false);
     saveAndNavigate(
       '/recruitment/ai-interviews/jd-selection/ai-interview-config/preview?id=' + id
     );
@@ -723,6 +1007,7 @@ export default function AIInterviewClusters() {
       const si = JSON.parse(config.special_instructions || '{}');
       si.mth_clusters = mthClusters;
       si.nth_clusters = nthClusters;
+      si.skill_weights = skillWeights;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
@@ -746,6 +1031,15 @@ export default function AIInterviewClusters() {
     }
     router.push('/recruitment/ai-interviews');
   };
+
+  /* ── Validation computed values (only meaningful when clusters exist) ── */
+  const hasClusters = mthClusters.length > 0 || nthClusters.length > 0;
+  const allAssignedMth = new Set(mthClusters.flatMap(c => c.skills));
+  const allAssignedNth = new Set(nthClusters.flatMap(c => c.skills));
+  const unassignedMth = hasClusters ? mthSkills.filter(s => !allAssignedMth.has(s.name)) : [];
+  const unassignedNth = hasClusters ? nthSkills.filter(s => !allAssignedNth.has(s.name)) : [];
+  const emptyClusters = [...mthClusters, ...nthClusters].filter(c => c.skills.length === 0);
+  const hasIssues = unassignedMth.length > 0 || unassignedNth.length > 0 || emptyClusters.length > 0;
 
   /* ── Loading state ── */
   if (loading) {
@@ -830,23 +1124,74 @@ export default function AIInterviewClusters() {
                   </p>
                 </div>
               </div>
-              <button
-                onClick={handleGenerateClusters}
-                disabled={generating || saving}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {generating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4" />
-                )}
-                {generating ? 'Generating...' : 'Regenerate with AI'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowWeightPanel(v => !v)}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                    showWeightPanel
+                      ? 'bg-gray-100 border-gray-300 text-gray-900'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  Skill Importance
+                </button>
+                <button
+                  onClick={handleGenerateClusters}
+                  disabled={generating || saving}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {generating ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  {generating ? 'Generating...' : 'Regenerate with AI'}
+                </button>
+              </div>
             </div>
           </div>
 
           {/* ── Main content ── */}
           <div className="space-y-6 pb-24">
+
+          {/* Skill Importance Panel */}
+          {showWeightPanel && (
+            <SkillWeightPanel
+              mthSkills={mthSkills}
+              nthSkills={nthSkills}
+              weights={skillWeights}
+              onWeightChange={setSkillWeight}
+            />
+          )}
+
+          {/* Validation warning banner */}
+          {!generating && hasIssues && hasClusters && (
+            <div className="flex items-start gap-3 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-xl">
+              <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-yellow-800">Attention needed</p>
+                <div className="flex flex-wrap gap-x-4 mt-0.5">
+                  {emptyClusters.length > 0 && (
+                    <span className="text-xs text-yellow-700">
+                      {emptyClusters.length} empty cluster{emptyClusters.length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {unassignedMth.length > 0 && (
+                    <span className="text-xs text-yellow-700">
+                      {unassignedMth.length} unassigned MTH skill{unassignedMth.length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {unassignedNth.length > 0 && (
+                    <span className="text-xs text-yellow-700">
+                      {unassignedNth.length} unassigned NTH skill{unassignedNth.length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Generating overlay within content area */}
           {generating && (
             <div className="flex items-center justify-center py-16">
@@ -895,6 +1240,17 @@ export default function AIInterviewClusters() {
                 />
               )}
             </>
+          )}
+
+          {/* Time Allocation Summary */}
+          {!generating && (
+            <TimeAllocationSummary
+              mthClusters={mthClusters}
+              nthClusters={nthClusters}
+              fixedMthMin={fixedMthMin}
+              fixedNthMin={fixedNthMin}
+              isFixed={isFixed}
+            />
           )}
         </div>
 
@@ -946,6 +1302,20 @@ export default function AIInterviewClusters() {
           </div>
         </div>
       </div>
+
+      {/* Finalize Confirmation Modal */}
+      {showFinalizeModal && (
+        <FinalizeModal
+          mthClusters={mthClusters}
+          nthClusters={nthClusters}
+          unassignedMth={unassignedMth}
+          unassignedNth={unassignedNth}
+          emptyClusters={emptyClusters}
+          saving={saving}
+          onConfirm={handleFinalizeConfirm}
+          onCancel={() => setShowFinalizeModal(false)}
+        />
+      )}
     </DndProvider>
   );
 }
