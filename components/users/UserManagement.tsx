@@ -1,6 +1,12 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import {
+  CUSTOM_PERMISSION_CATEGORIES,
+  type CustomPermissionAction,
+  type CustomPermissionCategory,
+  type CustomPermissionSubCategory,
+} from '@/lib/constants/permissionCategories';
 import { useRouter } from 'next/navigation';
 import {
   Search,
@@ -85,263 +91,11 @@ const MODULE_DISPLAY_NAMES: Record<string, string> = {
   export: 'Data Export',
 };
 
-// ============================================================================
-// CUSTOM PERMISSION CATEGORIES CONFIGURATION
-// ============================================================================
-// This defines the simplified permission structure for the Add/Edit User modal
+// ⚠️  Permission categories are defined in ONE place:
+//     lib/constants/permissionCategories.ts
+// Edit that file to change permissions across all three UIs simultaneously.
+// CUSTOM_PERMISSION_CATEGORIES imported from '@/lib/constants/permissionCategories'
 
-interface CustomPermissionAction {
-  code: string;  // Maps to backend permission code
-  label: string;
-  description?: string;
-}
-
-interface CustomPermissionSubCategory {
-  name: string;
-  viewCode?: string; // Auto-enabled when any action is selected
-  actions: CustomPermissionAction[];
-}
-
-interface CustomPermissionCategory {
-  id: string;
-  name: string;
-  icon?: string;
-  description?: string;
-  isMenuToggle?: boolean;  // If true, shows as single enable/disable toggle
-  viewCode?: string; // Auto-enabled when any action is selected
-  subCategories?: CustomPermissionSubCategory[];
-  actions?: CustomPermissionAction[];
-  dependencies?: {
-    // When this action is enabled, auto-enable these
-    [actionCode: string]: string[];
-  };
-}
-
-// Custom permission categories matching the user's requirements
-// NOTE: These permission codes need to exist in the backend RBAC system
-// Backend permission format: module:action (e.g., jd:create, resumes:delete)
-// viewCode: When any action is selected, the view permission is auto-enabled
-const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
-  {
-    id: 'job_description',
-    name: 'Job Description',
-    description: 'Job description management permissions',
-    viewCode: 'jd:read',
-    actions: [
-      { code: 'jd:create', label: 'Create' },
-      { code: 'jd:update', label: 'Edit' },
-      { code: 'jd:delete', label: 'Delete' },
-      { code: 'jd:export', label: 'Export' },
-      { code: 'jd:duplicate', label: 'Duplicate' },
-      { code: 'jd:archive', label: 'Archive' },
-      { code: 'jd:disable', label: 'Disable' },
-    ],
-  },
-  {
-    id: 'resume_scoring',
-    name: 'Resume Scoring',
-    description: 'Resume scoring and evaluation permissions',
-    viewCode: 'scoring:read',  // RBAC permission code that maps to can_view_scoring
-    actions: [
-      { code: 'scoring:score', label: 'Score Resumes' },  // RBAC permission code that maps to can_run_scoring
-      { code: 'scoring:export', label: 'Export' },
-      { code: 'scoring:download', label: 'Download Scorecard' },
-      { code: 'scoring:delete', label: 'Delete' },
-    ],
-    // Important: If Resume Scoring is enabled, Resume Upload is auto-enabled for both My Resumes and Internal Database
-    dependencies: {
-      'scoring:score': ['my_resumes:upload', 'internal_db:upload'],
-    },
-  },
-  {
-    id: 'ai_talent_match',
-    name: 'AI Talent Match',
-    description: 'AI-powered talent matching permissions',
-    viewCode: 'ai_match:read',  // RBAC permission code that maps to can_view_ai_match
-    actions: [
-      { code: 'ai_match:run', label: 'Run AI Match' },  // RBAC permission code that maps to can_run_ai_match
-      { code: 'ai_match:apply', label: 'Apply for Job' },
-      { code: 'ai_match:delete', label: 'Delete' },
-      { code: 'ai_match:export', label: 'Export' },
-    ],
-  },
-  // COMMENTED OUT: Resumes (All Users) - Uncomment if needed for cross-user resume access
-  // Most use cases covered by "My Resumes" (personal) and "Internal Database" (shared)
-  // {
-  //   id: 'resumes_all_users',
-  //   name: 'Resumes (All Users)',
-  //   description: 'Access to all resumes in the system',
-  //   viewCode: 'resumes:read',
-  //   actions: [
-  //     { code: 'resumes:update', label: 'Edit' },
-  //     { code: 'resumes:delete', label: 'Delete' },
-  //     { code: 'resumes:download', label: 'Download' },
-  //     { code: 'resumes:export', label: 'Export' },
-  //     { code: 'resumes:bulk_upload', label: 'Bulk Upload' },
-  //   ],
-  // },
-  {
-    id: 'resume_management',
-    name: 'Resume Management',
-    description: 'Resume and candidate management permissions',
-    subCategories: [
-      {
-        name: 'My Resumes',
-        viewCode: 'my_resumes:read',
-        actions: [
-          { code: 'my_resumes:upload', label: 'Resume Upload' },
-          { code: 'my_resumes:update', label: 'Edit' },
-          { code: 'my_resumes:delete', label: 'Delete' },
-          { code: 'my_resumes:archive', label: 'Archive' },
-        ],
-      },
-      {
-        name: 'Internal Database',
-        viewCode: 'internal_db:read',
-        actions: [
-          { code: 'internal_db:upload', label: 'Resume Upload' },
-          { code: 'internal_db:export', label: 'Export' },
-          // internal_db:delete intentionally omitted — Delete from Internal Database is Tenant Admin only
-          { code: 'internal_db:archive', label: 'Archive' },
-        ],
-      },
-      {
-        name: 'Assessment',
-        viewCode: 'assessments:read',
-        actions: [
-          { code: 'assessments:create', label: 'Create' },
-          { code: 'assessments:invite', label: 'Invite' },
-          { code: 'assessments:review', label: 'Review' },
-          { code: 'assessments:export', label: 'Export' },
-          { code: 'assessments:delete', label: 'Delete' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'analytics',
-    name: 'Analytics',
-    description: 'Dashboard and analytics permissions',
-    isMenuToggle: true,
-    viewCode: 'analytics:read',
-    actions: [
-      { code: 'analytics:export', label: 'Export' },
-      { code: 'analytics:custom_reports', label: 'Custom Reports' },
-    ],
-  },
-  {
-    id: 'subscription_billing',
-    name: 'Subscription & Billing',
-    description: 'Billing and subscription management',
-    isMenuToggle: true,
-    viewCode: 'billing:read',
-    subCategories: [
-      {
-        name: 'Current Plan',
-        viewCode: 'current_plan:read',
-        actions: [
-          { code: 'billing:upgrade', label: 'Upgrade' },
-        ],
-      },
-      {
-        name: 'Usage & Quotas',
-        viewCode: 'usage:read',
-        actions: [
-          { code: 'usage:upgrade', label: 'Upgrade' },
-          { code: 'usage:export', label: 'Export' },
-        ],
-      },
-      {
-        name: 'Payment Methods',
-        viewCode: 'payment_methods:read',
-        actions: [
-          { code: 'payment_methods:create', label: 'Add' },
-          { code: 'payment_methods:update', label: 'Edit' },
-          { code: 'payment_methods:delete', label: 'Delete' },
-        ],
-      },
-      {
-        name: 'Billing History',
-        actions: [
-          { code: 'billing_history:read', label: 'View' },
-        ],
-      },
-      {
-        name: 'Refund History',
-        actions: [
-          { code: 'refund_history:read', label: 'View' },
-        ],
-      },
-      {
-        name: 'Dispute History',
-        actions: [
-          { code: 'dispute_history:read', label: 'View' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'settings',
-    name: 'Settings',
-    description: 'System settings and configuration',
-    isMenuToggle: true,
-    viewCode: 'settings:read',
-    subCategories: [
-      {
-        name: 'General Settings',
-        viewCode: 'general_settings:read',
-        actions: [
-          { code: 'settings:general', label: 'Manage' },
-        ],
-      },
-      {
-        name: 'Permissions & Roles',
-        viewCode: 'permissions_roles:read',
-        actions: [
-          { code: 'settings:permissions_roles', label: 'Manage' },
-        ],
-      },
-      {
-        name: 'API Management',
-        viewCode: 'api_management:read',
-        actions: [
-          { code: 'settings:api_management', label: 'Manage' },
-        ],
-      },
-      {
-        name: 'Branding & White Label',
-        viewCode: 'branding:read',
-        actions: [
-          { code: 'settings:branding', label: 'Manage' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'support',
-    name: 'Support',
-    description: 'Support and security settings',
-    isMenuToggle: true,
-    viewCode: 'support:read',
-    subCategories: [
-      {
-        name: 'Security Settings',
-        viewCode: 'security_settings:read',
-        actions: [
-          { code: 'support:security_settings', label: 'Manage' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'teams',
-    name: 'Teams',
-    description: 'Team visibility permissions',
-    isMenuToggle: true,
-    viewCode: 'teams:view',
-    actions: [],
-  },
-];
 
 // Helper to get all permission codes from custom categories
 const getAllCustomPermissionCodes = (): string[] => {
@@ -1900,18 +1654,19 @@ export default function UserManagement() {
 
   // Returns false if a permission category or sub-category is for a feature not in the tenant's plan
   const isCategoryVisible = (categoryId: string, subCategoryName?: string): boolean => {
-    // Sub-category gating
+    // Sub-category gating (Subscription & Billing / Settings sub-categories)
     if (subCategoryName) {
-      if (subCategoryName === 'My Resumes' || subCategoryName === 'Internal Database') return hasPlanFeature('resume_upload');
-      if (subCategoryName === 'Assessment') return hasPlanFeature('assessment');
       if (subCategoryName === 'API Management') return hasPlanFeature('api_access');
       return true;
     }
     // Top-level category gating
     if (categoryId === 'resume_scoring') return hasPlanFeature('resume_scoring');
     if (categoryId === 'ai_talent_match') return hasPlanFeature('ai_talent_match');
+    if (categoryId === 'my_resumes') return hasPlanFeature('resume_upload');
+    if (categoryId === 'internal_database') return hasPlanFeature('resume_upload');
+    if (categoryId === 'assessments') return hasPlanFeature('assessment');
+    if (categoryId === 'ai_interviews') return hasPlanFeature('ai_interview');
     if (categoryId === 'teams') return hasPlanFeature('teams');
-    if (categoryId === 'resume_management') return hasPlanFeature('resume_upload') || hasPlanFeature('assessment');
     return true;
   };
 
@@ -2706,7 +2461,6 @@ export default function UserManagement() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="font-medium text-xs sm:text-sm text-gray-900">View {category.name}</div>
-                                      <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{category.viewCode}</div>
                                     </div>
                                   </div>
                                 );
@@ -2726,7 +2480,6 @@ export default function UserManagement() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="font-medium text-xs sm:text-sm text-gray-900">{action.label}</div>
-                                      <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{action.code}</div>
                                     </div>
                                   </div>
                                 );
@@ -2821,7 +2574,6 @@ export default function UserManagement() {
                                           </div>
                                           <div className="flex-1 min-w-0">
                                             <div className="font-medium text-xs sm:text-sm text-gray-900">View {sub.name}</div>
-                                            <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{sub.viewCode}</div>
                                           </div>
                                         </div>
                                       );

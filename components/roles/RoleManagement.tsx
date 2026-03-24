@@ -792,7 +792,6 @@ export default function RoleManagement() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium text-xs sm:text-sm text-gray-900">{perm.name}</div>
-                                <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{perm.code}</div>
                               </div>
                             </div>
                           ))}
