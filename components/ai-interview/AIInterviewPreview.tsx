@@ -27,6 +27,7 @@ interface Cluster {
 interface ParsedInstructions {
   mth_clusters?: Cluster[];
   nth_clusters?: Cluster[];
+  skill_weights?: Record<string, 'high' | 'medium' | 'low'>;
   [key: string]: unknown;
 }
 
@@ -94,6 +95,7 @@ export default function AIInterviewPreview() {
   const [rounds, setRounds] = useState<AIInterviewRoundConfig[]>([]);
   const [mthClusters, setMthClusters] = useState<Cluster[]>([]);
   const [nthClusters, setNthClusters] = useState<Cluster[]>([]);
+  const [skillWeights, setSkillWeights] = useState<Record<string, 'high' | 'medium' | 'low'>>({});
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -117,6 +119,7 @@ export default function AIInterviewPreview() {
           const parsed: ParsedInstructions = JSON.parse(data.special_instructions);
           setMthClusters(parsed.mth_clusters ?? []);
           setNthClusters(parsed.nth_clusters ?? []);
+          setSkillWeights(parsed.skill_weights ?? {});
         } catch {
           // Not JSON — ignore
         }
@@ -144,6 +147,25 @@ export default function AIInterviewPreview() {
 
   const enabledRounds = rounds.filter(r => r.enabled);
   const totalPercentage = enabledRounds.reduce((s, r) => s + r.percentage, 0);
+
+  /* Skill-weight-adjusted durations (mirrors backend logic) */
+  const adjustedDurations = React.useMemo<Record<string, number>>(() => {
+    if (mode !== 'fixed' || Object.keys(skillWeights).length === 0) return {};
+    const WVAL: Record<string, number> = { high: 3, medium: 2, low: 1 };
+    const mthSkills = new Set(mthClusters.flatMap(c => c.skills));
+    const nthSkills = new Set(nthClusters.flatMap(c => c.skills));
+    const mthScore = [...mthSkills].reduce((s, sk) => s + (WVAL[skillWeights[sk] ?? 'medium'] ?? 2), 0);
+    const nthScore = [...nthSkills].reduce((s, sk) => s + (WVAL[skillWeights[sk] ?? 'medium'] ?? 2), 0);
+    if (mthScore + nthScore === 0) return {};
+    const mthR = enabledRounds.find(r => r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical');
+    const nthR = enabledRounds.find(r => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have');
+    if (!mthR || !nthR) return {};
+    const avail = (mthR.duration_minutes ?? 0) + (nthR.duration_minutes ?? 0);
+    if (avail === 0) return {};
+    const newMth = Math.max(5, Math.round(avail * mthScore / (mthScore + nthScore)));
+    const newNth = avail - newMth;
+    return { [mthR.type]: newMth, [nthR.type]: newNth };
+  }, [mode, skillWeights, mthClusters, nthClusters, enabledRounds]);
 
   const languages = interview?.available_languages ?? (interview?.ai_voice_language ? [interview.ai_voice_language] : ['English']);
 
@@ -455,11 +477,22 @@ export default function AIInterviewPreview() {
                       r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical' ? 'Must-To-Have' :
                       r.type === 'nice_to_have_skills' || r.type === 'nice_to_have' ? 'Nice-To-Have' :
                       r.type === 'hr' ? 'HR Round' : r.type;
+                    const adjMin = adjustedDurations[r.type];
+                    const isAdjusted = adjMin !== undefined && adjMin !== r.duration_minutes;
                     return (
                       <tr key={r.type}>
                         <td className="px-4 py-2.5 text-gray-900">{roundLabel}</td>
                         <td className="px-4 py-2.5 text-gray-700 text-right">{r.percentage}%</td>
-                        <td className="px-4 py-2.5 text-gray-700 text-right">{r.duration_minutes} min</td>
+                        <td className="px-4 py-2.5 text-gray-700 text-right">
+                          {isAdjusted ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="line-through text-gray-400 text-xs">{r.duration_minutes}</span>
+                              <span className="font-semibold text-gray-900">{adjMin} min</span>
+                            </span>
+                          ) : (
+                            <>{adjMin ?? r.duration_minutes} min</>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -469,7 +502,7 @@ export default function AIInterviewPreview() {
                     <td className="px-4 py-2.5 text-gray-900">Total</td>
                     <td className="px-4 py-2.5 text-gray-900 text-right">{totalPercentage}%</td>
                     <td className="px-4 py-2.5 text-gray-900 text-right">
-                      {enabledRounds.reduce((s, r) => s + r.duration_minutes, 0)} min
+                      {enabledRounds.reduce((s, r) => s + (adjustedDurations[r.type] ?? r.duration_minutes), 0)} min
                     </td>
                   </tr>
                 </tfoot>

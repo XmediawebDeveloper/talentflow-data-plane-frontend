@@ -390,6 +390,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // VAD settings
   const silenceStartRef = useRef<number | null>(null);
   const speechDetectedRef = useRef(false);
+  const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.008);
   const silenceDurationMsRef = useRef(5000);
 
@@ -813,6 +814,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
         }
+        setStatus("Time's up — moving to the next question...");
         break;
       case "skill_coverage_update":
         setSkillCoverage({
@@ -828,8 +830,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         });
         break;
       case "question_timer_nudge":
-        // Candidate has been silent for 45s — show a gentle prompt in the status bar
-        setStatus("Take your time — share whatever comes to mind, or say 'skip' to move on.");
+        // Candidate has been silent for 45s — show urgency prompt in timed mode
+        setStatus("Time is running out — wrap up your answer or say 'skip' to continue.");
         break;
       case "interview_closing":
         setIsClosing(true); isClosingRef.current = true;
@@ -1015,6 +1017,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
       silenceStartRef.current = null;
       speechDetectedRef.current = false;
+      speechStartSentRef.current = false;
 
       processor.onaudioprocess = (e) => {
         if (!isRecordingRef.current) return;
@@ -1032,6 +1035,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (avgLevel > silenceThresholdRef.current) {
           speechDetectedRef.current = true;
           silenceStartRef.current = null;
+          // Notify backend on first actual speech — resets question timer to full duration
+          if (!speechStartSentRef.current) {
+            speechStartSentRef.current = true;
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: "speech_started" }));
+            }
+          }
           // Clear no-response timer — candidate is speaking
           clearNoResponseTimer();
           noResponseRetryRef.current = 0;
