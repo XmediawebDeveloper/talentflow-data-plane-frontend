@@ -4,23 +4,24 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft, Award, Clock, MessageSquare, ThumbsUp, ThumbsDown,
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
-  BarChart3, Brain, FileText, Mic,
+  BarChart3, Brain, FileText, Layers, Bot,
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line, Legend, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, LineChart, Line, Legend,
 } from 'recharts';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import ClusterInsightsTab from './ClusterInsightsTab';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
   onBack: () => void;
 }
 
-type TabKey = 'overview' | 'sentiment' | 'qa' | 'recording' | 'transcript';
+type TabKey = 'overview' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'clusters';
 
 export default function CandidateResultsView({ interview, onBack }: CandidateResultsViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
@@ -55,12 +56,19 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const isPartial = eval_.partial === true;
   const hasData = isCompleted || isPartial;
 
-  const roundScores: { name: string; score: number; percentage: number }[] = useMemo(() => {
-    return (eval_.round_scores || []).map((r: any) => ({
-      name: r.type?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Unknown',
-      score: r.score ?? 0,
-      percentage: r.percentage ?? 0,
-    }));
+  // Convert raw 1-5 evaluator score → 0-100 performance percentage for display
+  const roundScores: { name: string; score: number; percentage: number; weight: number }[] = useMemo(() => {
+    return (eval_.round_scores || []).map((r: any) => {
+      const raw = r.score ?? 0;
+      // raw is on 1-5 scale; convert to 0-100
+      const pct = raw > 0 ? Math.round((raw / 5) * 100) : 0;
+      return {
+        name: r.type?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Unknown',
+        score: raw,
+        percentage: pct,
+        weight: r.percentage ?? 0,
+      };
+    });
   }, [eval_.round_scores]);
 
   const sentimentTimeline: any[] = useMemo(() => {
@@ -126,6 +134,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <BarChart3 className="w-4 h-4" /> },
+    { key: 'clusters', label: 'Cluster Insights', icon: <Layers className="w-4 h-4" /> },
     { key: 'sentiment', label: 'Sentiment', icon: <Brain className="w-4 h-4" /> },
     { key: 'qa', label: 'Q&A', icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording', label: 'Recording', icon: <Video className="w-4 h-4" /> },
@@ -279,24 +288,34 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     </div>
                   </div>
 
-                  {/* Round Scores Bar Chart */}
+                  {/* Round Performance Bar Chart */}
                   {roundScores.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-900 mb-3">Round Scores</h3>
-                      <div className="bg-gray-50 rounded-lg p-4" style={{ height: Math.max(200, roundScores.length * 50) }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={roundScores} layout="vertical" margin={{ left: 20, right: 20, top: 5, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                            <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                            <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 12 }} />
-                            <Tooltip formatter={(value: number) => [`${value}%`, 'Score']} />
-                            <Bar dataKey="percentage" radius={[0, 4, 4, 0]}>
-                              {roundScores.map((entry, idx) => (
-                                <Cell key={idx} fill={entry.percentage >= 70 ? '#22c55e' : entry.percentage >= 50 ? '#eab308' : '#ef4444'} />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
+                      <h3 className="text-sm font-medium text-gray-900 mb-3">Round Performance</h3>
+                      <div className="space-y-3">
+                        {roundScores.map((r, idx) => (
+                          <div key={idx}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm text-gray-700">{r.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-gray-400">weight {r.weight}%</span>
+                                <span className={`text-sm font-semibold ${
+                                  r.percentage >= 70 ? 'text-green-600' :
+                                  r.percentage >= 50 ? 'text-yellow-600' : 'text-red-600'
+                                }`}>{r.percentage}%</span>
+                              </div>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                              <div
+                                className={`h-2.5 rounded-full ${
+                                  r.percentage >= 70 ? 'bg-green-500' :
+                                  r.percentage >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                                }`}
+                                style={{ width: `${r.percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -369,8 +388,32 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   {/* Summary */}
                   {summary.summary && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-900 mb-2">Summary</h3>
+                      <h3 className="text-sm font-medium text-gray-900 mb-2">AI Summary</h3>
                       <p className="text-sm text-gray-600 leading-relaxed">{summary.summary}</p>
+                    </div>
+                  )}
+
+                  {/* Training Suggestions */}
+                  {summary.training_suggestions?.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900 mb-2">Training Suggestions</h3>
+                      <ul className="space-y-1.5">
+                        {summary.training_suggestions.map((s: string, i: number) => (
+                          <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Closing reason note */}
+                  {eval_.closing_reason && eval_.closing_reason !== 'normal' && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                      <span className="text-xs text-gray-500">
+                        Interview ended: <span className="font-medium text-gray-700">{eval_.closing_reason.replace(/_/g, ' ')}</span>
+                      </span>
                     </div>
                   )}
 
@@ -379,6 +422,16 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     renderPlaceholder('No evaluation data available')
                   )}
                 </div>
+              )
+            )}
+
+            {/* Cluster Insights Tab */}
+            {activeTab === 'clusters' && (
+              placeholderMsg ? renderPlaceholder(placeholderMsg) : (
+                <ClusterInsightsTab
+                  clusterInsights={eval_.cluster_insights || []}
+                  capabilityScore={eval_.capability_score ?? null}
+                />
               )
             )}
 
@@ -463,77 +516,80 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
             {/* Q&A Tab */}
             {activeTab === 'qa' && (
-              placeholderMsg ? renderPlaceholder(placeholderMsg) : (
-                <div className="space-y-3">
-                  {evaluations.length > 0 ? (
-                    evaluations.map((item, idx) => {
-                      const ev = item.evaluation || {};
-                      const sent = item.sentiment;
+              placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
+                // Prefer question_history (richer — has round_type, response_type, timestamp)
+                // Fall back to evaluations if history not present
+                const qaItems: any[] = eval_.question_history?.length > 0
+                  ? eval_.question_history
+                  : evaluations.map((e: any, i: number) => ({
+                      question_number: i + 1,
+                      question: e.question,
+                      answer: e.response,
+                      topic: e.evaluation?.topic,
+                      round_type: null,
+                      response_type: 'answered',
+                      skip_source: null,
+                      timestamp: null,
+                    }));
+
+                if (qaItems.length === 0) return renderPlaceholder('No Q&A data available');
+
+                return (
+                  <div className="space-y-3">
+                    {qaItems.map((item: any, idx: number) => {
+                      const isSkipped = item.response_type === 'skipped';
+                      const answerText = item.answer || '';
                       const isExpanded = expandedQuestions.has(idx);
-                      const responseText = item.response || '';
-                      const truncated = responseText.length > 200;
+                      const truncated = answerText.length > 200;
+                      const roundLabel = item.round_type
+                        ? item.round_type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+                        : null;
 
                       return (
-                        <div key={idx} className="border border-gray-200 rounded-lg p-4">
-                          <div className="flex items-start justify-between gap-3 mb-2">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-medium text-gray-400">Q{idx + 1}</span>
-                                {ev.topic && (
-                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">
-                                    {ev.topic}
-                                  </span>
+                        <div key={idx} className={`border rounded-lg p-4 ${isSkipped ? 'border-gray-100 bg-gray-50/50' : 'border-gray-200'}`}>
+                          <div className="flex items-start gap-3 mb-2">
+                            <span className="flex-shrink-0 text-xs font-semibold text-gray-400 bg-gray-100 rounded px-1.5 py-0.5 mt-0.5">
+                              Q{item.question_number ?? idx + 1}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                                {roundLabel && (
+                                  <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">{roundLabel}</span>
                                 )}
-                                {sent?.dominant_emotion && (
-                                  <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full capitalize">
-                                    {sent.dominant_emotion}
+                                {item.topic && item.topic !== 'general' && (
+                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">{item.topic}</span>
+                                )}
+                                {isSkipped && (
+                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full">
+                                    Skipped{item.skip_source === 'user' ? ' by candidate' : ''}
                                   </span>
                                 )}
                               </div>
-                              <p className="text-sm font-medium text-gray-900">{item.question}</p>
+                              <p className="text-sm font-medium text-gray-900 leading-snug">{item.question}</p>
                             </div>
-                            {ev.overall != null && (
-                              <div className={`flex-shrink-0 px-2.5 py-1 rounded-md text-sm font-semibold border ${getScoreColor(ev.overall)}`}>
-                                {ev.overall}/5
+                          </div>
+                          {answerText && (
+                            <div className="ml-9">
+                              <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-600'}`}>
+                                {isExpanded || !truncated ? answerText : `${answerText.slice(0, 200)}...`}
                               </div>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-600 mt-2">
-                            {isExpanded || !truncated
-                              ? responseText
-                              : `${responseText.slice(0, 200)}...`}
-                          </div>
-                          {truncated && (
-                            <button
-                              onClick={() => toggleQuestion(idx)}
-                              className="flex items-center gap-1 mt-2 text-xs text-gray-500 hover:text-gray-700"
-                            >
-                              {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                              {isExpanded ? 'Show less' : 'Show more'}
-                            </button>
-                          )}
-                          {ev.brief_note && (
-                            <div className="mt-2 text-xs text-gray-500 italic">{ev.brief_note}</div>
-                          )}
-                          {ev.strength && (
-                            <div className="mt-1 flex items-center gap-1">
-                              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                ev.strength === 'strong' ? 'bg-green-100 text-green-700' :
-                                ev.strength === 'moderate' ? 'bg-yellow-100 text-yellow-700' :
-                                'bg-red-100 text-red-700'
-                              }`}>
-                                {ev.strength}
-                              </span>
+                              {truncated && (
+                                <button
+                                  onClick={() => toggleQuestion(idx)}
+                                  className="flex items-center gap-1 mt-1.5 text-xs text-gray-400 hover:text-gray-600"
+                                >
+                                  {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                  {isExpanded ? 'Show less' : 'Show more'}
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
                       );
-                    })
-                  ) : (
-                    renderPlaceholder('No Q&A data available')
-                  )}
-                </div>
-              )
+                    })}
+                  </div>
+                );
+              })()
             )}
 
             {/* Recording Tab */}
@@ -579,38 +635,79 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
             {/* Transcript Tab */}
             {activeTab === 'transcript' && (
-              placeholderMsg ? renderPlaceholder(placeholderMsg) : (
-                <div className="space-y-3 max-w-3xl mx-auto">
-                  {(interview.conversation_transcript && interview.conversation_transcript.length > 0) ? (
-                    interview.conversation_transcript
-                      .filter((msg: any) => msg.role !== 'system')
-                      .map((msg: any, idx: number) => {
+              placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
+                const messages = (interview.conversation_transcript || [])
+                  .filter((msg: any) => msg.role !== 'system' && msg.content?.trim());
+
+                if (messages.length === 0) return renderPlaceholder('No transcript available');
+
+                const candidateName = interview.candidate_name || 'Candidate';
+                const formatTs = (ts: string) => {
+                  if (!ts) return '';
+                  try {
+                    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                  } catch { return ''; }
+                };
+
+                return (
+                  <div className="max-w-3xl mx-auto">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                            <Bot className="w-3.5 h-3.5 text-blue-600" />
+                          </div>
+                          <span className="text-xs text-gray-500">Linda (AI Interviewer)</span>
+                        </div>
+                        <span className="text-gray-200">·</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold text-[10px]">
+                            {candidateName[0].toUpperCase()}
+                          </div>
+                          <span className="text-xs text-gray-500">{candidateName}</span>
+                        </div>
+                      </div>
+                      <span className="text-xs text-gray-400">{messages.length} messages</span>
+                    </div>
+
+                    <div className="space-y-4">
+                      {messages.map((msg: any, idx: number) => {
                         const isAssistant = msg.role === 'assistant';
+                        const ts = formatTs(msg.timestamp);
+                        const content = msg.content as string;
+
                         return (
-                          <div
-                            key={idx}
-                            className={`flex ${isAssistant ? 'justify-start' : 'justify-end'}`}
-                          >
-                            <div
-                              className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                          <div key={idx} className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'}`}>
+                            {/* Avatar */}
+                            <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ${
+                              isAssistant ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-600'
+                            }`}>
+                              {isAssistant ? <Bot className="w-3.5 h-3.5" /> : candidateName[0].toUpperCase()}
+                            </div>
+
+                            {/* Bubble */}
+                            <div className={`max-w-[75%] ${isAssistant ? '' : 'items-end flex flex-col'}`}>
+                              <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
                                 isAssistant
-                                  ? 'bg-gray-100 text-gray-800 rounded-bl-md'
-                                  : 'bg-blue-500 text-white rounded-br-md'
-                              }`}
-                            >
-                              <div className="text-[10px] font-medium mb-1 opacity-60">
-                                {isAssistant ? 'AI Interviewer' : 'Candidate'}
+                                  ? 'bg-gray-100 text-gray-800 rounded-tl-sm'
+                                  : 'bg-blue-500 text-white rounded-tr-sm'
+                              }`}>
+                                {content}
                               </div>
-                              {msg.content}
+                              {ts && (
+                                <div className={`text-[10px] text-gray-400 mt-1 ${isAssistant ? 'pl-1' : 'pr-1 text-right'}`}>
+                                  {ts}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
-                      })
-                  ) : (
-                    renderPlaceholder('No transcript available')
-                  )}
-                </div>
-              )
+                      })}
+                    </div>
+                  </div>
+                );
+              })()
             )}
           </div>
         </div>

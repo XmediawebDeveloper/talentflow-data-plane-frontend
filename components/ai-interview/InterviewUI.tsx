@@ -788,7 +788,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setQuestionTimerSeconds(null);
         break;
       case "question_timer_started": {
-        const dur = data.duration_seconds ?? 120;
+        const dur = data.seconds ?? data.duration_seconds ?? 120;
         setQuestionTimerSeconds(dur);
         setQuestionTimerExpired(false);
         if (questionTimerIntervalRef.current) {
@@ -908,12 +908,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
     const doUpload = async () => {
       const chunks = recordedChunksRef.current;
-      if (chunks.length === 0) return;
+      console.log(`[Recording] Upload: ${chunks.length} chunks, recorder=${recorder?.state ?? 'null'}`);
+      if (chunks.length === 0) {
+        console.warn('[Recording] No chunks to upload — recording may not have started');
+        return;
+      }
       // Use the recorder's negotiated mimeType; strip codec suffix for Blob constructor
       const mimeType = (recorder?.mimeType || 'video/webm').split(';')[0];
       const blob = new Blob(chunks, { type: mimeType });
+      console.log(`[Recording] Uploading blob: ${blob.size} bytes, type=${mimeType}`);
       try {
         await candidateAIInterviewService.uploadRecording(token, blob);
+        console.log('[Recording] Upload succeeded');
       } catch (err) {
         console.error('[Recording] Upload failed:', err);
       }
