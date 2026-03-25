@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { Briefcase, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { getLoginUrl } from '@/lib/services/authService';
@@ -10,6 +11,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1
 
 export default function ResetPassword() {
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNew, setShowNew] = useState(false);
@@ -96,7 +99,7 @@ export default function ResetPassword() {
 
   const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
+    background: isDark ? 'linear-gradient(135deg, #111827 0%, #1F2937 50%, #1E1B4B 100%)' : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -156,18 +159,18 @@ export default function ResetPassword() {
   };
 
   const formCardStyle: React.CSSProperties = {
-    backgroundColor: '#ffffff',
+    backgroundColor: isDark ? '#1F2937' : '#ffffff',
     borderRadius: '24px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+    boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.4)' : '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
     padding: isMobile ? '32px' : '40px',
-    border: '1px solid #F3F4F6',
+    border: isDark ? '1px solid #374151' : '1px solid #F3F4F6',
   };
 
   const labelStyle: React.CSSProperties = {
     display: 'block',
     fontSize: '14px',
     fontWeight: 500,
-    color: '#374151',
+    color: isDark ? '#D1D5DB' : '#374151',
     marginBottom: '8px',
   };
 
@@ -185,11 +188,11 @@ export default function ResetPassword() {
     paddingRight: '48px',
     paddingTop: '14px',
     paddingBottom: '14px',
-    border: '1px solid #D1D5DB',
+    border: `1px solid ${isDark ? '#4B5563' : '#D1D5DB'}`,
     borderRadius: '12px',
     fontSize: '16px',
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
+    color: isDark ? '#F9FAFB' : '#111827',
+    backgroundColor: isDark ? '#374151' : '#F9FAFB',
     outline: 'none',
     boxSizing: 'border-box',
     transition: 'all 0.2s',
@@ -229,7 +232,7 @@ export default function ResetPassword() {
     marginTop: '24px',
     textAlign: 'center',
     fontSize: '14px',
-    color: '#9CA3AF',
+    color: isDark ? '#6B7280' : '#9CA3AF',
   };
 
   // ── Success screen ─────────────────────────────────────────────────────────
@@ -256,8 +259,8 @@ export default function ResetPassword() {
             }}>
               <CheckCircle style={{ width: 36, height: 36, color: '#ffffff' }} />
             </div>
-            <h2 style={{ fontSize: '28px', fontWeight: 700, color: '#111827', marginBottom: '8px' }}>Password Set!</h2>
-            <p style={{ color: '#6B7280', fontSize: '16px' }}>Taking you to your dashboard...</p>
+            <h2 style={{ fontSize: '28px', fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: '8px' }}>Password Set!</h2>
+            <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontSize: '16px' }}>Taking you to your dashboard...</p>
           </div>
           <div style={copyrightStyle}>© 2026 TalentFlow. All rights reserved.</div>
         </div>
@@ -282,17 +285,17 @@ export default function ResetPassword() {
               <Briefcase style={{ width: 28, height: 28, color: '#ffffff' }} />
             </div>
             <div>
-              <div style={{ fontSize: '32px', fontWeight: 700, color: '#111827' }}>TalentFlow</div>
+              <div style={{ fontSize: '32px', fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>TalentFlow</div>
               <div style={{ fontSize: '14px', color: '#2563EB' }}>Recruitment Platform</div>
             </div>
           </div>
 
-          <h2 style={{ fontSize: '48px', fontWeight: 700, color: '#111827', lineHeight: 1.2, marginBottom: '24px' }}>
+          <h2 style={{ fontSize: '48px', fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', lineHeight: 1.2, marginBottom: '24px' }}>
             Secure Your<br />
             <span style={gradientTextStyle}>Account Access</span>
           </h2>
 
-          <p style={{ fontSize: '18px', color: '#6B7280', lineHeight: 1.6, marginBottom: '32px', maxWidth: '480px' }}>
+          <p style={{ fontSize: '18px', color: isDark ? '#9CA3AF' : '#6B7280', lineHeight: 1.6, marginBottom: '32px', maxWidth: '480px' }}>
             Set a strong password to protect your recruitment dashboard and team data.
           </p>
 
@@ -302,8 +305,8 @@ export default function ResetPassword() {
                 <Sparkles style={{ width: 20, height: 20, color: '#2563EB' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>AI-Powered Resume Parsing</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>Automated candidate screening and matching</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>AI-Powered Resume Parsing</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Automated candidate screening and matching</div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
@@ -311,8 +314,8 @@ export default function ResetPassword() {
                 <Sparkles style={{ width: 20, height: 20, color: '#4338CA' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>Smart Assessment Tools</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>LLM-driven candidate evaluations</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>Smart Assessment Tools</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>LLM-driven candidate evaluations</div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
@@ -320,8 +323,8 @@ export default function ResetPassword() {
                 <Sparkles style={{ width: 20, height: 20, color: '#7C3AED' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>Centralized Database</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>Organize and track all candidates in one place</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>Centralized Database</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Organize and track all candidates in one place</div>
               </div>
             </div>
           </div>
@@ -336,28 +339,28 @@ export default function ResetPassword() {
                 <Briefcase style={{ width: 24, height: 24, color: '#ffffff' }} />
               </div>
               <div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>TalentFlow</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>TalentFlow</div>
                 <div style={{ fontSize: 12, color: '#2563EB' }}>Recruitment Platform</div>
               </div>
             </div>
 
-            <h2 style={{ fontSize: '28px', fontWeight: 700, color: '#111827', marginBottom: '8px' }}>Set Your Password</h2>
-            <p style={{ color: '#6B7280', marginBottom: '32px' }}>Welcome! Please choose a new password to continue.</p>
+            <h2 style={{ fontSize: '28px', fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: '8px' }}>Set Your Password</h2>
+            <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: '32px' }}>Welcome! Please choose a new password to continue.</p>
 
             {/* API error banner */}
             {error && (
               <div style={{
                 marginBottom: '24px',
                 padding: '16px',
-                backgroundColor: '#FEF2F2',
-                border: '1px solid #FECACA',
+                backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : '#FEF2F2',
+                border: `1px solid ${isDark ? 'rgba(239,68,68,0.3)' : '#FECACA'}`,
                 borderRadius: '12px',
                 display: 'flex',
                 alignItems: 'flex-start',
                 gap: '12px',
               }}>
                 <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-                <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
+                <span style={{ fontSize: 14, color: isDark ? '#FCA5A5' : '#991B1B' }}>{error}</span>
               </div>
             )}
 
@@ -376,11 +379,11 @@ export default function ResetPassword() {
                     style={inputStyle}
                     onFocus={(e) => {
                       e.target.style.borderColor = '#2563EB';
-                      e.target.style.backgroundColor = '#ffffff';
+                      e.target.style.backgroundColor = isDark ? '#4B5563' : '#ffffff';
                     }}
                     onBlur={(e) => {
-                      e.target.style.borderColor = '#D1D5DB';
-                      e.target.style.backgroundColor = '#F9FAFB';
+                      e.target.style.borderColor = isDark ? '#4B5563' : '#D1D5DB';
+                      e.target.style.backgroundColor = isDark ? '#374151' : '#F9FAFB';
                     }}
                   />
                   <button type="button" onClick={() => setShowNew(!showNew)} style={eyeButtonStyle}>
@@ -407,15 +410,15 @@ export default function ResetPassword() {
                     required
                     style={{
                       ...inputStyle,
-                      borderColor: confirmTouched && !passwordsMatch ? '#EF4444' : '#D1D5DB',
+                      borderColor: confirmTouched && !passwordsMatch ? '#EF4444' : (isDark ? '#4B5563' : '#D1D5DB'),
                     }}
                     onFocus={(e) => {
                       e.target.style.borderColor = confirmTouched && !passwordsMatch ? '#EF4444' : '#2563EB';
-                      e.target.style.backgroundColor = '#ffffff';
+                      e.target.style.backgroundColor = isDark ? '#4B5563' : '#ffffff';
                     }}
                     onBlur={(e) => {
-                      e.target.style.borderColor = confirmTouched && !passwordsMatch ? '#EF4444' : '#D1D5DB';
-                      e.target.style.backgroundColor = '#F9FAFB';
+                      e.target.style.borderColor = confirmTouched && !passwordsMatch ? '#EF4444' : (isDark ? '#4B5563' : '#D1D5DB');
+                      e.target.style.backgroundColor = isDark ? '#374151' : '#F9FAFB';
                     }}
                   />
                   <button type="button" onClick={() => setShowConfirm(!showConfirm)} style={eyeButtonStyle}>

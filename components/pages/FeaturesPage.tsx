@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTheme } from 'next-themes';
 import {
   Sparkles,
   FileText,
@@ -23,9 +24,10 @@ interface FeaturesPageProps {
 }
 
 export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
 
   useEffect(() => {
@@ -36,7 +38,6 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
     };
     checkScreen();
     window.addEventListener('resize', checkScreen);
-    setIsDark(document.documentElement.classList.contains('dark'));
     return () => window.removeEventListener('resize', checkScreen);
   }, []);
 

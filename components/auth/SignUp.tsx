@@ -5,6 +5,7 @@
 // Any changes made here must also be applied to complete-payment/page.tsx and vice versa.
 
 import { useState, useEffect, useRef } from 'react';
+import { useTheme } from 'next-themes';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
@@ -1033,10 +1034,15 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     }
   };
 
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   // Styles
   const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
+    background: isDark
+      ? 'linear-gradient(135deg, #111827 0%, #1F2937 50%, #1E1B4B 100%)'
+      : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1086,11 +1092,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   };
 
   const formCardStyle: React.CSSProperties = {
-    backgroundColor: '#ffffff',
+    backgroundColor: isDark ? '#1F2937' : '#ffffff',
     borderRadius: '24px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+    boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' : '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
     padding: isMobile ? '32px' : '40px',
-    border: '1px solid #F3F4F6',
+    border: isDark ? '1px solid #374151' : '1px solid #F3F4F6',
   };
 
   const inputStyle: React.CSSProperties = {
@@ -1099,11 +1105,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     paddingRight: '16px',
     paddingTop: '12px',
     paddingBottom: '12px',
-    border: '1px solid #D1D5DB',
+    border: isDark ? '1px solid #4B5563' : '1px solid #D1D5DB',
     borderRadius: '12px',
     fontSize: '16px',
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
+    color: isDark ? '#F9FAFB' : '#111827',
+    backgroundColor: isDark ? '#374151' : '#F9FAFB',
     outline: 'none',
     boxSizing: 'border-box',
     transition: 'all 0.2s',
@@ -1181,37 +1187,37 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               <CreditCard style={{ width: 24, height: 24, color: '#ffffff' }} />
             </div>
             <div>
-              <h2 style={{ fontSize: 24, fontWeight: 700, color: '#111827', marginBottom: 4 }}>Complete Your Purchase</h2>
-              <p style={{ color: '#6B7280', fontSize: 14 }}>Your account is ready. Complete payment to activate your plan.</p>
+              <h2 style={{ fontSize: 24, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: 4 }}>Complete Your Purchase</h2>
+              <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14 }}>Your account is ready. Complete payment to activate your plan.</p>
             </div>
           </div>
 
           {error && (
-            <div style={{ marginBottom: 24, padding: 16, backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ marginBottom: 24, padding: 16, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2', border: isDark ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid #FECACA', borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-              <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
+              <span style={{ fontSize: 14, color: isDark ? '#FCA5A5' : '#991B1B' }}>{error}</span>
             </div>
           )}
 
           {/* Plan Summary Card */}
-          <div style={{ backgroundColor: '#F9FAFB', borderRadius: 16, padding: 24, marginBottom: 24, border: '1px solid #E5E7EB' }}>
+          <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 16, padding: 24, marginBottom: 24, border: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 20, fontWeight: 600, color: '#111827' }}>{selectedPlanDetails.plan_name}</span>
-                  <span style={{ backgroundColor: '#DBEAFE', color: '#1D4ED8', fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 12 }}>
+                  <span style={{ fontSize: 20, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{selectedPlanDetails.plan_name}</span>
+                  <span style={{ backgroundColor: isDark ? 'rgba(37, 99, 235, 0.2)' : '#DBEAFE', color: isDark ? '#93C5FD' : '#1D4ED8', fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 12 }}>
                     {selectedPlanDetails.plan_tier}
                   </span>
                 </div>
-                <p style={{ color: '#6B7280', fontSize: 14 }}>{selectedPlanDetails.description}</p>
+                <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14 }}>{selectedPlanDetails.description}</p>
               </div>
             </div>
 
             {/* Price Display with GST Breakdown */}
-            <div style={{ padding: '16px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
+            <div style={{ padding: '16px 0', borderTop: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB', borderBottom: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 14, color: '#6B7280' }}>Billing:</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>
+                <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Billing:</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>
                   {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
                 </span>
               </div>
@@ -1227,7 +1233,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       padding: '2px 8px',
                       fontSize: 12,
                       fontWeight: 600,
-                      backgroundColor: '#DCFCE7',
+                      backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7',
                       color: '#15803D',
                       borderRadius: 12
                     }}>
@@ -1237,25 +1243,25 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ fontSize: 14, color: '#6B7280' }}>Plan Price:</span>
-                <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>
+                <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Plan Price:</span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: isDark ? '#F9FAFB' : '#111827' }}>
                   {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 14, color: '#6B7280' }}>GST (18%):</span>
-                <span style={{ fontSize: 14, fontWeight: 500, color: '#111827' }}>
+                <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>GST (18%):</span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: isDark ? '#F9FAFB' : '#111827' }}>
                   {formatCurrency(Math.round(selectedPlanDetails.base_price * 0.18 * 100) / 100, selectedPlanDetails.currency)}
                 </span>
               </div>
-              <div style={{ height: 1, backgroundColor: '#E5E7EB', marginBottom: 8 }} />
+              <div style={{ height: 1, backgroundColor: isDark ? '#4B5563' : '#E5E7EB', marginBottom: 8 }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>Total:</span>
+                <span style={{ fontSize: 16, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>Total:</span>
                 <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+                  <span style={{ fontSize: 28, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>
                     {formatCurrency(Math.round((selectedPlanDetails.base_price * 1.18) * 100) / 100, selectedPlanDetails.currency)}
                   </span>
-                  <span style={{ fontSize: 14, color: '#6B7280', marginLeft: 4 }}>
+                  <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', marginLeft: 4 }}>
                     /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
                   </span>
                 </div>
@@ -1264,7 +1270,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
             {/* Included Seats */}
             {selectedPlanDetails.included_seats && (
-              <div style={{ marginTop: 12, padding: 12, backgroundColor: '#EEF2FF', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? 'rgba(67, 56, 202, 0.2)' : '#EEF2FF', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 14, color: '#4338CA', fontWeight: 500 }}>Included Team Seats</span>
                 <span style={{ fontSize: 16, fontWeight: 700, color: '#4338CA' }}>{selectedPlanDetails.included_seats}</span>
               </div>
@@ -1274,15 +1280,15 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           {/* Plan Quotas */}
           {selectedPlanDetails.quotas && Object.keys(selectedPlanDetails.quotas).length > 0 && (
             <div style={{ marginBottom: 24 }}>
-              <h4 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>Plan Quotas:</h4>
-              <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12 }}>Plan Quotas:</h4>
+              <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 12, padding: 16, border: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   {Object.entries(selectedPlanDetails.quotas)
                     .filter(([key, value]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key) && value !== 0 && value !== null && value !== undefined)
                     .map(([key, value]) => (
-                    <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid #E5E7EB' }}>
-                      <span style={{ fontSize: 13, color: '#6B7280' }}>{getQuotaLabel(key)}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{formatQuotaValue(key, value)}</span>
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: isDark ? '#1F2937' : '#ffffff', borderRadius: 8, border: isDark ? '1px solid #374151' : '1px solid #E5E7EB' }}>
+                      <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' }}>{getQuotaLabel(key)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuotaValue(key, value)}</span>
                     </div>
                   ))}
                 </div>
@@ -1293,15 +1299,15 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           {/* Features List */}
           {selectedPlanDetails.features && selectedPlanDetails.features.length > 0 && (
             <div style={{ marginBottom: 24 }}>
-              <h4 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>Included Features:</h4>
-              <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
+              <h4 style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12 }}>Included Features:</h4>
+              <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 12, padding: 16, border: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {selectedPlanDetails.features
                     .filter(f => f.is_enabled)
                     .map((feature, index) => (
                       <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
                         <Check style={{ width: 16, height: 16, color: '#10B981', flexShrink: 0 }} />
-                        <span style={{ fontSize: 13, color: '#4B5563' }}>{feature.feature_name}</span>
+                        <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#4B5563' }}>{feature.feature_name}</span>
                       </div>
                     ))}
                 </div>
@@ -1310,7 +1316,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           )}
 
           {/* Account Summary */}
-          <div style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 16, marginBottom: 24, border: '1px solid #BBF7D0' }}>
+          <div style={{ backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4', borderRadius: 12, padding: 16, marginBottom: 24, border: isDark ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid #BBF7D0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <CheckCircle style={{ width: 18, height: 18, color: '#16A34A' }} />
               <span style={{ fontSize: 14, fontWeight: 600, color: '#166534' }}>Account Details Confirmed</span>
@@ -1347,7 +1353,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           </button>
 
           {/* Security Notice */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, color: '#6B7280', fontSize: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 13 }}>
             <ShieldCheck style={{ width: 16, height: 16 }} />
             <span>Secure payment processing</span>
           </div>
@@ -1363,19 +1369,19 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     return (
       <div style={containerStyle}>
         <div style={{ ...formCardStyle, maxWidth: 480, margin: '0 auto', textAlign: 'center' }}>
-          <div style={{ width: 80, height: 80, borderRadius: '50%', backgroundColor: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+          <div style={{ width: 80, height: 80, borderRadius: '50%', backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
             <CheckCircle style={{ width: 40, height: 40, color: '#16A34A' }} />
           </div>
-          <h2 style={{ fontSize: 28, fontWeight: 700, color: '#111827', marginBottom: 8 }}>Welcome to TalentFlow!</h2>
-          <p style={{ color: '#6B7280', marginBottom: 16 }}>Your account has been created successfully.</p>
+          <h2 style={{ fontSize: 28, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>Welcome to TalentFlow!</h2>
+          <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 16 }}>Your account has been created successfully.</p>
 
           {/* Show plan info */}
           {freeTrialAcknowledged && (
             <div style={{
               padding: 16,
-              backgroundColor: '#F0FDF4',
+              backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4',
               borderRadius: 12,
-              border: '1px solid #BBF7D0',
+              border: isDark ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid #BBF7D0',
               marginBottom: 24,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
@@ -1390,7 +1396,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#6B7280' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: isDark ? '#9CA3AF' : '#6B7280' }}>
             <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite' }} />
             Redirecting to login...
           </div>
@@ -1423,46 +1429,46 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               <Briefcase style={{ width: 28, height: 28, color: '#ffffff' }} />
             </div>
             <div>
-              <div style={{ fontSize: 32, fontWeight: 700, color: '#111827' }}>TalentFlow</div>
+              <div style={{ fontSize: 32, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>TalentFlow</div>
               <div style={{ fontSize: 14, color: '#2563EB' }}>Recruitment Platform</div>
             </div>
           </div>
 
-          <h2 style={{ fontSize: 48, fontWeight: 700, color: '#111827', lineHeight: 1.2, marginBottom: 24 }}>
+          <h2 style={{ fontSize: 48, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', lineHeight: 1.2, marginBottom: 24 }}>
             Start Your<br />
             <span style={{ background: 'linear-gradient(to right, #2563EB, #4338CA)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Recruitment Journey</span>
           </h2>
 
-          <p style={{ fontSize: 18, color: '#6B7280', lineHeight: 1.6, marginBottom: 32, maxWidth: 480 }}>
+          <p style={{ fontSize: 18, color: isDark ? '#9CA3AF' : '#6B7280', lineHeight: 1.6, marginBottom: 32, maxWidth: 480 }}>
             Create your organization's recruitment workspace in minutes. Start hiring smarter today with AI-powered tools.
           </p>
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <CheckCircle style={{ width: 20, height: 20, color: '#16A34A' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>{trialDays}-{trialDays === 1 ? 'Day' : 'Days'} Free Trial</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>No credit card required</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>{trialDays}-{trialDays === 1 ? 'Day' : 'Days'} Free Trial</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>No credit card required</div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#DBEAFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: isDark ? 'rgba(37, 99, 235, 0.2)' : '#DBEAFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <ShieldCheck style={{ width: 20, height: 20, color: '#2563EB' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>Business Email Verification</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>Secure account setup</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>Business Email Verification</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Secure account setup</div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: '#EDE9FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', backgroundColor: isDark ? 'rgba(124, 58, 237, 0.2)' : '#EDE9FE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Building2 style={{ width: 20, height: 20, color: '#7C3AED' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>Isolated Workspace</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>Secure, dedicated database for your data</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>Isolated Workspace</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Secure, dedicated database for your data</div>
               </div>
             </div>
           </div>
@@ -1473,7 +1479,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
           <div style={formCardStyle}>
             {/* Back Button */}
             {onBackToPublic && (
-              <button type="button" onClick={onBackToPublic} style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#6B7280', fontSize: 14, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer' }}>
+              <button type="button" onClick={onBackToPublic} style={{ display: 'flex', alignItems: 'center', gap: 8, color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14, marginBottom: 24, background: 'none', border: 'none', cursor: 'pointer' }}>
                 <ArrowLeft style={{ width: 16, height: 16 }} />
                 <span>Back to Home</span>
               </button>
@@ -1486,14 +1492,14 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                   <Briefcase style={{ width: 24, height: 24, color: '#ffffff' }} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>TalentFlow</div>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>TalentFlow</div>
                   <div style={{ fontSize: 12, color: '#2563EB' }}>Recruitment Platform</div>
                 </div>
               </div>
             )}
 
-            <h2 style={{ fontSize: 28, fontWeight: 700, color: '#111827', marginBottom: 8 }}>Create Account</h2>
-            <p style={{ color: '#6B7280', marginBottom: 16 }}>Set up your recruitment workspace</p>
+            <h2 style={{ fontSize: 28, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>Create Account</h2>
+            <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 16 }}>Set up your recruitment workspace</p>
 
             {/* Selected Plan Indicator */}
             {(freeTrialAcknowledged || selectedPlanDetails) && (
@@ -1502,8 +1508,12 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                   marginBottom: 24,
                   padding: 16,
                   borderRadius: 12,
-                  backgroundColor: freeTrialAcknowledged ? '#F0FDF4' : '#EFF6FF',
-                  border: `1px solid ${freeTrialAcknowledged ? '#BBF7D0' : '#BFDBFE'}`,
+                  backgroundColor: freeTrialAcknowledged
+                    ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4')
+                    : (isDark ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF'),
+                  border: freeTrialAcknowledged
+                    ? `1px solid ${isDark ? 'rgba(16, 185, 129, 0.3)' : '#BBF7D0'}`
+                    : `1px solid ${isDark ? 'rgba(37, 99, 235, 0.3)' : '#BFDBFE'}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -1515,7 +1525,9 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       width: 40,
                       height: 40,
                       borderRadius: 10,
-                      backgroundColor: freeTrialAcknowledged ? '#D1FAE5' : '#DBEAFE',
+                      backgroundColor: freeTrialAcknowledged
+                        ? (isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5')
+                        : (isDark ? 'rgba(37, 99, 235, 0.2)' : '#DBEAFE'),
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -1528,10 +1540,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     )}
                   </div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: freeTrialAcknowledged ? '#166534' : '#1E40AF' }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: freeTrialAcknowledged ? (isDark ? '#6EE7B7' : '#166534') : (isDark ? '#93C5FD' : '#1E40AF') }}>
                       {freeTrialAcknowledged ? `Free Trial (${trialDays} days)` : selectedPlanDetails?.plan_name}
                     </div>
-                    <div style={{ fontSize: 12, color: freeTrialAcknowledged ? '#15803D' : '#3B82F6' }}>
+                    <div style={{ fontSize: 12, color: freeTrialAcknowledged ? (isDark ? '#6EE7B7' : '#15803D') : '#3B82F6' }}>
                       {freeTrialAcknowledged ? 'No credit card required' : `${formatCurrency(selectedPlanDetails?.base_price || 0, selectedPlanDetails?.currency || 'INR')} / ${billingInterval === 'ANNUAL' ? 'year' : 'month'}`}
                     </div>
                   </div>
@@ -1543,9 +1555,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     padding: '6px 12px',
                     fontSize: 13,
                     fontWeight: 500,
-                    color: freeTrialAcknowledged ? '#166534' : '#1E40AF',
+                    color: freeTrialAcknowledged ? (isDark ? '#6EE7B7' : '#166534') : (isDark ? '#93C5FD' : '#1E40AF'),
                     backgroundColor: 'transparent',
-                    border: `1px solid ${freeTrialAcknowledged ? '#86EFAC' : '#93C5FD'}`,
+                    border: freeTrialAcknowledged
+                      ? `1px solid ${isDark ? 'rgba(16, 185, 129, 0.4)' : '#86EFAC'}`
+                      : `1px solid ${isDark ? 'rgba(37, 99, 235, 0.4)' : '#93C5FD'}`,
                     borderRadius: 6,
                     cursor: 'pointer',
                   }}
@@ -1556,16 +1570,16 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             )}
 
             {error && (
-              <div style={{ marginBottom: 24, padding: 16, backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ marginBottom: 24, padding: 16, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2', border: isDark ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid #FECACA', borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                 <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-                <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
+                <span style={{ fontSize: 14, color: isDark ? '#FCA5A5' : '#991B1B' }}>{error}</span>
               </div>
             )}
 
             <form onSubmit={handleSubmit}>
               {/* Company Name */}
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>Company Name</label>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>Company Name</label>
                 <div style={{ position: 'relative' }}>
                   <Building2 style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
                   <input
@@ -1575,7 +1589,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     placeholder="Acme Corporation"
                     required
                     maxLength={100}
-                    style={{ ...inputStyle, borderColor: companyNameError ? '#EF4444' : '#D1D5DB' }}
+                    style={{ ...inputStyle, borderColor: companyNameError ? '#EF4444' : (isDark ? '#4B5563' : '#D1D5DB') }}
                   />
                 </div>
                 {companyNameError && (
@@ -1585,7 +1599,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
               {/* Admin Name */}
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>Your Name</label>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>Your Name</label>
                 <div style={{ position: 'relative' }}>
                   <User style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
                   <input
@@ -1595,7 +1609,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     placeholder="John Smith"
                     required
                     maxLength={100}
-                    style={{ ...inputStyle, borderColor: adminNameError ? '#EF4444' : '#D1D5DB' }}
+                    style={{ ...inputStyle, borderColor: adminNameError ? '#EF4444' : (isDark ? '#4B5563' : '#D1D5DB') }}
                   />
                 </div>
                 {adminNameError && (
@@ -1605,8 +1619,8 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
               {/* Work Email with OTP */}
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
-                  Work Email <span style={{ color: '#6B7280', fontWeight: 400 }}>(Business email only)</span>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>
+                  Work Email <span style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: 400 }}>(Business email only)</span>
                 </label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <div style={{ position: 'relative', flex: 1 }}>
@@ -1620,8 +1634,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       disabled={otpSent}
                       style={{
                         ...inputStyle,
-                        borderColor: otpVerified ? '#10B981' : emailError ? '#EF4444' : '#D1D5DB',
-                        backgroundColor: otpSent ? (otpVerified ? '#F0FDF4' : '#F9FAFB') : '#F9FAFB',
+                        borderColor: otpVerified ? '#10B981' : emailError ? '#EF4444' : (isDark ? '#4B5563' : '#D1D5DB'),
+                        backgroundColor: otpSent
+                          ? (otpVerified ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4') : (isDark ? '#374151' : '#F9FAFB'))
+                          : (isDark ? '#374151' : '#F9FAFB'),
                       }}
                     />
                     {otpVerified && (
@@ -1635,7 +1651,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       disabled={!isEmailValidForOtp() || isSendingOtp || otpSent}
                       style={{
                         padding: '12px 20px',
-                        background: otpSent ? '#10B981' : isEmailValidForOtp() ? 'linear-gradient(to right, #2563EB, #4338CA)' : '#E5E7EB',
+                        background: otpSent ? '#10B981' : isEmailValidForOtp() ? 'linear-gradient(to right, #2563EB, #4338CA)' : (isDark ? '#374151' : '#E5E7EB'),
                         color: otpSent || isEmailValidForOtp() ? '#fff' : '#9CA3AF',
                         fontSize: 14,
                         fontWeight: 500,
@@ -1674,8 +1690,8 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
                 {/* Inline OTP Input */}
                 {otpSent && !otpVerified && (
-                  <div style={{ marginTop: 16, padding: 16, backgroundColor: '#F0F9FF', borderRadius: 12, border: '1px solid #BAE6FD' }}>
-                    <p style={{ fontSize: 13, color: '#0369A1', marginBottom: 12 }}>
+                  <div style={{ marginTop: 16, padding: 16, backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#F0F9FF', borderRadius: 12, border: isDark ? '1px solid rgba(37, 99, 235, 0.3)' : '1px solid #BAE6FD' }}>
+                    <p style={{ fontSize: 13, color: isDark ? '#93C5FD' : '#0369A1', marginBottom: 12 }}>
                       Enter the 6-digit code sent to <strong>{form.adminEmail}</strong>
                     </p>
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
@@ -1696,14 +1712,15 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                             textAlign: 'center',
                             fontSize: 20,
                             fontWeight: 600,
-                            border: '2px solid #D1D5DB',
+                            color: isDark ? '#F9FAFB' : '#111827',
+                            border: isDark ? '2px solid #4B5563' : '2px solid #D1D5DB',
                             borderRadius: 8,
                             outline: 'none',
                             transition: 'all 0.2s',
-                            backgroundColor: isVerifying ? '#F3F4F6' : '#fff',
+                            backgroundColor: isVerifying ? (isDark ? '#374151' : '#F3F4F6') : (isDark ? '#1F2937' : '#fff'),
                           }}
                           onFocus={(e) => { e.target.style.borderColor = '#2563EB'; }}
-                          onBlur={(e) => { e.target.style.borderColor = '#D1D5DB'; }}
+                          onBlur={(e) => { e.target.style.borderColor = isDark ? '#4B5563' : '#D1D5DB'; }}
                         />
                       ))}
                     </div>
@@ -1729,7 +1746,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       >
                         {isSendingOtp ? 'Sending...' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend Code'}
                       </button>
-                      <span style={{ color: '#D1D5DB' }}>|</span>
+                      <span style={{ color: isDark ? '#4B5563' : '#D1D5DB' }}>|</span>
                       <button
                         type="button"
                         onClick={handleChangeEmail}
@@ -1759,7 +1776,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
               {/* Phone Number */}
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>Phone Number</label>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>Phone Number</label>
                 <div style={{ position: 'relative' }}>
                   <Phone style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
                   <input
@@ -1776,7 +1793,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               {/* Passwords */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>Password</label>
+                  <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>Password</label>
                   <div style={{ position: 'relative' }}>
                     <Lock style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
                     <input
@@ -1788,7 +1805,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       style={{
                         ...inputStyle,
                         paddingRight: 40,
-                        borderColor: form.password ? (passwordStrength === 5 ? '#10B981' : passwordStrength >= 3 ? '#F59E0B' : '#EF4444') : '#D1D5DB',
+                        borderColor: form.password ? (passwordStrength === 5 ? '#10B981' : passwordStrength >= 3 ? '#F59E0B' : '#EF4444') : (isDark ? '#4B5563' : '#D1D5DB'),
                       }}
                     />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
@@ -1797,7 +1814,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                   </div>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>Confirm Password</label>
+                  <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 8 }}>Confirm Password</label>
                   <div style={{ position: 'relative' }}>
                     <Lock style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', width: 20, height: 20, color: '#9CA3AF' }} />
                     <input
@@ -1809,7 +1826,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                       style={{
                         ...inputStyle,
                         paddingRight: 40,
-                        borderColor: form.confirmPassword ? (passwordsMatch ? '#10B981' : '#EF4444') : '#D1D5DB',
+                        borderColor: form.confirmPassword ? (passwordsMatch ? '#10B981' : '#EF4444') : (isDark ? '#4B5563' : '#D1D5DB'),
                       }}
                     />
                     <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
@@ -1824,11 +1841,11 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 <div style={{
                   marginBottom: 16,
                   padding: 16,
-                  backgroundColor: '#F9FAFB',
-                  border: '1px solid #E5E7EB',
+                  backgroundColor: isDark ? '#374151' : '#F9FAFB',
+                  border: isDark ? '1px solid #4B5563' : '1px solid #E5E7EB',
                   borderRadius: 12
                 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 10 }}>Password Requirements:</p>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 10 }}>Password Requirements:</p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
                     {[
                       { label: 'At least 8 characters', check: passwordChecks.length },
@@ -1842,12 +1859,12 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                         <CheckCircle style={{
                           width: 16,
                           height: 16,
-                          color: req.check ? '#10B981' : '#D1D5DB',
+                          color: req.check ? '#10B981' : (isDark ? '#4B5563' : '#D1D5DB'),
                           transition: 'color 0.2s'
                         }} />
                         <span style={{
                           fontSize: 13,
-                          color: req.check ? '#059669' : '#6B7280',
+                          color: req.check ? '#059669' : (isDark ? '#9CA3AF' : '#6B7280'),
                           transition: 'color 0.2s'
                         }}>
                           {req.label}
@@ -1858,7 +1875,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                   {/* Strength Bar */}
                   <div style={{ marginTop: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, color: '#6B7280' }}>Password Strength</span>
+                      <span style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>Password Strength</span>
                       <span style={{
                         fontSize: 12,
                         fontWeight: 600,
@@ -1869,7 +1886,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     </div>
                     <div style={{
                       height: 6,
-                      backgroundColor: '#E5E7EB',
+                      backgroundColor: isDark ? '#4B5563' : '#E5E7EB',
                       borderRadius: 3,
                       overflow: 'hidden'
                     }}>
@@ -1915,8 +1932,8 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             </form>
 
             {/* Footer */}
-            <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px solid #E5E7EB', textAlign: 'center' }}>
-              <span style={{ fontSize: 14, color: '#4B5563' }}>
+            <div style={{ marginTop: 24, paddingTop: 24, borderTop: isDark ? '1px solid #374151' : '1px solid #E5E7EB', textAlign: 'center' }}>
+              <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#4B5563' }}>
                 Already have an account?{' '}
                 <button onClick={onSwitchToLogin} style={{ color: '#2563EB', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer' }}>
                   Sign In
@@ -1940,7 +1957,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{ backgroundColor: '#fff', borderRadius: 20, width: '100%', maxWidth: 720, maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 60px rgba(0,0,0,0.3)' }}
+            style={{ backgroundColor: isDark ? '#1F2937' : '#fff', borderRadius: 20, width: '100%', maxWidth: 720, maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: isDark ? '0 25px 60px rgba(0,0,0,0.5)' : '0 25px 60px rgba(0,0,0,0.3)' }}
           >
             {/* Header */}
             <div style={{ padding: '20px 24px', background: 'linear-gradient(135deg, #2563EB, #4338CA)', borderRadius: '20px 20px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -1963,7 +1980,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             </div>
 
             {/* Tabs */}
-            <div style={{ display: 'flex', borderBottom: '1px solid #E5E7EB', backgroundColor: '#F9FAFB', flexShrink: 0 }}>
+            <div style={{ display: 'flex', borderBottom: isDark ? '1px solid #374151' : '1px solid #E5E7EB', backgroundColor: isDark ? '#374151' : '#F9FAFB', flexShrink: 0 }}>
               {([
                 { key: 'terms' as const, label: 'Terms & Conditions', Icon: FileText, agreed: agreedToTerms },
                 { key: 'privacy' as const, label: 'Privacy Policy', Icon: Shield, agreed: agreedToPrivacy },
@@ -1981,7 +1998,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     gap: 8,
                     fontSize: 14,
                     fontWeight: activeTermsTab === key ? 600 : 400,
-                    color: activeTermsTab === key ? '#2563EB' : '#6B7280',
+                    color: activeTermsTab === key ? '#2563EB' : (isDark ? '#9CA3AF' : '#6B7280'),
                     backgroundColor: 'transparent',
                     border: 'none',
                     borderBottom: activeTermsTab === key ? '2px solid #2563EB' : '2px solid transparent',
@@ -2001,29 +2018,29 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               {termsConsentLoading ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 16 }}>
                   <Loader2 style={{ width: 40, height: 40, color: '#2563EB', animation: 'spin 1s linear infinite' }} />
-                  <p style={{ fontSize: 14, color: '#6B7280', margin: 0 }}>Loading documents...</p>
+                  <p style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', margin: 0 }}>Loading documents...</p>
                 </div>
               ) : activeTermsTab === 'terms' ? (
                 termsConsentContent.terms ? (
-                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.terms.content_html }} style={{ fontSize: 14, color: '#374151', lineHeight: 1.7 }} />
+                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.terms.content_html }} style={{ fontSize: 14, color: isDark ? '#D1D5DB' : '#374151', lineHeight: 1.7 }} />
                 ) : (
-                  <p style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', padding: 40 }}>Terms & Conditions content is currently unavailable. You may still proceed.</p>
+                  <p style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', padding: 40 }}>Terms & Conditions content is currently unavailable. You may still proceed.</p>
                 )
               ) : (
                 termsConsentContent.privacy ? (
-                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.privacy.content_html }} style={{ fontSize: 14, color: '#374151', lineHeight: 1.7 }} />
+                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.privacy.content_html }} style={{ fontSize: 14, color: isDark ? '#D1D5DB' : '#374151', lineHeight: 1.7 }} />
                 ) : (
-                  <p style={{ fontSize: 14, color: '#6B7280', textAlign: 'center', padding: 40 }}>Privacy Policy content is currently unavailable. You may still proceed.</p>
+                  <p style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', textAlign: 'center', padding: 40 }}>Privacy Policy content is currently unavailable. You may still proceed.</p>
                 )
               )}
             </div>
 
             {/* Footer — Checkboxes + Create Account */}
-            <div style={{ padding: '20px 24px', borderTop: '2px solid #E5E7EB', backgroundColor: '#F9FAFB', borderRadius: '0 0 20px 20px', flexShrink: 0 }}>
+            <div style={{ padding: '20px 24px', borderTop: isDark ? '2px solid #374151' : '2px solid #E5E7EB', backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: '0 0 20px 20px', flexShrink: 0 }}>
               {/* Acceptance Checkboxes */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
                 {/* Terms & Conditions checkbox — enabled only after content has loaded */}
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: termsConsentLoading ? 'not-allowed' : 'pointer', padding: '10px 12px', backgroundColor: termsConsentLoading ? '#F3F4F6' : agreedToTerms ? '#F0FDF4' : '#fff', border: `1px solid ${termsConsentLoading ? '#E5E7EB' : agreedToTerms ? '#86EFAC' : '#D1D5DB'}`, borderRadius: 10, transition: 'all 0.2s', opacity: termsConsentLoading ? 0.6 : 1 }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: termsConsentLoading ? 'not-allowed' : 'pointer', padding: '10px 12px', backgroundColor: termsConsentLoading ? (isDark ? '#374151' : '#F3F4F6') : agreedToTerms ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4') : (isDark ? '#1F2937' : '#fff'), border: `1px solid ${termsConsentLoading ? (isDark ? '#4B5563' : '#E5E7EB') : agreedToTerms ? (isDark ? 'rgba(16, 185, 129, 0.3)' : '#86EFAC') : (isDark ? '#4B5563' : '#D1D5DB')}`, borderRadius: 10, transition: 'all 0.2s', opacity: termsConsentLoading ? 0.6 : 1 }}>
                   <input
                     type="checkbox"
                     checked={agreedToTerms}
@@ -2031,7 +2048,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     onChange={(e) => setAgreedToTerms(e.target.checked)}
                     style={{ marginTop: 2, width: 17, height: 17, cursor: termsConsentLoading ? 'not-allowed' : 'pointer', accentColor: '#2563EB', flexShrink: 0 }}
                   />
-                  <span style={{ fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
+                  <span style={{ fontSize: 14, color: isDark ? '#D1D5DB' : '#374151', lineHeight: 1.5 }}>
                     I have read and agree to the{' '}
                     <button type="button" onClick={(e) => { e.preventDefault(); setActiveTermsTab('terms'); setVisitedTabs(prev => new Set([...prev, 'terms' as const])); }} style={{ color: '#2563EB', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, textDecoration: 'underline' }}>
                       Terms & Conditions
@@ -2043,7 +2060,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 {/* Privacy Policy checkbox — disabled until content loads and user clicks the Privacy Policy tab */}
                 <label
                   title={termsConsentLoading ? 'Please wait for documents to load' : !visitedTabs.has('privacy') ? 'Please read the Privacy Policy tab first' : undefined}
-                  style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: termsConsentLoading || !visitedTabs.has('privacy') ? 'not-allowed' : 'pointer', padding: '10px 12px', backgroundColor: termsConsentLoading || !visitedTabs.has('privacy') ? '#F3F4F6' : agreedToPrivacy ? '#F0FDF4' : '#fff', border: `1px solid ${termsConsentLoading || !visitedTabs.has('privacy') ? '#E5E7EB' : agreedToPrivacy ? '#86EFAC' : '#D1D5DB'}`, borderRadius: 10, transition: 'all 0.2s', opacity: termsConsentLoading || !visitedTabs.has('privacy') ? 0.6 : 1 }}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: termsConsentLoading || !visitedTabs.has('privacy') ? 'not-allowed' : 'pointer', padding: '10px 12px', backgroundColor: (termsConsentLoading || !visitedTabs.has('privacy')) ? (isDark ? '#374151' : '#F3F4F6') : agreedToPrivacy ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#F0FDF4') : (isDark ? '#1F2937' : '#fff'), border: `1px solid ${(termsConsentLoading || !visitedTabs.has('privacy')) ? (isDark ? '#4B5563' : '#E5E7EB') : agreedToPrivacy ? (isDark ? 'rgba(16, 185, 129, 0.3)' : '#86EFAC') : (isDark ? '#4B5563' : '#D1D5DB')}`, borderRadius: 10, transition: 'all 0.2s', opacity: termsConsentLoading || !visitedTabs.has('privacy') ? 0.6 : 1 }}
                 >
                   <input
                     type="checkbox"
@@ -2052,7 +2069,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     onChange={(e) => setAgreedToPrivacy(e.target.checked)}
                     style={{ marginTop: 2, width: 17, height: 17, cursor: termsConsentLoading || !visitedTabs.has('privacy') ? 'not-allowed' : 'pointer', accentColor: '#2563EB', flexShrink: 0 }}
                   />
-                  <span style={{ fontSize: 14, color: visitedTabs.has('privacy') ? '#374151' : '#9CA3AF', lineHeight: 1.5 }}>
+                  <span style={{ fontSize: 14, color: visitedTabs.has('privacy') ? (isDark ? '#D1D5DB' : '#374151') : '#9CA3AF', lineHeight: 1.5 }}>
                     I have read and agree to the{' '}
                     <button type="button" onClick={(e) => { e.preventDefault(); setActiveTermsTab('privacy'); setVisitedTabs(prev => new Set([...prev, 'privacy' as const])); }} style={{ color: '#2563EB', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: 0, textDecoration: 'underline' }}>
                       Privacy Policy
@@ -2071,7 +2088,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                 style={{
                   width: '100%',
                   padding: '14px 24px',
-                  background: agreedToTerms && agreedToPrivacy && !termsConsentLoading ? 'linear-gradient(135deg, #2563EB, #4338CA)' : '#E5E7EB',
+                  background: agreedToTerms && agreedToPrivacy && !termsConsentLoading ? 'linear-gradient(135deg, #2563EB, #4338CA)' : (isDark ? '#374151' : '#E5E7EB'),
                   color: agreedToTerms && agreedToPrivacy && !termsConsentLoading ? '#ffffff' : '#9CA3AF',
                   fontSize: 16,
                   fontWeight: 600,

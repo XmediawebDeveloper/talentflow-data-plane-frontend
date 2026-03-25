@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTheme } from 'next-themes';
 import { Check, Sparkles, Building2, Users, Zap, ArrowRight, Loader2 } from "lucide-react";
 
 interface PricingPageProps {
@@ -84,9 +85,10 @@ const getGradientForPlan = (planName: string, index: number): string => {
 };
 
 export default function PricingPage({ onNavigate }: PricingPageProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [isYearly, setIsYearly] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [plans, setPlans] = useState<DisplayPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -204,7 +206,6 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     };
     checkScreen();
     window.addEventListener('resize', checkScreen);
-    setIsDark(document.documentElement.classList.contains('dark'));
     return () => window.removeEventListener('resize', checkScreen);
   }, []);
 

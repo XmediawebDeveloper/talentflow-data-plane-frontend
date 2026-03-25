@@ -3,6 +3,7 @@
 import { Menu, X, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { useTheme } from 'next-themes';
 
 const navItems = [
   { label: "Home", page: "home" },
@@ -23,13 +24,11 @@ interface PublicHeaderProps {
 
 export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: PublicHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   useEffect(() => {
-    const isDarkMode = document.documentElement.classList.contains("dark");
-    setIsDark(isDarkMode);
-
     // Check if mobile
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -40,15 +39,7 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
   }, []);
 
   const toggleDarkMode = () => {
-    const newIsDark = !isDark;
-    setIsDark(newIsDark);
-    if (newIsDark) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    }
+    setTheme(isDark ? 'light' : 'dark');
   };
 
   // Inline styles

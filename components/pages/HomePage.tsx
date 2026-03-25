@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTheme } from 'next-themes';
 import {
   ArrowRight,
   Play,
@@ -28,13 +29,14 @@ interface HomePageProps {
 }
 
 export default function HomePage({ onNavigate }: HomePageProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [demoModalOpen, setDemoModalOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSmallMobile, setIsSmallMobile] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
 
   useEffect(() => {
@@ -46,9 +48,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     };
     checkScreen();
     window.addEventListener('resize', checkScreen);
-
-    // Check dark mode
-    setIsDark(document.documentElement.classList.contains('dark'));
 
     return () => window.removeEventListener('resize', checkScreen);
   }, []);

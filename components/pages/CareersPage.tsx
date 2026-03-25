@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTheme } from 'next-themes';
 import {
   Briefcase,
   MapPin,
@@ -19,9 +20,10 @@ interface CareersPageProps {
 }
 
 export default function CareersPage({ onNavigate }: CareersPageProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [selectedDepartment, setSelectedDepartment] = useState("All");
 
   useEffect(() => {
@@ -32,7 +34,6 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     };
     checkScreen();
     window.addEventListener('resize', checkScreen);
-    setIsDark(document.documentElement.classList.contains('dark'));
     return () => window.removeEventListener('resize', checkScreen);
   }, []);
 
@@ -137,8 +138,8 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     border: 'none',
     backgroundColor: isActive
       ? (isDark ? '#8B5CF6' : '#7C3AED')
-      : (isDark ? '#1E293B' : '#F3F4F6'),
-    color: isActive ? '#ffffff' : (isDark ? '#CBD5E1' : '#374151'),
+      : (isDark ? '#374151' : '#F3F4F6'),
+    color: isActive ? '#ffffff' : (isDark ? '#D1D5DB' : '#374151'),
     transition: 'all 0.2s',
   });
 
