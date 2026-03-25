@@ -463,18 +463,18 @@ function CompletePaymentContent() {
                 </div>
 
                 {/* GST & Total Breakdown */}
-                <div style={{ padding: '12px 0', borderTop: '1px solid #E5E7EB', borderBottom: '1px solid #E5E7EB' }}>
+                <div style={{ padding: '12px 0', borderTop: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`, borderBottom: `1px solid ${isDark ? '#374151' : '#E5E7EB'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, color: '#6B7280' }}>Subtotal</span>
-                    <span style={{ fontSize: 13, color: '#374151' }}>{formatCurrency(planDetails.base_price, planDetails.currency)}</span>
+                    <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' }}>Subtotal</span>
+                    <span style={{ fontSize: 13, color: isDark ? '#D1D5DB' : '#374151' }}>{formatCurrency(planDetails.base_price, planDetails.currency)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, color: '#6B7280' }}>GST (18%)</span>
-                    <span style={{ fontSize: 13, color: '#374151' }}>{formatCurrency(gstAmount, planDetails.currency)}</span>
+                    <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' }}>GST (18%)</span>
+                    <span style={{ fontSize: 13, color: isDark ? '#D1D5DB' : '#374151' }}>{formatCurrency(gstAmount, planDetails.currency)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: '1px dashed #E5E7EB' }}>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>Total</span>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{formatCurrency(totalAmount, planDetails.currency)}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px dashed ${isDark ? '#374151' : '#E5E7EB'}` }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>Total</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>{formatCurrency(totalAmount, planDetails.currency)}</span>
                   </div>
                 </div>
               </>
@@ -483,7 +483,7 @@ function CompletePaymentContent() {
 
           {/* Included Seats */}
           {planDetails.included_seats && (
-            <div style={{ marginTop: 12, padding: 12, backgroundColor: '#EEF2FF', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? 'rgba(67,56,202,0.2)' : '#EEF2FF', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 14, color: '#4338CA', fontWeight: 500 }}>Included Team Seats</span>
               <span style={{ fontSize: 16, fontWeight: 700, color: '#4338CA' }}>{planDetails.included_seats}</span>
             </div>
