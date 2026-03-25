@@ -9,6 +9,7 @@ import JDCreation from '@/components/JDCreation';
 import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // 1:1 JD-Assessment relationship: JDs that already have assessments cannot be selected
 
@@ -52,6 +53,8 @@ interface SectionConfig {
 export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings }: AssessmentCreationProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isTenantAdmin, user } = useAuth();
+  const canCreateJd = isTenantAdmin || (user?.permissions?.canCreateJd ?? false);
   const { available: assessmentAvailable } = usePlanFeature('assessment');
 
   // Read initial step from URL, default to 'select-jd'
@@ -354,15 +357,30 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     { id: 'hr-9', text: 'Are you open to learning new technologies?', type: 'Yes/No', time: 1, correct_answer: 'Yes' },
     { id: 'hr-10', text: 'Can you join immediately or within notice period?', type: 'Yes/No', time: 1, correct_answer: 'Yes' },
   ];
-  const [selectedHRQuestions, setSelectedHRQuestions] = useState<string[]>(hrQuestionBank.map(q => q.id)); // All selected by default
+  const HR_QUESTION_LIMIT = 5;
+  const [selectedHRQuestions, setSelectedHRQuestions] = useState<string[]>(hrQuestionBank.slice(0, HR_QUESTION_LIMIT).map(q => q.id)); // First 5 selected by default
 
   const toggleHRQuestion = (id: string) => {
-    setSelectedHRQuestions(prev =>
-      prev.includes(id) ? prev.filter(q => q !== id) : [...prev, id]
-    );
+    setSelectedHRQuestions(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(q => q !== id);
+      }
+      if (prev.length >= HR_QUESTION_LIMIT) {
+        toast.error(`Maximum ${HR_QUESTION_LIMIT} HR questions allowed`);
+        return prev;
+      }
+      return [...prev, id];
+    });
   };
 
-  const selectAllHR = () => setSelectedHRQuestions(hrQuestionBank.map(q => q.id));
+  const selectAllHR = () => {
+    if (hrQuestionBank.length > HR_QUESTION_LIMIT) {
+      toast.error(`Maximum ${HR_QUESTION_LIMIT} HR questions allowed. Selecting first ${HR_QUESTION_LIMIT}.`);
+      setSelectedHRQuestions(hrQuestionBank.slice(0, HR_QUESTION_LIMIT).map(q => q.id));
+    } else {
+      setSelectedHRQuestions(hrQuestionBank.map(q => q.id));
+    }
+  };
   const deselectAllHR = () => setSelectedHRQuestions([]);
 
   // Store previous percentages when coding is disabled (to restore when re-enabled)
@@ -1330,14 +1348,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     Choose the JD that this assessment will be based on
                   </p>
                 </div>
-                <button
-                  onClick={handleCreateNewJD}
-                  className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 text-sm flex-shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Create New Job</span>
-                  <span className="sm:hidden">New Job</span>
-                </button>
+                {canCreateJd && (
+                  <button
+                    onClick={handleCreateNewJD}
+                    className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 text-sm flex-shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Create New Job</span>
+                    <span className="sm:hidden">New Job</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1472,13 +1492,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
                     <p className="text-sm sm:text-base">No published jobs available</p>
                     <p className="text-xs sm:text-sm mt-1">Create and publish a Job first to create assessments</p>
-                    <button
-                      onClick={handleCreateNewJD}
-                      className="mt-4 px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 mx-auto text-sm"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Create New Job
-                    </button>
+                    {canCreateJd && (
+                      <button
+                        onClick={handleCreateNewJD}
+                        className="mt-4 px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 mx-auto text-sm"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Create New Job
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1585,7 +1607,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                             <span className="px-1.5 sm:px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">No Timer</span>
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5 leading-snug">
-                            {selectedHRQuestions.length} of {hrQuestionBank.length} questions selected — select questions in Section Distribution below
+                            {selectedHRQuestions.length} of {HR_QUESTION_LIMIT} questions selected (max {HR_QUESTION_LIMIT}) — select questions in Section Distribution below
                           </p>
                         </div>
                       </div>
@@ -1872,7 +1894,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">No Timer</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="text-gray-500">{selectedHRQuestions.length}/{hrQuestionBank.length} selected</span>
+                        <span className={`${selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-orange-600 font-medium' : 'text-gray-500'}`}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
                         <button onClick={selectAllHR} className="text-blue-600 hover:text-blue-800 font-medium">All</button>
                         <span className="text-gray-300">|</span>
                         <button onClick={deselectAllHR} className="text-gray-500 hover:text-gray-700 font-medium">None</button>

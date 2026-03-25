@@ -192,6 +192,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     canReadJD: hasPermission('canReadJD'),
     canViewAssessments: hasPermission('canViewAssessments'),
     canUploadResumes: hasPermission('canUploadResumes'),
+    canRunScoring: hasPermission('canRunScoring'),
   };
 
   // ✅ PERMISSIONS: Get feature flags for Quick Actions
@@ -1365,7 +1366,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
               )}
 
               {/* 5. Resume Scoring - Score resumes in this JD page (shows popup, no navigation) */}
-              {permissions.canUploadResumes && hasPlanFeature('resume_scoring') && (
+              {permissions.canRunScoring && hasPlanFeature('resume_scoring') && (
                 <QuickActionButton
                   icon={<Target className="w-4 h-4" />}
                   label="Resume Scoring"

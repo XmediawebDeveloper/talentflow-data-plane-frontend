@@ -1,9 +1,10 @@
 'use client';
 
-import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power, Target } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power, Target, Download } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { exportToCSV, ExportColumn } from '@/lib/utils/exportUtils';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -13,6 +14,7 @@ import JDCreation from '@/components/JDCreation';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 // ✅ PERMISSION FIX: Import permission hook for CRUD checks
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -38,11 +40,25 @@ export default function JDListPage() {
   const dialog = useGlobalDialog();
   // ✅ PERMISSION FIX: Get JD CRUD permissions
   const jdPerms = useModulePermissions('jd');
+  const { isTenantAdmin, user } = useAuth();
+  const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
   const [jds, setJds] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [bulkActionsOpen, setBulkActionsOpen] = useState(false);
+  const bulkActionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (bulkActionsRef.current && !bulkActionsRef.current.contains(e.target as Node)) {
+        setBulkActionsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -345,6 +361,73 @@ export default function JDListPage() {
     );
   };
 
+  const handleExportJDs = () => {
+    const jdsToExport = selectedJds.length > 0
+      ? jds.filter(jd => selectedJds.includes(jd.id))
+      : jds;
+
+    if (jdsToExport.length === 0) {
+      toast.error('No job descriptions to export');
+      return;
+    }
+
+    const exportData = jdsToExport.map(jd => ({
+      job_id: jd.job_id || '-',
+      title: jd.title,
+      status: jd.status.charAt(0).toUpperCase() + jd.status.slice(1),
+      creation_method: jd.creation_method === 'ai_generated' ? 'AI' : 'Manual',
+      current_version: jd.current_version ? `v${jd.current_version}` : 'v1',
+      industry_type: jd.industry_type || '-',
+      department: jd.department || '-',
+      employment_type: jd.employment_type ? formatEmploymentType(jd.employment_type) : '-',
+      remote_type: jd.remote_type ? formatEmploymentType(jd.remote_type) : '-',
+      experience: jd.experience_min != null && jd.experience_max != null
+        ? `${jd.experience_min}-${jd.experience_max} years`
+        : jd.experience_min != null
+        ? `${jd.experience_min}+ years`
+        : '-',
+      salary: jd.salary_min && jd.salary_max
+        ? `${jd.salary_currency || ''} ${jd.salary_min}-${jd.salary_max}`.trim()
+        : '-',
+      location: jd.location || '-',
+      job_level: jd.job_level || '-',
+      published_at: jd.published_at ? formatISTDate(jd.published_at) : '-',
+      created_at: formatISTDate(jd.created_at),
+      updated_at: formatISTDate(jd.updated_at),
+      created_by_name: jd.created_by_name || '-',
+      applicants_count: jd.applicants_count || 0,
+      scored_resumes_count: jd.scored_resumes_count || 0,
+      assessments_count: jd.assessments_count || 0,
+    }));
+
+    const columns: ExportColumn[] = [
+      { key: 'job_id', header: 'JD ID' },
+      { key: 'title', header: 'Title' },
+      { key: 'status', header: 'Status' },
+      { key: 'creation_method', header: 'Creation Method' },
+      { key: 'current_version', header: 'Version' },
+      { key: 'industry_type', header: 'Industry' },
+      { key: 'department', header: 'Department' },
+      { key: 'employment_type', header: 'Employment Type' },
+      { key: 'remote_type', header: 'Work Mode' },
+      { key: 'experience', header: 'Experience' },
+      { key: 'salary', header: 'Salary Range' },
+      { key: 'location', header: 'Location' },
+      { key: 'job_level', header: 'Job Level' },
+      { key: 'published_at', header: 'Posted Date' },
+      { key: 'created_at', header: 'Created Date' },
+      { key: 'updated_at', header: 'Last Updated' },
+      { key: 'created_by_name', header: 'Created By' },
+      { key: 'applicants_count', header: 'Applicants' },
+      { key: 'scored_resumes_count', header: 'Scored Resumes' },
+      { key: 'assessments_count', header: 'Assessments' },
+    ];
+
+    const dateStr = new Date().toISOString().split('T')[0];
+    exportToCSV(exportData, columns, `job-descriptions-${dateStr}`);
+    toast.success(`Exported ${jdsToExport.length} job description${jdsToExport.length !== 1 ? 's' : ''}`);
+  };
+
   const getStatusBadge = (status: string, currentVersion?: number) => {
     // Show "Republished" if published and version > 1
     const isRepublished = status === 'published' && currentVersion && currentVersion > 1;
@@ -434,25 +517,36 @@ export default function JDListPage() {
               Manage your job descriptions ({total} total)
             </p>
           </div>
-          <button
-            onClick={() => {
-              // FIX-003: Open sheet instead of navigating
-              if (canCreateJD) {
-                setEditingJDId(null);
-                setShowJDSheet(true);
-              }
-            }}
-            disabled={!canCreateJD || accessCheckLoading}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-              canCreateJD
-                ? 'bg-gray-800 text-white hover:bg-gray-900'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
-            title={!canCreateJD ? accessError || 'Cannot create JD' : 'Create a new job description'}
-          >
-            <Plus className="w-4 h-4" />
-            Create New JD
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportJDs}
+              disabled={jds.length === 0}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={selectedJds.length > 0 ? `Export ${selectedJds.length} selected JDs` : 'Export all JDs'}
+            >
+              <Download className="w-4 h-4" />
+              {selectedJds.length > 0 ? `Export (${selectedJds.length})` : 'Export CSV'}
+            </button>
+            <button
+              onClick={() => {
+                // FIX-003: Open sheet instead of navigating
+                if (canCreateJD) {
+                  setEditingJDId(null);
+                  setShowJDSheet(true);
+                }
+              }}
+              disabled={!canCreateJD || accessCheckLoading}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
+                canCreateJD
+                  ? 'bg-gray-800 text-white hover:bg-gray-900'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+              title={!canCreateJD ? accessError || 'Cannot create JD' : 'Create a new job description'}
+            >
+              <Plus className="w-4 h-4" />
+              Create New JD
+            </button>
+          </div>
         </div>
 
         {/* JD03: Status Tabs */}
@@ -478,20 +572,43 @@ export default function JDListPage() {
             <div className="flex items-center gap-4">
               <span className="font-medium">{selectedJds.length} selected</span>
               <button
-                onClick={() => setSelectedJds([])}
+                onClick={() => { setSelectedJds([]); setBulkActionsOpen(false); }}
                 className="text-gray-300 hover:text-white flex items-center gap-1"
               >
                 <X className="w-4 h-4" />
                 Clear
               </button>
             </div>
-            <button
-              onClick={handleBulkDelete}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete Selected
-            </button>
+            <div className="relative" ref={bulkActionsRef}>
+              <button
+                onClick={() => setBulkActionsOpen(prev => !prev)}
+                className="flex items-center gap-2 px-4 py-2 bg-white text-gray-800 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+              >
+                Bulk Actions
+                <svg className={`w-4 h-4 transition-transform ${bulkActionsOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {bulkActionsOpen && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                  <button
+                    onClick={() => { handleExportJDs(); setBulkActionsOpen(false); }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <Download className="w-4 h-4 text-gray-500" />
+                    Export Selected to CSV
+                  </button>
+                  <div className="border-t border-gray-100 my-1" />
+                  <button
+                    onClick={() => { handleBulkDelete(); setBulkActionsOpen(false); }}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Selected
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -711,8 +828,8 @@ export default function JDListPage() {
                             <Users className="w-4 h-4" />
                             View Applicants
                           </button>
-                          {/* Score Resumes - only for published JDs */}
-                          {jd.status === 'published' && (
+                          {/* Score Resumes - only for published JDs + scoring permission */}
+                          {jd.status === 'published' && canRunScoring && (
                             <button
                               onClick={() => { router.push(`/recruitment/resume-scoring?jd_id=${jd.id}&mode=new`); setActiveDropdown(null); }}
                               className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
