@@ -1879,7 +1879,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               </div>
             </div>
 
-            {/* Skill coverage panel (timed mode only) */}
+            {/* Skill coverage panel (timed + flexible modes) */}
             {skillCoverage && (
               <div className="px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                 <div className="flex items-center justify-between mb-1.5">

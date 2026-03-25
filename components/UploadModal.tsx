@@ -649,7 +649,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       />
                     </div>
                     <div className="flex items-center justify-between mt-1">
-                      <span className="text-[10px] sm:text-xs text-gray-600">
+                      <span className="text-[10px] sm:text-xs text-gray-700 font-medium">
                         {quotaInfo.subscription.used.toLocaleString()} used
                       </span>
                       {(quotaInfo.status === 'APPROACHING' || quotaInfo.status === 'WARNING' || quotaInfo.status === 'CRITICAL') && (
@@ -674,13 +674,13 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               onClick={() => handleTabSwitch('single')}
               className={`flex-1 p-2.5 sm:p-4 rounded-lg border-2 transition-all ${
                 activeTab === 'single'
-                  ? 'border-gray-800 bg-gray-50'
+                  ? 'border-blue-600 bg-blue-50 shadow-sm'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="text-center">
-                <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-1.5 sm:mb-2 ${activeTab === 'single' ? 'text-gray-800' : 'text-gray-400'}`} />
-                <div className={`text-xs sm:text-sm mb-0.5 sm:mb-1 ${activeTab === 'single' ? 'text-gray-800' : 'text-gray-900'}`}>
+                <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-1.5 sm:mb-2 ${activeTab === 'single' ? 'text-blue-600' : 'text-gray-400'}`} />
+                <div className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 ${activeTab === 'single' ? 'text-blue-700' : 'text-gray-900'}`}>
                   Single Upload
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">Upload one resume at a time</div>
@@ -690,13 +690,13 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               onClick={() => handleTabSwitch('bulk')}
               className={`flex-1 p-2.5 sm:p-4 rounded-lg border-2 transition-all ${
                 activeTab === 'bulk'
-                  ? 'border-gray-800 bg-gray-50'
+                  ? 'border-blue-600 bg-blue-50 shadow-sm'
                   : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="text-center">
-                <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-1.5 sm:mb-2 ${activeTab === 'bulk' ? 'text-gray-800' : 'text-gray-400'}`} />
-                <div className={`text-xs sm:text-sm mb-0.5 sm:mb-1 ${activeTab === 'bulk' ? 'text-gray-800' : 'text-gray-900'}`}>
+                <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-1.5 sm:mb-2 ${activeTab === 'bulk' ? 'text-blue-600' : 'text-gray-400'}`} />
+                <div className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 ${activeTab === 'bulk' ? 'text-blue-700' : 'text-gray-900'}`}>
                   Bulk Upload
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">Upload multiple resumes (up to 100)</div>

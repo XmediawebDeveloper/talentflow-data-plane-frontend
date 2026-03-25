@@ -98,11 +98,11 @@ interface SkillSectionProps {
   config: CategoryConfig;
   jdSkillNames: string[];   // original from JD (read-only label)
   mode: InterviewMode;
-  fixedMinutes: number;
+  questionCount: number;
   onChange: (updated: Partial<CategoryConfig>) => void;
 }
 
-function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinutes, onChange }: SkillSectionProps) {
+function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, onChange }: SkillSectionProps) {
   const [customInput, setCustomInput] = useState('');
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
@@ -216,53 +216,20 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
   return (
     <div className="border border-gray-200 rounded-lg bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+      <div className="flex items-center px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <Brain className={`w-4 h-4 ${color.accent}`} />
           <span className="font-semibold text-gray-900 text-sm">{title}</span>
-          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 border border-gray-200">
-            {config.percentage}% scoring weight
-          </span>
           {mode === 'fixed' && (
-            <span className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-600 border border-blue-200">
-              <Timer className="w-3 h-3" />
-              {fixedMinutes} min
+            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+              {questionCount} questions
             </span>
           )}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-500">Weight</label>
-            <div className="flex items-center">
-              <input
-                type="number"
-                min={10}
-                max={100}
-                value={config.percentage}
-                onChange={e => {
-                  const raw = e.target.value;
-                  if (raw === '') return;
-                  const v = Math.min(100, parseInt(raw));
-                  if (!isNaN(v) && v >= 0) {
-                    setWeightError(v < 10);
-                    onChange({ percentage: v });
-                  }
-                }}
-                onBlur={() => {
-                  if (config.percentage < 10) setWeightError(true);
-                }}
-                className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 ${
-                  weightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-gray-400'
-                }`}
-              />
-              <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-gray-50 ${
-                weightError ? 'border-red-400 text-red-600' : 'border-gray-300 text-gray-600'
-              }`}>%</span>
-            </div>
-            {weightError && (
-              <span className="text-[11px] text-red-500 ml-1">Min 10%</span>
-            )}
-          </div>
+          {mode === 'flexible' && (
+            <span className="px-2 py-0.5 text-xs rounded-full bg-purple-50 text-purple-600 border border-purple-200">
+              flexible questions
+            </span>
+          )}
         </div>
       </div>
 
@@ -401,15 +368,13 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
 /* ─────────────────────────────────────────────────────────────────────── */
 
 interface HRSectionProps {
-  percentage: number;
   mode: InterviewMode;
   enabled: boolean;
+  questionCount: number;
   onToggle: () => void;
-  onPctChange: (v: number) => void;
 }
 
-function HRSection({ percentage, mode, enabled, onToggle, onPctChange }: HRSectionProps) {
-  const [hrWeightError, setHrWeightError] = useState(false);
+function HRSection({ mode, enabled, questionCount, onToggle }: HRSectionProps) {
   const hrFocusAreas = [
     { icon: MessageSquare, label: 'Behavioural', desc: 'Past behaviour & situational responses' },
     { icon: Shield,        label: 'Cultural Fit', desc: 'Values, work-style & team alignment' },
@@ -429,47 +394,17 @@ function HRSection({ percentage, mode, enabled, onToggle, onPctChange }: HRSecti
           <span className="px-2 py-0.5 text-[11px] rounded-full bg-blue-50 text-blue-600 border border-blue-200 font-medium">
             Qualitative Only — Non-Scoring
           </span>
-          {mode === 'fixed' && enabled && (
-            <span className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-600 border border-blue-200">
-              <Timer className="w-3 h-3" />
-              {FIXED_TIME.hr} min
+          {enabled && mode === 'fixed' && (
+            <span className="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+              {questionCount} questions
+            </span>
+          )}
+          {enabled && mode === 'flexible' && (
+            <span className="px-2 py-0.5 text-xs rounded-full bg-purple-50 text-purple-600 border border-purple-200">
+              flexible questions
             </span>
           )}
         </div>
-        {enabled && (
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-gray-500">Weight</label>
-            <div className="flex items-center">
-              <input
-                type="number"
-                min={10}
-                max={100}
-                value={percentage}
-                onChange={e => {
-                  const raw = e.target.value;
-                  if (raw === '') return;
-                  const v = Math.min(100, parseInt(raw));
-                  if (!isNaN(v) && v >= 0) {
-                    setHrWeightError(v < 10);
-                    onPctChange(v);
-                  }
-                }}
-                onBlur={() => {
-                  if (percentage < 10) setHrWeightError(true);
-                }}
-                className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 ${
-                  hrWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-gray-400'
-                }`}
-              />
-              <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-gray-50 ${
-                hrWeightError ? 'border-red-400 text-red-600' : 'border-gray-300 text-gray-600'
-              }`}>%</span>
-              {hrWeightError && (
-                <span className="text-[11px] text-red-500 ml-1">Min 10%</span>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {enabled && (
@@ -883,6 +818,20 @@ export default function AIInterviewConfig() {
   const totalPct = mth.percentage + (nth.enabled ? nth.percentage : 0) + (hrEnabled ? hrPct : 0);
   const pctValid = totalPct === 100;
 
+  // Static question distribution based on enabled sections (timed mode: total=15)
+  const timedQDist = (() => {
+    const mhs = true;
+    const nhs = nth.enabled;
+    const hr  = hrEnabled;
+    if (mhs && nhs && hr)  return { mth: 8, nth: 4, hr: 3 };
+    if (mhs && nhs)        return { mth: 9, nth: 6, hr: 0 };
+    if (mhs && hr)         return { mth: 10, nth: 0, hr: 5 };
+    if (nhs && hr)         return { mth: 0, nth: 9, hr: 6 };
+    if (mhs)               return { mth: 15, nth: 0, hr: 0 };
+    if (nhs)               return { mth: 0, nth: 15, hr: 0 };
+    return                        { mth: 0, nth: 0, hr: 15 };
+  })();
+
   /* ── Video handlers ── */
   const handleVideoUpload = async (file: File, skipDurationCheck = false) => {
     setVideoDurationError('');
@@ -1083,7 +1032,7 @@ export default function AIInterviewConfig() {
   const [generatingClusters, setGeneratingClusters] = useState(false);
 
   const handleContinueToClusters = async () => {
-    if (!selectedJd || !pctValid) return;
+    if (!selectedJd) return;
     isNavigatingRef.current = true;
 
     // 1. Save draft first
@@ -1265,9 +1214,9 @@ export default function AIInterviewConfig() {
                       Candidate response time is capped. AI narration excluded.
                     </p>
                     <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'fixed' ? 'text-gray-400' : 'text-gray-400'}`}>
-                      {hrEnabled && <div>HR Round → {fixedHrMin} min</div>}
-                      <div>Must-to-Have → {fixedMthMin} min</div>
-                      {nth.enabled && <div>Nice-to-Have → {fixedNthMin} min</div>}
+                      <div>Must-to-Have → {timedQDist.mth} questions</div>
+                      {nth.enabled && <div>Nice-to-Have → {timedQDist.nth} questions</div>}
+                      {hrEnabled && <div>HR Round → {timedQDist.hr} questions</div>}
                     </div>
                   </button>
 
@@ -1286,9 +1235,9 @@ export default function AIInterviewConfig() {
                       Candidate response time is capped. AI narration excluded.
                     </p>
                     <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'flexible' ? 'text-gray-400' : 'text-gray-400'}`}>
-                      {hrEnabled && <div>HR Round → {fixedHrMin} min</div>}
-                      <div>Must-to-Have → {fixedMthMin} min</div>
-                      {nth.enabled && <div>Nice-to-Have → {fixedNthMin} min</div>}
+                      <div>Must-to-Have → flexible questions</div>
+                      {nth.enabled && <div>Nice-to-Have → flexible questions</div>}
+                      {hrEnabled && <div>HR Round → flexible questions</div>}
                     </div>
                   </button>
                 </div>
@@ -1303,7 +1252,7 @@ export default function AIInterviewConfig() {
               config={mth}
               jdSkillNames={selectedJd.must_have_skills || []}
               mode={mode}
-              fixedMinutes={fixedMthMin}
+              questionCount={timedQDist.mth}
               onChange={patch => setMth(prev => ({ ...prev, ...patch }))}
             />
 
@@ -1317,9 +1266,6 @@ export default function AIInterviewConfig() {
                   </label>
                   <Sparkles className="w-4 h-4 text-indigo-600" />
                   <span className="font-semibold text-gray-900 text-sm">Nice-To-Have Skills</span>
-                  {!nth.enabled && mode === 'fixed' && (
-                    <span className="text-[11px] text-gray-400 italic">Disabled — Must-to-Have gets full 30 min</span>
-                  )}
                 </div>
               </div>
 
@@ -1331,7 +1277,7 @@ export default function AIInterviewConfig() {
                     config={nth}
                     jdSkillNames={selectedJd.nice_to_have_skills || []}
                     mode={mode}
-                    fixedMinutes={fixedNthMin}
+                    questionCount={timedQDist.nth}
                     onChange={patch => setNth(prev => ({ ...prev, ...patch }))}
                   />
                 </div>
@@ -1340,11 +1286,10 @@ export default function AIInterviewConfig() {
 
             {/* ── HR ── */}
             <HRSection
-              percentage={hrPct}
               mode={mode}
               enabled={hrEnabled}
+              questionCount={timedQDist.hr}
               onToggle={() => setHrEnabled(e => !e)}
-              onPctChange={setHrPct}
             />
 
 
@@ -1614,86 +1559,48 @@ export default function AIInterviewConfig() {
             <div className="bg-white border border-gray-200 rounded-lg p-4 lg:sticky lg:top-6">
               <h3 className="font-semibold text-gray-900 text-sm mb-4">Configuration Summary</h3>
 
-              {/* Weightage visual */}
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                  <span>Scoring Weight Distribution</span>
-                  <span className={`font-semibold ${pctValid ? 'text-green-600' : 'text-red-500'}`}>
-                    {totalPct}% / 100%
+              {/* Question distribution */}
+              <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
+                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                  <span className="text-xs font-medium text-gray-500">
+                    {mode === 'fixed' ? 'Question Budget (Total: 15)' : 'Question Coverage'}
                   </span>
                 </div>
-                {[
-                  { label: 'Must-to-Have', pct: mth.percentage, color: 'bg-purple-500' },
-                  ...(nth.enabled ? [{ label: 'Nice-to-Have', pct: nth.percentage, color: 'bg-indigo-400' }] : []),
-                  ...(hrEnabled ? [{ label: 'HR Round', pct: hrPct, color: 'bg-blue-400' }] : []),
-                ].map(({ label, pct, color }) => (
-                  <div key={label}>
-                    <div className="flex items-center justify-between text-xs mb-0.5">
-                      <span className="text-gray-600">{label}</span>
-                      <span className="font-medium text-gray-900">{pct}%</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {!pctValid && (
-                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100 mb-4">
-                  <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-red-600">Weights must total 100%. Adjust Must-to-Have, Nice-to-Have, or HR percentages.</p>
-                </div>
-              )}
-
-              {/* Time allocation (fixed mode) */}
-              {mode === 'fixed' && (
-                <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
-                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-                    <span className="text-xs font-medium text-gray-500">Fixed Time Allocation</span>
-                  </div>
-                  <table className="w-full text-xs">
-                    <tbody>
-                      {hrEnabled && (
-                        <tr className="border-b border-gray-50">
-                          <td className="px-3 py-2 text-gray-600">HR Round</td>
-                          <td className="px-3 py-2 text-gray-400">{hrPct}%</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin} min</td>
-                        </tr>
-                      )}
+                <table className="w-full text-xs">
+                  <tbody>
+                    <tr className="border-b border-gray-50">
+                      <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                      <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                        {mode === 'fixed' ? `${timedQDist.mth} questions` : 'flexible'}
+                      </td>
+                    </tr>
+                    {nth.enabled && (
                       <tr className="border-b border-gray-50">
-                        <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                        <td className="px-3 py-2 text-gray-400">{mth.percentage}%</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin} min</td>
+                        <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                          {mode === 'fixed' ? `${timedQDist.nth} questions` : 'flexible'}
+                        </td>
                       </tr>
-                      {nth.enabled && (
-                        <tr>
-                          <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                          <td className="px-3 py-2 text-gray-400">{nth.percentage}%</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin} min</td>
-                        </tr>
-                      )}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-gray-50 border-t border-gray-200">
-                        <td className="px-3 py-2 font-semibold text-gray-900" colSpan={2}>Total</td>
-                        <td className="px-3 py-2 text-right font-bold text-gray-900">{totalFixed} min</td>
+                    )}
+                    {hrEnabled && (
+                      <tr>
+                        <td className="px-3 py-2 text-gray-600">HR Round</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                          {mode === 'fixed' ? `${timedQDist.hr} questions` : 'flexible'}
+                        </td>
                       </tr>
-                    </tfoot>
-                  </table>
-                  <p className="px-3 py-2 text-[11px] text-gray-400 bg-gray-50 border-t border-gray-100">
-                    AI narration time excluded from all counts
-                  </p>
-                </div>
-              )}
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
               {/* Actions */}
               <div className="space-y-2">
                 <button
                   onClick={handleContinueToClusters}
-                  disabled={!pctValid || savingDraft || generatingClusters}
+                  disabled={savingDraft || generatingClusters}
                   className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
-                    pctValid && !savingDraft && !generatingClusters
+                    !savingDraft && !generatingClusters
                       ? 'bg-gray-900 text-white hover:bg-gray-800'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}

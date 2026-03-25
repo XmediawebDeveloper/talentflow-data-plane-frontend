@@ -74,9 +74,9 @@ export function LandingPageContent() {
 
         <div className="container relative mx-auto max-w-[1400px] px-4 sm:px-6 py-12 sm:py-16 md:py-20">
           <div className="text-center space-y-5 sm:space-y-6 md:space-y-8">
-            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-full bg-white/80 dark:bg-white/10 border border-white/20 dark:border-white/10 backdrop-blur-md">
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-full bg-gray-50 border border-gray-200 dark:border-white/20 backdrop-blur-md">
               <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#667EEA] dark:text-[#A78BFA]" />
-              <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
+              <span className="text-xs sm:text-sm font-medium text-gray-700">
                 Rated 4.9/5 by 2,500+ recruitment teams
               </span>
               <div className="flex gap-0.5">
@@ -122,7 +122,7 @@ export function LandingPageContent() {
               <Button
                 size="lg"
                 variant="outline"
-                className="w-full sm:w-auto h-12 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 text-base sm:text-lg rounded-xl sm:rounded-2xl bg-white/80 dark:bg-white/10 border-2"
+                className="w-full sm:w-auto h-12 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 text-base sm:text-lg rounded-xl sm:rounded-2xl bg-gray-50 border-2"
                 onClick={() => setDemoModalOpen(true)}
               >
                 <Play className="w-5 h-5 mr-2" />

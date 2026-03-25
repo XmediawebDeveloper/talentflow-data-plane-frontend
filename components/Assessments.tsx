@@ -999,21 +999,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {/* Low Quota Warning Banner */}
         {!isUnlimited && availableUnits !== null && availableUnits > 0 && availableUnits <= 3 && (
-          <div className="mb-4 sm:mb-6 bg-gray-100 border-2 border-gray-300 rounded-lg p-3 sm:p-4">
+          <div className="mb-4 sm:mb-6 bg-amber-50 border border-amber-300 rounded-lg p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="w-5 h-5 text-gray-700" />
+              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-orange-900 mb-1">Low Assessment Quota</h3>
-                <p className="text-sm text-orange-800">
-                  You have only <span className="font-bold">{availableUnits}</span> assessment unit{availableUnits !== 1 ? 's' : ''} remaining out of {totalUnits}.
+                <h3 className="text-sm font-semibold text-amber-800 mb-0.5">Low Assessment Quota</h3>
+                <p className="text-sm text-amber-700">
+                  You have only <span className="font-semibold">{availableUnits}</span> assessment unit{availableUnits !== 1 ? 's' : ''} remaining out of {totalUnits}.
                   {' '}Consider purchasing add-on credits to avoid interruptions.
                 </p>
               </div>
               <button
                 onClick={() => window.location.href = '/subscription/usage-quotas'}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 transition-colors"
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors flex-shrink-0"
               >
                 Add Credits
               </button>
@@ -1023,20 +1023,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {/* Quota Exhausted Banner — only show when units were actually consumed */}
         {!isUnlimited && availableUnits !== null && availableUnits <= 0 && stats.units_consumed > 0 && (
-          <div className="mb-4 sm:mb-6 bg-red-50 border-2 border-red-300 rounded-lg p-3 sm:p-4">
+          <div className="mb-4 sm:mb-6 bg-red-50 border border-red-300 rounded-lg p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-200 flex items-center justify-center flex-shrink-0">
-                <Lock className="w-5 h-5 text-red-700" />
+              <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Lock className="w-4 h-4 text-red-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-red-900 mb-1">Assessment Quota Exhausted</h3>
-                <p className="text-sm text-red-800">
+                <h3 className="text-sm font-semibold text-red-800 mb-0.5">Assessment Quota Exhausted</h3>
+                <p className="text-sm text-red-700">
                   You have used all {totalUnits} assessment units in your current plan. Purchase add-on credits or upgrade your plan to create more assessments.
                 </p>
               </div>
               <button
                 onClick={() => window.location.href = '/subscription/usage-quotas'}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-2 flex-shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 Add Credits

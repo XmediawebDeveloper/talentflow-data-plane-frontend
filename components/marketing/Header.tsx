@@ -115,9 +115,12 @@ export function Header() {
               </Button>
             )}
             {!isLoggedIn && !isOrgLogin && (
-              <Button className="bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200 text-sm xl:text-base whitespace-nowrap" asChild>
-                <Link href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`}>Start Free Trial</Link>
-              </Button>
+              <Link
+                href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`}
+                className="inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm xl:text-base font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors whitespace-nowrap shadow-sm"
+              >
+                Start Free Trial
+              </Link>
             )}
           </div>
 
@@ -179,9 +182,13 @@ export function Header() {
                 >
                   <Link href="/signup" prefetch={false}>Sign Up</Link>
                 </Button>
-                <Button className="w-full bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-gray-200" asChild>
-                  <Link href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`} prefetch={false}>Start Free Trial</Link>
-                </Button>
+                <Link
+                  href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`}
+                  prefetch={false}
+                  className="w-full inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 transition-colors"
+                >
+                  Start Free Trial
+                </Link>
               </div>
             </nav>
           </div>

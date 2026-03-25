@@ -1941,13 +1941,13 @@ function CurrentPlanContent() {
             </span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 lg:gap-6">
-            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Plan</p>
               <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial ? 'Free Trial' : (companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || '-')}
               </p>
             </div>
-            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Price</p>
               <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial ? (
@@ -1961,7 +1961,7 @@ function CurrentPlanContent() {
                 )}
               </p>
             </div>
-            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
                 {isOnTrial ? 'Trial Started' : 'Plan Start'}
               </p>
@@ -1976,7 +1976,7 @@ function CurrentPlanContent() {
                 }
               </p>
             </div>
-            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
                 {isOnTrial ? 'Trial Ends' : 'Plan Expires'}
               </p>
@@ -2107,37 +2107,37 @@ function CurrentPlanContent() {
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-3 sm:mb-4">Your Plan Limits</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_seats)}
                   </p>
                   <p className="text-xs text-gray-600">Team Seats</p>
                 </div>
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_jobs)}
                   </p>
                   <p className="text-xs text-gray-600">Job Postings</p>
                 </div>
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_resume_uploads)}
                   </p>
                   <p className="text-xs text-gray-600">Resume Storage</p>
                 </div>
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_resume_searches)}
                   </p>
                   <p className="text-xs text-gray-600">Resume Scores</p>
                 </div>
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_assessments)}
                   </p>
                   <p className="text-xs text-gray-600">Assessments</p>
                 </div>
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_ai_interviews)}
                   </p>
@@ -2185,7 +2185,7 @@ function CurrentPlanContent() {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                   {nonQuotaFeatures.map(f => (
-                    <div key={f.feature_key} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
+                    <div key={f.feature_key} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-200">
                       {f.is_enabled ? (
                         <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
                       ) : (

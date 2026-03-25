@@ -516,6 +516,24 @@ export const brandingApi = {
       return handleApiError(error);
     }
   },
+
+  async verifyDomain(domain: string): Promise<{ verified: boolean; error?: string; cname?: string; target?: string }> {
+    try {
+      const response = await api.post('/settings/branding/verify-domain', { domain });
+      return response.data;
+    } catch (error) {
+      return handleApiError(error);
+    }
+  },
+
+  async getDomainConfig(): Promise<{ cname_target: string; base_domain: string }> {
+    try {
+      const response = await api.get('/settings/branding/domain-config');
+      return response.data;
+    } catch (error) {
+      return { cname_target: '', base_domain: '' };
+    }
+  },
 };
 
 // ========================================================================

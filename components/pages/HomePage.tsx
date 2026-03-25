@@ -112,8 +112,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     gap: '8px',
     padding: '12px 24px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)',
-    border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)'}`,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.85)',
+    border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(102,126,234,0.3)'}`,
     backdropFilter: 'blur(12px)',
     marginBottom: '32px',
   };
@@ -121,7 +121,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const badgeTextStyle: React.CSSProperties = {
     fontSize: '14px',
     fontWeight: 500,
-    color: isDark ? '#CBD5E1' : '#374151',
+    color: isDark ? '#F1F5F9' : '#374151',
   };
 
   const h1Style: React.CSSProperties = {
