@@ -103,6 +103,10 @@ export interface User {
     can_view_usage?: boolean;
     // Teams
     can_view_teams?: boolean;
+    can_create_teams?: boolean;
+    can_update_teams?: boolean;
+    can_delete_teams?: boolean;
+    can_view_team_usage?: boolean;
     // RBAC06: Feature flags permissions - GRANULAR (VIEW + RUN)
     can_view_scoring?: boolean;      // NEW: View resume scoring page/results
     can_run_scoring?: boolean;       // Run scoring operations
@@ -143,6 +147,7 @@ export interface User {
   suspended_at?: string;
   // Tenant subdomain - used to build org-aware login URL on logout
   tenant_subdomain?: string;
+  tenant_admin_email?: string;
   // Invite flow: if true, user must set a permanent password before accessing the dashboard
   must_reset_password?: boolean;
 }

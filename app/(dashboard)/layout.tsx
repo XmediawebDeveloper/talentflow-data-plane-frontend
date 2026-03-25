@@ -16,6 +16,7 @@ import { TermsProvider } from '@/components/providers/TermsProvider';
 import { PlanChangeProvider, usePlanChange } from '@/components/providers/PlanChangeProvider';
 import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail, PAYMENT_PENDING_EVENT, PaymentPendingDetail, redirectToPaymentPage } from '@/lib/services/api';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
+import ExpiredAccountBlock from '@/components/subscription/ExpiredAccountBlock';
 import TermsReminderBanner from '@/components/terms/TermsReminderBanner';
 import TermsBlockingOverlay from '@/components/terms/TermsBlockingOverlay';
 import TermsAcceptanceModal from '@/components/terms/TermsAcceptanceModal';
@@ -36,6 +37,7 @@ const adminRoutes = [
 const SUBSCRIPTION_ALLOWED_PATHS = [
   '/subscription/current-plan',
   '/subscription/payment-methods',
+  '/subscription/usage-quotas',
   '/audits/trail',
   '/audits/activity',
   '/support-tickets',
@@ -190,19 +192,20 @@ export default function DashboardLayout({
     return () => window.removeEventListener(PAYMENT_PENDING_EVENT, handlePaymentPending as EventListener);
   }, []);
 
-  // Redirect to current-plan page when subscription is expired and user is on a non-allowed page
+  // Redirect to current-plan page when subscription is expired — admins only.
+  // Non-admins cannot access /subscription/current-plan (admin-only route) so redirecting
+  // them there causes an infinite loop. They see ExpiredAccountBlock instead.
   useEffect(() => {
-    // Only redirect if explicitly expired (not undefined/loading) and NOT suspended
-    if (subscriptionExpired === true && !accountSuspended && pathname) {
+    if (subscriptionExpired === true && !accountSuspended && isTenantAdmin && pathname) {
       const isAllowed = SUBSCRIPTION_ALLOWED_PATHS.some(path =>
         pathname === path || pathname.startsWith(path + '/')
       );
       if (!isAllowed) {
-        console.log('[DASHBOARD] Subscription expired, redirecting to current-plan from:', pathname);
+        console.log('[DASHBOARD] Subscription expired (admin), redirecting to current-plan from:', pathname);
         router.push('/subscription/current-plan');
       }
     }
-  }, [subscriptionExpired, accountSuspended, pathname, router]);
+  }, [subscriptionExpired, accountSuspended, isTenantAdmin, pathname, router]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -223,6 +226,16 @@ export default function DashboardLayout({
       // Exception: Team Chat is accessible to all users, even though it's under /organization
       if (pathname === '/organization/team-chat' || pathname.startsWith('/organization/team-chat/')) {
         return; // Allow access to all users
+      }
+
+      // Exception: Team Management is accessible to users with teams permissions
+      if (pathname === '/organization/team-management' || pathname.startsWith('/organization/team-management/')) {
+        if (user.permissions?.canViewTeams || user.permissions?.canCreateTeams) return;
+      }
+
+      // Exception: User Management is accessible to users with user management permissions
+      if (pathname === '/organization/user-management' || pathname.startsWith('/organization/user-management/')) {
+        if (user.permissions?.canManageUsers) return;
       }
 
       // Exception: Profile Settings (/settings/general-settings) is accessible to ALL users
@@ -420,6 +433,7 @@ export default function DashboardLayout({
                 onOpenSettings={() => router.push('/settings')}
                 onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 isMobileMenuOpen={isMobileMenuOpen}
+                subscriptionExpired={subscriptionExpired === true}
               />
 
               <TermsReminderBanner />
@@ -452,6 +466,13 @@ export default function DashboardLayout({
                   suspendedAt={suspendedAt}
                   contactEmail={supportEmail}
                 />
+              </div>
+            )}
+
+            {/* Non-admin expired overlay - blocks all interaction, logout only */}
+            {subscriptionExpired === true && !accountSuspended && !isTenantAdmin && (
+              <div className="fixed inset-0 z-[100]">
+                <ExpiredAccountBlock adminEmail={user?.tenantAdminEmail} />
               </div>
             )}
           </div>

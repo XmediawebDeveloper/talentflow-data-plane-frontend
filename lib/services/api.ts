@@ -103,12 +103,21 @@ export const setTokens = (access: string, refresh: string) => {
 
 export const getTokens = () => {
   if (!accessToken && typeof window !== 'undefined') {
-    accessToken = localStorage.getItem('accessToken');
-    refreshToken = localStorage.getItem('refreshToken');
-    // ✅ NEW: Restore permission version from storage
-    const storedVersion = localStorage.getItem('permission_version');
-    if (storedVersion) {
-      permissionVersion = parseInt(storedVersion, 10);
+    // Try localStorage first; fall back to cookies (Firefox private mode can restrict localStorage)
+    try {
+      accessToken = localStorage.getItem('accessToken');
+      refreshToken = localStorage.getItem('refreshToken');
+      const storedVersion = localStorage.getItem('permission_version');
+      if (storedVersion) {
+        permissionVersion = parseInt(storedVersion, 10);
+      }
+    } catch {
+      // localStorage unavailable (e.g. Firefox strict ETP in private mode)
+    }
+    // Cookie fallback — set by setTokens() alongside localStorage
+    if (!accessToken) {
+      accessToken = Cookies.get('accessToken') ?? null;
+      refreshToken = Cookies.get('refreshToken') ?? null;
     }
   }
   return { accessToken, refreshToken };

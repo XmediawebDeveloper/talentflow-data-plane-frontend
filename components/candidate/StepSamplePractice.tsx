@@ -16,52 +16,12 @@ import {
   Square,
   Play,
 } from 'lucide-react';
-
-// ── SpeechRecognition TypeScript interfaces ──────────────────────────────────
-
-interface SpeechRecognitionResult {
-  readonly isFinal: boolean;
-  readonly length: number;
-  [index: number]: { transcript: string; confidence: number };
-}
-
-interface SpeechRecognitionResultList {
-  readonly length: number;
-  [index: number]: SpeechRecognitionResult;
-}
-
-interface SpeechRecognitionEvent {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
-}
-
-interface SpeechRecognitionErrorEvent {
-  error: string;
-  message?: string;
-}
-
-interface SpeechRecognitionInstance extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition?: new () => SpeechRecognitionInstance;
-    webkitSpeechRecognition?: new () => SpeechRecognitionInstance;
-  }
-}
+import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 
 // ── Component props ──────────────────────────────────────────────────────────
 
 interface StepSamplePracticeProps {
+  token: string;
   onStartInterview: () => void;
   onGoBack?: () => void;
   selectedLanguage?: string;
@@ -79,7 +39,6 @@ function pickVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
   if (voices.length === 0) return null;
 
-  // Prefer natural-sounding English female voices
   const preferred = [
     'Google UK English Female',
     'Google US English',
@@ -93,7 +52,6 @@ function pickVoice(): SpeechSynthesisVoice | null {
     const v = voices.find((voice) => voice.name.includes(name));
     if (v) return v;
   }
-  // Fallback: any English voice
   const english = voices.find(
     (v) => v.lang.startsWith('en') && !v.name.toLowerCase().includes('male')
   );
@@ -103,6 +61,7 @@ function pickVoice(): SpeechSynthesisVoice | null {
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function StepSamplePractice({
+  token,
   onStartInterview,
   onGoBack,
   selectedLanguage = 'English',
@@ -114,17 +73,15 @@ export default function StepSamplePractice({
   const [micReady, setMicReady] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [aiSpeaking, setAiSpeaking] = useState(false);
-  const [aiSpoken, setAiSpoken] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [finalTranscript, setFinalTranscript] = useState('');
-  const [interimTranscript, setInterimTranscript] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [liveTranscript, setLiveTranscript] = useState('');
   const [typedAnswer, setTypedAnswer] = useState('');
   const [inputMode, setInputMode] = useState<'none' | 'voice' | 'typing'>('none');
   const [audioLevel, setAudioLevel] = useState(0);
-  const [speechSupported, setSpeechSupported] = useState(true);
-  const [speechError, setSpeechError] = useState('');
-  const [networkRetries, setNetworkRetries] = useState(0);
   const [ttsSupported, setTtsSupported] = useState(true);
+  const [transcribeError, setTranscribeError] = useState('');
 
   // ── Refs ─────────────────────────────────────────────────────────────────
 
@@ -133,14 +90,11 @@ export default function StepSamplePractice({
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const isListeningRef = useRef(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-
-  // Keep ref in sync
-  useEffect(() => {
-    isListeningRef.current = isListening;
-  }, [isListening]);
+  const recognitionRef = useRef<any>(null);
+  const webSpeechFinalRef = useRef('');
 
   // ── Webcam + mic setup on mount ──────────────────────────────────────────
 
@@ -159,7 +113,6 @@ export default function StepSamplePractice({
         }
         mediaStreamRef.current = stream;
 
-        // Attach video
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -167,7 +120,7 @@ export default function StepSamplePractice({
         setCameraReady(true);
         setMicReady(true);
 
-        // Audio analyser
+        // Audio analyser for level meter
         const audioCtx = new AudioContext();
         audioContextRef.current = audioCtx;
         const source = audioCtx.createMediaStreamSource(stream);
@@ -176,7 +129,6 @@ export default function StepSamplePractice({
         source.connect(analyser);
         analyserRef.current = analyser;
 
-        // Start audio level monitoring
         const dataArray = new Uint8Array(analyser.fftSize);
         const tick = () => {
           if (!analyserRef.current) return;
@@ -198,14 +150,6 @@ export default function StepSamplePractice({
 
     initMedia();
 
-    // Check speech recognition support
-    const SpeechAPI =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechAPI) {
-      setSpeechSupported(false);
-    }
-
-    // Check TTS support
     if (!window.speechSynthesis) {
       setTtsSupported(false);
     }
@@ -216,12 +160,12 @@ export default function StepSamplePractice({
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
+        mediaRecorderRef.current = null;
+      }
       if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {
-          /* ignore */
-        }
+        try { recognitionRef.current.stop(); } catch { /* ignore */ }
         recognitionRef.current = null;
       }
       if (audioContextRef.current) {
@@ -233,12 +177,12 @@ export default function StepSamplePractice({
         mediaStreamRef.current.getTracks().forEach((t) => t.stop());
         mediaStreamRef.current = null;
       }
-      // Stop any TTS in progress
       window.speechSynthesis?.cancel();
     };
   }, []);
 
-  // ── TTS: Speak the practice question ───────────────────────────────────
+  // ── TTS: Speak the practice question ──────────────────────────────────────
+  // Called only on explicit user click so the browser always has a user gesture.
 
   const speakQuestion = useCallback(() => {
     if (!window.speechSynthesis) {
@@ -246,223 +190,231 @@ export default function StepSamplePractice({
       return;
     }
 
-    // Cancel any in-progress speech
+    // Chrome bug: calling speak() immediately after cancel() silently drops the utterance.
     window.speechSynthesis.cancel();
 
-    const utterance = new SpeechSynthesisUtterance(PRACTICE_QUESTION);
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
+    const doSpeak = () => {
+      const utterance = new SpeechSynthesisUtterance(PRACTICE_QUESTION);
+      utterance.rate = 0.9;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
 
-    const voice = pickVoice();
-    if (voice) utterance.voice = voice;
+      const voice = pickVoice();
+      if (voice) utterance.voice = voice;
 
-    utterance.onstart = () => {
-      setAiSpeaking(true);
+      utterance.onstart = () => setAiSpeaking(true);
+      utterance.onend = () => {
+        setAiSpeaking(false);
+      };
+      utterance.onerror = (e) => {
+        if ((e as SpeechSynthesisErrorEvent).error === 'interrupted') return;
+        setAiSpeaking(false);
+      };
+
+      utteranceRef.current = utterance;
+      window.speechSynthesis.speak(utterance);
     };
 
-    utterance.onend = () => {
-      setAiSpeaking(false);
-      setAiSpoken(true);
-      // Auto-start listening after AI finishes speaking
-      if (speechSupported && mediaStreamRef.current?.active) {
-        setTimeout(() => startListening(), 500);
-      }
-    };
-
-    utterance.onerror = () => {
-      setAiSpeaking(false);
-      setAiSpoken(true);
-    };
-
-    utteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  }, [speechSupported]); // startListening added below via ref
-
-  // Auto-speak on mount (after voices load)
-  useEffect(() => {
-    // Fallback: if TTS doesn't fire within 3s, show answer area anyway
-    const fallbackTimer = setTimeout(() => {
-      setAiSpoken(true);
-    }, 3000);
-
-    if (!window.speechSynthesis) {
-      setTtsSupported(false);
-      return () => clearTimeout(fallbackTimer);
-    }
-
-    // Voices may load asynchronously
-    const trySpeak = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        speakQuestion();
-      }
-    };
-
-    // Try immediately (voices may already be loaded)
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      // Small delay so user sees the UI first
-      const timer = setTimeout(speakQuestion, 800);
-      return () => { clearTimeout(timer); clearTimeout(fallbackTimer); };
-    }
-
-    // Wait for voices to load
-    window.speechSynthesis.addEventListener('voiceschanged', trySpeak);
-    return () => {
-      window.speechSynthesis.removeEventListener('voiceschanged', trySpeak);
-      clearTimeout(fallbackTimer);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // 150ms delay after cancel() — fixes Chrome silent-drop bug
+    setTimeout(doSpeak, 150);
   }, []);
 
-  // ── Speech recognition helpers ───────────────────────────────────────────
+  // ── Live transcription (Web Speech API) ──────────────────────────────────
 
-  const startListening = useCallback(() => {
-    const SpeechAPI =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechAPI) return;
+  const startLiveTranscription = useCallback(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
 
-    // Stop any existing instance
+    webSpeechFinalRef.current = '';
+    setLiveTranscript('');
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      let finalText = '';
+      let interimText = '';
+      for (let i = 0; i < event.results.length; i++) {
+        const t = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalText += t + ' ';
+        } else {
+          interimText += t;
+        }
+      }
+      webSpeechFinalRef.current = finalText.trimEnd();
+      setLiveTranscript((finalText + interimText).trim());
+    };
+
+    recognition.onerror = () => { /* ignore — best-effort */ };
+
+    recognition.onend = () => {
+      // Restart if still recording (recognition can time out after silence)
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        try { recognition.start(); } catch { /* ignore */ }
+      }
+    };
+
+    recognitionRef.current = recognition;
+    try { recognition.start(); } catch { /* ignore */ }
+  }, []);
+
+  const stopLiveTranscription = useCallback(() => {
     if (recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch { /* ignore */ }
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
       recognitionRef.current = null;
     }
+  }, []);
+
+  // ── Recording + transcription ─────────────────────────────────────────────
+
+  const stopRecordingAndTranscribe = useCallback(async () => {
+    if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
+
+    setIsRecording(false);
+    stopLiveTranscription();
+
+    // Capture browser live transcript before clearing state
+    const browserTranscript = webSpeechFinalRef.current.trim() || liveTranscript.trim();
+    setLiveTranscript('');
+
+    await new Promise<void>((resolve) => {
+      const mr = mediaRecorderRef.current!;
+      mr.onstop = () => resolve();
+      try { mr.stop(); } catch { resolve(); }
+    });
+
+    const chunks = audioChunksRef.current;
+    audioChunksRef.current = [];
+    mediaRecorderRef.current = null;
+
+    // If we already have a browser transcript, show it immediately while
+    // the backend call runs in the background for a more accurate result.
+    if (browserTranscript) {
+      setTranscript(browserTranscript);
+      setInputMode('voice');
+      setVoiceReady(true);
+    }
+
+    if (chunks.length === 0) {
+      if (!browserTranscript) {
+        setTranscribeError('No audio captured. Please speak for at least 1 second before stopping.');
+      }
+      return;
+    }
+
+    setIsTranscribing(true);
+    setTranscribeError('');
+
+    const mimeType = chunks[0].type || 'audio/webm';
+    const audioBlob = new Blob(chunks, { type: mimeType });
 
     try {
-      const recognition = new SpeechAPI();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let interim = '';
-        let finalText = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (result.isFinal) {
-            finalText += result[0].transcript;
-          } else {
-            interim += result[0].transcript;
-          }
-        }
-
-        if (finalText) {
-          setFinalTranscript((prev) => prev + finalText);
-          setInterimTranscript('');
-          setVoiceReady(true);
-        } else {
-          setInterimTranscript(interim);
-        }
-      };
-
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.warn('[SpeechRecognition] Error:', event.error);
-        if (event.error === 'not-allowed') {
-          setSpeechSupported(false);
-          setSpeechError('Microphone access denied. Please allow microphone permissions.');
-          setIsListening(false);
-          isListeningRef.current = false;
-        } else if (event.error === 'network') {
-          // Auto-retry up to 3 times for network errors
-          setNetworkRetries((prev) => {
-            if (prev < 3) {
-              setSpeechError(`Connecting to speech service... (attempt ${prev + 2}/4)`);
-              // onend will auto-restart
-              return prev + 1;
-            } else {
-              setSpeechError(
-                'Speech-to-text is unavailable — this uses Chrome\'s built-in service which requires Google connectivity. ' +
-                'Don\'t worry, the actual interview uses our own AI transcription which works independently. ' +
-                'For now, you can type your answer below.'
-              );
-              setIsListening(false);
-              isListeningRef.current = false;
-              return 0;
-            }
-          });
-        } else if (event.error !== 'aborted' && event.error !== 'no-speech') {
-          setSpeechError(`Speech recognition error: ${event.error}. Try again.`);
-        }
-      };
-
-      recognition.onend = () => {
-        // Auto-restart if still supposed to be listening (use ref to avoid stale closure)
-        if (isListeningRef.current && mediaStreamRef.current?.active) {
-          setTimeout(() => {
-            if (!isListeningRef.current) return;
-            try {
-              recognition.start();
-            } catch {
-              setIsListening(false);
-              isListeningRef.current = false;
-            }
-          }, 300);
-        }
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-      setIsListening(true);
-      setInputMode('voice');
-      setSpeechError('');
-      setNetworkRetries(0);
-    } catch (err) {
-      console.error('Failed to start speech recognition:', err);
-      setSpeechError('Failed to start speech recognition.');
-    }
-  }, []);
-
-  const stopListening = useCallback(() => {
-    setIsListening(false);
-    isListeningRef.current = false;
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        /* ignore */
+      const text = await candidateAIInterviewService.transcribePracticeAudio(token, audioBlob);
+      if (text.trim()) {
+        // Backend result is more accurate — upgrade the transcript
+        setTranscript(text);
+        setInputMode('voice');
+        setVoiceReady(true);
+      } else if (!browserTranscript) {
+        setTranscribeError('No speech detected. Try again or type your answer below.');
       }
-      recognitionRef.current = null;
-    }
-    // Move any interim text to final
-    setInterimTranscript((interim) => {
-      if (interim) {
-        setFinalTranscript((prev) => prev + interim);
+    } catch (err: unknown) {
+      // If backend fails but we have a browser transcript, silently keep it
+      if (browserTranscript) {
+        // Already set above — don't show an error
+      } else {
+        const axiosErr = err as { message?: string; response?: { data?: { detail?: string } } };
+        const isBlocked =
+          !axiosErr.response &&
+          (axiosErr.message === 'Network Error' || axiosErr.message?.includes('ERR_BLOCKED'));
+        const msg = isBlocked
+          ? 'Request blocked by your browser or an ad-blocker extension. Please disable any ad-blockers for this page and try again, or type your answer below.'
+          : axiosErr.response?.data?.detail ||
+            'Transcription failed. Please try again or type your answer.';
+        setTranscribeError(msg);
       }
-      return '';
-    });
-  }, []);
+    } finally {
+      setIsTranscribing(false);
+    }
+  }, [token, liveTranscript, stopLiveTranscription]);
 
-  const toggleListening = useCallback(() => {
-    if (isListening) {
-      stopListening();
+  const startRecording = useCallback(() => {
+    if (!mediaStreamRef.current?.active) return;
+
+    // Audio-only stream for recording
+    const audioTracks = mediaStreamRef.current.getAudioTracks();
+    if (audioTracks.length === 0) return;
+
+    const audioStream = new MediaStream(audioTracks);
+    audioChunksRef.current = [];
+
+    // Pick best supported MIME type
+    const mimeType = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/ogg',
+    ].find((m) => MediaRecorder.isTypeSupported(m)) || '';
+
+    const mr = new MediaRecorder(audioStream, mimeType ? { mimeType } : undefined);
+    mr.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunksRef.current.push(e.data);
+    };
+    mediaRecorderRef.current = mr;
+    mr.start(500); // collect chunks every 500ms
+    setIsRecording(true);
+    setTranscript('');
+    setTypedAnswer('');
+    setInputMode('none');
+    setTranscribeError('');
+    setLiveTranscript('');
+
+    // Start live transcription via Web Speech API
+    startLiveTranscription();
+  }, [startLiveTranscription]);
+
+  const toggleRecording = useCallback(() => {
+    if (isRecording) {
+      stopRecordingAndTranscribe();
     } else {
-      startListening();
+      startRecording();
     }
-  }, [isListening, startListening, stopListening]);
+  }, [isRecording, startRecording, stopRecordingAndTranscribe]);
 
   const resetPractice = useCallback(() => {
-    stopListening();
-    window.speechSynthesis?.cancel();
-    setFinalTranscript('');
-    setInterimTranscript('');
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
+      mediaRecorderRef.current = null;
+    }
+    stopLiveTranscription();
+    audioChunksRef.current = [];
+    setIsRecording(false);
+    setIsTranscribing(false);
+    setTranscript('');
+    setLiveTranscript('');
     setTypedAnswer('');
     setInputMode('none');
     setVoiceReady(false);
-    setSpeechError('');
+    setTranscribeError('');
     setAiSpeaking(false);
-    setAiSpoken(false);
-    // Re-speak the question after a short pause
-    setTimeout(() => speakQuestion(), 400);
-  }, [stopListening, speakQuestion]);
+    window.speechSynthesis?.cancel();
+  }, [stopLiveTranscription]);
 
-  // ── Derived ──────────────────────────────────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────────────────
 
-  const voiceTranscript = finalTranscript + (interimTranscript ? interimTranscript : '');
-  const displayAnswer = inputMode === 'voice' ? voiceTranscript : typedAnswer;
-  const hasAnswer = displayAnswer.trim().length > 0;
+  // Show live transcript while recording, final transcript when done
+  const displayAnswer = isRecording
+    ? liveTranscript
+    : inputMode === 'voice'
+    ? transcript
+    : typedAnswer;
+  const hasAnswer = (isRecording ? false : displayAnswer.trim().length > 0);
 
-  // ── Status items ─────────────────────────────────────────────────────────
+  // ── Status items ──────────────────────────────────────────────────────────
 
   const statusItems = [
     { icon: Camera, label: 'Camera Access', ready: cameraReady },
@@ -476,7 +428,7 @@ export default function StepSamplePractice({
     { color: 'bg-gray-500', label: 'Interface', desc: 'You understand how to answer questions' },
   ];
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
@@ -536,14 +488,21 @@ export default function StepSamplePractice({
                 AI Speaking...
               </div>
             )}
-            {/* Listening indicator */}
-            {isListening && !aiSpeaking && (
+            {/* Recording indicator */}
+            {isRecording && !aiSpeaking && (
               <div className="absolute top-3 left-3 flex items-center gap-2 bg-red-500/90 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
                 </span>
-                Listening...
+                Recording...
+              </div>
+            )}
+            {/* Transcribing indicator */}
+            {isTranscribing && (
+              <div className="absolute top-3 left-3 flex items-center gap-2 bg-blue-600/90 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Transcribing...
               </div>
             )}
           </div>
@@ -573,133 +532,144 @@ export default function StepSamplePractice({
                 </span>
               )}
             </div>
+
+            {/* Question card */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <p className="text-gray-800 font-medium">
                 &ldquo;{PRACTICE_QUESTION}&rdquo;
               </p>
-              {/* Play / Replay button */}
-              {ttsSupported && !aiSpeaking && (
+              {/* Play / Replay button — always shown, requires user click for reliable TTS */}
+              {ttsSupported && (
                 <button
                   type="button"
                   onClick={speakQuestion}
-                  className="mt-2 inline-flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-800 font-medium transition-colors"
+                  disabled={aiSpeaking}
+                  className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-white text-xs font-semibold hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  <Play className="w-3 h-3" />
-                  {aiSpoken ? 'Replay Question' : 'Play Question'}
+                  {aiSpeaking ? (
+                    <>
+                      <span className="flex items-center gap-0.5">
+                        <span className="w-1 h-2 bg-white rounded-full animate-pulse" />
+                        <span className="w-1 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
+                        <span className="w-1 h-2 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                      </span>
+                      Playing...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3 h-3" />
+                      Play Question
+                    </>
+                  )}
                 </button>
               )}
             </div>
 
-            {/* "Your turn" indicator when AI finishes speaking */}
-            {aiSpoken && !aiSpeaking && (
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-gray-700">Your Answer:</p>
-                {!isListening && !hasAnswer && speechSupported && (
-                  <span className="text-xs text-gray-600 animate-pulse">Your turn to answer!</span>
-                )}
-                {hasAnswer && (
-                  <button
-                    type="button"
-                    onClick={resetPractice}
-                    className="ml-auto inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-                  >
-                    <RefreshCw className="w-3 h-3" />
-                    Try Again
-                  </button>
-                )}
-              </div>
+            {/* Your Answer header */}
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-gray-700">Your Answer:</p>
+              {!isRecording && !isTranscribing && !hasAnswer && (
+                <span className="text-xs text-gray-500 animate-pulse">Your turn to answer!</span>
+              )}
+              {isRecording && (
+                <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                  </span>
+                  Transcribing live...
+                </span>
+              )}
+              {isTranscribing && (
+                <span className="text-xs text-blue-600 flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Enhancing transcript...
+                </span>
+              )}
+              {hasAnswer && !isTranscribing && !isRecording && (
+                <button
+                  type="button"
+                  onClick={resetPractice}
+                  className="ml-auto inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Try Again
+                </button>
+              )}
+            </div>
+
+            {/* Answer textarea — always visible */}
+            <div className="relative flex-1">
+              <textarea
+                value={displayAnswer}
+                onChange={(e) => {
+                  if (isRecording) return; // don't allow typing while recording
+                  setTypedAnswer(e.target.value);
+                  setInputMode('typing');
+                }}
+                placeholder={
+                  isRecording
+                    ? 'Listening… speak now — your words will appear here in real-time'
+                    : isTranscribing
+                    ? 'Enhancing your transcript with AI…'
+                    : 'Click "Start Recording" below or type your answer here...'
+                }
+                readOnly={isRecording || isTranscribing}
+                className={`w-full h-full min-h-[80px] border rounded-lg p-3 text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-colors ${
+                  isRecording
+                    ? 'border-red-300 bg-red-50/30'
+                    : isTranscribing
+                    ? 'border-blue-300 bg-blue-50/30'
+                    : 'border-gray-300 bg-white'
+                }`}
+                rows={4}
+              />
+            </div>
+
+            {/* Transcription error */}
+            {transcribeError && !isTranscribing && (
+              <p className="text-xs text-red-500">{transcribeError}</p>
             )}
 
-            {/* Waiting for AI to finish speaking */}
-            {aiSpeaking && (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center space-y-2">
-                  <div className="flex items-center justify-center gap-1">
-                    {[0, 1, 2, 3, 4].map((i) => (
-                      <span
-                        key={i}
-                        className="w-1.5 h-6 bg-gray-400 rounded-full animate-pulse"
-                        style={{ animationDelay: `${i * 0.12}s`, animationDuration: '0.8s' }}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-sm text-gray-500">Listen to the question...</p>
-                </div>
-              </div>
-            )}
-
-            {/* Answer area — shown after AI finishes speaking */}
-            {(aiSpoken && !aiSpeaking) && (
-              <>
-                <div className="relative flex-1">
-                  <textarea
-                    value={displayAnswer}
-                    onChange={(e) => {
-                      if (isListening) stopListening();
-                      setTypedAnswer(e.target.value);
-                      setInputMode('typing');
-                    }}
-                    placeholder={
-                      isListening
-                        ? 'Listening... speak now and your words will appear here'
-                        : 'Click "Start Speaking" below or type your answer here...'
-                    }
-                    className={`w-full h-full min-h-[80px] border rounded-lg p-3 text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-colors ${
-                      isListening
-                        ? 'border-red-300 bg-red-50/30'
-                        : 'border-gray-300 bg-white'
-                    }`}
-                    rows={4}
-                  />
-                  {/* Interim indicator */}
-                  {isListening && interimTranscript && (
-                    <div className="absolute bottom-2 right-2 text-[10px] text-gray-400 bg-white/80 px-1.5 py-0.5 rounded">
-                      recognizing...
-                    </div>
+            {/* Voice / Record button */}
+            <div className="flex gap-3">
+              {micReady ? (
+                <button
+                  type="button"
+                  onClick={toggleRecording}
+                  disabled={isTranscribing}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                    isRecording
+                      ? 'bg-red-500 text-white hover:bg-red-600 shadow-md shadow-red-200'
+                      : 'bg-gray-900 text-white hover:bg-gray-800 shadow-md shadow-gray-200'
+                  }`}
+                >
+                  {isTranscribing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Enhancing...
+                    </>
+                  ) : isRecording ? (
+                    <>
+                      <Square className="w-4 h-4" />
+                      Stop Recording
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-4 h-4" />
+                      {hasAnswer ? 'Re-record Answer' : 'Start Recording'}
+                    </>
                   )}
+                </button>
+              ) : (
+                <div className="flex-1 bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-center">
+                  <p className="text-xs text-amber-700">
+                    <MicOff className="w-3.5 h-3.5 inline mr-1" />
+                    Microphone not available. You can type your answer instead.
+                  </p>
                 </div>
-
-                {/* Speech error */}
-                {speechError && (
-                  <p className="text-xs text-red-500">{speechError}</p>
-                )}
-
-                {/* Voice / Type toggle buttons */}
-                <div className="flex gap-3">
-                  {speechSupported && (
-                    <button
-                      type="button"
-                      onClick={toggleListening}
-                      className={`flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                        isListening
-                          ? 'bg-red-500 text-white hover:bg-red-600 shadow-md shadow-red-200'
-                          : 'bg-gray-900 text-white hover:bg-gray-800 shadow-md shadow-gray-200'
-                      }`}
-                    >
-                      {isListening ? (
-                        <>
-                          <Square className="w-4 h-4" />
-                          Stop Recording
-                        </>
-                      ) : (
-                        <>
-                          <Mic className="w-4 h-4" />
-                          Start Speaking
-                        </>
-                      )}
-                    </button>
-                  )}
-                  {!speechSupported && (
-                    <div className="flex-1 bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-center">
-                      <p className="text-xs text-amber-700">
-                        <MicOff className="w-3.5 h-3.5 inline mr-1" />
-                        Speech recognition not available in this browser. You can type your answer instead.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
+              )}
+            </div>
 
             {/* Tip — always visible */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-auto">

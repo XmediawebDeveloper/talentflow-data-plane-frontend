@@ -125,6 +125,21 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  async recordPracticeComplete(token: string): Promise<void> {
+    await candidateApi.post(`/candidate/ai-interview/${token}/practice-complete`).catch(() => {});
+  },
+
+  async transcribePracticeAudio(token: string, audioBlob: Blob): Promise<string> {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'practice.webm');
+    const response = await candidateApi.post<{ transcript: string }>(
+      `/candidate/ai-interview/${token}/transcribe-practice`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return response.data.transcript || '';
+  },
+
   async startInterview(token: string): Promise<CandidateInterviewInfo> {
     const response = await candidateApi.post<CandidateInterviewInfo>(
       `/candidate/ai-interview/${token}/start`,
@@ -135,10 +150,12 @@ export const candidateAIInterviewService = {
   async uploadRecording(token: string, blob: Blob): Promise<{ message: string; path: string }> {
     const formData = new FormData();
     formData.append('file', blob, 'recording.webm');
+    // Do NOT set Content-Type manually — axios auto-sets multipart/form-data with the
+    // correct boundary when given a FormData object. Overriding it drops the boundary
+    // and the server cannot parse the request.
     const response = await candidateApi.post(
       `/candidate/ai-interview/${token}/upload-recording`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
     );
     return response.data;
   },

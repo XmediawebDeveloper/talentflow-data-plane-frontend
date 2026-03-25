@@ -183,16 +183,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, fixedMinute
             className={`text-[10px] font-medium px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${SKILL_TYPE_COLORS[skillType]}`}
           >
             <option value="Skill">Skill</option>
-            <option value="Command">Command</option>
-            <option value="Certification">Certification</option>
           </select>
-          <button
-            onClick={() => setCommentOpen(commentOpen === skill.name ? null : skill.name)}
-            title="Add comment"
-            className={`p-1 rounded transition-colors ${skill.comment ? 'text-amber-500' : 'text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100'}`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-          </button>
           <button
             onClick={() => setSkillToDelete(skill.name)}
             className="p-1 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
@@ -523,6 +514,8 @@ export default function AIInterviewConfig() {
 
   /* Interview mode */
   const [mode, setMode] = useState<InterviewMode>('fixed');
+  /* Per-question time limit (timed mode only), in seconds */
+  const [perQuestionSeconds, setPerQuestionSeconds] = useState<number>(120);
 
   /* Category configs */
   const [mth, setMth] = useState<CategoryConfig>({
@@ -744,6 +737,11 @@ export default function AIInterviewConfig() {
               const mthTypes: Record<string, string> = parsed.skill_types?.mth || {};
               const nthTypes: Record<string, string> = parsed.skill_types?.nth || {};
 
+              // Restore per-question time limit
+              if (parsed.per_question_seconds) {
+                setPerQuestionSeconds(Number(parsed.per_question_seconds));
+              }
+
               // Restore clusters
               if (parsed.mth_clusters?.length) {
                 setMth(prev => ({ ...prev, clusters: parsed.mth_clusters }));
@@ -844,7 +842,7 @@ export default function AIInterviewConfig() {
         const payload = {
           position: selectedJd.title,
           jd_id: selectedJd.id,
-          duration_minutes: mode === 'fixed' ? (FIXED_TIME.mth + (nth.enabled ? FIXED_TIME.nth : 0) + (hrEnabled ? FIXED_TIME.hr : 0)) : 0,
+          duration_minutes: FIXED_TIME.mth + (nth.enabled ? FIXED_TIME.nth : 0) + (hrEnabled ? FIXED_TIME.hr : 0),
           rounds_config: rounds,
           recording_enabled: recordingEnabled,
           available_languages: availableLanguages,
@@ -893,9 +891,15 @@ export default function AIInterviewConfig() {
       const isValid = await new Promise<boolean>((resolve) => {
         const video = document.createElement('video');
         video.preload = 'metadata';
-        video.onloadedmetadata = () => {
+        // Timeout fallback: if metadata never loads (some formats), allow upload after 5s
+        const timeout = setTimeout(() => {
           URL.revokeObjectURL(video.src);
-          if (video.duration > 60) {
+          resolve(true);
+        }, 5000);
+        video.onloadedmetadata = () => {
+          clearTimeout(timeout);
+          URL.revokeObjectURL(video.src);
+          if (isFinite(video.duration) && Math.floor(video.duration) > 60) {
             setVideoDurationError('Video must be 1 minute or less');
             toast.error('Video must be 1 minute or less');
             resolve(false);
@@ -904,6 +908,7 @@ export default function AIInterviewConfig() {
           }
         };
         video.onerror = () => {
+          clearTimeout(timeout);
           URL.revokeObjectURL(video.src);
           resolve(true); // Allow upload if duration can't be read
         };
@@ -919,8 +924,9 @@ export default function AIInterviewConfig() {
       const result = await aiInterviewService.uploadIntroVideo(file);
       setIntroVideoUrl(result.url || result.file_url || '');
       toast.success('Video uploaded successfully');
-    } catch {
-      toast.error('Failed to upload video');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to upload video';
+      toast.error(msg);
       setIntroVideoFile(null);
       setVideoPreviewSrc('');
     } finally {
@@ -939,13 +945,9 @@ export default function AIInterviewConfig() {
   const buildRounds = (isDraft = false): AIInterviewRoundConfig[] => {
     const rounds: AIInterviewRoundConfig[] = [];
     const dur = (cat: 'mth' | 'nth' | 'hr') => {
-      if (mode === 'fixed') {
-        if (cat === 'mth') return fixedMthMin;
-        if (cat === 'nth') return fixedNthMin;
-        return fixedHrMin;
-      }
-      // Flexible: duration_minutes = 0 (no restriction)
-      return 0;
+      if (cat === 'mth') return fixedMthMin;
+      if (cat === 'nth') return fixedNthMin;
+      return fixedHrMin;
     };
 
     // MTH round
@@ -1027,6 +1029,7 @@ export default function AIInterviewConfig() {
   /* Cluster config as JSON for special_instructions */
   const buildClusterJson = () => JSON.stringify({
     interview_mode: mode,
+    per_question_seconds: mode === 'fixed' ? perQuestionSeconds : undefined,
     mth_clusters: mth.clusters,
     nth_clusters: nth.clusters,
     skill_comments: {
@@ -1047,7 +1050,7 @@ export default function AIInterviewConfig() {
       const payload = {
         position: selectedJd.title,
         jd_id: selectedJd.id,
-        duration_minutes: mode === 'fixed' ? totalFixed : 0,
+        duration_minutes: totalFixed,
         rounds_config: buildRounds(true),
         recording_enabled: recordingEnabled,
         available_languages: availableLanguages,
@@ -1271,19 +1274,25 @@ export default function AIInterviewConfig() {
                   {/* Flexible */}
                   <button
                     onClick={() => setMode('flexible')}
-                    className={`flex flex-col gap-1 p-4 rounded-lg border-2 text-left transition-all ${
+                    className={`relative flex flex-col gap-1 p-4 rounded-lg border-2 text-left transition-all ${
                       mode === 'flexible' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <Zap className={`w-4 h-4 ${mode === 'flexible' ? 'text-white' : 'text-gray-600'}`} />
-                      <span className="font-semibold text-sm">Flexible</span>
+                      <Timer className={`w-4 h-4 ${mode === 'flexible' ? 'text-white' : 'text-gray-600'}`} />
+                      <span className="font-semibold text-sm">Flexible — 30 min</span>
                     </div>
                     <p className={`text-xs ${mode === 'flexible' ? 'text-gray-300' : 'text-gray-500'}`}>
-                      No time restriction. Interview runs until all questions are covered.
+                      Candidate response time is capped. AI narration excluded.
                     </p>
+                    <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'flexible' ? 'text-gray-400' : 'text-gray-400'}`}>
+                      {hrEnabled && <div>HR Round → {fixedHrMin} min</div>}
+                      <div>Must-to-Have → {fixedMthMin} min</div>
+                      {nth.enabled && <div>Nice-to-Have → {fixedNthMin} min</div>}
+                    </div>
                   </button>
                 </div>
+
               </div>
             </div>
 

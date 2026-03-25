@@ -40,6 +40,7 @@ export default function StepIdentity({
   const [countdown, setCountdown] = useState(3);
   const [livenessInstruction, setLivenessInstruction] = useState('');
   const [cameraError, setCameraError] = useState(false);
+  const [faceError, setFaceError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -112,14 +113,14 @@ export default function StepIdentity({
       setCountdown(3);
 
       let count = 3;
-      countdownRef.current = setInterval(() => {
+      countdownRef.current = setInterval(async () => {
         count -= 1;
         if (count <= 0) {
           if (countdownRef.current) {
             clearInterval(countdownRef.current);
             countdownRef.current = null;
           }
-          // Capture frame
+          // Capture frame with automatic face validation
           if (videoRef.current && canvasRef.current) {
             const video = videoRef.current;
             const canvas = canvasRef.current;
@@ -128,21 +129,47 @@ export default function StepIdentity({
             const ctx = canvas.getContext('2d');
             if (ctx) {
               ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-              canvas.toBlob(
-                (blob) => {
-                  if (blob) {
-                    setPhotoBlob(blob);
-                    setPhotoPreview(URL.createObjectURL(blob));
-                    setPhase('captured');
-                    // Stop camera
-                    if (streamRef.current) {
-                      streamRef.current.getTracks().forEach((track) => track.stop());
-                      streamRef.current = null;
-                    }
+
+              // Automatic face count check before accepting the photo
+              let faceCheckPassed = true;
+              if (typeof window !== 'undefined' && 'FaceDetector' in window) {
+                try {
+                  const detector = new (window as any).FaceDetector({ fastMode: true });
+                  const faces = await detector.detect(video);
+                  if (faces.length === 0) {
+                    setFaceError('No face detected. Please position your face clearly in front of the camera and try again.');
+                    faceCheckPassed = false;
+                    setPhase('photo_ready');
+                  } else if (faces.length > 1) {
+                    setFaceError(`${faces.length} faces detected. Please ensure only you are visible and try again.`);
+                    faceCheckPassed = false;
+                    setPhase('photo_ready');
+                  } else {
+                    setFaceError(null);
                   }
-                },
-                'image/png',
-              );
+                } catch {
+                  // FaceDetector failed — let backend OpenAI Vision handle it
+                  setFaceError(null);
+                }
+              }
+
+              if (faceCheckPassed) {
+                canvas.toBlob(
+                  (blob) => {
+                    if (blob) {
+                      setPhotoBlob(blob);
+                      setPhotoPreview(URL.createObjectURL(blob));
+                      setPhase('captured');
+                      // Stop camera
+                      if (streamRef.current) {
+                        streamRef.current.getTracks().forEach((track) => track.stop());
+                        streamRef.current = null;
+                      }
+                    }
+                  },
+                  'image/png',
+                );
+              }
             }
           }
         } else {
@@ -392,6 +419,14 @@ export default function StepIdentity({
             </ul>
           </div>
 
+          {/* Face detection error (auto-detected multiple/no faces) */}
+          {faceError && (
+            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
+              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-700">{faceError}</p>
+            </div>
+          )}
+
           {/* Start button */}
           <button
             type="button"
@@ -399,7 +434,7 @@ export default function StepIdentity({
             disabled={cameraError}
             className="w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            Start Liveness Check &rarr;
+            {faceError ? 'Retry Liveness Check' : 'Start Liveness Check'} &rarr;
           </button>
         </div>
       );

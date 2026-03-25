@@ -4,7 +4,7 @@ import React, { useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import {
   Video, Mic, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle,
-  Circle, Briefcase, MapPin, Building2, Award, ExternalLink,
+  Circle, Briefcase, MapPin, Building2, Award, ExternalLink, X,
 } from 'lucide-react';
 
 interface StepConsentProps {
@@ -99,6 +99,7 @@ export default function StepConsent({
     consent_terms: false,
   });
   const [showFullDesc, setShowFullDesc] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const allChecked = Object.values(consents).every(Boolean);
   const noneChecked = Object.values(consents).every((v) => !v);
@@ -323,16 +324,71 @@ export default function StepConsent({
 
         {/* Read full policy link */}
         <div className="mt-4 pt-3 border-t border-gray-100">
-          <a
-            href="/privacy-policy"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={() => setShowPrivacyModal(true)}
             className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-800 transition-colors"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             Read our Privacy Policy & Terms of Service
-          </a>
+          </button>
         </div>
+
+        {/* Privacy Policy & Terms Modal */}
+        {showPrivacyModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-gray-700" />
+                  <h2 className="text-lg font-semibold text-gray-900">Privacy Policy & Terms of Service</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPrivacyModal(false)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="overflow-y-auto px-6 py-5 space-y-5 text-sm text-gray-700">
+                <section>
+                  <h3 className="font-semibold text-gray-900 mb-2">1. Data Collection</h3>
+                  <p>During this AI-powered interview, we collect video, audio, and responses for the sole purpose of evaluating your candidacy. All data is encrypted in transit and at rest.</p>
+                </section>
+                <section>
+                  <h3 className="font-semibold text-gray-900 mb-2">2. Biometric Data</h3>
+                  <p>We may process facial recognition data to verify your identity and prevent impersonation. This biometric data is processed in compliance with GDPR Article 9 and applicable local data protection laws (including DPDP Act). It is never sold or shared with third parties.</p>
+                </section>
+                <section>
+                  <h3 className="font-semibold text-gray-900 mb-2">3. AI Analysis</h3>
+                  <p>Your responses are analysed by AI to generate a structured evaluation report for the hiring team. No automated hiring decision is made solely by the AI — a human recruiter always reviews the results.</p>
+                </section>
+                <section>
+                  <h3 className="font-semibold text-gray-900 mb-2">4. Data Retention</h3>
+                  <p>Interview recordings and data are retained for up to 90 days after the recruitment process concludes, after which they are permanently deleted unless required by law or explicitly requested by you.</p>
+                </section>
+                <section>
+                  <h3 className="font-semibold text-gray-900 mb-2">5. Your Rights</h3>
+                  <p>You have the right to access, correct, or request deletion of your personal data at any time. To exercise these rights, contact the recruiter or the organisation that invited you to this interview.</p>
+                </section>
+                <section>
+                  <h3 className="font-semibold text-gray-900 mb-2">6. Terms of Use</h3>
+                  <p>By proceeding you confirm that you are the person invited to this interview, that you will not attempt to impersonate another individual, and that you consent to the recording and AI analysis described above.</p>
+                </section>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowPrivacyModal(false)}
+                  className="w-full bg-gray-900 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-gray-800 transition-colors text-sm"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── SECTION 6: Your Rights (collapsed) ── */}

@@ -1,7 +1,7 @@
 'use client'
 
 import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, FileText, Clock, GripVertical } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag } from 'react-dnd';
 import { Resume, Folder } from '@/lib/types/types';
@@ -136,6 +136,7 @@ export default function ResumeTable({
   // ✅ PERMISSION FIX: Get Resume CRUD permissions
   const resumePerms = useModulePermissions('resume');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number; openUp: boolean }>({ top: 0, right: 0, openUp: false });
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
   const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
@@ -537,7 +538,21 @@ export default function ResumeTable({
                       </button>
                       <div className="relative">
                         <button
-                          onClick={() => setActiveMenu(activeMenu === resume.id ? null : resume.id)}
+                          onClick={(e) => {
+                            if (activeMenu === resume.id) {
+                              setActiveMenu(null);
+                              return;
+                            }
+                            const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                            const spaceBelow = window.innerHeight - rect.bottom;
+                            const openUp = spaceBelow < 280;
+                            setMenuPosition({
+                              top: openUp ? rect.top : rect.bottom + 4,
+                              right: window.innerWidth - rect.right,
+                              openUp,
+                            });
+                            setActiveMenu(resume.id);
+                          }}
                           className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
                           title="More Options"
                         >
@@ -545,11 +560,17 @@ export default function ResumeTable({
                         </button>
                         {activeMenu === resume.id && (
                           <>
-                            <div 
-                              className="fixed inset-0 z-10" 
+                            <div
+                              className="fixed inset-0 z-[100]"
                               onClick={() => setActiveMenu(null)}
                             />
-                            <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
+                            <div
+                              className="fixed w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-[101]"
+                              style={menuPosition.openUp
+                                ? { bottom: window.innerHeight - menuPosition.top, right: menuPosition.right }
+                                : { top: menuPosition.top, right: menuPosition.right }
+                              }
+                            >
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();

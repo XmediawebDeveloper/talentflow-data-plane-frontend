@@ -10,6 +10,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  AlertTriangle,
   RefreshCw,
   ArrowLeft,
   ArrowRight,
@@ -27,7 +28,7 @@ interface SystemCheckProps {
 }
 
 interface CheckStatus {
-  status: 'pending' | 'checking' | 'success' | 'error';
+  status: 'pending' | 'checking' | 'success' | 'warning' | 'error';
   message: string;
 }
 
@@ -47,6 +48,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const faceCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const networkCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Scroll to top when component mounts
@@ -57,6 +59,10 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       if (faceCheckIntervalRef.current) {
         clearInterval(faceCheckIntervalRef.current);
         faceCheckIntervalRef.current = null;
+      }
+      if (networkCheckIntervalRef.current) {
+        clearInterval(networkCheckIntervalRef.current);
+        networkCheckIntervalRef.current = null;
       }
       // DON'T cleanup stream on unmount - keep it alive for assessment
       // The parent (CandidateAssessmentPortal) will handle stream cleanup
@@ -134,12 +140,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   }, [streamRef.current]);
 
   useEffect(() => {
-    // Check if all checks are successful
+    // Internet 'warning' (slow but reachable) is allowed — candidate can still proceed.
+    // All other checks must be 'success'.
     const allSuccess =
       cameraCheck.status === 'success' &&
       micCheck.status === 'success' &&
       screenCheck.status === 'success' &&
-      internetCheck.status === 'success' &&
+      (internetCheck.status === 'success' || internetCheck.status === 'warning') &&
       browserCheck.status === 'success';
     setAllChecksComplete(allSuccess);
   }, [cameraCheck, micCheck, screenCheck, internetCheck, browserCheck]);
@@ -158,6 +165,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     // Run checks
     await checkBrowser();
     await checkInternet();
+    startNetworkPolling(); // keep re-checking so slow→fast transitions update immediately
     await checkCameraAndMicrophone();  // Combined to avoid permission conflicts
     await checkScreenShare();
 
@@ -192,19 +200,25 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     try {
       const startTime = Date.now();
       await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors' });
-      const endTime = Date.now();
-      const latency = endTime - startTime;
+      const latency = Date.now() - startTime;
 
       if (latency < 200) {
         setInternetCheck({ status: 'success', message: `Excellent connection (${latency}ms)` });
       } else if (latency < 500) {
         setInternetCheck({ status: 'success', message: `Good connection (${latency}ms)` });
       } else {
-        setInternetCheck({ status: 'success', message: `Slow connection (${latency}ms)` });
+        // Slow but reachable — warn without blocking; polling may improve it
+        setInternetCheck({ status: 'warning', message: `Slow connection (${latency}ms) — the interview may still work` });
       }
     } catch {
       setInternetCheck({ status: 'error', message: 'No internet connection' });
     }
+  };
+
+  const startNetworkPolling = () => {
+    if (networkCheckIntervalRef.current) clearInterval(networkCheckIntervalRef.current);
+    // Re-check every 5 s so the mark updates as soon as the network improves
+    networkCheckIntervalRef.current = setInterval(checkInternet, 5000);
   };
 
   // GitHub CDN hosts the actual weight files (npm package does not include them)
@@ -489,6 +503,8 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         );
       case 'success':
         return <CheckCircle className="w-6 h-6 text-green-500" />;
+      case 'warning':
+        return <AlertTriangle className="w-6 h-6 text-yellow-500" />;
       case 'error':
         return <XCircle className="w-6 h-6 text-red-500" />;
     }
@@ -499,6 +515,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     { label: 'Terms & Consent', active: false, completed: true },
     { label: 'Assessment Details', active: false, completed: true },
     { label: 'System Check', active: true, completed: false },
+    { label: 'HR Questions', active: false, completed: false },
     { label: 'Assessment', active: false, completed: false }
   ];
 

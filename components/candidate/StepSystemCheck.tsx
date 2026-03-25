@@ -159,8 +159,6 @@ export default function StepSystemCheck({
 
   // System checks phase state
   const [systemChecks, setSystemChecks] = useState<SystemCheckItem[]>([]);
-  const [manualFaceConfirm, setManualFaceConfirm] = useState(false);
-  const [manualMultipleConfirm, setManualMultipleConfirm] = useState(false);
   const [hasFaceDetector, setHasFaceDetector] = useState(false);
 
   // Refs for cleanup
@@ -568,16 +566,16 @@ export default function StepSystemCheck({
       }
 
       if (!faceDetectorAvailable) {
-        // Fallback: manual checkboxes
+        // FaceDetector not supported — auto-pass and rely on photo capture validation
         if (cancelled) return;
         setHasFaceDetector(false);
         updateSystemCheck('face', {
-          status: 'fail',
-          detail: 'FaceDetector not available - please confirm manually below',
+          status: 'pass',
+          detail: 'Face check will be validated during photo capture',
         });
         updateSystemCheck('multiple', {
-          status: 'fail',
-          detail: 'FaceDetector not available - please confirm manually below',
+          status: 'pass',
+          detail: 'Single-face check will be validated during photo capture',
         });
       }
     };
@@ -591,23 +589,6 @@ export default function StepSystemCheck({
   }, [phase, systemChecks.length === 0 ? 0 : 1]);
 
   // Handle manual face / multiple people confirmations
-  useEffect(() => {
-    if (phase !== 'system_checks' || hasFaceDetector) return;
-    if (manualFaceConfirm) {
-      updateSystemCheck('face', { status: 'pass', detail: 'Face confirmed (manual)' });
-    } else if (systemChecks.find((c) => c.id === 'face')?.status !== 'checking') {
-      updateSystemCheck('face', { status: 'fail', detail: 'Please confirm using the checkbox below' });
-    }
-  }, [manualFaceConfirm, hasFaceDetector, phase, updateSystemCheck, systemChecks]);
-
-  useEffect(() => {
-    if (phase !== 'system_checks' || hasFaceDetector) return;
-    if (manualMultipleConfirm) {
-      updateSystemCheck('multiple', { status: 'pass', detail: 'Single person confirmed (manual)' });
-    } else if (systemChecks.find((c) => c.id === 'multiple')?.status !== 'checking') {
-      updateSystemCheck('multiple', { status: 'fail', detail: 'Please confirm using the checkbox below' });
-    }
-  }, [manualMultipleConfirm, hasFaceDetector, phase, updateSystemCheck, systemChecks]);
 
   // Cleanup all resources on unmount
   useEffect(() => {
@@ -1027,36 +1008,6 @@ export default function StepSystemCheck({
             {/* Hidden canvas for frame analysis */}
             <canvas ref={canvasRef} className="hidden" />
 
-            {/* Manual face / multiple people confirmation fallback */}
-            {!hasFaceDetector && allSystemDone && (
-              <div className="mt-4 bg-white border border-gray-200 rounded-lg p-4 space-y-3">
-                <p className="text-sm text-gray-700 font-medium">
-                  FaceDetector API is not available in your browser. Please confirm manually:
-                </p>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={manualFaceConfirm}
-                    onChange={(e) => setManualFaceConfirm(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                  />
-                  <span className="text-sm text-gray-700">
-                    I confirm my face is clearly visible in the camera
-                  </span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={manualMultipleConfirm}
-                    onChange={(e) => setManualMultipleConfirm(e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500"
-                  />
-                  <span className="text-sm text-gray-700">
-                    I confirm I am alone and no other person is visible
-                  </span>
-                </label>
-              </div>
-            )}
 
             {/* All Checks Passed banner */}
             {allSystemPassed && (

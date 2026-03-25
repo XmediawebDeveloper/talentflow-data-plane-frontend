@@ -21,9 +21,10 @@ interface HeaderProps {
   onOpenSettings?: () => void;
   onMenuClick?: () => void;
   isMobileMenuOpen?: boolean;
+  subscriptionExpired?: boolean;
 }
 
-export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen }: HeaderProps) {
+export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen, subscriptionExpired }: HeaderProps) {
   if (!user) return null;
   const router = useRouter();
   const { refreshUser } = useAuth();
@@ -465,12 +466,17 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     if (tenantStatus === 'SUSPENDED') return 'Account Suspended';
     if (tenantStatus === 'LOCKED') return 'Account Locked';
     if (quotaError) return 'Unable to load';
-    return quotaData?.plan_name || 'No plan data';
+    const rawName = quotaData?.plan_name || quotaData?.plan_info?.plan_name;
+    if (!rawName || rawName.toLowerCase() === 'no plan') {
+      return quotaData?.is_trial ? 'Free Trial' : 'No plan data';
+    }
+    return rawName.replace(/\s*\(.*?\)\s*/g, '').trim() || rawName;
   };
 
   const planName = getPlanDisplayName();
   const usagePercentage = totalUnits.limit > 0 ? ((totalUnits.used / totalUnits.limit) * 100) : 0;
   const isPendingStatus = tenantStatus === 'PENDING' || tenantStatus === 'SUSPENDED' || tenantStatus === 'LOCKED';
+  const isExpiredSubscription = ['expired', 'inactive'].includes((quotaData?.subscription_status || '').toLowerCase());
 
   const roleLabels = {
     tenant_admin: 'Owner',
@@ -561,7 +567,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 <span className="text-xs lg:text-sm font-semibold text-gray-900 truncate max-w-[100px] lg:max-w-[140px]" title={loadingQuota ? 'Loading...' : planName}>
                   {loadingQuota ? 'Loading...' : planName}
                 </span>
-                {!loadingQuota && !quotaError && !isPendingStatus && (
+                {!loadingQuota && !quotaError && !isPendingStatus && !isExpiredSubscription && (
                   <div className="flex items-center gap-1 lg:gap-1.5">
                     <span className="text-xs lg:text-sm font-bold text-gray-700">{totalUnits.remaining.toLocaleString()}</span>
                     <span className="text-[10px] lg:text-xs text-gray-500">units left</span>
@@ -573,7 +579,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   </span>
                 )}
               </div>
-              {!loadingQuota && !quotaError && !isPendingStatus && totalUnits.limit > 0 && (
+              {!loadingQuota && !quotaError && !isPendingStatus && !isExpiredSubscription && totalUnits.limit > 0 && (
                 <div className="w-12 lg:w-16 h-2 bg-white/60 rounded-full overflow-hidden border border-gray-200">
                   <div
                     className={`h-full rounded-full transition-all ${
@@ -587,7 +593,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
               <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showPlanMenu ? 'rotate-180' : ''}`} />
             </button>
 
-            {showPlanMenu && (
+            {showPlanMenu && !isExpiredSubscription && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowPlanMenu(false)} />
                 <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-20">
@@ -1111,10 +1117,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 <div className="py-2">
                   <button
                     onClick={() => {
+                      if (subscriptionExpired) return;
                       setShowUserMenu(false);
                       router.push('/settings/general-settings');
                     }}
-                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                    disabled={subscriptionExpired}
+                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
                       <User className="w-4 h-4 text-gray-600" />
@@ -1126,10 +1134,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   </button>
                   <button
                     onClick={() => {
+                      if (subscriptionExpired) return;
                       setShowUserMenu(false);
                       router.push('/settings/security');
                     }}
-                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                    disabled={subscriptionExpired}
+                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
                       <Shield className="w-4 h-4 text-gray-600" />
@@ -1141,10 +1151,12 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   </button>
                   <button
                     onClick={() => {
+                      if (subscriptionExpired) return;
                       setShowUserMenu(false);
                       router.push('/audits/activity');
                     }}
-                    className="w-full px-5 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-3 group"
+                    disabled={subscriptionExpired}
+                    className={`w-full px-5 py-2.5 text-left text-sm flex items-center gap-3 group transition-colors ${subscriptionExpired ? 'opacity-40 cursor-not-allowed' : 'text-gray-700 hover:bg-gray-50'}`}
                   >
                     <div className="w-8 h-8 rounded-lg bg-gray-100 group-hover:bg-gray-200 flex items-center justify-center transition-colors">
                       <Activity className="w-4 h-4 text-gray-600" />

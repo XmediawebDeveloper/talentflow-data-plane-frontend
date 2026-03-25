@@ -61,6 +61,10 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       if (!containerRef.current) return;
       let mounted = true;
       let rafId: number | null = null;
+      // Track head locally so cleanup can stop it even before headRef is set.
+      // Without this, React StrictMode's double-invoke creates two TalkingHead
+      // instances on the same canvas and the first one is never stopped.
+      let localHead: any = null;
 
       (async () => {
         try {
@@ -92,27 +96,21 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             lightDirectIntensity: 40,           // strong front light for subject pop
             lightSpotIntensity: 0,              // no harsh spot
           });
+          localHead = head; // register immediately so cleanup can stop it
 
-          await head.showAvatar({
-            url: avatarUrl,
-            body: "F",
-            lipsyncLang: "en",
-          });
-
-          if (!mounted) return;
-
-          // ── Inject user-gesture AudioContext (24kHz) so browser doesn't block audio ──
-          // Must happen AFTER showAvatar so TalkingHead's own init is complete.
+          // ── Inject user-gesture AudioContext (24kHz) BEFORE showAvatar ──
+          // TalkingHead creates a suspended AudioContext in its constructor.
+          // By injecting the pre-created running context now, showAvatar() and
+          // the subsequent start() call use a context that is already running,
+          // avoiding autoplay-policy hangs.
           try {
             const preCreated = (window as any).__interviewAudioContext as AudioContext | undefined;
             if (preCreated && preCreated.state !== "closed") {
-              // Close TalkingHead's auto-created (suspended) AudioContext
               if (head.audioCtx && head.audioCtx !== preCreated) {
                 try { head.audioCtx.close(); } catch {}
               }
               head.audioCtx = preCreated;
               (window as any).__interviewAudioContext = null;
-              // Rebuild audio graph nodes on the 24kHz context
               head.audioSpeechSource = preCreated.createBufferSource();
               head.audioBackgroundSource = preCreated.createBufferSource();
               head.audioBackgroundGainNode = preCreated.createGain();
@@ -121,19 +119,26 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
               head.audioAnalyzerNode = preCreated.createAnalyser();
               head.audioAnalyzerNode.fftSize = 256;
               head.audioAnalyzerNode.smoothingTimeConstant = 0.1;
-              // Re-wire: stream gain → analyzer → speech gain → destination
               head.audioStreamGainNode.connect(head.audioAnalyzerNode);
               head.audioAnalyzerNode.connect(head.audioSpeechGainNode);
               head.audioSpeechGainNode.connect(preCreated.destination);
               head.audioBackgroundGainNode.connect(preCreated.destination);
-              // Force worklet rebuild on next streamStart
               head.workletLoaded = false;
               head.streamWorkletNode = null;
-              console.log("[TalkingHead] Injected 24kHz AudioContext, state:", preCreated.state, "sampleRate:", preCreated.sampleRate);
+              console.log("[TalkingHead] Pre-injected 24kHz AudioContext, state:", preCreated.state);
             }
           } catch (e) {
-            console.warn("[TalkingHead] AudioContext injection failed:", e);
+            console.warn("[TalkingHead] AudioContext pre-injection failed:", e);
           }
+
+          await Promise.race([
+            head.showAvatar({ url: avatarUrl, body: "F", lipsyncLang: "en" }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("showAvatar timeout after 8 s")), 8000)
+            ),
+          ]);
+
+          if (!mounted) return;
 
           // ══════════════════════════════════════════════════════════
           // PROFESSIONAL INTERVIEWER BEHAVIOR
@@ -476,15 +481,23 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
         } catch (err) {
           console.error("[TalkingHead] Failed to load avatar:", err);
-          if (mounted) setStatus("error");
+          if (mounted) {
+            setStatus("error");
+            // Still signal ready so the WebSocket connects even without the avatar
+            onReady?.();
+          }
         }
       })();
 
       return () => {
         mounted = false;
         if (rafId !== null) cancelAnimationFrame(rafId);
+        // Stop via localHead (set immediately after construction) so we can
+        // clean up even if showAvatar() is still in-flight and headRef isn't set yet.
+        try { localHead?.stop?.(); } catch {}
         try { headRef.current?.stop?.(); } catch {}
         headRef.current = null;
+        localHead = null;
       };
     }, [avatarUrl]);
 
@@ -521,43 +534,51 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         // Rebuild viseme timeline from current text
         lastBuiltTextRef.current = "";
 
-        // Resume AudioContext if suspended
-        try {
-          if (head.audioCtx?.state === "suspended") {
-            head.audioCtx.resume();
+        // Pre-resume AudioContext if suspended BEFORE calling head.streamStart.
+        // TalkingHead's streamStart has a 1-second resume timeout — if we don't
+        // pre-resume it returns early WITHOUT setting up the worklet, so
+        // streamNotifyEnd() is a no-op and onAudioEnd is never called (interview hangs).
+        const preResumeCtx = async () => {
+          const ctx = head.audioCtx as AudioContext | undefined;
+          if (ctx && ctx.state !== "running") {
+            try { await ctx.resume(); } catch { /* ignore */ }
           }
-        } catch {}
+        };
 
         const lm = head.lipsync?.["en"];
         console.log("[TalkingHead] streamStart — phoneme-based lip sync, lipsync module:", lm ? "loaded" : "NOT loaded");
 
-        head
-          .streamStart(
-            {
-              gain: 1,
-              lipsyncLang: "en",
-              waitForAudioChunks: 0,
-            },
-            null,
-            () => {
-              console.log("[TalkingHead] stream complete — audio finished");
-              streamReadyRef.current = false;
+        preResumeCtx().then(() => {
+          head
+            .streamStart(
+              {
+                gain: 1,
+                lipsyncLang: "en",
+                waitForAudioChunks: 0,
+              },
+              null,
+              () => {
+                console.log("[TalkingHead] stream complete — audio finished");
+                streamReadyRef.current = false;
+                onAudioEndRef.current?.();
+              },
+            )
+            .then(() => {
+              if (!headRef.current) return;
+              streamReadyRef.current = true;
+              const queued = pendingRef.current.splice(0);
+              console.log("[TalkingHead] streamStart ready, flushing", queued.length, "queued chunks");
+              for (const buf of queued) {
+                sendAudioChunk(buf);
+              }
+            })
+            .catch((e: Error) => {
+              console.error("[TalkingHead] streamStart failed:", e);
+              streamReadyRef.current = true;
+              // Fallback: fire onAudioEnd so the mic starts even if TalkingHead failed
               onAudioEndRef.current?.();
-            },
-          )
-          .then(() => {
-            if (!headRef.current) return;
-            streamReadyRef.current = true;
-            const queued = pendingRef.current.splice(0);
-            console.log("[TalkingHead] streamStart ready, flushing", queued.length, "queued chunks");
-            for (const buf of queued) {
-              sendAudioChunk(buf);
-            }
-          })
-          .catch((e: Error) => {
-            console.error("[TalkingHead] streamStart failed:", e);
-            streamReadyRef.current = true;
-          });
+            });
+        });
       },
 
       streamAudio(pcmData: ArrayBuffer) {
