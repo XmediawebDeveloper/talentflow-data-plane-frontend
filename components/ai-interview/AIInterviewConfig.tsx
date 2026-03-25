@@ -842,7 +842,7 @@ export default function AIInterviewConfig() {
         const payload = {
           position: selectedJd.title,
           jd_id: selectedJd.id,
-          duration_minutes: mode === 'fixed' ? (FIXED_TIME.mth + (nth.enabled ? FIXED_TIME.nth : 0) + (hrEnabled ? FIXED_TIME.hr : 0)) : 0,
+          duration_minutes: FIXED_TIME.mth + (nth.enabled ? FIXED_TIME.nth : 0) + (hrEnabled ? FIXED_TIME.hr : 0),
           rounds_config: rounds,
           recording_enabled: recordingEnabled,
           available_languages: availableLanguages,
@@ -945,13 +945,9 @@ export default function AIInterviewConfig() {
   const buildRounds = (isDraft = false): AIInterviewRoundConfig[] => {
     const rounds: AIInterviewRoundConfig[] = [];
     const dur = (cat: 'mth' | 'nth' | 'hr') => {
-      if (mode === 'fixed') {
-        if (cat === 'mth') return fixedMthMin;
-        if (cat === 'nth') return fixedNthMin;
-        return fixedHrMin;
-      }
-      // Flexible: duration_minutes = 0 (no restriction)
-      return 0;
+      if (cat === 'mth') return fixedMthMin;
+      if (cat === 'nth') return fixedNthMin;
+      return fixedHrMin;
     };
 
     // MTH round
@@ -1054,7 +1050,7 @@ export default function AIInterviewConfig() {
       const payload = {
         position: selectedJd.title,
         jd_id: selectedJd.id,
-        duration_minutes: mode === 'fixed' ? totalFixed : 0,
+        duration_minutes: totalFixed,
         rounds_config: buildRounds(true),
         recording_enabled: recordingEnabled,
         available_languages: availableLanguages,
@@ -1253,7 +1249,7 @@ export default function AIInterviewConfig() {
                   <Clock className="w-4 h-4 text-gray-600" />
                   <span className="font-semibold text-gray-900 text-sm">Interview Mode</span>
                 </div>
-                <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-2 gap-3">
                   {/* Fixed */}
                   <button
                     onClick={() => setMode('fixed')}
@@ -1269,6 +1265,27 @@ export default function AIInterviewConfig() {
                       Candidate response time is capped. AI narration excluded.
                     </p>
                     <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'fixed' ? 'text-gray-400' : 'text-gray-400'}`}>
+                      {hrEnabled && <div>HR Round → {fixedHrMin} min</div>}
+                      <div>Must-to-Have → {fixedMthMin} min</div>
+                      {nth.enabled && <div>Nice-to-Have → {fixedNthMin} min</div>}
+                    </div>
+                  </button>
+
+                  {/* Flexible */}
+                  <button
+                    onClick={() => setMode('flexible')}
+                    className={`relative flex flex-col gap-1 p-4 rounded-lg border-2 text-left transition-all ${
+                      mode === 'flexible' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Timer className={`w-4 h-4 ${mode === 'flexible' ? 'text-white' : 'text-gray-600'}`} />
+                      <span className="font-semibold text-sm">Flexible — 30 min</span>
+                    </div>
+                    <p className={`text-xs ${mode === 'flexible' ? 'text-gray-300' : 'text-gray-500'}`}>
+                      Candidate response time is capped. AI narration excluded.
+                    </p>
+                    <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'flexible' ? 'text-gray-400' : 'text-gray-400'}`}>
                       {hrEnabled && <div>HR Round → {fixedHrMin} min</div>}
                       <div>Must-to-Have → {fixedMthMin} min</div>
                       {nth.enabled && <div>Nice-to-Have → {fixedNthMin} min</div>}
