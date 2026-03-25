@@ -109,18 +109,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const isUnmountedRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
 
-  // Countdown timer (flexible mode = duration 0 → count UP instead)
+  // Timer modes:
+  //   isFlexibleMode      = duration 0 (legacy unlimited) → count UP, pause while Linda speaks
+  //   isNewFlexibleMode   = duration > 0, interview_mode='flexible' → count DOWN, runs NON-STOP
+  //   timed / fixed       = duration > 0, interview_mode='fixed'  → count DOWN, pause while Linda speaks
   const isFlexibleMode = interviewInfo.duration_minutes === 0;
+  const isNewFlexibleMode = !isFlexibleMode && interviewInfo.interview_mode === 'flexible';
   const [remainingSeconds, setRemainingSeconds] = useState(isFlexibleMode ? 0 : interviewInfo.duration_minutes * 60);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!isConnected || isClosing) return;
     timerIntervalRef.current = setInterval(() => {
-      // Pause global timer while Linda is speaking OR processing candidate response
-      if (isAiSpeakingRef.current || isProcessingRef.current) return;
+      // Flexible (new 30-min): timer runs non-stop — Linda's speaking time counts toward 30 min.
+      // Fixed/timed and legacy flexible: pause while Linda is speaking or processing.
+      if (!isNewFlexibleMode && (isAiSpeakingRef.current || isProcessingRef.current)) return;
       setRemainingSeconds(prev => {
-        if (isFlexibleMode) return prev + 1; // count up
+        if (isFlexibleMode) return prev + 1; // legacy unlimited: count up
         if (prev <= 1) {
           if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
           return 0;
@@ -131,7 +136,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [isConnected, isClosing, isFlexibleMode]);
+  }, [isConnected, isClosing, isFlexibleMode, isNewFlexibleMode]);
 
   // Waveform animation — driven by isAiSpeaking
   useEffect(() => {

@@ -9,6 +9,7 @@ import JDCreation from '@/components/JDCreation';
 import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // 1:1 JD-Assessment relationship: JDs that already have assessments cannot be selected
 
@@ -52,6 +53,8 @@ interface SectionConfig {
 export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings }: AssessmentCreationProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { isTenantAdmin, user } = useAuth();
+  const canCreateJd = isTenantAdmin || (user?.permissions?.canCreateJd ?? false);
   const { available: assessmentAvailable } = usePlanFeature('assessment');
 
   // Read initial step from URL, default to 'select-jd'
@@ -1330,14 +1333,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     Choose the JD that this assessment will be based on
                   </p>
                 </div>
-                <button
-                  onClick={handleCreateNewJD}
-                  className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 text-sm flex-shrink-0"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Create New Job</span>
-                  <span className="sm:hidden">New Job</span>
-                </button>
+                {canCreateJd && (
+                  <button
+                    onClick={handleCreateNewJD}
+                    className="px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 text-sm flex-shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">Create New Job</span>
+                    <span className="sm:hidden">New Job</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1472,13 +1477,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
                     <p className="text-sm sm:text-base">No published jobs available</p>
                     <p className="text-xs sm:text-sm mt-1">Create and publish a Job first to create assessments</p>
-                    <button
-                      onClick={handleCreateNewJD}
-                      className="mt-4 px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 mx-auto text-sm"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Create New Job
-                    </button>
+                    {canCreateJd && (
+                      <button
+                        onClick={handleCreateNewJD}
+                        className="mt-4 px-3 sm:px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 mx-auto text-sm"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Create New Job
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
