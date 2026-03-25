@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, Building2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTheme } from 'next-themes';
 import { User } from '@/lib/types/tenant';
 import { authService, isTwoFactorRequired, LoginResponse } from '@/lib/services';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -319,11 +320,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     setError('');
   };
 
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   // Styles
   const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
+    background: isDark
+      ? 'linear-gradient(135deg, #111827 0%, #1F2937 50%, #1E1B4B 100%)'
+      : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -370,7 +375,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const brandNameStyle: React.CSSProperties = {
     fontSize: '32px',
     fontWeight: 700,
-    color: '#111827',
+    color: isDark ? '#F9FAFB' : '#111827',
   };
 
   const brandSubtitleStyle: React.CSSProperties = {
@@ -381,7 +386,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const headlineStyle: React.CSSProperties = {
     fontSize: '48px',
     fontWeight: 700,
-    color: '#111827',
+    color: isDark ? '#F9FAFB' : '#111827',
     lineHeight: 1.2,
     marginBottom: '24px',
   };
@@ -395,7 +400,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
   const descriptionStyle: React.CSSProperties = {
     fontSize: '18px',
-    color: '#6B7280',
+    color: isDark ? '#9CA3AF' : '#6B7280',
     lineHeight: 1.6,
     marginBottom: '32px',
     maxWidth: '480px',
@@ -408,11 +413,11 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     marginBottom: '16px',
   };
 
-  const featureIconBoxStyle = (color: string): React.CSSProperties => ({
+  const featureIconBoxStyle = (color: string, darkColor: string): React.CSSProperties => ({
     width: '40px',
     height: '40px',
     borderRadius: '50%',
-    backgroundColor: color,
+    backgroundColor: isDark ? darkColor : color,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -424,18 +429,20 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   };
 
   const formCardStyle: React.CSSProperties = {
-    backgroundColor: '#ffffff',
+    backgroundColor: isDark ? '#1F2937' : '#ffffff',
     borderRadius: '24px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+    boxShadow: isDark
+      ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+      : '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
     padding: isMobile ? '32px' : '40px',
-    border: '1px solid #F3F4F6',
+    border: isDark ? '1px solid #374151' : '1px solid #F3F4F6',
   };
 
   const backButtonStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    color: '#6B7280',
+    color: isDark ? '#9CA3AF' : '#6B7280',
     fontSize: '14px',
     marginBottom: '24px',
     background: 'none',
@@ -454,20 +461,20 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const formTitleStyle: React.CSSProperties = {
     fontSize: '28px',
     fontWeight: 700,
-    color: '#111827',
+    color: isDark ? '#F9FAFB' : '#111827',
     marginBottom: '8px',
   };
 
   const formSubtitleStyle: React.CSSProperties = {
-    color: '#6B7280',
+    color: isDark ? '#9CA3AF' : '#6B7280',
     marginBottom: '32px',
   };
 
   const errorBoxStyle: React.CSSProperties = {
     marginBottom: '24px',
     padding: '16px',
-    backgroundColor: '#FEF2F2',
-    border: '1px solid #FECACA',
+    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
+    border: isDark ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid #FECACA',
     borderRadius: '12px',
     display: 'flex',
     alignItems: 'flex-start',
@@ -482,7 +489,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     display: 'block',
     fontSize: '14px',
     fontWeight: 500,
-    color: '#374151',
+    color: isDark ? '#D1D5DB' : '#374151',
     marginBottom: '8px',
   };
 
@@ -504,11 +511,11 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     paddingRight: '16px',
     paddingTop: '14px',
     paddingBottom: '14px',
-    border: '1px solid #D1D5DB',
+    border: isDark ? '1px solid #4B5563' : '1px solid #D1D5DB',
     borderRadius: '12px',
     fontSize: '16px',
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
+    color: isDark ? '#F9FAFB' : '#111827',
+    backgroundColor: isDark ? '#374151' : '#F9FAFB',
     outline: 'none',
     boxSizing: 'border-box',
     transition: 'all 0.2s',
@@ -537,7 +544,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     alignItems: 'center',
     gap: '8px',
     fontSize: '14px',
-    color: '#374151',
+    color: isDark ? '#D1D5DB' : '#374151',
     cursor: 'pointer',
   };
 
@@ -570,13 +577,13 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const footerStyle: React.CSSProperties = {
     marginTop: '32px',
     paddingTop: '24px',
-    borderTop: '1px solid #E5E7EB',
+    borderTop: isDark ? '1px solid #374151' : '1px solid #E5E7EB',
   };
 
   const footerTextStyle: React.CSSProperties = {
     textAlign: 'center',
     fontSize: '14px',
-    color: '#4B5563',
+    color: isDark ? '#9CA3AF' : '#4B5563',
     marginBottom: '12px',
   };
 
@@ -592,7 +599,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     marginTop: '24px',
     textAlign: 'center',
     fontSize: '14px',
-    color: '#9CA3AF',
+    color: isDark ? '#6B7280' : '#9CA3AF',
   };
 
   return (
@@ -626,30 +633,30 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
           <div>
             <div style={featureItemStyle}>
-              <div style={featureIconBoxStyle('#DBEAFE')}>
+              <div style={featureIconBoxStyle('#DBEAFE', 'rgba(37, 99, 235, 0.2)')}>
                 <Sparkles style={{ width: 20, height: 20, color: '#2563EB' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>AI-Powered Resume Parsing</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>Automated candidate screening and matching</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>AI-Powered Resume Parsing</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Automated candidate screening and matching</div>
               </div>
             </div>
             <div style={featureItemStyle}>
-              <div style={featureIconBoxStyle('#E0E7FF')}>
+              <div style={featureIconBoxStyle('#E0E7FF', 'rgba(67, 56, 202, 0.2)')}>
                 <Sparkles style={{ width: 20, height: 20, color: '#4338CA' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>Smart Assessment Tools</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>LLM-driven candidate evaluations</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>Smart Assessment Tools</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>LLM-driven candidate evaluations</div>
               </div>
             </div>
             <div style={featureItemStyle}>
-              <div style={featureIconBoxStyle('#EDE9FE')}>
+              <div style={featureIconBoxStyle('#EDE9FE', 'rgba(124, 58, 237, 0.2)')}>
                 <Sparkles style={{ width: 20, height: 20, color: '#7C3AED' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>Centralized Database</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>Organize and track all candidates in one place</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>Centralized Database</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Organize and track all candidates in one place</div>
               </div>
             </div>
           </div>
@@ -672,7 +679,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                 <Briefcase style={{ width: 24, height: 24, color: '#ffffff' }} />
               </div>
               <div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>TalentFlow</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>TalentFlow</div>
                 <div style={{ fontSize: 12, color: '#2563EB' }}>Recruitment Platform</div>
               </div>
             </div>
@@ -705,15 +712,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                   <p style={{ ...formSubtitleStyle, marginBottom: '8px' }}>
                     Enter the 6-digit code from your authenticator app
                   </p>
-                  <p style={{ fontSize: '14px', color: '#9CA3AF' }}>
-                    Logging in as <strong style={{ color: '#374151' }}>{userEmail2FA}</strong>
+                  <p style={{ fontSize: '14px', color: isDark ? '#6B7280' : '#9CA3AF' }}>
+                    Logging in as <strong style={{ color: isDark ? '#D1D5DB' : '#374151' }}>{userEmail2FA}</strong>
                   </p>
                 </div>
 
                 {error && (
                   <div style={errorBoxStyle}>
                     <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-                    <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
+                    <span style={{ fontSize: 14, color: isDark ? '#FCA5A5' : '#991B1B' }}>{error}</span>
                   </div>
                 )}
 
@@ -736,19 +743,20 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                           textAlign: 'center',
                           fontSize: '24px',
                           fontWeight: 600,
-                          border: '2px solid #D1D5DB',
+                          border: isDark ? '2px solid #4B5563' : '2px solid #D1D5DB',
                           borderRadius: '12px',
-                          backgroundColor: '#F9FAFB',
+                          backgroundColor: isDark ? '#374151' : '#F9FAFB',
+                          color: isDark ? '#F9FAFB' : '#111827',
                           outline: 'none',
                           transition: 'all 0.2s',
                         }}
                         onFocus={(e) => {
                           e.target.style.borderColor = '#2563EB';
-                          e.target.style.backgroundColor = '#ffffff';
+                          e.target.style.backgroundColor = isDark ? '#4B5563' : '#ffffff';
                         }}
                         onBlur={(e) => {
-                          e.target.style.borderColor = '#D1D5DB';
-                          e.target.style.backgroundColor = '#F9FAFB';
+                          e.target.style.borderColor = isDark ? '#4B5563' : '#D1D5DB';
+                          e.target.style.backgroundColor = isDark ? '#374151' : '#F9FAFB';
                         }}
                       />
                     ))}
@@ -777,7 +785,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                   </button>
                 </form>
 
-                <p style={{ marginTop: '24px', textAlign: 'center', fontSize: '14px', color: '#6B7280' }}>
+                <p style={{ marginTop: '24px', textAlign: 'center', fontSize: '14px', color: isDark ? '#9CA3AF' : '#6B7280' }}>
                   Open your authenticator app (Google Authenticator, Authy, etc.) to view your verification code.
                 </p>
               </>
@@ -788,15 +796,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                   <div style={{
                     marginBottom: '20px',
                     padding: '10px 14px',
-                    backgroundColor: '#EFF6FF',
-                    border: '1px solid #BFDBFE',
+                    backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF',
+                    border: isDark ? '1px solid rgba(37, 99, 235, 0.3)' : '1px solid #BFDBFE',
                     borderRadius: '10px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
                   }}>
                     <Building2 style={{ width: 16, height: 16, color: '#2563EB', flexShrink: 0 }} />
-                    <span style={{ fontSize: '13px', color: '#1D4ED8' }}>
+                    <span style={{ fontSize: '13px', color: isDark ? '#93C5FD' : '#1D4ED8' }}>
                       Signing in to <strong style={{ textTransform: 'capitalize' }}>{subdomain}</strong> workspace
                     </span>
                   </div>
@@ -808,7 +816,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                 {error && (
                   <div style={errorBoxStyle}>
                     <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-                    <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
+                    <span style={{ fontSize: 14, color: isDark ? '#FCA5A5' : '#991B1B' }}>{error}</span>
                   </div>
                 )}
 

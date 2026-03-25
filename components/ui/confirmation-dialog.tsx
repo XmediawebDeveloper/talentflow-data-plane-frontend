@@ -46,7 +46,7 @@ export function ConfirmationDialog({
       icon: Info,
       iconBg: 'bg-gray-100',
       iconColor: 'text-gray-800',
-      buttonBg: 'bg-gray-800 hover:bg-gray-900',
+      buttonBg: 'bg-gray-800 hover:bg-gray-900 dark:bg-gray-600 dark:hover:bg-gray-500',
     },
     success: {
       icon: CheckCircle,
@@ -69,7 +69,7 @@ export function ConfirmationDialog({
 
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full pointer-events-auto animate-in zoom-in-95 duration-200">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full pointer-events-auto animate-in zoom-in-95 duration-200">
           <div className="p-6">
             {/* Icon */}
             <div className={`w-12 h-12 ${config.iconBg} rounded-full flex items-center justify-center mx-auto mb-4`}>
@@ -89,7 +89,7 @@ export function ConfirmationDialog({
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+                className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 {cancelText}
               </button>

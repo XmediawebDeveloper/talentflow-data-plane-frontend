@@ -31,12 +31,15 @@
   --primary: #374151;
   --primary-hover: #1f2937;
   --primary-light: #6b7280;
+  --primary-foreground: #ffffff;
 
   --secondary: #9ca3af;
   --secondary-hover: #6b7280;
+  --secondary-foreground: #374151;
 
   --accent: #4b5563;
   --accent-light: #e5e7eb;
+  --accent-foreground: #111827;
 
   --surface: #f9fafb;
   --surface-hover: #f3f4f6;
@@ -57,6 +60,18 @@
 
   --header-bg: #ffffff;
   --header-border: #e5e7eb;
+
+  /* Component tokens */
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --destructive: #dc2626;
+  --ring: #374151;
+  --input: #e5e7eb;
+  --input-background: #ffffff;
 }
 
 /* Markdown/Prose Styling for JD Preview */
@@ -238,6 +253,24 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-surface: var(--surface);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -251,12 +284,15 @@
     --primary: #9ca3af;
     --primary-hover: #d1d5db;
     --primary-light: #6b7280;
+    --primary-foreground: #111827;
 
     --secondary: #6b7280;
     --secondary-hover: #9ca3af;
+    --secondary-foreground: #f9fafb;
 
     --accent: #9ca3af;
     --accent-light: #374151;
+    --accent-foreground: #f9fafb;
 
     --surface: #1f2937;
     --surface-hover: #374151;
@@ -277,6 +313,18 @@
 
     --header-bg: #1f2937;
     --header-border: #374151;
+
+    /* Component tokens - Dark Mode */
+    --popover: #1f2937;
+    --popover-foreground: #f9fafb;
+    --card: #1f2937;
+    --card-foreground: #f9fafb;
+    --muted: #374151;
+    --muted-foreground: #9ca3af;
+    --destructive: #ef4444;
+    --ring: #9ca3af;
+    --input: #374151;
+    --input-background: #1f2937;
   }
 }
 
@@ -288,12 +336,15 @@
   --primary: #9ca3af;
   --primary-hover: #d1d5db;
   --primary-light: #6b7280;
+  --primary-foreground: #111827;
 
   --secondary: #6b7280;
   --secondary-hover: #9ca3af;
+  --secondary-foreground: #f9fafb;
 
   --accent: #9ca3af;
   --accent-light: #374151;
+  --accent-foreground: #f9fafb;
 
   --surface: #1f2937;
   --surface-hover: #374151;
@@ -314,6 +365,20 @@
 
   --header-bg: #1f2937;
   --header-border: #374151;
+
+  /* Component tokens - Dark Mode */
+  --popover: #1f2937;
+  --popover-foreground: #f9fafb;
+  --card: #1f2937;
+  --card-foreground: #f9fafb;
+  --muted: #374151;
+  --muted-foreground: #9ca3af;
+  --destructive: #ef4444;
+  --ring: #9ca3af;
+  --input: #374151;
+  --input-background: #1f2937;
+
+  color-scheme: dark;
 }
 
 body {
@@ -349,6 +414,40 @@ body {
 
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Dark mode overrides for markdown-content */
+.dark .markdown-content h1 {
+  color: var(--text-primary);
+  border-bottom-color: #3b82f6;
+}
+.dark .markdown-content h2 {
+  color: var(--text-primary);
+  border-bottom-color: var(--border);
+}
+.dark .markdown-content h3 { color: var(--text-secondary); }
+.dark .markdown-content h4 { color: var(--text-secondary); }
+.dark .markdown-content p { color: var(--text-secondary); }
+.dark .markdown-content li { color: var(--text-secondary); }
+.dark .markdown-content li::marker { color: var(--text-muted); }
+.dark .markdown-content strong,
+.dark .markdown-content b { color: var(--text-primary); }
+.dark .markdown-content a { color: #60a5fa; }
+.dark .markdown-content a:hover { color: #93c5fd; }
+.dark .markdown-content blockquote {
+  color: var(--text-muted);
+  background-color: var(--surface);
+  border-left-color: #3b82f6;
+}
+.dark .markdown-content hr { border-top-color: var(--border); }
+.dark .markdown-content th {
+  background-color: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.dark .markdown-content td {
+  color: var(--text-secondary);
+  border-color: var(--border);
 }
 
 /* FIX-009: Standardized Focus Indicators for Accessibility */
@@ -435,4 +534,133 @@ a:focus:not(:focus-visible) {
     overflow-wrap: break-word;
     word-wrap: break-word;
   }
+}
+
+/* ============================================================
+   DARK MODE GLOBAL OVERRIDES
+   These are unlayered CSS rules and therefore override Tailwind
+   utility classes (which live in @layer utilities). This lets
+   us apply dark-mode theming across all 200+ components that
+   use hardcoded Tailwind gray/white color classes without
+   touching every individual file.
+   ============================================================ */
+
+/* ── Background colors ──────────────────────────────────── */
+.dark .bg-white  { background-color: var(--surface); }
+.dark .bg-gray-50 { background-color: var(--surface); }
+.dark .bg-gray-100 { background-color: var(--surface-hover); }
+.dark .bg-gray-200 { background-color: var(--surface-active); }
+
+/* ── Hover background colors ────────────────────────────── */
+.dark .hover\:bg-white:hover  { background-color: var(--surface-hover); }
+.dark .hover\:bg-gray-50:hover  { background-color: var(--surface-hover); }
+.dark .hover\:bg-gray-100:hover { background-color: var(--surface-active); }
+.dark .hover\:bg-gray-200:hover { background-color: var(--border-dark); }
+
+/* ── Text colors ─────────────────────────────────────────── */
+.dark .text-gray-900 { color: var(--text-primary); }
+.dark .text-gray-800 { color: var(--text-primary); }
+.dark .text-gray-700 { color: var(--text-secondary); }
+.dark .text-gray-600 { color: var(--text-secondary); }
+.dark .text-gray-500 { color: var(--text-muted); }
+
+/* ── Hover text colors ───────────────────────────────────── */
+.dark .hover\:text-gray-900:hover { color: var(--text-primary); }
+.dark .hover\:text-gray-800:hover { color: var(--text-primary); }
+.dark .hover\:text-gray-700:hover { color: var(--text-secondary); }
+.dark .hover\:text-gray-600:hover { color: var(--text-secondary); }
+
+/* ── Border colors ───────────────────────────────────────── */
+.dark .border-gray-100 { border-color: var(--border); }
+.dark .border-gray-200 { border-color: var(--border); }
+.dark .border-gray-300 { border-color: var(--border-dark); }
+
+/* ── Divide colors ───────────────────────────────────────── */
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border); }
+.dark .divide-gray-300 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border-dark); }
+
+/* ── Ring / focus ring colors ────────────────────────────── */
+.dark .focus\:ring-gray-600:focus { --tw-ring-color: var(--text-muted); }
+.dark .focus\:ring-gray-500:focus { --tw-ring-color: var(--text-muted); }
+
+/* ── Native form elements ────────────────────────────────── */
+/* Covers raw <input>, <textarea>, <select> that have no
+   Tailwind bg class and would otherwise stay browser-white */
+.dark input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="range"]):not([type="color"]):not([type="checkbox"]):not([type="radio"]) {
+  background-color: var(--input-background);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.dark input::placeholder { color: var(--text-muted); }
+.dark textarea {
+  background-color: var(--input-background);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.dark textarea::placeholder { color: var(--text-muted); }
+.dark select {
+  background-color: var(--input-background);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.dark option {
+  background-color: var(--surface);
+  color: var(--text-primary);
+}
+
+/* ── Dark "primary action" backgrounds ──────────────────── */
+/* bg-gray-800/900 are used as primary button/action colors in light mode.
+   On dark surfaces (#1f2937 = gray-800) they become invisible, so we
+   shift them to lighter grays to preserve visual prominence. */
+.dark .bg-gray-800 { background-color: #374151; }
+.dark .bg-gray-700 { background-color: #4b5563; }
+.dark .bg-gray-900 { background-color: #1f2937; }
+
+/* ── Dark hover brightening (inverts the "darker on hover" to "lighter on hover") */
+.dark .hover\:bg-gray-900:hover { background-color: #4b5563; }
+.dark .hover\:bg-gray-800:hover { background-color: #4b5563; }
+.dark .hover\:bg-gray-700:hover { background-color: #6b7280; }
+
+/* ── Gradient color stops for dark panel headers ─────────── */
+/* e.g. "from-gray-800 to-gray-900" used on dropdown/modal headers */
+.dark .from-gray-800 { --tw-gradient-from: #374151; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .from-gray-900 { --tw-gradient-from: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-gray-800   { --tw-gradient-to: #374151; }
+.dark .to-gray-900   { --tw-gradient-to: #111827; }
+.dark .via-gray-800  { --tw-gradient-via: #374151; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+
+/* ── Specific patterns used in many feature components ───── */
+/* Toggle switch track (used in Settings notifications) */
+.dark .bg-gray-300 { background-color: var(--surface-active); }
+.dark .peer-checked\:bg-gray-800 { background-color: var(--accent); }
+
+/* Colored icon badge backgrounds (light tints — make semi-transparent in dark) */
+.dark .bg-blue-50   { background-color: rgba(59, 130, 246, 0.15); }
+.dark .bg-blue-100  { background-color: rgba(59, 130, 246, 0.2); }
+.dark .bg-red-50    { background-color: rgba(239, 68, 68, 0.15); }
+.dark .bg-red-100   { background-color: rgba(239, 68, 68, 0.2); }
+.dark .bg-green-50  { background-color: rgba(34, 197, 94, 0.15); }
+.dark .bg-green-100 { background-color: rgba(34, 197, 94, 0.2); }
+.dark .bg-amber-50  { background-color: rgba(245, 158, 11, 0.15); }
+.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.2); }
+.dark .bg-purple-50  { background-color: rgba(168, 85, 247, 0.15); }
+.dark .bg-purple-100 { background-color: rgba(168, 85, 247, 0.2); }
+.dark .bg-orange-50  { background-color: rgba(249, 115, 22, 0.15); }
+.dark .bg-orange-100 { background-color: rgba(249, 115, 22, 0.2); }
+.dark .bg-yellow-50  { background-color: rgba(234, 179, 8, 0.15); }
+.dark .bg-yellow-100 { background-color: rgba(234, 179, 8, 0.2); }
+.dark .bg-indigo-50  { background-color: rgba(99, 102, 241, 0.15); }
+.dark .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.2); }
+
+/* Dark mode focus indicators */
+.dark button:focus-visible,
+.dark a:focus-visible,
+.dark [role="button"]:focus-visible,
+.dark [tabindex]:focus-visible:not([tabindex="-1"]) {
+  outline-color: var(--text-muted);
+}
+.dark input:focus-visible,
+.dark textarea:focus-visible,
+.dark select:focus-visible {
+  outline-color: var(--text-muted);
 }

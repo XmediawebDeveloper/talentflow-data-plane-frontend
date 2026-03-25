@@ -52,11 +52,11 @@ export function PageLoader() {
 
 export function FullPageLoader({ message = 'Loading...' }: { message?: string }) {
   return (
-    <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div className="fixed inset-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
       <div className="text-center">
         <div className="relative">
-          <div className="w-16 h-16 border-4 border-gray-200 rounded-full animate-ping absolute"></div>
-          <div className="w-16 h-16 border-4 border-gray-800 border-t-transparent rounded-full animate-spin"></div>
+          <div className="w-16 h-16 border-4 border-gray-200 dark:border-gray-700 rounded-full animate-ping absolute"></div>
+          <div className="w-16 h-16 border-4 border-gray-800 dark:border-gray-400 border-t-transparent rounded-full animate-spin"></div>
         </div>
         <p className="text-gray-700 mt-6 text-lg font-medium">{message}</p>
       </div>

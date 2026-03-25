@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import {
   X, Check, Sparkles, Building2, Users, Zap, Loader2, AlertCircle, ArrowLeft
 } from 'lucide-react';
@@ -106,6 +107,8 @@ const getIconForPlan = (planName: string, tier: string) => {
 
 export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: PlanSelectionModalProps) {
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   // Handle close - redirect to pricing if no close handler provided
   const handleClose = () => {
@@ -319,8 +322,8 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-[95vw] sm:max-w-[90vw] lg:max-w-[1400px] rounded-xl sm:rounded-2xl md:rounded-3xl"
         style={{
-          backgroundColor: '#ffffff',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          backgroundColor: isDark ? '#1F2937' : '#ffffff',
+          boxShadow: isDark ? '0 25px 50px -12px rgba(0, 0, 0, 0.6)' : '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
           maxHeight: '90vh',
           overflow: 'hidden',
           display: 'flex',
@@ -332,8 +335,8 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
         <div
           className="px-4 py-4 sm:px-6 sm:py-5 md:px-8 md:py-6"
           style={{
-            borderBottom: '1px solid #E5E7EB',
-            background: 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%)',
+            borderBottom: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`,
+            background: isDark ? 'linear-gradient(135deg, #1F2937 0%, #1e2a3b 100%)' : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%)',
             position: 'relative',
           }}
         >
@@ -347,26 +350,26 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
               right: '12px',
               borderRadius: '50%',
               border: 'none',
-              backgroundColor: '#F3F4F6',
+              backgroundColor: isDark ? '#374151' : '#F3F4F6',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               transition: 'background-color 0.2s',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#E5E7EB')}
-            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#F3F4F6')}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = isDark ? '#4B5563' : '#E5E7EB')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = isDark ? '#374151' : '#F3F4F6')}
             title="Close and go to pricing page"
           >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: '#6B7280' }} />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }} />
           </button>
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pr-10 sm:pr-12">
             <div>
-              <h2 className="text-lg sm:text-xl md:text-2xl" style={{ fontWeight: 700, color: '#111827', marginBottom: '4px' }}>
+              <h2 className="text-lg sm:text-xl md:text-2xl" style={{ fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: '4px' }}>
                 Choose Your Plan
               </h2>
-              <p className="text-xs sm:text-sm" style={{ color: '#6B7280' }}>
+              <p className="text-xs sm:text-sm" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>
                 Select a plan to continue. You can upgrade or change anytime.
               </p>
             </div>
@@ -391,7 +394,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
 
           {/* Billing Toggle */}
           <div className="flex items-center gap-2 sm:gap-3 mt-3 sm:mt-4 flex-wrap">
-            <span className="text-xs sm:text-sm" style={{ fontWeight: !isYearly ? 600 : 400, color: !isYearly ? '#111827' : '#6B7280' }}>
+            <span className="text-xs sm:text-sm" style={{ fontWeight: !isYearly ? 600 : 400, color: !isYearly ? (isDark ? '#F9FAFB' : '#111827') : (isDark ? '#9CA3AF' : '#6B7280') }}>
               Monthly
             </span>
             <button
@@ -403,7 +406,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                 borderRadius: '12px',
                 border: 'none',
                 cursor: 'pointer',
-                backgroundColor: isYearly ? '#2563EB' : '#D1D5DB',
+                backgroundColor: isYearly ? '#2563EB' : (isDark ? '#4B5563' : '#D1D5DB'),
                 transition: 'background-color 0.2s',
                 flexShrink: 0,
               }}
@@ -422,7 +425,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                 }}
               />
             </button>
-            <span className="text-xs sm:text-sm" style={{ fontWeight: isYearly ? 600 : 400, color: isYearly ? '#111827' : '#6B7280' }}>
+            <span className="text-xs sm:text-sm" style={{ fontWeight: isYearly ? 600 : 400, color: isYearly ? (isDark ? '#F9FAFB' : '#111827') : (isDark ? '#9CA3AF' : '#6B7280') }}>
               Yearly
             </span>
             <span className="text-[10px] sm:text-xs" style={{
@@ -444,7 +447,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-10 sm:py-16">
               <Loader2 className="w-8 h-8 sm:w-10 sm:h-10" style={{ color: '#2563EB', animation: 'spin 1s linear infinite' }} />
-              <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: '#6B7280' }}>Loading plans...</p>
+              <p className="mt-3 sm:mt-4 text-xs sm:text-sm" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Loading plans...</p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-10 sm:py-16">
@@ -484,11 +487,11 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                     className="p-3 sm:p-4 md:p-5 rounded-xl sm:rounded-2xl"
                     style={{
                       position: 'relative',
-                      border: isSelected ? '2px solid #2563EB' : '2px solid #E5E7EB',
-                      backgroundColor: isSelected ? '#EFF6FF' : '#ffffff',
+                      border: isSelected ? '2px solid #2563EB' : `2px solid ${isDark ? '#374151' : '#E5E7EB'}`,
+                      backgroundColor: isSelected ? (isDark ? 'rgba(37,99,235,0.15)' : '#EFF6FF') : (isDark ? '#111827' : '#ffffff'),
                       cursor: 'pointer',
                       transition: 'all 0.2s',
-                      boxShadow: isSelected ? '0 4px 12px rgba(37, 99, 235, 0.15)' : 'none',
+                      boxShadow: isSelected ? (isDark ? '0 4px 12px rgba(37, 99, 235, 0.3)' : '0 4px 12px rgba(37, 99, 235, 0.15)') : 'none',
                     }}
                   >
                     {/* Selection indicator */}
@@ -499,7 +502,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                         top: '10px',
                         right: '10px',
                         borderRadius: '50%',
-                        border: isSelected ? 'none' : '2px solid #D1D5DB',
+                        border: isSelected ? 'none' : `2px solid ${isDark ? '#4B5563' : '#D1D5DB'}`,
                         backgroundColor: isSelected ? '#2563EB' : 'transparent',
                         display: 'flex',
                         alignItems: 'center',
@@ -513,22 +516,22 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                     <div
                       className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-md mb-2 sm:mb-3"
                       style={{
-                        backgroundColor: isFreeTrial ? '#D1FAE5' : '#F3F4F6',
+                        backgroundColor: isFreeTrial ? (isDark ? 'rgba(16,185,129,0.15)' : '#D1FAE5') : (isDark ? '#374151' : '#F3F4F6'),
                       }}
                     >
-                      <IconComponent className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: isFreeTrial ? '#059669' : '#4B5563' }} />
-                      <span className="text-[10px] sm:text-xs" style={{ fontWeight: 600, color: isFreeTrial ? '#059669' : '#4B5563' }}>
+                      <IconComponent className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: isFreeTrial ? '#059669' : (isDark ? '#9CA3AF' : '#4B5563') }} />
+                      <span className="text-[10px] sm:text-xs" style={{ fontWeight: 600, color: isFreeTrial ? '#059669' : (isDark ? '#9CA3AF' : '#4B5563') }}>
                         {String(plan.planTier || plan.name || '')}
                       </span>
                     </div>
 
                     {/* Plan name */}
-                    <h3 className="text-sm sm:text-base md:text-lg" style={{ fontWeight: 600, color: '#111827', marginBottom: '4px' }}>
+                    <h3 className="text-sm sm:text-base md:text-lg" style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827', marginBottom: '4px' }}>
                       {String(plan.name || '')}
                     </h3>
 
                     {/* Description */}
-                    <p className="text-[11px] sm:text-xs md:text-[13px] mb-2 sm:mb-3" style={{ color: '#6B7280', minHeight: '28px' }}>
+                    <p className="text-[11px] sm:text-xs md:text-[13px] mb-2 sm:mb-3" style={{ color: isDark ? '#9CA3AF' : '#6B7280', minHeight: '28px' }}>
                       {String(plan.description || '')}
                     </p>
 
@@ -537,15 +540,15 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                       {isFreeTrial ? (
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                           <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: '#059669' }}>Free</span>
-                          <span className="text-xs sm:text-sm" style={{ color: '#6B7280' }}>for {plan.trialDays} days</span>
+                          <span className="text-xs sm:text-sm" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>for {plan.trialDays} days</span>
                         </div>
                       ) : displayPrice !== null ? (
                         <div>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', flexWrap: 'wrap' }}>
-                            <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: '#111827' }}>
+                            <span className="text-xl sm:text-2xl md:text-[28px]" style={{ fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>
                               {formatCurrency(displayPrice, plan.currency)}
                             </span>
-                            <span className="text-[11px] sm:text-sm" style={{ color: '#6B7280' }}>
+                            <span className="text-[11px] sm:text-sm" style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>
                               /{isYearly ? 'year' : 'month'}
                             </span>
                           </div>
@@ -567,7 +570,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                           )}
                         </div>
                       ) : (
-                        <span className="text-sm sm:text-base md:text-lg" style={{ fontWeight: 600, color: '#111827' }}>Contact Sales</span>
+                        <span className="text-sm sm:text-base md:text-lg" style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>Contact Sales</span>
                       )}
                     </div>
 
@@ -583,42 +586,42 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                         RU: displayQuotas.RU ?? displayQuotas.resume_uploads ?? displayQuotas.resume_storage,
                       };
                       return (
-                        <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: '12px', marginBottom: '12px' }}>
+                        <div style={{ borderTop: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`, paddingTop: '12px', marginBottom: '12px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '12px' }}>
                             {formatQuota(normalizedQuotas.max_seats) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: '#6B7280' }}>Users</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.max_seats)}</span>
+                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Users</span>
+                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.max_seats)}</span>
                               </div>
                             )}
                             {formatQuota(normalizedQuotas.max_jobs) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: '#6B7280' }}>Jobs</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.max_jobs)}</span>
+                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Jobs</span>
+                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.max_jobs)}</span>
                               </div>
                             )}
                             {formatQuota(normalizedQuotas.RS) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: '#6B7280' }}>Resume Scores</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.RS)}</span>
+                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Resume Scores</span>
+                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.RS)}</span>
                               </div>
                             )}
                             {formatQuota(normalizedQuotas.AS) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: '#6B7280' }}>Assessments</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.AS)}</span>
+                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Assessments</span>
+                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.AS)}</span>
                               </div>
                             )}
                             {formatQuota(normalizedQuotas.RU) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: '#6B7280' }}>Resume Storage</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.RU)}</span>
+                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>Resume Storage</span>
+                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.RU)}</span>
                               </div>
                             )}
                             {formatQuota(normalizedQuotas.AIU) !== null && (
                               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: '#6B7280' }}>AI Interviews</span>
-                                <span style={{ fontWeight: 600, color: '#111827' }}>{formatQuota(normalizedQuotas.AIU)}</span>
+                                <span style={{ color: isDark ? '#9CA3AF' : '#6B7280' }}>AI Interviews</span>
+                                <span style={{ fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuota(normalizedQuotas.AIU)}</span>
                               </div>
                             )}
                           </div>
@@ -632,7 +635,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                         {plan.features.slice(0, expandedFeatures === plan.id ? undefined : 3).map((feature, idx) => (
                           <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                             <Check style={{ width: '14px', height: '14px', color: '#10B981', flexShrink: 0 }} />
-                            <span style={{ fontSize: '12px', color: '#4B5563' }}>
+                            <span style={{ fontSize: '12px', color: isDark ? '#9CA3AF' : '#4B5563' }}>
                               {typeof feature === 'string' ? feature : (feature as any)?.feature_name || String(feature)}
                             </span>
                           </div>
@@ -671,14 +674,14 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
         <div
           style={{
             padding: '20px 32px',
-            borderTop: '1px solid #E5E7EB',
-            backgroundColor: '#F9FAFB',
+            borderTop: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`,
+            backgroundColor: isDark ? '#374151' : '#F9FAFB',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ fontSize: '13px', color: '#6B7280', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ fontSize: '13px', color: isDark ? '#9CA3AF' : '#6B7280', display: 'flex', alignItems: 'center', gap: '6px' }}>
             {selectedPlanId === 'free_trial' ? (
               <>
                 <Sparkles style={{ width: '14px', height: '14px', color: '#059669', flexShrink: 0 }} />
@@ -701,7 +704,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
               fontSize: '16px',
               fontWeight: 600,
               color: '#ffffff',
-              background: selectedPlanId ? 'linear-gradient(to right, #2563EB, #4338CA)' : '#D1D5DB',
+              background: selectedPlanId ? 'linear-gradient(to right, #2563EB, #4338CA)' : (isDark ? '#4B5563' : '#D1D5DB'),
               border: 'none',
               borderRadius: '12px',
               cursor: selectedPlanId ? 'pointer' : 'not-allowed',

@@ -2,12 +2,14 @@
 
 import { User, Bell, Shield, Palette, Mail, Save, Check, Lock, Phone, MapPin, Briefcase, Target, Filter, Calendar, Loader2, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useTheme } from 'next-themes';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
 
 export default function Settings() {
   const { user, logout } = useAuth();
+  const { setTheme, theme: currentTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('profile');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -120,6 +122,10 @@ export default function Settings() {
           time_format: userSettings.time_format,
           default_view: userSettings.default_view,
         });
+        // Apply saved theme preference to next-themes
+        if (userSettings.theme) {
+          setTheme(userSettings.theme === 'auto' ? 'system' : userSettings.theme);
+        }
       } catch (error) {
         console.error('Error loading settings:', error);
         // Use default values on error
@@ -699,10 +705,13 @@ export default function Settings() {
                       ].map((theme) => (
                         <button
                           key={theme.value}
-                          onClick={() => setSettings({ ...settings, theme: theme.value })}
+                          onClick={() => {
+                            setSettings({ ...settings, theme: theme.value });
+                            setTheme(theme.value === 'auto' ? 'system' : theme.value);
+                          }}
                           className={`p-4 rounded-lg border-2 transition-all ${
                             settings.theme === theme.value
-                              ? 'border-gray-800 bg-gray-50'
+                              ? 'border-gray-800 dark:border-gray-400 bg-gray-50'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
