@@ -866,11 +866,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       percent: response.progress.percent
     });
 
-    // Don't auto-navigate when saving draft - let the component handle navigation
-    // Only update currentQuestion if backend returns next_question AND it's not a draft save
-    if (response.next_question && answer.is_draft === false) {
-      setCurrentQuestion(response.next_question);
-    }
+    // Don't auto-navigate here - let the AssessmentInterface component handle navigation
+    // via onNavigate (handleNext/handlePrevious). Auto-navigating here causes the
+    // question to jump back to the start when the candidate clicks "Submit" (lock).
+    // The backend returns next_question for information only, not for auto-navigation.
 
     return response;
   };

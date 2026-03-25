@@ -45,6 +45,8 @@ export interface CandidateInterviewInfo {
   // Identity verification for Step 3
   identity_verified?: boolean;
   identity_name?: string | null;
+  // Interview mode: 'fixed' (per-question 2-min timer) | 'flexible' (global timer only)
+  interview_mode?: string | null;
 }
 
 export interface AvailableLanguagesResponse {

@@ -92,11 +92,15 @@ export async function proxy(request: NextRequest) {
         );
 
         if (!resp.ok) {
-          // Subdomain not found or inactive → redirect to root domain
-          console.log(`[MIDDLEWARE] Unknown subdomain "${tenantSubdomain}", redirecting to root`);
-          return NextResponse.redirect(`https://${BASE_DOMAIN}`);
+          if (resp.status === 404) {
+            // Subdomain not found → redirect to root domain
+            console.log(`[MIDDLEWARE] Unknown subdomain "${tenantSubdomain}", redirecting to root`);
+            return NextResponse.redirect(`https://${BASE_DOMAIN}`);
+          }
+          // For non-404 errors (5xx, 503, etc.) — allow through rather than blocking all traffic
+          console.log(`[MIDDLEWARE] Subdomain validation returned ${resp.status} for "${tenantSubdomain}", allowing through`);
         }
-        // Valid — the cache cookie is set below on the final response
+        // Valid (or non-fatal error) — the cache cookie is set below on the final response
       } catch (err) {
         // Backend unreachable — allow through rather than blocking all traffic
         console.log('[MIDDLEWARE] Subdomain validation fetch error:', err);

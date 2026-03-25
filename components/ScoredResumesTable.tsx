@@ -91,7 +91,8 @@ export default function ScoredResumesTable({
   onSelectAll,
   isGlobalView = false
 }: ScoredResumesTableProps) {
-  const { tenant } = useAuth();  // Get tenant info from auth context
+  const { tenant, isTenantAdmin, user } = useAuth();  // Get tenant info from auth context
+  const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const [showColumnModal, setShowColumnModal] = useState(false);
   const [internalSelectedResumes, setInternalSelectedResumes] = useState<string[]>([]);
 
@@ -551,16 +552,18 @@ export default function ScoredResumesTable({
                 <FileDown className="w-4 h-4" />
                 <span className="hidden sm:inline">Export</span>
               </button>
-              <button
-                onClick={() => setShowBulkInviteModal(true)}
-                disabled={availableUnits === 0}
-                className="px-3 sm:px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                title={availableUnits === 0 ? 'No assessment units available' : `Bulk invite ${selectedResumes.length} candidates`}
-              >
-                <Send className="w-4 h-4" />
-                <span className="hidden sm:inline">Bulk Invite ({selectedResumes.length})</span>
-                <span className="sm:hidden">{selectedResumes.length}</span>
-              </button>
+              {canCreateAssessments && (
+                <button
+                  onClick={() => setShowBulkInviteModal(true)}
+                  disabled={availableUnits === 0}
+                  className="px-3 sm:px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={availableUnits === 0 ? 'No assessment units available' : `Bulk invite ${selectedResumes.length} candidates`}
+                >
+                  <Send className="w-4 h-4" />
+                  <span className="hidden sm:inline">Bulk Invite ({selectedResumes.length})</span>
+                  <span className="sm:hidden">{selectedResumes.length}</span>
+                </button>
+              )}
             </>
           )}
           {selectedResumes.length === 0 && (
@@ -1085,8 +1088,8 @@ export default function ScoredResumesTable({
 
             {/* Card Actions */}
             <div className="space-y-2">
-              {/* Invite Button - For Exact Match & Partial Match */}
-              {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
+              {/* Invite Button - For Exact Match & Partial Match + assessment permission */}
+              {canCreateAssessments && (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
                 availableUnits === 0 ? (
                   <div className="relative group">
                     <button
