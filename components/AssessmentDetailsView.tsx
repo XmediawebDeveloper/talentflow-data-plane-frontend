@@ -382,9 +382,9 @@ export default function AssessmentDetailsView({
                         <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
                         <div className="flex flex-wrap gap-2">
                           {(assessment.hr_topics || []).length > 0 ? (
-                            (assessment.hr_topics || []).map((topic: string, idx: number) => (
+                            (assessment.hr_topics || []).map((topic: any, idx: number) => (
                               <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
-                                {topic}
+                                {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                               </span>
                             ))
                           ) : (
@@ -411,9 +411,9 @@ export default function AssessmentDetailsView({
                         <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
                         <div className="flex flex-wrap gap-2">
                           {(assessment.technical_topics || []).length > 0 ? (
-                            (assessment.technical_topics || []).map((topic: string, idx: number) => (
+                            (assessment.technical_topics || []).map((topic: any, idx: number) => (
                               <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
-                                {topic}
+                                {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                               </span>
                             ))
                           ) : (
@@ -458,9 +458,9 @@ export default function AssessmentDetailsView({
                         <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
                         <div className="flex flex-wrap gap-2">
                           {(assessment.coding_topics || []).length > 0 ? (
-                            (assessment.coding_topics || []).map((topic: string, idx: number) => (
+                            (assessment.coding_topics || []).map((topic: any, idx: number) => (
                               <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
-                                {topic}
+                                {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                               </span>
                             ))
                           ) : (
@@ -512,9 +512,9 @@ export default function AssessmentDetailsView({
                               <div className="mb-3">
                                 <div className="text-xs text-gray-600 mb-2 font-medium">Topics Covered</div>
                                 <div className="flex flex-wrap gap-2">
-                                  {section.topics.map((topic, i) => (
+                                  {section.topics.map((topic: any, i: number) => (
                                     <span key={i} className="px-2 py-1 bg-white border border-gray-200 text-gray-700 rounded text-xs">
-                                      {topic}
+                                      {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                                     </span>
                                   ))}
                                 </div>
