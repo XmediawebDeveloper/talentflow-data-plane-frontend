@@ -1,5 +1,6 @@
-import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu } from 'lucide-react';
+import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTheme } from 'next-themes';
 import { User as UserType } from '@/lib/types/tenant';
 import NotificationCenter from './NotificationCenter';
 import QuickActions from './QuickActions';
@@ -28,6 +29,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   if (!user) return null;
   const router = useRouter();
   const { refreshUser } = useAuth();
+  const { resolvedTheme, setTheme } = useTheme();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -1009,6 +1011,20 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             </>
           )}
         </div>
+
+        {/* Dark mode toggle */}
+        <Tooltip content={resolvedTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'} position="bottom">
+          <button
+            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="Toggle dark mode"
+          >
+            {resolvedTheme === 'dark'
+              ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" />
+              : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />
+            }
+          </button>
+        </Tooltip>
 
         {/* FIX-010: Settings with Tooltip - Hidden on mobile */}
         <Tooltip content="Settings" position="bottom">

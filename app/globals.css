@@ -629,6 +629,17 @@ a:focus:not(:focus-visible) {
 .dark .to-gray-900   { --tw-gradient-to: #111827; }
 .dark .via-gray-800  { --tw-gradient-via: #374151; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
 
+/* ── Light-color gradient stops (bg-gradient from-gray-50/via-white etc.) ── */
+.dark .from-white    { --tw-gradient-from: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .from-gray-50  { --tw-gradient-from: #111827; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .from-gray-100 { --tw-gradient-from: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-white      { --tw-gradient-to: #1f2937; }
+.dark .to-gray-50    { --tw-gradient-to: #111827; }
+.dark .to-gray-100   { --tw-gradient-to: #1f2937; }
+.dark .via-white     { --tw-gradient-via: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+.dark .via-gray-50   { --tw-gradient-via: #111827; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+.dark .via-gray-100  { --tw-gradient-via: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+
 /* ── Specific patterns used in many feature components ───── */
 /* Toggle switch track (used in Settings notifications) */
 .dark .bg-gray-300 { background-color: var(--surface-active); }

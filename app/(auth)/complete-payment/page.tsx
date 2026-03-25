@@ -493,15 +493,15 @@ function CompletePaymentContent() {
         {/* Plan Quotas */}
         {planDetails.quotas && Object.keys(planDetails.quotas).length > 0 && (
           <div style={{ marginBottom: 24 }}>
-            <h4 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>Plan Quotas:</h4>
-            <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12 }}>Plan Quotas:</h4>
+            <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 12, padding: 16, border: `1px solid ${isDark ? '#374151' : '#E5E7EB'}` }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {Object.entries(planDetails.quotas)
                   .filter(([key, value]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key) && value !== 0 && value !== null && value !== undefined)
                   .map(([key, value]) => (
-                  <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#ffffff', borderRadius: 8, border: '1px solid #E5E7EB' }}>
-                    <span style={{ fontSize: 13, color: '#6B7280' }}>{getQuotaLabel(key)}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{formatQuotaValue(key, value)}</span>
+                  <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: isDark ? '#1F2937' : '#ffffff', borderRadius: 8, border: `1px solid ${isDark ? '#374151' : '#E5E7EB'}` }}>
+                    <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' }}>{getQuotaLabel(key)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuotaValue(key, value)}</span>
                   </div>
                 ))}
               </div>
@@ -512,15 +512,15 @@ function CompletePaymentContent() {
         {/* Features List */}
         {planDetails.features && planDetails.features.length > 0 && (
           <div style={{ marginBottom: 24 }}>
-            <h4 style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>Included Features:</h4>
-            <div style={{ backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, border: '1px solid #E5E7EB' }}>
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12 }}>Included Features:</h4>
+            <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 12, padding: 16, border: `1px solid ${isDark ? '#374151' : '#E5E7EB'}` }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {planDetails.features
                   .filter(f => f.is_enabled)
                   .map((feature, index) => (
                     <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
                       <Check style={{ width: 16, height: 16, color: '#10B981', flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, color: '#4B5563' }}>{feature.feature_name}</span>
+                      <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#4B5563' }}>{feature.feature_name}</span>
                     </div>
                   ))}
               </div>
@@ -529,7 +529,7 @@ function CompletePaymentContent() {
         )}
 
         {/* Account Status */}
-        <div style={{ backgroundColor: '#F0FDF4', borderRadius: 12, padding: 16, marginBottom: 24, border: '1px solid #BBF7D0' }}>
+        <div style={{ backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : '#F0FDF4', borderRadius: 12, padding: 16, marginBottom: 24, border: `1px solid ${isDark ? 'rgba(16,185,129,0.3)' : '#BBF7D0'}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <CheckCircle style={{ width: 18, height: 18, color: '#16A34A' }} />
             <span style={{ fontSize: 14, fontWeight: 600, color: '#166534' }}>Account Created — Payment Pending</span>
@@ -565,22 +565,22 @@ function CompletePaymentContent() {
         {/* Payment Methods Indicator */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 12, fontSize: 12, color: '#9CA3AF' }}>
           <span>Card</span>
-          <span style={{ color: '#D1D5DB' }}>|</span>
+          <span style={{ color: isDark ? '#374151' : '#D1D5DB' }}>|</span>
           <span>UPI</span>
-          <span style={{ color: '#D1D5DB' }}>|</span>
+          <span style={{ color: isDark ? '#374151' : '#D1D5DB' }}>|</span>
           <span>Netbanking</span>
-          <span style={{ color: '#D1D5DB' }}>|</span>
+          <span style={{ color: isDark ? '#374151' : '#D1D5DB' }}>|</span>
           <span>Wallets</span>
         </div>
 
         {/* Security Notice */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, color: '#6B7280', fontSize: 13 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 13 }}>
           <Shield style={{ width: 16, height: 16 }} />
           <span>Secure payment via Razorpay</span>
         </div>
 
         {/* Logout and Back to Login */}
-        <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #E5E7EB', textAlign: 'center' }}>
+        <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`, textAlign: 'center' }}>
           <a
             href="/login"
             onClick={() => {
@@ -609,22 +609,26 @@ function CompletePaymentContent() {
 
 // Loading fallback for Suspense
 function LoadingFallback() {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
+      background: isDark
+        ? 'linear-gradient(135deg, #111827 0%, #1F2937 50%, #1E1B4B 100%)'
+        : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
     }}>
       <div style={{
-        backgroundColor: '#ffffff',
+        backgroundColor: isDark ? '#1F2937' : '#ffffff',
         borderRadius: '24px',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
         padding: '40px',
-        border: '1px solid #F3F4F6',
+        border: `1px solid ${isDark ? '#374151' : '#F3F4F6'}`,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, color: '#6B7280' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>
           <Loader2 style={{ width: 24, height: 24, animation: 'spin 1s linear infinite' }} />
           <span>Loading...</span>
         </div>
