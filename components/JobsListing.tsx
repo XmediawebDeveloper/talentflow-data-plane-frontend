@@ -306,20 +306,46 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   const handleBulkExport = () => {
     const selectedJobsData = sortedJobs.filter(job => selectedJobs.has(job.id));
+    const headers = [
+      'JD ID', 'Title', 'Status', 'Creation Method', 'Version',
+      'Industry', 'Department', 'Employment Type', 'Work Mode',
+      'Experience (Min Years)', 'Experience (Max Years)', 'Experience',
+      'Salary', 'Location', 'Job Level', 'Education',
+      'Posted Date', 'Created Date', 'Last Updated', 'Created By',
+      'Applicants'
+    ];
+    const escape = (val: any) => {
+      const str = val === null || val === undefined ? '' : String(val);
+      return str.includes(',') || str.includes('"') || str.includes('\n')
+        ? `"${str.replace(/"/g, '""')}"` : str;
+    };
     const csvContent = [
-      ['Title', 'Status', 'Department', 'Location', 'Type', 'Experience', 'Applicants', 'Posted Date'].join(','),
+      headers.join(','),
       ...selectedJobsData.map(job => [
+        (job as any).job_id || '',
         job.title,
         job.status,
+        (job as any).creation_method === 'ai_generated' ? 'AI' : (job as any).creation_method === 'manual' ? 'Manual' : '',
+        (job as any).currentVersion ? `v${(job as any).currentVersion}` : '',
+        (job as any).industry_type || '',
         job.department || '',
-        job.location,
         job.employmentType || '',
+        (job as any).workMode || '',
+        (job as any).experience_min !== undefined ? (job as any).experience_min : '',
+        (job as any).experience_max !== undefined ? (job as any).experience_max : '',
         job.experience || '',
-        job.applicants || 0,
-        job.postedDate || ''
-      ].join(','))
+        (job as any).salary || '',
+        job.location || '',
+        (job as any).experience_level || '',
+        (job as any).education || '',
+        job.postedDate || '',
+        (job as any).created_at ? new Date((job as any).created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        (job as any).updated_at ? new Date((job as any).updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        job.postedBy || '',
+        job.applicants || 0
+      ].map(escape).join(','))
     ].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

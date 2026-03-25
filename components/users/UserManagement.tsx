@@ -37,6 +37,7 @@ import FeaturePermissionManager from './FeaturePermissionManager';
 import DependencyMatrix from './DependencyMatrix';
 import { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
+import AddSeatsModal from './AddSeatsModal';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuota } from '@/contexts/QuotaContext';
 import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
@@ -484,6 +485,7 @@ export default function UserManagement() {
 
   // Refresh trigger for SeatQuotaCard
   const [seatQuotaRefreshTrigger, setSeatQuotaRefreshTrigger] = useState(0);
+  const [showAddSeatsModal, setShowAddSeatsModal] = useState(false);
   const [isLoadingPermissions, setIsLoadingPermissions] = useState(false);
 
   // View role permissions popup (same as RoleManagement view modal)
@@ -1339,10 +1341,21 @@ export default function UserManagement() {
       setEditOriginalRoleId(matchingRole?.id || null);
 
       // Also initialize permission codes based on permission IDs
+      // Only include codes that are recognized in CUSTOM_PERMISSION_CATEGORIES to prevent
+      // legacy/unmapped codes from persisting silently through saves.
+      const recognizedCodes = new Set<string>();
+      CUSTOM_PERMISSION_CATEGORIES.forEach(cat => {
+        if (cat.viewCode) recognizedCodes.add(cat.viewCode);
+        cat.actions?.forEach(a => recognizedCodes.add(a.code));
+        cat.subCategories?.forEach(sub => {
+          if (sub.viewCode) recognizedCodes.add(sub.viewCode);
+          sub.actions?.forEach(a => recognizedCodes.add(a.code));
+        });
+      });
       const currentPermissionCodes = new Set<string>();
       currentPermissionIds.forEach(id => {
         const perm = permissionsForMapping.find(p => p.id === id);
-        if (perm) {
+        if (perm && recognizedCodes.has(perm.code)) {
           currentPermissionCodes.add(perm.code);
         }
       });
@@ -1701,21 +1714,20 @@ export default function UserManagement() {
                   if (isTrial) {
                     toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
                   } else {
-                    toast.error('User limit reached. Purchase additional seats or deactivate existing users to add more.');
+                    setShowAddSeatsModal(true);
                   }
                   return;
                 }
                 setIsCreateModalOpen(true);
               }}
-              disabled={isAtLimit}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors shadow-md ${
                 isAtLimit
-                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                  ? 'bg-red-600 text-white hover:bg-red-700'
                   : 'bg-gray-800 text-white hover:bg-gray-700'
               }`}
             >
               <Plus className="w-5 h-5" />
-              Add User
+              {isAtLimit && !isTrial ? 'Buy More Seats' : 'Add User'}
             </button>
           </div>
         </div>
@@ -2694,6 +2706,21 @@ export default function UserManagement() {
       <DependencyMatrix
         isOpen={isDependencyMatrixOpen}
         onClose={() => setIsDependencyMatrixOpen(false)}
+      />
+
+      {/* Add Seats Modal - opens when user limit is exhausted */}
+      <AddSeatsModal
+        isOpen={showAddSeatsModal}
+        onClose={() => setShowAddSeatsModal(false)}
+        currentSeats={limits?.current_users ?? users.length}
+        maxSeats={limits?.max_users ?? 0}
+        planName={limits?.plan_name ?? ''}
+        onSuccess={() => {
+          setShowAddSeatsModal(false);
+          setSeatQuotaRefreshTrigger(t => t + 1);
+          loadUsers();
+          refreshLimits();
+        }}
       />
 
       {/* View Role Permissions Popup */}
