@@ -1075,14 +1075,20 @@ export function AssessmentInterface({
     const { round_type, question_type, starter_code } = currentQuestion;
 
     // For coding questions
-    if (round_type === 'coding') {
+    if (round_type === 'coding' || question_type === 'coding') {
       const code = answer.code_submission?.trim() || '';
-      const language = answer.language || 'python';
-      const template = starter_code?.[language]?.trim() || '';
 
-      // Code must be non-empty and different from the template
+      // Code must be non-empty
       if (!code) return false;
-      if (code === template) return false;
+
+      // Check if code is different from ALL possible templates (starter_code + default template)
+      const language = answer.language || 'python';
+      const questionTemplate = starter_code?.[language]?.trim() || '';
+      if (questionTemplate && code === questionTemplate) return false;
+
+      // Also check against default language template
+      // But allow submit if candidate wrote at least 10 chars of meaningful code
+      if (code.length < 10) return false;
 
       return true;
     }
