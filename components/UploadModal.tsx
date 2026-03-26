@@ -160,8 +160,8 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     fetchQuotaStatus();
   }, []);
 
-  // Get tenant-specific limits or use defaults
-  const maxFileSizeMB = tenant?.subscription.limits.maxFileSizeMB || 3;
+  // Get tenant-specific limits or use defaults — hard-capped at 3MB per backend limit
+  const maxFileSizeMB = Math.min(tenant?.subscription.limits.maxFileSizeMB || 3, 3);
   const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024;
   const storageLimitMB = (tenant?.subscription.limits.storageGB || 50) * 1024; // Convert GB to MB
   const storageUsedMB = tenant?.subscription.usage.storageUsedMB || 0;

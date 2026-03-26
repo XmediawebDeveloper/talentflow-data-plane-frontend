@@ -152,14 +152,21 @@ export const candidateAIInterviewService = {
   async uploadRecording(token: string, blob: Blob): Promise<{ message: string; path: string }> {
     const formData = new FormData();
     formData.append('file', blob, 'recording.webm');
-    // Do NOT set Content-Type manually — axios auto-sets multipart/form-data with the
-    // correct boundary when given a FormData object. Overriding it drops the boundary
-    // and the server cannot parse the request.
-    const response = await candidateApi.post(
-      `/candidate/ai-interview/${token}/upload-recording`,
-      formData,
-    );
-    return response.data;
+    // Use native fetch (not axios) for video upload:
+    // - No Content-Type override that could drop the multipart boundary
+    // - No default body size limits from axios interceptors
+    // - Works reliably with large video files
+    const uploadUrl = `${API_BASE_URL}/candidate/ai-interview/${token}/upload-recording`;
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+      // No Content-Type header — browser sets multipart/form-data + boundary automatically
+    });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Recording upload failed (${response.status}): ${errorText}`);
+    }
+    return response.json();
   },
 
   async getAvailableLanguages(token: string): Promise<AvailableLanguagesResponse> {

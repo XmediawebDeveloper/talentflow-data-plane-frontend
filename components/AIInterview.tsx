@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -727,6 +727,17 @@ export default function AIInterview() {
                             </button>
                           )}
 
+                          {/* Edit / Continue Editing button */}
+                          {(config.status === 'draft' || config.status === 'published') && config.jd_id && (
+                            <button
+                              onClick={() => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`)}
+                              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                              {config.status === 'draft' ? 'Edit' : 'Edit'}
+                            </button>
+                          )}
+
                           {/* Publish button for draft configs */}
                           {config.status === 'draft' && (
                             <button
@@ -768,6 +779,15 @@ export default function AIInterview() {
                                   <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                   View Details
                                 </button>
+                                {(config.status === 'draft' || config.status === 'published') && config.jd_id && (
+                                  <button
+                                    onClick={() => { router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`); setOpenMenuId(null); }}
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                    {config.status === 'draft' ? 'Continue Editing' : 'Edit Config'}
+                                  </button>
+                                )}
                                 {config.status === 'published' && (
                                   <button
                                     onClick={() => handleCopyLink(config)}

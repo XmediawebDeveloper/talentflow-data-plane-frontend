@@ -209,7 +209,18 @@ export default function AddSeatsModal({
       const data = await response.json();
 
       if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          throw new Error('Service temporarily unavailable. Your payment was not charged. Please try again.');
+        }
         throw new Error(data.detail?.message || data.detail || 'Failed to purchase seats');
+      }
+
+      if (data.status === 'pending') {
+        setPurchaseSuccess('Payment received! Your seats are being activated in the background and will appear shortly.');
+        toast.success('Payment received! Seats activation in progress.');
+        onSuccess?.();
+        return;
       }
 
       const successMsg = `${totalSeats} seat${totalSeats > 1 ? 's' : ''} added to your account!`;

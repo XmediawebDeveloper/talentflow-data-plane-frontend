@@ -20,6 +20,8 @@ export interface AIInterviewRoundConfig {
   // Deprecated: kept for backward compat with old "technical" round configs only
   must_have_percentage?: number;
   nice_to_have_percentage?: number;
+  // HR round: specific questions selected from the question bank
+  hr_questions?: { id: string; question_text: string; answer_type: string }[];
 }
 
 export interface AIInterviewCreate {

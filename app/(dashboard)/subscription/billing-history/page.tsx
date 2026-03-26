@@ -1,13 +1,11 @@
 'use client';
 
-import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar } from 'lucide-react';
+import { Receipt, Download, Search, Loader2, AlertCircle, CheckCircle2, Clock, XCircle, CreditCard, RefreshCw, ExternalLink, FileText, Calendar, RotateCcw } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { handleUnauthorized } from '@/lib/services/api';
+import api from '@/lib/services/api';
 import { generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
-import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
 interface LineItem {
   description: string;
@@ -76,6 +74,21 @@ interface BillingStats {
   open_count: number;
 }
 
+interface AddonTransaction {
+  id: string;
+  invoice_number: string;
+  addon_name: string;
+  amount: number;
+  currency: string;
+  transaction_type: string;
+  status: string;
+  activation_status: 'activated' | 'failed' | 'processing' | 'unknown';
+  razorpay_order_id?: string;
+  razorpay_payment_id?: string;
+  transaction_date?: string;
+  created_at?: string;
+}
+
 export default function BillingHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -84,33 +97,21 @@ export default function BillingHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<BillingInvoice | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [addonTransactions, setAddonTransactions] = useState<AddonTransaction[]>([]);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchBillingData();
+    fetchAddonTransactions();
   }, []);
 
   const fetchBillingData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        setError('Not authenticated. Please login again.');
-        setLoading(false);
-        return;
-      }
+      const res = await api.get('/billing/invoices/billing');
 
-      const res = await fetch(`${API_URL}/billing/invoices/billing`, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (res.status === 401) { handleUnauthorized(); return; }
-      if (!res.ok) throw new Error('Failed to fetch billing history');
-
-      const result = await res.json();
+      const result = res.data;
       const invoiceData: BillingInvoice[] = result.data?.invoices || [];
       setInvoices(invoiceData);
 
@@ -129,6 +130,31 @@ export default function BillingHistoryPage() {
       setError('Failed to load billing history. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAddonTransactions = async () => {
+    try {
+      const res = await api.get('/addons/transactions');
+      setAddonTransactions(res.data?.data || []);
+    } catch (err) {
+      console.error('[BillingHistory] Addon transactions fetch error:', err);
+    }
+  };
+
+  const handleRetryActivation = async (txnId: string) => {
+    setRetryingId(txnId);
+    try {
+      const res = await api.post('/addons/retry-activation', { billing_txn_id: txnId });
+      toast.success(res.data?.message || 'Activation successful!');
+      setAddonTransactions(prev =>
+        prev.map(t => t.id === txnId ? { ...t, status: 'paid', activation_status: 'activated' } : t)
+      );
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || 'Retry failed. Please try again.';
+      toast.error(msg);
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -201,7 +227,7 @@ export default function BillingHistoryPage() {
               </div>
             </div>
             <button
-              onClick={fetchBillingData}
+              onClick={() => { fetchBillingData(); fetchAddonTransactions(); }}
               disabled={loading}
               className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
             >
@@ -295,7 +321,7 @@ export default function BillingHistoryPage() {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[200px]">Invoice</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[105px]">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[160px]">Timestamp</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-[160px]">Payment</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[130px]">Amount</th>
@@ -315,7 +341,7 @@ export default function BillingHistoryPage() {
                         </div>
                       </td>
                       <td className="px-4 py-4 text-sm text-gray-900 whitespace-nowrap">
-                        {formatISTDate(inv.issue_date)}
+                        {formatIST(inv.issue_date)}
                       </td>
                       <td className="px-4 py-4">
                         <div className="text-sm font-medium text-gray-900 truncate" title={getDescription(inv)}>
@@ -379,6 +405,97 @@ export default function BillingHistoryPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Purchase History (addons, seats, subscriptions) */}
+        {addonTransactions.length > 0 && (
+          <div className="mt-8">
+            <div className="mb-3 flex items-center gap-2">
+              <Package className="w-5 h-5 text-gray-600" />
+              <h2 className="text-base font-semibold text-gray-800">Purchase History</h2>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[750px]">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-[110px]">Amount</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[130px]">Activation Status</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-[120px]">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {addonTransactions.map((txn, index) => (
+                      <tr key={txn.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="text-sm font-medium text-gray-900 truncate max-w-[160px]" title={txn.invoice_number}>
+                              {txn.invoice_number}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                          {txn.transaction_date ? formatISTDate(txn.transaction_date) : '-'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-gray-800 truncate block max-w-[220px]" title={txn.addon_name}>
+                            {txn.addon_name}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-sm font-semibold text-gray-900">
+                            ₹{Math.abs(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {txn.activation_status === 'activated' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Activated
+                            </span>
+                          )}
+                          {txn.activation_status === 'failed' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                              <XCircle className="w-3.5 h-3.5" />
+                              Failed
+                            </span>
+                          )}
+                          {txn.activation_status === 'processing' && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 border border-yellow-200">
+                              <Clock className="w-3.5 h-3.5" />
+                              Processing
+                            </span>
+                          )}
+                          {txn.activation_status === 'unknown' && (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {txn.activation_status === 'failed' ? (
+                            <button
+                              onClick={() => handleRetryActivation(txn.id)}
+                              disabled={retryingId === txn.id}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                            >
+                              {retryingId === txn.id
+                                ? <><Loader2 className="w-3 h-3 animate-spin" /> Retrying...</>
+                                : <><RotateCcw className="w-3 h-3" /> Retry</>}
+                            </button>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

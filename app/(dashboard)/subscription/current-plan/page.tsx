@@ -871,7 +871,7 @@ function CurrentPlanContent() {
         };
       }
 
-      const transformedPlans: DisplayPlan[] = (Array.isArray(plansArray) ? plansArray : [])
+      const transformedPlans: DisplayPlan[] = ((Array.isArray(plansArray) ? plansArray : [])
         .map((groupedPlan: GroupedPlan) => {
           const monthly = groupedPlan.billing_options?.monthly;
           const annual = groupedPlan.billing_options?.annual;
@@ -902,7 +902,7 @@ function CurrentPlanContent() {
           const isCurrentAnnual = currentPlanId !== undefined && currentPlanId !== null &&
             Number(currentPlanId) === Number(annual?.id);
           const isCurrent = isCurrentMonthly || isCurrentAnnual ||
-            (currentPlanName && currentPlanName.toLowerCase() === groupedPlan.plan_name.toLowerCase());
+            !!(currentPlanName && currentPlanName.toLowerCase() === groupedPlan.plan_name.toLowerCase());
 
           return {
             id: String(basePlan.id),
@@ -924,7 +924,7 @@ function CurrentPlanContent() {
             monthlyQuotas: monthly?.quotas,
             annualQuotas: annual?.quotas,
             // Discount percentage from API
-            discountPercentage: (groupedPlan as any).discount_percentage ?? annual?.discount_percentage,
+            discountPercentage: (groupedPlan as any).discount_percentage ?? (annual as any)?.discount_percentage,
             isCurrent,
             // Track which billing period is current
             isCurrentMonthly,
@@ -937,11 +937,11 @@ function CurrentPlanContent() {
             planSlug: groupedPlan.plan_slug,
           };
         })
-        .filter((plan): plan is DisplayPlan => plan !== null)
+        .filter((plan) => plan !== null && plan !== undefined) as DisplayPlan[])
         .sort((a, b) => {
-          // Sort by price ascending (lowest first)
-          const orderA = a.monthlyPrice || 0;
-          const orderB = b.monthlyPrice || 0;
+          const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+          const orderA = tierOrder[a.tier?.toUpperCase()] ?? 99;
+          const orderB = tierOrder[b.tier?.toUpperCase()] ?? 99;
           return orderA - orderB;
         });
 
@@ -1228,7 +1228,7 @@ function CurrentPlanContent() {
 
     // Check if this is a downgrade (tier or billing interval)
     const tierComparison = comparePlanTiers(
-      companySettings?.current_plan_tier || currentPlan?.tier,
+      currentPlan?.tier,
       plan.tier,
       currentPlanBillingPeriod,          // current: ANNUAL or MONTHLY
       isYearly ? 'ANNUAL' : 'MONTHLY',   // target: what the user toggled to
@@ -1433,7 +1433,7 @@ function CurrentPlanContent() {
             amount: orderData.amount,
             currency: orderData.currency,
             planName: orderData.plan_name || selectedPlanForPayment.name,
-            userName: user?.full_name || user?.email?.split('@')[0],
+            userName: user?.name || user?.email?.split('@')[0],
             userEmail: user?.email,
           });
           razorpayFields = {
@@ -2352,9 +2352,9 @@ function CurrentPlanContent() {
               onMouseLeave={() => setHoveredPlan(null)}
             >
               {[...plans].sort((a, b) => {
-                // Sort by price ascending (lowest first)
-                const priceA = a.monthlyPrice || a.annualPrice || 0;
-                const priceB = b.monthlyPrice || b.annualPrice || 0;
+                const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+                const priceA = tierOrder[a.tier?.toUpperCase()] ?? 99;
+                const priceB = tierOrder[b.tier?.toUpperCase()] ?? 99;
                 return priceA - priceB;
               }).map((plan) => {
                 const Icon = plan.icon;
@@ -2422,6 +2422,11 @@ function CurrentPlanContent() {
                       <Icon className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white" />
                     </div>
 
+                    {plan.tier && (
+                      <Badge className="mb-2 text-xs uppercase tracking-widest bg-gray-100 text-gray-500 border border-gray-200">
+                        {plan.tier}
+                      </Badge>
+                    )}
                     <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">{plan.name}</h3>
                     <p className="text-gray-600 mb-3 sm:mb-4 lg:mb-6 min-h-[36px] sm:min-h-[48px] text-xs sm:text-sm">{plan.description}</p>
 
@@ -2599,9 +2604,9 @@ function CurrentPlanContent() {
                         (!plan.monthlyPrice && !plan.annualPrice) ||
                         queuedUpgrades.length > 0 ||
                         // Disable if viewing yearly but only monthly available
-                        (isYearly && !plan.annualPrice && plan.monthlyPrice) ||
+                        (isYearly && !plan.annualPrice && !!plan.monthlyPrice) ||
                         // Disable if viewing monthly but only yearly available
-                        (!isYearly && !plan.monthlyPrice && plan.annualPrice)
+                        (!isYearly && !plan.monthlyPrice && !!plan.annualPrice)
                       }
                       className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
                         !canUpgradePlan && !isCurrentForToggle
@@ -2784,7 +2789,7 @@ function CurrentPlanContent() {
                       <span className="text-gray-600">GST (18%):</span>
                       <span className="font-medium text-gray-900">
                         {formatCurrency(
-                          Math.round((() => {
+                          (() => {
                             const basePrice = isYearly
                               ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
                               : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
@@ -2792,7 +2797,7 @@ function CurrentPlanContent() {
                               ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
                               : 0;
                             return (basePrice + dbFee) * 0.18;
-                          })()),
+                          })(),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
@@ -2827,7 +2832,7 @@ function CurrentPlanContent() {
                               ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (useYearlyPrice ? 12 : 1)
                               : 0;
                             const subtotal = basePrice + dbFee;
-                            return subtotal + Math.round(subtotal * 0.18);
+                            return subtotal + subtotal * 0.18;
                           })(),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
@@ -2929,7 +2934,7 @@ function CurrentPlanContent() {
                               (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * 12 : 0)
                             : (selectedPlanForPayment?.monthlyPrice || 0) +
                               (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) : 0);
-                          return subtotal + Math.round(subtotal * 0.18);
+                          return subtotal + subtotal * 0.18;
                         })(),
                         selectedPlanForPayment?.currency || 'INR'
                       )}
@@ -2959,7 +2964,7 @@ function CurrentPlanContent() {
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Current Plan:</span>
-                        <span className="font-medium text-gray-900">{transactionResult.current_plan_name || 'Your current plan'}</span>
+                        <span className="font-medium text-gray-900">{companySettings?.current_plan_name || 'Your current plan'}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">New Plan:</span>
@@ -3146,16 +3151,21 @@ function CurrentPlanContent() {
       )}
 
       {/* Terms & Conditions Modal for Applying Queued Upgrade */}
-      {showTCModal && selectedQueuedUpgrade && (
+      {showTCModal && selectedQueuedUpgrade && (() => {
+        const queuedNewPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
+        const isQueuedDowngrade = comparePlanTiers(currentPlan?.tier, queuedNewPlan?.tier) === -1;
+        return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">Apply Upgrade Now</h2>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    {isQueuedDowngrade ? 'Apply Downgrade Now' : 'Apply Upgrade Now'}
+                  </h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    Upgrade to {selectedQueuedUpgrade.new_plan_name}
+                    {isQueuedDowngrade ? 'Downgrade' : 'Upgrade'} to {selectedQueuedUpgrade.new_plan_name}
                   </p>
                 </div>
                 <button
@@ -3179,7 +3189,7 @@ function CurrentPlanContent() {
                   <div>
                     <h4 className="font-semibold text-amber-800 mb-1">Important Notice</h4>
                     <p className="text-sm text-amber-700">
-                      By applying this upgrade immediately, any remaining credits and unused quota
+                      By applying this {isQueuedDowngrade ? 'downgrade' : 'upgrade'} immediately, any remaining credits and unused quota
                       on your current plan ({companySettings?.current_plan_name || 'your active plan'}) will be
                       <strong> forfeited</strong>. Your new plan will start today.
                     </p>
@@ -3187,9 +3197,9 @@ function CurrentPlanContent() {
                 </div>
               </div>
 
-              {/* Upgrade Details */}
+              {/* Plan Change Details */}
               <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                <h4 className="font-medium text-gray-900">Upgrade Details</h4>
+                <h4 className="font-medium text-gray-900">{isQueuedDowngrade ? 'Downgrade Details' : 'Upgrade Details'}</h4>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-gray-500">From:</span>
@@ -3269,7 +3279,7 @@ function CurrentPlanContent() {
                   ) : (
                     <>
                       <CheckCircle className="w-5 h-5" />
-                      Apply Now
+                      {isQueuedDowngrade ? 'Apply Downgrade Now' : 'Apply Upgrade Now'}
                     </>
                   )}
                 </button>
@@ -3277,7 +3287,8 @@ function CurrentPlanContent() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Cancel Queued Upgrade Modal */}
       {showCancelModal && selectedQueuedUpgrade && (

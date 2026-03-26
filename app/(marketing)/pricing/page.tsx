@@ -357,9 +357,9 @@ export default function PricingPage() {
           })
           .filter((plan): plan is DisplayPlan => plan !== null)
           .sort((a, b) => {
-            // Sort by price (monthly price as baseline)
-            const orderA = a.monthlyPrice || 0;
-            const orderB = b.monthlyPrice || 0;
+            const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+            const orderA = tierOrder[(a.planTier || '').toUpperCase()] ?? 99;
+            const orderB = tierOrder[(b.planTier || '').toUpperCase()] ?? 99;
             return orderA - orderB;
           });
 
@@ -589,16 +589,16 @@ export default function PricingPage() {
           // Combine free trial card with other plans
           const allPlans = freeTrialCard ? [...plans, freeTrialCard] : plans;
 
-          // Sort plans: ascending order (lowest price first, free trial first)
+          // Sort plans: Free Trial first, then STARTER > PROFESSIONAL > ENTERPRISE
+          const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
           const sortedPlans = [...allPlans].sort((a, b) => {
             const aIsTrial = a.id === 'free-trial';
             const bIsTrial = b.id === 'free-trial';
-            if (aIsTrial) return -1; // Trial goes first
-            if (bIsTrial) return 1; // Trial goes first
-            // Sort by price ascending (lowest first)
-            const priceA = a.yearlyPrice || a.monthlyPrice || 0;
-            const priceB = b.yearlyPrice || b.monthlyPrice || 0;
-            return priceA - priceB;
+            if (aIsTrial) return -1;
+            if (bIsTrial) return 1;
+            const orderA = tierOrder[(a.planTier || '').toUpperCase()] ?? 99;
+            const orderB = tierOrder[(b.planTier || '').toUpperCase()] ?? 99;
+            return orderA - orderB;
           });
 
           // Build Custom plan card with ALL features from paid plans, placed last

@@ -1616,7 +1616,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           if (selectedHRQuestions.length > 0) {
                             setSelectedHRQuestions([]);
                           } else {
-                            setSelectedHRQuestions(hrQuestionBank.map(q => q.id));
+                            setSelectedHRQuestions(hrQuestionBank.slice(0, HR_QUESTION_LIMIT).map(q => q.id));
                           }
                         }}
                         className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${

@@ -298,34 +298,38 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     faceDetection.setVideoElement(video);
     setWebcamReady(true);
 
-    // Start video recording from webcam stream
+    // Start video recording from webcam stream.
+    // Low bitrate: 200 Kbps video + 32 Kbps audio = ~232 Kbps total.
+    // 30-min interview ≈ 52 MB — well within upload limits.
     const stream = video.srcObject as MediaStream;
     if (stream) {
       webcamStreamRef.current = stream;
-      try {
-        const recorder = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp9" });
+      const RECORDER_OPTIONS: MediaRecorderOptions = {
+        videoBitsPerSecond: 200_000,  // 200 Kbps — clear face video at talking-head scale
+        audioBitsPerSecond: 32_000,   // 32 Kbps — voice quality
+      };
+      const startRecorder = (opts: MediaRecorderOptions) => {
+        const recorder = new MediaRecorder(stream, opts);
         recordedChunksRef.current = [];
         recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) {
-            recordedChunksRef.current.push(e.data);
-          }
+          if (e.data.size > 0) recordedChunksRef.current.push(e.data);
         };
-        recorder.start(1000); // Record in 1s chunks
+        recorder.start(5000); // 5-second chunks — fewer objects, same result
         mediaRecorderRef.current = recorder;
+        console.log(`[Recording] Started: mimeType=${recorder.mimeType}, videoBps=${opts.videoBitsPerSecond}, audioBps=${opts.audioBitsPerSecond}`);
+      };
+      try {
+        startRecorder({ ...RECORDER_OPTIONS, mimeType: "video/webm;codecs=vp9" });
       } catch {
-        // Fallback without codec
         try {
-          const recorder = new MediaRecorder(stream);
-          recordedChunksRef.current = [];
-          recorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-              recordedChunksRef.current.push(e.data);
-            }
-          };
-          recorder.start(1000);
-          mediaRecorderRef.current = recorder;
-        } catch (err) {
-          console.error("MediaRecorder not supported:", err);
+          startRecorder({ ...RECORDER_OPTIONS, mimeType: "video/webm;codecs=vp8" });
+        } catch {
+          try {
+            // Last resort: browser default codec, still apply bitrate cap
+            startRecorder(RECORDER_OPTIONS);
+          } catch (err) {
+            console.error("[Recording] MediaRecorder not supported:", err);
+          }
         }
       }
     }
@@ -409,6 +413,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.008);
   const silenceDurationMsRef = useRef(5000);
+
+  // VAD: adaptive noise floor calibration + rolling RMS window
+  const noiseFloorRef = useRef(0);          // calibrated ambient noise floor
+  const calibFramesRef = useRef(0);         // frames collected so far during calibration
+  const calibSumRef = useRef(0);            // sum of RMS values during calibration
+  const calibDoneRef = useRef(false);       // true once noise floor is established
+  const rmsWindowRef = useRef<number[]>([]); // rolling window of recent RMS values (last N frames)
 
   // Save AI message
   const saveAiMessage = useCallback(() => {
@@ -938,12 +949,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // Use the recorder's negotiated mimeType; strip codec suffix for Blob constructor
       const mimeType = (recorder?.mimeType || 'video/webm').split(';')[0];
       const blob = new Blob(chunks, { type: mimeType });
-      console.log(`[Recording] Uploading blob: ${blob.size} bytes, type=${mimeType}`);
+      console.log(`[Recording] Uploading blob: ${(blob.size / 1024 / 1024).toFixed(1)} MB, type=${mimeType}`);
       try {
         await candidateAIInterviewService.uploadRecording(token, blob);
         console.log('[Recording] Upload succeeded');
-      } catch (err) {
-        console.error('[Recording] Upload failed:', err);
+      } catch (err: any) {
+        // Log detailed error — most common cause is nginx client_max_body_size too small
+        console.error(`[Recording] Upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${err?.message || err}`);
       }
     };
 
@@ -1049,7 +1061,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (isAiSpeakingRef.current || isProcessingRef.current || isRecordingRef.current) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: 1, echoCancellation: true }
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
       });
       // Apply mute state immediately if candidate had muted before recording started
       if (isMutedRef.current) {
@@ -1082,6 +1099,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       silenceStartRef.current = null;
       speechDetectedRef.current = false;
       speechStartSentRef.current = false;
+      // Reset adaptive VAD state for this recording session
+      noiseFloorRef.current = 0;
+      calibFramesRef.current = 0;
+      calibSumRef.current = 0;
+      calibDoneRef.current = false;
+      rmsWindowRef.current = [];
+
+      // Number of frames to use for noise floor calibration (~500ms at 4096/44.1kHz ≈ 93ms/frame)
+      const CALIB_FRAMES = 5;
+      // Rolling window size for smoothed RMS (reduces single-frame spikes)
+      const RMS_WINDOW = 8;
 
       processor.onaudioprocess = (e) => {
         if (!isRecordingRef.current) return;
@@ -1092,11 +1120,39 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           voiceVerifBufferRef.current.push(new Float32Array(input));
         }
 
-        let sum = 0;
-        for (let i = 0; i < input.length; i++) { sum += Math.abs(input[i]); }
-        const avgLevel = sum / input.length;
+        // Compute RMS amplitude (more accurate than mean absolute value)
+        let sumSq = 0;
+        for (let i = 0; i < input.length; i++) { sumSq += input[i] * input[i]; }
+        const rms = Math.sqrt(sumSq / input.length);
 
-        if (avgLevel > silenceThresholdRef.current) {
+        // Adaptive noise floor: calibrate on first CALIB_FRAMES frames
+        if (!calibDoneRef.current) {
+          calibSumRef.current += rms;
+          calibFramesRef.current++;
+          if (calibFramesRef.current >= CALIB_FRAMES) {
+            const measuredFloor = calibSumRef.current / calibFramesRef.current;
+            // Use max of server threshold and 2× measured ambient noise
+            noiseFloorRef.current = Math.max(
+              silenceThresholdRef.current,
+              measuredFloor * 2
+            );
+            calibDoneRef.current = true;
+          }
+          // Still send audio during calibration, just skip VAD decisions
+        }
+
+        // Smooth RMS using a rolling window
+        const window = rmsWindowRef.current;
+        window.push(rms);
+        if (window.length > RMS_WINDOW) window.shift();
+        const smoothedRms = window.reduce((a, b) => a + b, 0) / window.length;
+
+        // Use calibrated floor once ready, otherwise fall back to server threshold
+        const effectiveThreshold = calibDoneRef.current
+          ? noiseFloorRef.current
+          : silenceThresholdRef.current;
+
+        if (smoothedRms > effectiveThreshold) {
           speechDetectedRef.current = true;
           silenceStartRef.current = null;
           // Notify backend on first actual speech — resets question timer to full duration
@@ -1118,13 +1174,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           }
         }
 
-        // Downsample to 16kHz if context sample rate differs
+        // Downsample to 16kHz using linear interpolation for better quality
         let samples: Float32Array;
         if (downsampleRatio > 1) {
           const outputLen = Math.floor(input.length / downsampleRatio);
           samples = new Float32Array(outputLen);
           for (let i = 0; i < outputLen; i++) {
-            samples[i] = input[Math.floor(i * downsampleRatio)];
+            const pos = i * downsampleRatio;
+            const idx = Math.floor(pos);
+            const frac = pos - idx;
+            const a = input[idx] ?? 0;
+            const b = input[Math.min(idx + 1, input.length - 1)] ?? 0;
+            samples[i] = a + frac * (b - a);
           }
         } else {
           samples = input;
@@ -1156,8 +1217,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           handleNoResponseRef.current();
         }
       }, 20000);
-    } catch {
-      setStatus("Microphone error");
+    } catch (err: any) {
+      const errName = err?.name ?? '';
+      if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+        setStatus("Microphone access denied — please allow microphone in browser settings and refresh");
+      } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+        setStatus("No microphone detected — please connect a microphone and refresh");
+      } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+        setStatus("Microphone is in use by another app — please close it and refresh");
+      } else {
+        setStatus("Microphone error — please check your audio device and refresh");
+      }
+      console.error('[InterviewUI] getUserMedia failed:', err);
     }
   };
 
@@ -1342,7 +1413,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             if (!isUnmountedRef.current) connectRef.current();
           }, 2000 * attempt);
         } else {
-          setStatus("Connection failed. Please refresh the page.");
+          // All reconnect attempts exhausted — still upload whatever was recorded
+          setStatus("Connection failed. Saving recording...");
+          uploadRecording().then(() => {
+            setStatus("Connection failed. Please refresh the page.");
+          });
         }
       }
       stopRecording();
@@ -1880,103 +1955,66 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             </div>
 
             {/* Skill coverage panel (timed + flexible modes) */}
-            {skillCoverage && (
-              <div className="px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[#64748B] truncate mr-2" style={{ fontSize: 10, fontWeight: 500 }}>
-                    Skills — {skillCoverage.round_name || skillCoverage.round}
-                  </span>
-                  <span className="text-[#94A3B8] shrink-0" style={{ fontSize: 10, fontWeight: 600 }}>
-                    {skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.low_covered.length}/{skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.low_covered.length + skillCoverage.uncovered.length} covered
-                  </span>
-                </div>
-                {/* Progress bar — green (thorough), amber (adequate), orange (weak), gray (uncovered) */}
-                {(() => {
-                  const total = skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.low_covered.length + skillCoverage.uncovered.length;
-                  return (
-                    <div className="w-full h-1 bg-white/[0.06] rounded-full mb-1.5 overflow-hidden flex">
-                      <div className="h-full bg-[#10B981] transition-all duration-500" style={{ width: total > 0 ? `${(skillCoverage.covered.length / total) * 100}%` : '0%' }} />
-                      <div className="h-full bg-[#F59E0B]/60 transition-all duration-500" style={{ width: total > 0 ? `${(skillCoverage.medium_covered.length / total) * 100}%` : '0%' }} />
-                      <div className="h-full bg-[#F97316]/50 transition-all duration-500" style={{ width: total > 0 ? `${(skillCoverage.low_covered.length / total) * 100}%` : '0%' }} />
-                    </div>
-                  );
-                })()}
-                <div className="flex flex-wrap gap-1">
-                  {/* Covered skills — green */}
-                  {skillCoverage.covered.map(skill => (
-                    <span
-                      key={`covered-${skill}`}
-                      className="px-1.5 py-0.5 rounded-full bg-[#10B981]/15 border border-[#10B981]/25 text-[#10B981]"
-                      style={{ fontSize: 9, fontWeight: 600 }}
-                    >
-                      ✓ {skill}
+            {skillCoverage && (() => {
+              const coveredSet = new Set(skillCoverage.covered);
+              const mediumSet = new Set(skillCoverage.medium_covered);
+              const lowSet = new Set(skillCoverage.low_covered);
+              const nthSet = new Set(skillCoverage.nice_to_have_skills);
+              const total = skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.low_covered.length + skillCoverage.uncovered.length;
+              // Stable alphabetical order — skill stays in same DOM position as it transitions categories
+              const allSkills = Array.from(new Set([
+                ...skillCoverage.covered,
+                ...skillCoverage.medium_covered,
+                ...skillCoverage.low_covered,
+                ...skillCoverage.uncovered,
+              ])).sort((a, b) => a.localeCompare(b));
+              return (
+                <div className="px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] animate-fadeIn">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[#64748B] truncate mr-2" style={{ fontSize: 10, fontWeight: 500 }}>
+                      Skills — {skillCoverage.round_name || skillCoverage.round}
                     </span>
-                  ))}
-                  {/* Medium-covered skills — amber partial */}
-                  {skillCoverage.medium_covered.map(skill => (
-                    <span
-                      key={`medium-${skill}`}
-                      className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/12 border border-[#F59E0B]/35 text-[#D97706]"
-                      style={{ fontSize: 9, fontWeight: 600 }}
-                      title="Adequately covered — moving on"
-                    >
-                      ~ {skill}
+                    <span className="text-[#94A3B8] shrink-0" style={{ fontSize: 10, fontWeight: 600 }}>
+                      {skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.low_covered.length}/{total} covered
                     </span>
-                  ))}
-                  {/* Low-covered skills — orange, briefly touched */}
-                  {skillCoverage.low_covered.map(skill => (
-                    <span
-                      key={`low-${skill}`}
-                      className="px-1.5 py-0.5 rounded-full bg-[#F97316]/10 border border-[#F97316]/30 text-[#C2410C]"
-                      style={{ fontSize: 9, fontWeight: 600 }}
-                      title="Briefly touched — needs more depth"
-                    >
-                      ≈ {skill}
-                    </span>
-                  ))}
-                  {/* Uncovered must-have skills — muted */}
-                  {skillCoverage.uncovered
-                    .filter(skill => !skillCoverage.nice_to_have_skills.includes(skill))
-                    .map(skill => (
-                      <span
-                        key={`uncovered-${skill}`}
-                        className="px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.12] text-[#64748B]"
-                        style={{ fontSize: 9, fontWeight: 600 }}
-                        title="Must-have skill"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  {/* Uncovered nice-to-have skills — amber dashed */}
-                  {skillCoverage.uncovered
-                    .filter(skill => skillCoverage.nice_to_have_skills.includes(skill))
-                    .map(skill => (
-                      <span
-                        key={`nice-${skill}`}
-                        className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/10 border border-dashed border-[#F59E0B]/30 text-[#92400E]"
-                        style={{ fontSize: 9, fontWeight: 600 }}
-                        title="Nice-to-have — skippable"
-                      >
-                        {skill} ○
-                      </span>
-                    ))}
-                </div>
-                {/* Legend */}
-                {(skillCoverage.medium_covered.length > 0 || skillCoverage.low_covered.length > 0 || skillCoverage.uncovered.some(s => skillCoverage.nice_to_have_skills.includes(s))) && (
-                  <div className="flex items-center gap-2 mt-1.5">
-                    {skillCoverage.medium_covered.length > 0 && (
-                      <span className="text-[#475569]" style={{ fontSize: 8 }}>~ partial</span>
-                    )}
-                    {skillCoverage.low_covered.length > 0 && (
-                      <span className="text-[#475569]" style={{ fontSize: 8 }}>≈ weak</span>
-                    )}
-                    {skillCoverage.uncovered.some(s => skillCoverage.nice_to_have_skills.includes(s)) && (
-                      <span className="text-[#475569]" style={{ fontSize: 8 }}>○ optional</span>
-                    )}
                   </div>
-                )}
-              </div>
-            )}
+                  {/* Progress bar — green (thorough), amber (adequate), orange (weak) */}
+                  <div className="w-full h-1 bg-white/[0.06] rounded-full mb-1.5 overflow-hidden flex">
+                    <div className="h-full bg-[#10B981] transition-[width] duration-700 ease-out" style={{ width: total > 0 ? `${(skillCoverage.covered.length / total) * 100}%` : '0%' }} />
+                    <div className="h-full bg-[#F59E0B]/60 transition-[width] duration-700 ease-out" style={{ width: total > 0 ? `${(skillCoverage.medium_covered.length / total) * 100}%` : '0%' }} />
+                    <div className="h-full bg-[#F97316]/50 transition-[width] duration-700 ease-out" style={{ width: total > 0 ? `${(skillCoverage.low_covered.length / total) * 100}%` : '0%' }} />
+                  </div>
+                  {/* Unified skill tags — stable keys so color/style transitions smoothly */}
+                  <div className="flex flex-wrap gap-1">
+                    {allSkills.map(skill => {
+                      if (coveredSet.has(skill)) return (
+                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#10B981]/15 border border-[#10B981]/25 text-[#10B981] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }}>✓ {skill}</span>
+                      );
+                      if (mediumSet.has(skill)) return (
+                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/12 border border-[#F59E0B]/35 text-[#D97706] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Adequately covered — moving on">~ {skill}</span>
+                      );
+                      if (lowSet.has(skill)) return (
+                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F97316]/10 border border-[#F97316]/30 text-[#C2410C] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Briefly touched — needs more depth">≈ {skill}</span>
+                      );
+                      if (nthSet.has(skill)) return (
+                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/10 border border-dashed border-[#F59E0B]/30 text-[#92400E] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Nice-to-have — skippable">{skill} ○</span>
+                      );
+                      return (
+                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.12] text-[#64748B] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Must-have skill">{skill}</span>
+                      );
+                    })}
+                  </div>
+                  {/* Legend */}
+                  {(skillCoverage.medium_covered.length > 0 || skillCoverage.low_covered.length > 0 || skillCoverage.uncovered.some(s => nthSet.has(s))) && (
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {skillCoverage.medium_covered.length > 0 && <span className="text-[#475569]" style={{ fontSize: 8 }}>~ partial</span>}
+                      {skillCoverage.low_covered.length > 0 && <span className="text-[#475569]" style={{ fontSize: 8 }}>≈ weak</span>}
+                      {skillCoverage.uncovered.some(s => nthSet.has(s)) && <span className="text-[#475569]" style={{ fontSize: 8 }}>○ optional</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
 

@@ -6,7 +6,7 @@ import {
   ArrowLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, Brain, Sparkles,
-  ExternalLink, Layers,
+  ExternalLink, Layers, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -299,6 +299,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {/* Edit / Continue Editing — available for draft and published */}
+              {(config.status === 'draft' || config.status === 'published') && config.jd_id && (
+                <button
+                  onClick={() => {
+                    const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
+                    router.push(url);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  {config.status === 'draft' ? 'Continue Editing' : 'Edit'}
+                </button>
+              )}
               {onRefresh && (
                 <button
                   onClick={onRefresh}
@@ -602,12 +615,6 @@ ${nthClusters.length > 0 ? `<h2>Nice-to-Have Skills (${nthClusters.length} clust
                     <div className="text-2xl font-semibold text-yellow-600">{invitationStats.inProgress}</div>
                     <div className="text-xs text-gray-500 mt-1">In Progress</div>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-blue-600">
-                      {invitationStats.avgScore != null ? `${invitationStats.avgScore}%` : '-'}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-1">Avg Score</div>
-                  </div>
                 </div>
               </div>
 
@@ -740,12 +747,6 @@ ${nthClusters.length > 0 ? `<h2>Nice-to-Have Skills (${nthClusters.length} clust
                           <div className="text-sm text-gray-500 truncate">{activity.candidate_email}</div>
                         </div>
                         <div className="flex items-center gap-4 flex-shrink-0">
-                          {activity.score != null && (
-                            <div className="text-right">
-                              <div className="text-xs text-gray-500">Score</div>
-                              <div className="text-lg font-medium text-green-600">{Number(activity.score)}%</div>
-                            </div>
-                          )}
                           <div className="text-xs text-gray-400">
                             {formatISTDate(activity.completed_at || activity.started_at || activity.created_at)}
                           </div>
@@ -861,9 +862,6 @@ ${nthClusters.length > 0 ? `<h2>Nice-to-Have Skills (${nthClusters.length} clust
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusBadge(activity.status)}`}>
                       {getStatusLabel(activity.status)}
                     </span>
-                    {activity.score != null && (
-                      <span className="text-sm font-semibold text-green-600 flex-shrink-0">{Number(activity.score)}%</span>
-                    )}
                     <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
                   </div>
                 ))

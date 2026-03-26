@@ -70,6 +70,10 @@ export function useRazorpay(): UseRazorpayReturn {
       return new Promise((resolve, reject) => {
         setIsProcessing(true);
 
+        // Track whether payment succeeded — prevents ondismiss from
+        // rejecting after the modal auto-closes post-payment (Razorpay quirk)
+        let paymentSucceeded = false;
+
         const options: RazorpayOptions = {
           key: RAZORPAY_KEY_ID,
           amount: params.amount,
@@ -86,13 +90,18 @@ export function useRazorpay(): UseRazorpayReturn {
             color: '#2563EB',
           },
           handler: (response: RazorpayResponse) => {
+            paymentSucceeded = true;
             setIsProcessing(false);
             resolve(response);
           },
           modal: {
             ondismiss: () => {
               setIsProcessing(false);
-              reject(new Error('Payment cancelled by user'));
+              // Only reject if payment was NOT already captured
+              // (ondismiss fires on modal auto-close after success too)
+              if (!paymentSucceeded) {
+                reject(new Error('Payment cancelled by user'));
+              }
             },
             escape: true,
             confirm_close: true,

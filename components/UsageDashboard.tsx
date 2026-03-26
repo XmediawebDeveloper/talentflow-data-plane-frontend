@@ -214,6 +214,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const [purchasingAddon, setPurchasingAddon] = useState(false);
   const [addonPurchaseSuccess, setAddonPurchaseSuccess] = useState<string | null>(null);
   const [addonPurchaseError, setAddonPurchaseError] = useState<string | null>(null);
+  const [paymentCaptured, setPaymentCaptured] = useState(false);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -617,6 +618,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
     setPurchasingAddon(true);
     setAddonPurchaseError(null);
+    setPaymentCaptured(false);
 
     try {
       const token = localStorage.getItem('accessToken');
@@ -679,6 +681,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return;
       }
 
+      // Payment captured — mark so we can show the right error if backend fails
+      setPaymentCaptured(true);
+
       // Step 3: Complete purchase with Razorpay payment credentials
       const response = await fetch(`${API_BASE}/addons/purchase`, {
         method: 'POST',
@@ -694,10 +699,19 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           razorpay_payment_id: paymentResponse.razorpay_payment_id,
           razorpay_order_id: paymentResponse.razorpay_order_id,
           razorpay_signature: paymentResponse.razorpay_signature,
+          // Send addon details so backend skips the second admin API call
+          addon_name: selectedAddon.name,
+          addon_credit_type: selectedAddon.credit_type,
+          addon_credit_amount: selectedAddon.credit_amount,
+          addon_price: selectedAddon.price || selectedAddon.unit_price || 0,
         }),
       });
 
       if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          throw new Error('Service temporarily unavailable. Your payment was not charged. Please try again.');
+        }
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || `Purchase verification failed: ${response.status}`);
       }
@@ -705,6 +719,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       const result = await response.json();
       const totalCredits = (selectedAddon.credit_amount || 0) * addonQuantity;
       console.log('[UsageDashboard] Addon purchase result:', result);
+
+      if (result.status === 'pending') {
+        setAddonPurchaseSuccess('Payment received! Your credits are being activated in the background and will appear shortly.');
+        return;
+      }
+
       setAddonPurchaseSuccess(`Successfully added ${totalCredits} Units to your ${cleanName}!`);
 
       // Queue audit verification for addon purchase (non-blocking)
@@ -1614,8 +1634,15 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       <AlertCircle className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-red-800 text-sm">Purchase Failed</p>
+                      <p className="font-semibold text-red-800 text-sm">
+                        {paymentCaptured ? 'Activation Failed — Payment Was Captured' : 'Purchase Failed'}
+                      </p>
                       <p className="text-xs text-red-600 mt-0.5">{addonPurchaseError}</p>
+                      {paymentCaptured && (
+                        <p className="text-xs text-red-700 mt-1 font-medium">
+                          Your payment was received. Please check Billing History to retry activation — you will not be charged again.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1735,20 +1762,25 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     setShowAddonModal(false);
                     setAddonPurchaseError(null);
                     setAddonPurchaseSuccess(null);
+                    setPaymentCaptured(false);
                   }}
                   className="px-5 py-3 border border-gray-200 rounded-2xl text-gray-600 font-semibold text-sm hover:bg-gray-50 hover:border-gray-300 transition-all"
                 >
-                  Cancel
+                  {paymentCaptured && addonPurchaseError ? 'Close' : 'Cancel'}
                 </button>
                 <button
                   onClick={handlePurchaseAddon}
-                  disabled={purchasingAddon || razorpayProcessing || !!addonPurchaseSuccess}
+                  disabled={purchasingAddon || razorpayProcessing || !!addonPurchaseSuccess || paymentCaptured}
                   className="flex-1 py-3 bg-gray-900 text-white rounded-2xl font-semibold text-sm hover:bg-gray-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20"
                 >
                   {purchasingAddon || razorpayProcessing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span>Processing...</span>
+                    </>
+                  ) : paymentCaptured && addonPurchaseError ? (
+                    <>
+                      <span>Payment Captured — Check Billing History</span>
                     </>
                   ) : (
                     <>

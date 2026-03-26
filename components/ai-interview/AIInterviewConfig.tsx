@@ -28,6 +28,13 @@ const CURRENT_STEP = 2;
 type InterviewMode = 'fixed' | 'flexible';
 type SkillType = 'Skill' | 'Command' | 'Certification';
 
+interface HRBankQuestion {
+  id: string;
+  question_text: string;
+  answer_type: 'text' | 'yes_no';
+  is_default: boolean;
+}
+
 interface Cluster {
   id: string;
   name: string;
@@ -99,11 +106,11 @@ interface SkillSectionProps {
   jdSkillNames: string[];   // original from JD (read-only label)
   mode: InterviewMode;
   questionCount: number;
+  flexibleMinutes: number;
   onChange: (updated: Partial<CategoryConfig>) => void;
 }
 
-function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, onChange }: SkillSectionProps) {
-  const [customInput, setCustomInput] = useState('');
+function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange }: SkillSectionProps) {
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
   const [skillToDelete, setSkillToDelete] = useState<string | null>(null);
@@ -126,17 +133,6 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
-
-  const addCustomSkill = () => {
-    const name = customInput.trim();
-    if (!name) return;
-    if (config.skills.some(s => s.name.toLowerCase() === name.toLowerCase())) {
-      toast.error('Skill already added');
-      return;
-    }
-    onChange({ skills: [...config.skills, { name, comment: '', type: 'Skill' as SkillType }] });
-    setCustomInput('');
   };
 
   const removeSkill = (name: string) => {
@@ -216,7 +212,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   return (
     <div className="border border-gray-200 rounded-lg bg-white">
       {/* Header */}
-      <div className="flex items-center px-4 py-3 border-b border-gray-100">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <Brain className={`w-4 h-4 ${color.accent}`} />
           <span className="font-semibold text-gray-900 text-sm">{title}</span>
@@ -227,10 +223,40 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
           )}
           {mode === 'flexible' && (
             <span className="px-2 py-0.5 text-xs rounded-full bg-purple-50 text-purple-600 border border-purple-200">
-              flexible questions
+              ~{flexibleMinutes} min
             </span>
           )}
         </div>
+        {mode === 'flexible' && (
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500">Weight</label>
+            <div className="flex items-center">
+              <input
+                type="number"
+                min={10}
+                max={100}
+                value={config.percentage}
+                onChange={e => {
+                  const raw = e.target.value;
+                  if (raw === '') return;
+                  const v = Math.min(100, parseInt(raw));
+                  if (!isNaN(v) && v >= 0) {
+                    setWeightError(v < 10);
+                    onChange({ percentage: v });
+                  }
+                }}
+                onBlur={() => { if (config.percentage < 10) setWeightError(true); }}
+                className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 ${
+                  weightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-gray-400'
+                }`}
+              />
+              <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-gray-50 ${
+                weightError ? 'border-red-400 text-red-600' : 'border-gray-300 text-gray-600'
+              }`}>%</span>
+            </div>
+            {weightError && <span className="text-[11px] text-red-500 ml-1">Min 10%</span>}
+          </div>
+        )}
       </div>
 
       <div className="p-4 space-y-4">
@@ -325,28 +351,6 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
           </div>
         )}
 
-        {/* Add custom skill */}
-        <div className="flex items-center gap-2 mt-2.5">
-          <input
-            value={customInput}
-            onChange={e => setCustomInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustomSkill())}
-            placeholder="Add a skill (won't modify the JD)…"
-            className="flex-1 px-3 py-1.5 text-xs border border-dashed border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-gray-400 placeholder-gray-400"
-          />
-          <button
-            onClick={addCustomSkill}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Plus className="w-3 h-3" />
-            Add
-          </button>
-        </div>
-        <p className="text-[11px] text-gray-400 mt-1 flex items-center gap-1">
-          <Info className="w-3 h-3 flex-shrink-0" />
-          Added skills apply to this interview config only — the original JD is unchanged.
-        </p>
-
       </div>
 
       {/* Delete skill confirmation */}
@@ -371,15 +375,55 @@ interface HRSectionProps {
   mode: InterviewMode;
   enabled: boolean;
   questionCount: number;
+  flexibleMinutes: number;
+  percentage: number;
   onToggle: () => void;
+  onPctChange: (v: number) => void;
+  bankQuestions: HRBankQuestion[];
+  selectedIds: string[];
+  onSelectedChange: (ids: string[]) => void;
+  onBankAdd: (q: HRBankQuestion) => void;
 }
 
-function HRSection({ mode, enabled, questionCount, onToggle }: HRSectionProps) {
-  const hrFocusAreas = [
-    { icon: MessageSquare, label: 'Behavioural', desc: 'Past behaviour & situational responses' },
-    { icon: Shield,        label: 'Cultural Fit', desc: 'Values, work-style & team alignment' },
-    { icon: Users,         label: 'Situational',  desc: 'Hypothetical scenario judgement' },
-  ];
+function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, onToggle, onPctChange, bankQuestions, selectedIds, onSelectedChange, onBankAdd }: HRSectionProps) {
+  const [hrWeightError, setHrWeightError] = useState(false);
+  const [addingQuestion, setAddingQuestion] = useState(false);
+  const [newQText, setNewQText] = useState('');
+  const [newQType, setNewQType] = useState<'text' | 'yes_no'>('text');
+  const [savingQ, setSavingQ] = useState(false);
+
+  const isOverLimit = mode === 'fixed' && questionCount > 0 && selectedIds.length > questionCount;
+
+  const toggleQuestion = (id: string) => {
+    if (selectedIds.includes(id)) {
+      onSelectedChange(selectedIds.filter(x => x !== id));
+    } else {
+      onSelectedChange([...selectedIds, id]);
+    }
+  };
+
+  const saveNewQuestion = async () => {
+    const text = newQText.trim();
+    if (!text) return;
+    setSavingQ(true);
+    try {
+      const res = await api.post('/hr-question-bank', { question_text: text, answer_type: newQType });
+      const newQ: HRBankQuestion = { id: res.data.id, question_text: res.data.question_text, answer_type: res.data.answer_type, is_default: false };
+      onBankAdd(newQ);
+      // Auto-select only if within limit
+      if (mode !== 'fixed' || selectedIds.length < questionCount) {
+        onSelectedChange([...selectedIds, newQ.id]);
+      }
+      setNewQText('');
+      setNewQType('text');
+      setAddingQuestion(false);
+      toast.success('Question added to bank');
+    } catch {
+      toast.error('Failed to add question');
+    } finally {
+      setSavingQ(false);
+    }
+  };
 
   return (
     <div className={`border rounded-lg transition-all ${enabled ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50 opacity-60'}`}>
@@ -401,25 +445,160 @@ function HRSection({ mode, enabled, questionCount, onToggle }: HRSectionProps) {
           )}
           {enabled && mode === 'flexible' && (
             <span className="px-2 py-0.5 text-xs rounded-full bg-purple-50 text-purple-600 border border-purple-200">
-              flexible questions
+              ~{flexibleMinutes} min
             </span>
           )}
         </div>
+        {enabled && mode === 'flexible' && (
+          <div className="flex items-center gap-1.5">
+            <label className="text-xs text-gray-500">Weight</label>
+            <div className="flex items-center">
+              <input
+                type="number"
+                min={10}
+                max={100}
+                value={percentage}
+                onChange={e => {
+                  const raw = e.target.value;
+                  if (raw === '') return;
+                  const v = Math.min(100, parseInt(raw));
+                  if (!isNaN(v) && v >= 0) {
+                    setHrWeightError(v < 10);
+                    onPctChange(v);
+                  }
+                }}
+                onBlur={() => { if (percentage < 10) setHrWeightError(true); }}
+                className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 ${
+                  hrWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-gray-400'
+                }`}
+              />
+              <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-gray-50 ${
+                hrWeightError ? 'border-red-400 text-red-600' : 'border-gray-300 text-gray-600'
+              }`}>%</span>
+            </div>
+            {hrWeightError && <span className="text-[11px] text-red-500 ml-1">Min 10%</span>}
+          </div>
+        )}
       </div>
 
       {enabled && (
-        <div className="p-4">
-          <div className="grid grid-cols-3 gap-3 mb-3">
-            {hrFocusAreas.map(({ icon: Icon, label, desc }) => (
-              <div key={label} className="flex flex-col gap-1 p-3 rounded-lg bg-blue-50/50 border border-blue-100">
-                <div className="flex items-center gap-1.5">
-                  <Icon className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                  <span className="text-xs font-medium text-blue-700">{label}</span>
-                </div>
-                <p className="text-[11px] text-blue-500">{desc}</p>
+        <div className="p-4 space-y-3">
+
+          {/* Flexible mode: no static questions */}
+          {mode === 'flexible' && (
+            <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100">
+              <Info className="w-3.5 h-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-[11px] text-blue-700">
+                In Flexible mode Linda asks HR questions dynamically based on the conversation — no pre-selected questions needed.
+              </p>
+            </div>
+          )}
+
+          {/* Timed mode only: question bank selection */}
+          {mode === 'fixed' && (<>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-gray-600">
+                {`Select exactly ${questionCount} question${questionCount !== 1 ? 's' : ''} for Linda to ask`}
+              </span>
+              <span className={`text-xs font-semibold ${isOverLimit ? 'text-red-500' : 'text-gray-500'}`}>
+                {selectedIds.length} / {questionCount} selected
+              </span>
+            </div>
+
+            {/* Over-limit error */}
+            {isOverLimit && (
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200">
+                <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-red-600">
+                  {selectedIds.length} selected but only {questionCount} allowed. Please deselect {selectedIds.length - questionCount} question{selectedIds.length - questionCount !== 1 ? 's' : ''}.
+                </p>
               </div>
-            ))}
-          </div>
+            )}
+
+            {/* Question list */}
+            <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+              {bankQuestions.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-6">No questions in the bank yet. Add your first question below.</p>
+              ) : (
+                bankQuestions.map(q => (
+                  <label
+                    key={q.id}
+                    className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                      selectedIds.includes(q.id)
+                        ? 'border-blue-200 bg-blue-50'
+                        : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(q.id)}
+                      onChange={() => toggleQuestion(q.id)}
+                      className="mt-0.5 w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-800 leading-relaxed">{q.question_text}</p>
+                      <span className={`text-[10px] mt-1 px-1.5 py-0.5 rounded border inline-block ${
+                        q.answer_type === 'yes_no'
+                          ? 'bg-green-50 text-green-600 border-green-200'
+                          : 'bg-gray-50 text-gray-500 border-gray-200'
+                      }`}>
+                        {q.answer_type === 'yes_no' ? 'Yes / No' : 'Text'}
+                      </span>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+
+            {/* Add Question */}
+            {addingQuestion ? (
+              <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+                <textarea
+                  autoFocus
+                  rows={2}
+                  value={newQText}
+                  onChange={e => setNewQText(e.target.value)}
+                  placeholder="Enter question text…"
+                  className="w-full text-xs border border-gray-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none bg-white"
+                />
+                <div className="flex items-center gap-2">
+                  <select
+                    value={newQType}
+                    onChange={e => setNewQType(e.target.value as 'text' | 'yes_no')}
+                    className="text-xs border border-gray-200 rounded-md px-2 py-1 focus:outline-none bg-white"
+                  >
+                    <option value="text">Text answer</option>
+                    <option value="yes_no">Yes / No</option>
+                  </select>
+                  <div className="flex-1" />
+                  <button
+                    onClick={() => { setAddingQuestion(false); setNewQText(''); setNewQType('text'); }}
+                    className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveNewQuestion}
+                    disabled={savingQ || !newQText.trim()}
+                    className="flex items-center gap-1 text-xs bg-gray-900 text-white px-3 py-1.5 rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setAddingQuestion(true)}
+                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:border-gray-400 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Question
+              </button>
+            )}
+          </>)}
+
+          {/* Info */}
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-100">
             <Info className="w-3.5 h-3.5 text-amber-500 flex-shrink-0 mt-0.5" />
             <p className="text-[11px] text-amber-700">
@@ -441,6 +620,7 @@ export default function AIInterviewConfig() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const jdId = searchParams.get('jd_id');
+  const configId = searchParams.get('config_id'); // set when editing an existing config (any status)
 
   const [selectedJd, setSelectedJd] = useState<PublishedJD | null>(null);
   const [loadingJd, setLoadingJd] = useState(true);
@@ -461,6 +641,8 @@ export default function AIInterviewConfig() {
   });
   const [hrPct, setHrPct] = useState<number>(DEFAULT_PCT.hr);
   const [hrEnabled, setHrEnabled] = useState(true);
+  const [hrBankQuestions, setHrBankQuestions] = useState<HRBankQuestion[]>([]);
+  const [hrSelectedIds, setHrSelectedIds] = useState<string[]>([]);
 
   /* Other settings */
   const [recordingEnabled, setRecordingEnabled] = useState(true);
@@ -576,10 +758,10 @@ export default function AIInterviewConfig() {
       try {
         setLoadingJd(true);
 
-        // Load JD and check for existing draft in parallel
-        const [jdResult, draftResult] = await Promise.all([
+        // Load JD; if editing a specific config, fetch it directly instead of searching drafts
+        const [jdResult, specificConfig] = await Promise.all([
           aiInterviewService.getPublishedJDs(),
-          aiInterviewService.listConfigs({ status: 'draft', page_size: 50 }).catch(() => null),
+          configId ? aiInterviewService.get(configId).catch(() => null) : Promise.resolve(null),
         ]);
 
         const jd = jdResult.items.find(j => j.id === jdId);
@@ -590,10 +772,14 @@ export default function AIInterviewConfig() {
         }
         setSelectedJd(jd);
 
-        // Look for a draft config saved for this JD
-        const existingDraft = draftResult?.items?.find(
-          (c: AIInterviewResponse) => c.jd_id === jdId && c.status === 'draft'
-        );
+        // Look for an existing config: specific config_id takes priority, then search drafts by jd_id
+        let existingDraft: AIInterviewResponse | null = specificConfig;
+        if (!existingDraft) {
+          const draftResult = await aiInterviewService.listConfigs({ status: 'draft', page_size: 50 }).catch(() => null);
+          existingDraft = draftResult?.items?.find(
+            (c: AIInterviewResponse) => c.jd_id === jdId && c.status === 'draft'
+          ) ?? null;
+        }
 
         if (existingDraft?.rounds_config?.length) {
           // Restore state from saved draft
@@ -644,6 +830,9 @@ export default function AIInterviewConfig() {
           if (hrRound) {
             setHrEnabled(true);
             setHrPct(hrRound.percentage ?? DEFAULT_PCT.hr);
+            if (hrRound.hr_questions?.length) {
+              setHrSelectedIds(hrRound.hr_questions.map((q: any) => q.id));
+            }
           } else {
             setHrEnabled(false);
           }
@@ -711,8 +900,20 @@ export default function AIInterviewConfig() {
             // Silent — malformed special_instructions is non-critical
           }
 
+        } else if (existingDraft) {
+          // Config exists but has no rounds_config yet — still register the ID
+          // so subsequent saves update it rather than creating a duplicate.
+          existingDraftIdRef.current = existingDraft.id;
+          setMth(prev => ({
+            ...prev,
+            skills: jd.must_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
+          }));
+          setNth(prev => ({
+            ...prev,
+            skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
+          }));
         } else {
-          // No draft — populate from JD
+          // No existing config at all — populate from JD defaults
           setMth(prev => ({
             ...prev,
             skills: jd.must_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
@@ -733,6 +934,19 @@ export default function AIInterviewConfig() {
     loadJD();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jdId]);
+
+  /* ── Fetch HR question bank on mount ── */
+  useEffect(() => {
+    api.get('/hr-question-bank').then(res => {
+      const data: any[] = res.data || [];
+      setHrBankQuestions(data.map(q => ({
+        id: q.id,
+        question_text: q.question_text,
+        answer_type: q.answer_type as 'text' | 'yes_no',
+        is_default: q.is_default ?? false,
+      })));
+    }).catch(() => {/* non-critical */});
+  }, []);
 
   /* ── Navigation guards ── */
   useEffect(() => {
@@ -818,6 +1032,12 @@ export default function AIInterviewConfig() {
   const totalPct = mth.percentage + (nth.enabled ? nth.percentage : 0) + (hrEnabled ? hrPct : 0);
   const pctValid = totalPct === 100;
 
+  // Flexible mode: time split per section based on weight % × 30 min
+  const FLEXIBLE_TOTAL_MIN = 30;
+  const flexMthMin = pctValid ? Math.round(mth.percentage / 100 * FLEXIBLE_TOTAL_MIN) : 0;
+  const flexNthMin = pctValid && nth.enabled ? Math.round(nth.percentage / 100 * FLEXIBLE_TOTAL_MIN) : 0;
+  const flexHrMin  = pctValid && hrEnabled   ? Math.round(hrPct / 100 * FLEXIBLE_TOTAL_MIN) : 0;
+
   // Static question distribution based on enabled sections (timed mode: total=15)
   const timedQDist = (() => {
     const mhs = true;
@@ -894,6 +1114,11 @@ export default function AIInterviewConfig() {
   const buildRounds = (isDraft = false): AIInterviewRoundConfig[] => {
     const rounds: AIInterviewRoundConfig[] = [];
     const dur = (cat: 'mth' | 'nth' | 'hr') => {
+      if (mode === 'flexible') {
+        if (cat === 'mth') return flexMthMin;
+        if (cat === 'nth') return flexNthMin;
+        return flexHrMin;
+      }
       if (cat === 'mth') return fixedMthMin;
       if (cat === 'nth') return fixedNthMin;
       return fixedHrMin;
@@ -962,6 +1187,12 @@ export default function AIInterviewConfig() {
 
     // HR round — always first (introduction, background, cultural fit)
     if (hrEnabled) {
+      // Build selected question objects (in selection order)
+      const selectedHrQuestions = hrSelectedIds
+        .map(id => hrBankQuestions.find(q => q.id === id))
+        .filter(Boolean)
+        .map(q => ({ id: q!.id, question_text: q!.question_text, answer_type: q!.answer_type }));
+
       rounds.push({
         type: 'hr',
         percentage: hrPct,
@@ -969,6 +1200,7 @@ export default function AIInterviewConfig() {
         topics: ['Behavioural', 'Cultural Fit', 'Situational'],
         enabled: true,
         order: 1,
+        ...(selectedHrQuestions.length > 0 ? { hr_questions: selectedHrQuestions } : {}),
       });
     }
 
@@ -1033,6 +1265,7 @@ export default function AIInterviewConfig() {
 
   const handleContinueToClusters = async () => {
     if (!selectedJd) return;
+    if (mode === 'flexible' && !pctValid) return;
     isNavigatingRef.current = true;
 
     // 1. Save draft first
@@ -1235,9 +1468,9 @@ export default function AIInterviewConfig() {
                       Candidate response time is capped. AI narration excluded.
                     </p>
                     <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'flexible' ? 'text-gray-400' : 'text-gray-400'}`}>
-                      <div>Must-to-Have → flexible questions</div>
-                      {nth.enabled && <div>Nice-to-Have → flexible questions</div>}
-                      {hrEnabled && <div>HR Round → flexible questions</div>}
+                      <div>Must-to-Have → {mth.percentage}% weight</div>
+                      {nth.enabled && <div>Nice-to-Have → {nth.percentage}% weight</div>}
+                      {hrEnabled && <div>HR Round → {hrPct}% weight</div>}
                     </div>
                   </button>
                 </div>
@@ -1253,6 +1486,7 @@ export default function AIInterviewConfig() {
               jdSkillNames={selectedJd.must_have_skills || []}
               mode={mode}
               questionCount={timedQDist.mth}
+              flexibleMinutes={flexMthMin}
               onChange={patch => setMth(prev => ({ ...prev, ...patch }))}
             />
 
@@ -1278,6 +1512,7 @@ export default function AIInterviewConfig() {
                     jdSkillNames={selectedJd.nice_to_have_skills || []}
                     mode={mode}
                     questionCount={timedQDist.nth}
+                    flexibleMinutes={flexNthMin}
                     onChange={patch => setNth(prev => ({ ...prev, ...patch }))}
                   />
                 </div>
@@ -1289,7 +1524,14 @@ export default function AIInterviewConfig() {
               mode={mode}
               enabled={hrEnabled}
               questionCount={timedQDist.hr}
+              flexibleMinutes={flexHrMin}
+              percentage={hrPct}
               onToggle={() => setHrEnabled(e => !e)}
+              onPctChange={setHrPct}
+              bankQuestions={hrBankQuestions}
+              selectedIds={hrSelectedIds}
+              onSelectedChange={setHrSelectedIds}
+              onBankAdd={q => setHrBankQuestions(prev => [...prev, q])}
             />
 
 
@@ -1559,48 +1801,104 @@ export default function AIInterviewConfig() {
             <div className="bg-white border border-gray-200 rounded-lg p-4 lg:sticky lg:top-6">
               <h3 className="font-semibold text-gray-900 text-sm mb-4">Configuration Summary</h3>
 
-              {/* Question distribution */}
-              <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
-                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-                  <span className="text-xs font-medium text-gray-500">
-                    {mode === 'fixed' ? 'Question Budget (Total: 15)' : 'Question Coverage'}
-                  </span>
-                </div>
-                <table className="w-full text-xs">
-                  <tbody>
-                    <tr className="border-b border-gray-50">
-                      <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                      <td className="px-3 py-2 text-right font-semibold text-gray-900">
-                        {mode === 'fixed' ? `${timedQDist.mth} questions` : 'flexible'}
-                      </td>
-                    </tr>
-                    {nth.enabled && (
+              {/* Fixed mode: question budget */}
+              {mode === 'fixed' && (
+                <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
+                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                    <span className="text-xs font-medium text-gray-500">Question Budget (Total: 15)</span>
+                  </div>
+                  <table className="w-full text-xs">
+                    <tbody>
                       <tr className="border-b border-gray-50">
-                        <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-900">
-                          {mode === 'fixed' ? `${timedQDist.nth} questions` : 'flexible'}
-                        </td>
+                        <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth} questions</td>
                       </tr>
-                    )}
-                    {hrEnabled && (
-                      <tr>
-                        <td className="px-3 py-2 text-gray-600">HR Round</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-900">
-                          {mode === 'fixed' ? `${timedQDist.hr} questions` : 'flexible'}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      {nth.enabled && (
+                        <tr className="border-b border-gray-50">
+                          <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth} questions</td>
+                        </tr>
+                      )}
+                      {hrEnabled && (
+                        <tr>
+                          <td className="px-3 py-2 text-gray-600">HR Round</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr} questions</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Flexible mode: weight distribution + time allocation */}
+              {mode === 'flexible' && (
+                <div className="space-y-3 mb-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                      <span>Scoring Weight Distribution</span>
+                      <span className={`font-semibold ${pctValid ? 'text-green-600' : 'text-red-500'}`}>
+                        {totalPct}% / 100%
+                      </span>
+                    </div>
+                    {[
+                      { label: 'Must-to-Have', pct: mth.percentage, color: 'bg-purple-500' },
+                      ...(nth.enabled ? [{ label: 'Nice-to-Have', pct: nth.percentage, color: 'bg-indigo-400' }] : []),
+                      ...(hrEnabled ? [{ label: 'HR Round', pct: hrPct, color: 'bg-blue-400' }] : []),
+                    ].map(({ label, pct, color }) => (
+                      <div key={label}>
+                        <div className="flex items-center justify-between text-xs mb-0.5">
+                          <span className="text-gray-600">{label}</span>
+                          <span className="font-medium text-gray-900">{pct}%</span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {!pctValid && (
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
+                      <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-red-600">Weights must total 100%. Adjust the percentages above.</p>
+                    </div>
+                  )}
+                  {pctValid && (
+                    <div className="border border-gray-100 rounded-lg overflow-hidden">
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                        <span className="text-xs font-medium text-gray-500">Time Allocation (30 min total)</span>
+                      </div>
+                      <table className="w-full text-xs">
+                        <tbody>
+                          <tr className="border-b border-gray-50">
+                            <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexMthMin} min</td>
+                          </tr>
+                          {nth.enabled && (
+                            <tr className="border-b border-gray-50">
+                              <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexNthMin} min</td>
+                            </tr>
+                          )}
+                          {hrEnabled && (
+                            <tr>
+                              <td className="px-3 py-2 text-gray-600">HR Round</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexHrMin} min</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="space-y-2">
                 <button
                   onClick={handleContinueToClusters}
-                  disabled={savingDraft || generatingClusters}
+                  disabled={(mode === 'flexible' && !pctValid) || savingDraft || generatingClusters}
                   className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
-                    !savingDraft && !generatingClusters
+                    (mode === 'flexible' ? pctValid : true) && !savingDraft && !generatingClusters
                       ? 'bg-gray-900 text-white hover:bg-gray-800'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
