@@ -22,6 +22,8 @@ export interface AIInterviewRoundConfig {
   nice_to_have_percentage?: number;
   // HR round: specific questions selected from the question bank
   hr_questions?: { id: string; question_text: string; answer_type: string }[];
+  // Timed mode: planned question count for this round (set at config time)
+  planned_questions?: number;
 }
 
 export interface AIInterviewCreate {

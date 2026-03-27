@@ -2,17 +2,8 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
-  Shield,
-  Camera,
-  Lock,
-  AlertCircle,
-  Mail,
-  User,
-  CheckCircle,
-  Smile,
-  Eye,
-  RefreshCw,
-  Loader2,
+  Shield, Camera, Lock, AlertCircle, Mail, User,
+  CheckCircle, RefreshCw, Loader2, Smile, Eye, ArrowRight,
 } from 'lucide-react';
 
 interface StepIdentityProps {
@@ -23,7 +14,12 @@ interface StepIdentityProps {
   submitting?: boolean;
 }
 
-const LIVENESS_INSTRUCTIONS = ['Smile', 'Blink', 'Turn head slightly'];
+const LIVENESS_STEPS = [
+  { action: 'Smile', icon: Smile, description: 'Show a natural smile for the camera', color: 'text-yellow-500' },
+  { action: 'Blink slowly', icon: Eye, description: 'Slowly blink both eyes once', color: 'text-blue-500' },
+  { action: 'Turn slightly', icon: ArrowRight, description: 'Gently turn your head left, then back', color: 'text-purple-500' },
+];
+const STEP_DURATION_MS = 2200;
 
 export default function StepIdentity({
   candidateName = '',
@@ -38,40 +34,33 @@ export default function StepIdentity({
   const [photoBlob, setPhotoBlob] = useState<Blob | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
-  const [livenessInstruction, setLivenessInstruction] = useState('');
+  const [livenessStepIdx, setLivenessStepIdx] = useState(0);
+  const [livenessProgress, setLivenessProgress] = useState(0);
   const [cameraError, setCameraError] = useState(false);
   const [faceError, setFaceError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isFormValid = name.trim() !== '' && email.trim() !== '' && isEmailValid;
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
     }
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    if (countdownRef.current) {
-      clearInterval(countdownRef.current);
-      countdownRef.current = null;
-    }
+    if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
   }, []);
 
   useEffect(() => {
     return () => {
       stopStream();
-      if (photoPreview) {
-        URL.revokeObjectURL(photoPreview);
-      }
+      if (photoPreview) URL.revokeObjectURL(photoPreview);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -81,568 +70,423 @@ export default function StepIdentity({
       setCameraError(false);
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
-    } catch {
-      setCameraError(true);
+      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
+    } catch { setCameraError(true); }
+  }, []);
+
+  useEffect(() => {
+    if (phase === 'photo_ready') startCamera();
+  }, [phase, startCamera]);
+
+  const capturePhoto = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+
+    // Face count check (best-effort)
+    let faceCheckPassed = true;
+    if (typeof window !== 'undefined' && 'FaceDetector' in window) {
+      try {
+        const detector = new (window as any).FaceDetector({ fastMode: true });
+        const faces = await detector.detect(video);
+        if (faces.length === 0) {
+          setFaceError('No face detected. Position your face clearly and try again.');
+          faceCheckPassed = false; setPhase('photo_ready');
+        } else if (faces.length > 1) {
+          setFaceError(`${faces.length} faces detected. Ensure only you are visible and try again.`);
+          faceCheckPassed = false; setPhase('photo_ready');
+        } else { setFaceError(null); }
+      } catch { setFaceError(null); }
+    }
+
+    if (faceCheckPassed) {
+      canvas.toBlob(blob => {
+        if (blob) {
+          setPhotoBlob(blob);
+          setPhotoPreview(URL.createObjectURL(blob));
+          setPhase('captured');
+          streamRef.current?.getTracks().forEach(t => t.stop());
+          streamRef.current = null;
+        }
+      }, 'image/png');
     }
   }, []);
 
-  // Start camera when entering photo phases
-  useEffect(() => {
-    if (phase === 'photo_ready') {
-      startCamera();
-    }
-  }, [phase, startCamera]);
-
   const handleFormSubmit = useCallback(() => {
-    if (!isFormValid) return;
-    setPhase('photo_ready');
+    if (isFormValid) setPhase('photo_ready');
   }, [isFormValid]);
 
   const handleStartLiveness = useCallback(() => {
-    const instruction = LIVENESS_INSTRUCTIONS[Math.floor(Math.random() * LIVENESS_INSTRUCTIONS.length)];
-    setLivenessInstruction(instruction);
-    setPhase('liveness');
+    if (cameraError) return;
+    setFaceError(null);
 
-    // After 3 seconds, advance to countdown
-    timerRef.current = setTimeout(() => {
-      setPhase('countdown');
-      setCountdown(3);
-
-      let count = 3;
-      countdownRef.current = setInterval(async () => {
-        count -= 1;
-        if (count <= 0) {
-          if (countdownRef.current) {
-            clearInterval(countdownRef.current);
+    const runStep = (stepIdx: number) => {
+      if (stepIdx >= LIVENESS_STEPS.length) {
+        // All liveness steps done — start countdown
+        setPhase('countdown');
+        setCountdown(3);
+        let count = 3;
+        countdownRef.current = setInterval(async () => {
+          count -= 1;
+          if (count <= 0) {
+            clearInterval(countdownRef.current!);
             countdownRef.current = null;
+            await capturePhoto();
+          } else {
+            setCountdown(count);
           }
-          // Capture frame with automatic face validation
-          if (videoRef.current && canvasRef.current) {
-            const video = videoRef.current;
-            const canvas = canvasRef.current;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }, 1000);
+        return;
+      }
 
-              // Automatic face count check before accepting the photo
-              let faceCheckPassed = true;
-              if (typeof window !== 'undefined' && 'FaceDetector' in window) {
-                try {
-                  const detector = new (window as any).FaceDetector({ fastMode: true });
-                  const faces = await detector.detect(video);
-                  if (faces.length === 0) {
-                    setFaceError('No face detected. Please position your face clearly in front of the camera and try again.');
-                    faceCheckPassed = false;
-                    setPhase('photo_ready');
-                  } else if (faces.length > 1) {
-                    setFaceError(`${faces.length} faces detected. Please ensure only you are visible and try again.`);
-                    faceCheckPassed = false;
-                    setPhase('photo_ready');
-                  } else {
-                    setFaceError(null);
-                  }
-                } catch {
-                  // FaceDetector failed — let backend OpenAI Vision handle it
-                  setFaceError(null);
-                }
-              }
+      setLivenessStepIdx(stepIdx);
+      setLivenessProgress(0);
+      setPhase('liveness');
 
-              if (faceCheckPassed) {
-                canvas.toBlob(
-                  (blob) => {
-                    if (blob) {
-                      setPhotoBlob(blob);
-                      setPhotoPreview(URL.createObjectURL(blob));
-                      setPhase('captured');
-                      // Stop camera
-                      if (streamRef.current) {
-                        streamRef.current.getTracks().forEach((track) => track.stop());
-                        streamRef.current = null;
-                      }
-                    }
-                  },
-                  'image/png',
-                );
-              }
-            }
-          }
+      const startTime = performance.now();
+      const animate = (now: number) => {
+        const progress = Math.min(((now - startTime) / STEP_DURATION_MS) * 100, 100);
+        setLivenessProgress(progress);
+        if (progress < 100) {
+          animFrameRef.current = requestAnimationFrame(animate);
         } else {
-          setCountdown(count);
+          animFrameRef.current = null;
+          runStep(stepIdx + 1);
         }
-      }, 1000);
-    }, 3000);
-  }, []);
+      };
+      animFrameRef.current = requestAnimationFrame(animate);
+    };
+
+    runStep(0);
+  }, [cameraError, capturePhoto]);
 
   const handleRetake = useCallback(() => {
     stopStream();
-    if (photoPreview) {
-      URL.revokeObjectURL(photoPreview);
-    }
-    setPhotoBlob(null);
-    setPhotoPreview(null);
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoBlob(null); setPhotoPreview(null);
     setPhase('photo_ready');
   }, [stopStream, photoPreview]);
 
-  // Auto-submit when captured
+  const handleGoBackFromPhoto = useCallback(() => {
+    stopStream();
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoBlob(null); setPhotoPreview(null);
+    setPhase('form');
+  }, [stopStream, photoPreview]);
+
+  // Auto-submit after capture
   useEffect(() => {
     if (phase === 'captured' && photoBlob) {
-      onVerify({
-        name: name.trim(),
-        email: email.trim(),
-        photo: photoBlob,
-      });
+      onVerify({ name: name.trim(), email: email.trim(), photo: photoBlob });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, photoBlob]);
 
-  const handleGoBackFromPhoto = useCallback(() => {
-    stopStream();
-    if (photoPreview) {
-      URL.revokeObjectURL(photoPreview);
-    }
-    setPhotoBlob(null);
-    setPhotoPreview(null);
-    setPhase('form');
-  }, [stopStream, photoPreview]);
-
-  // ────────────────────────────────────────
-  // Shared sub-components
-  // ────────────────────────────────────────
-
+  // ── Privacy card ──
   const privacyCard = (
     <div className="bg-gray-50 rounded-xl p-4 flex items-start gap-3">
-      <div className="flex-shrink-0 mt-0.5">
-        <Lock className="w-5 h-5 text-gray-500" />
-      </div>
+      <Lock className="w-5 h-5 text-gray-500 flex-shrink-0 mt-0.5" />
       <div>
         <h4 className="text-sm font-semibold text-gray-900 mb-1">Privacy &amp; Security</h4>
         <p className="text-xs text-gray-600 leading-relaxed">
-          Your personal information is encrypted and stored securely. We comply with GDPR and DPDP
-          regulations. This data will only be used for interview verification and communication
-          purposes.
+          Your information is encrypted and stored securely under GDPR and DPDP regulations.
+          Used only for interview verification purposes.
         </p>
       </div>
     </div>
   );
 
-  const whyWeNeedThisCard = (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 bg-gray-100">
-        <Shield className="w-4 h-4 text-gray-600" />
-        <h4 className="text-sm font-semibold text-gray-900">Why We Need This</h4>
-      </div>
-      <ul className="px-4 py-3 space-y-2">
-        {[
-          'Verify a real person is present',
-          'Prevent proxy interviews and fraud',
-          'Create identity evidence for interview record',
-          'Ensure image is captured live, not uploaded',
-        ].map((item) => (
-          <li key={item} className="flex items-start gap-2 text-xs text-gray-700">
-            <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-
-  // ────────────────────────────────────────
-  // PHASE A: Form
-  // ────────────────────────────────────────
+  // ── PHASE A: Form ──
   if (phase === 'form') {
     return (
-      <div className="w-full max-w-3xl mx-auto px-4 py-8 space-y-6">
-        {/* Pill badge */}
-        <div className="flex justify-center">
-          <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
-            <Shield className="w-3.5 h-3.5" />
-            Identity Verification
-          </span>
-        </div>
-
-        {/* Heading */}
+      <div className="w-full max-w-2xl mx-auto space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-            Candidate Identity Verification
-          </h1>
-          <p className="text-gray-600 mt-2">
-            The next step verifies your identity for this interview session.
+          <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
+            <Shield className="w-3.5 h-3.5" /> Identity Verification
+          </span>
+          <h1 className="text-2xl font-bold text-gray-900">Verify Your Identity</h1>
+          <p className="text-gray-600 mt-1 text-sm">
+            Confirm your details to proceed with the interview for <strong>{position}</strong>
           </p>
         </div>
 
-        {/* Gradient header card */}
-        <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gray-800 px-6 py-5 rounded-t-xl">
-            <div className="flex items-center gap-2 text-white mb-1">
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+          <div className="bg-gray-800 px-6 py-4">
+            <div className="flex items-center gap-2 text-white">
               <Shield className="w-5 h-5" />
-              <h2 className="text-lg font-semibold">Verify Your Identity</h2>
+              <h2 className="font-semibold">Candidate Details</h2>
             </div>
-            <p className="text-gray-300 text-sm">
-              Please provide the following information to continue with your interview for{' '}
-              <span className="font-medium text-white">{position}</span>
-            </p>
           </div>
-
-          {/* Card body */}
-          <div className="bg-white rounded-b-xl p-6 space-y-6">
-            {/* Important Instructions */}
-            <div className="border-l-4 border-gray-400 bg-gray-50 rounded-r-lg p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                  <AlertCircle className="w-4 h-4 text-gray-600" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-2">
-                    Important Instructions
-                  </h3>
-                  <ul className="space-y-1.5 text-sm text-gray-700">
-                    <li className="flex items-start gap-2">
-                      <span className="text-gray-400 mt-1">&#8226;</span>
-                      Enter your name exactly as it appears on your government ID
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-gray-400 mt-1">&#8226;</span>
-                      Provide a valid email address for interview notifications
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-gray-400 mt-1">&#8226;</span>
-                      This information will be used for identity verification purposes
-                    </li>
-                  </ul>
-                </div>
-              </div>
+          <div className="p-6 space-y-5">
+            <div className="border-l-4 border-amber-400 bg-amber-50 rounded-r-lg p-3">
+              <p className="text-sm text-amber-800 font-medium">Important</p>
+              <p className="text-xs text-amber-700 mt-1">Enter your name exactly as it appears on your government ID.</p>
             </div>
 
-            {/* Full Name input */}
             <div>
               <label htmlFor="identity-name" className="flex items-center gap-1.5 text-sm font-medium text-gray-900 mb-1.5">
-                <User className="w-4 h-4 text-gray-500" />
-                Full Name <span className="text-red-500">*</span>
+                <User className="w-4 h-4 text-gray-500" /> Full Name <span className="text-red-500">*</span>
               </label>
               <input
-                id="identity-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Example: John Michael Smith"
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors"
+                id="identity-name" type="text" value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. John Michael Smith"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
               />
             </div>
 
-            {/* Email Address input */}
             <div>
               <label htmlFor="identity-email" className="flex items-center gap-1.5 text-sm font-medium text-gray-900 mb-1.5">
-                <Mail className="w-4 h-4 text-gray-500" />
-                Email Address <span className="text-red-500">*</span>
+                <Mail className="w-4 h-4 text-gray-500" /> Email Address <span className="text-red-500">*</span>
               </label>
               <input
-                id="identity-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Example: john.smith@example.com"
+                id="identity-email" type="email" value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="e.g. john.smith@example.com"
                 readOnly={!!candidateEmail}
-                className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 transition-colors ${
-                  candidateEmail ? 'bg-gray-50 cursor-not-allowed' : ''
-                }`}
+                className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors ${candidateEmail ? 'bg-gray-50 cursor-not-allowed' : ''}`}
               />
             </div>
 
-            {/* Privacy & Security */}
             {privacyCard}
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-2">
+        <div className="flex justify-end">
           <button
-            type="button"
-            className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors"
-          >
-            &larr; Go Back
-          </button>
-          <button
-            type="button"
-            onClick={handleFormSubmit}
+            type="button" onClick={handleFormSubmit}
             disabled={!isFormValid || submitting}
-            className="inline-flex items-center gap-2 bg-gray-900 text-white font-semibold py-2.5 px-6 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className="inline-flex items-center gap-2 bg-gray-900 text-white font-semibold py-2.5 px-6 rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
           >
-            {submitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Verifying...
-              </>
-            ) : (
-              <>Verify &amp; Continue &rarr;</>
-            )}
+            {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</> : <>Continue to Photo <ArrowRight className="w-4 h-4" /></>}
           </button>
         </div>
       </div>
     );
   }
 
-  // ────────────────────────────────────────
-  // PHASE B: Live Photo Capture
-  // (photo_ready | liveness | countdown | captured)
-  // ────────────────────────────────────────
+  // ── PHASES B-E: Live Photo Capture ──
+  const currentLivenessStep = LIVENESS_STEPS[livenessStepIdx];
+  const LivenessIcon = currentLivenessStep?.icon;
 
-  const isPhotoPhase = phase === 'photo_ready' || phase === 'liveness' || phase === 'countdown' || phase === 'captured';
+  return (
+    <div className="w-full max-w-4xl mx-auto space-y-6">
+      <div className="text-center">
+        <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
+          <Camera className="w-3.5 h-3.5" /> Live Photo Capture
+        </span>
+        <h1 className="text-2xl font-bold text-gray-900">Identity Validation</h1>
+        <p className="text-gray-600 mt-1 text-sm">Take a live photo to verify your identity and prevent proxy interviews.</p>
+      </div>
 
-  const renderRightColumn = () => {
-    if (phase === 'photo_ready') {
-      return (
-        <div className="space-y-4">
-          {whyWeNeedThisCard}
-
-          {/* Before We Begin */}
-          <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-4">
-            <h4 className="text-sm font-semibold text-yellow-900 mb-2">Before We Begin</h4>
-            <ul className="space-y-1.5 text-xs text-yellow-800">
-              {[
-                'Position yourself in center of camera frame',
-                'Ensure good lighting on your face',
-                'Remove any sunglasses or face coverings',
-                'Look directly at the camera',
-              ].map((item) => (
-                <li key={item} className="flex items-start gap-2">
-                  <CheckCircle className="w-3.5 h-3.5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Face detection error (auto-detected multiple/no faces) */}
-          {faceError && (
-            <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
-              <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700">{faceError}</p>
-            </div>
-          )}
-
-          {/* Start button */}
-          <button
-            type="button"
-            onClick={handleStartLiveness}
-            disabled={cameraError}
-            className="w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-          >
-            {faceError ? 'Retry Liveness Check' : 'Start Liveness Check'} &rarr;
-          </button>
-        </div>
-      );
-    }
-
-    if (phase === 'liveness') {
-      return (
-        <div className="space-y-4">
-          {whyWeNeedThisCard}
-
-          {/* Liveness Detection */}
-          <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-4">
-            <h4 className="text-sm font-semibold text-yellow-900 mb-2">Liveness Detection</h4>
-            <p className="text-xs text-yellow-800 mb-3">Please follow this instruction</p>
-            <p className="text-xl font-bold text-yellow-900 mb-3">{livenessInstruction}</p>
-            <div className="flex items-center gap-2 text-green-600 text-xs font-medium">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              Detecting liveness...
-            </div>
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+        <div className="bg-gray-800 px-6 py-4">
+          <div className="flex items-center gap-2 text-white">
+            <Shield className="w-5 h-5" />
+            <h2 className="font-semibold">Live Identity Verification</h2>
           </div>
         </div>
-      );
-    }
 
-    if (phase === 'countdown') {
-      return (
-        <div className="space-y-4">
-          {whyWeNeedThisCard}
+        <div className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Left: Video feed */}
+            <div className="relative bg-gray-900 rounded-xl aspect-video overflow-hidden flex items-center justify-center">
+              {phase !== 'captured' && (
+                <video ref={videoRef} muted playsInline className="w-full h-full object-cover" />
+              )}
+              {phase === 'captured' && photoPreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoPreview} alt="Captured identity photo" className="w-full h-full object-cover" />
+              )}
+              {cameraError && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white gap-2">
+                  <Camera className="w-10 h-10 text-gray-400" />
+                  <p className="text-sm text-gray-300">Camera access denied</p>
+                  <p className="text-xs text-gray-500">Please allow camera access and reload</p>
+                </div>
+              )}
 
-          {/* Capturing Photo */}
-          <div className="bg-yellow-50 border border-yellow-300 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Camera className="w-4 h-4 text-yellow-700" />
-              <h4 className="text-sm font-semibold text-yellow-900">Capturing Photo...</h4>
+              {/* Always-visible face oval guide */}
+              {phase !== 'captured' && !cameraError && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className={`w-36 h-44 md:w-44 md:h-52 rounded-[50%] border-[3px] transition-all duration-300 ${
+                    phase === 'liveness' ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.4)]' :
+                    phase === 'countdown' ? 'border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)]' :
+                    'border-white/50'
+                  }`} />
+                  <p className="absolute bottom-12 text-xs text-white/70 font-medium">Position face inside oval</p>
+                </div>
+              )}
+
+              {/* Liveness instruction overlay */}
+              {phase === 'liveness' && currentLivenessStep && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 whitespace-nowrap">
+                  {LivenessIcon && <LivenessIcon className={`w-4 h-4 ${currentLivenessStep.color}`} />}
+                  {currentLivenessStep.action}
+                  <span className="text-gray-400 text-xs ml-1">({livenessStepIdx + 1}/{LIVENESS_STEPS.length})</span>
+                </div>
+              )}
+
+              {/* Countdown overlay */}
+              {phase === 'countdown' && (
+                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
+                  <span className="text-7xl font-bold text-white drop-shadow-lg">{countdown}</span>
+                  <span className="text-sm text-gray-300 mt-2">Hold still…</span>
+                </div>
+              )}
+
+              {/* Status badges */}
+              {phase !== 'captured' && !cameraError && (
+                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                  Camera Active
+                </div>
+              )}
+              {phase === 'captured' && (
+                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-green-600/90 text-white text-xs px-2.5 py-1 rounded-full">
+                  <CheckCircle className="w-3 h-3" /> Captured
+                </div>
+              )}
             </div>
-            <p className="text-xs text-yellow-800">Hold still and look at the camera</p>
-          </div>
-        </div>
-      );
-    }
 
-    if (phase === 'captured') {
-      return (
-        <div className="space-y-4">
-          {/* Success */}
-          <div className="bg-green-50 border border-green-300 rounded-xl p-4 flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h4 className="text-sm font-semibold text-green-900">Photo Captured Successfully!</h4>
-              <p className="text-xs text-green-700 mt-1">
-                Your identity photo has been captured and will be used for verification.
-              </p>
-            </div>
-          </div>
-
-          {/* Retake button */}
-          <button
-            type="button"
-            onClick={handleRetake}
-            className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 font-medium py-2.5 px-5 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Retake Photo
-          </button>
-        </div>
-      );
-    }
-
-    return null;
-  };
-
-  if (isPhotoPhase) {
-    return (
-      <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6">
-        {/* Pill badge */}
-        <div className="flex justify-center">
-          <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
-            <Camera className="w-3.5 h-3.5" />
-            Live Photo Capture
-          </span>
-        </div>
-
-        {/* Heading */}
-        <div className="text-center">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Identity Validation</h1>
-          <p className="text-gray-600 mt-2">
-            Take a live photo to verify your identity and prevent proxy interviews.
-          </p>
-        </div>
-
-        {/* Gradient header + card */}
-        <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gray-800 px-6 py-5 rounded-t-xl">
-            <div className="flex items-center gap-2 text-white mb-1">
-              <Shield className="w-5 h-5" />
-              <h2 className="text-lg font-semibold">Live Identity Verification</h2>
-            </div>
-            <p className="text-gray-300 text-sm">
-              Secure identity validation for{' '}
-              <span className="font-medium text-white">{position}</span>
-            </p>
-          </div>
-
-          {/* Card body: 2-column */}
-          <div className="bg-white rounded-b-xl p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left column: Webcam */}
-              <div className="relative bg-gray-900 rounded-xl aspect-video overflow-hidden flex items-center justify-center">
-                {/* Live video feed */}
-                {phase !== 'captured' && (
-                  <video
-                    ref={videoRef}
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
-                )}
-
-                {/* Captured photo */}
-                {phase === 'captured' && photoPreview && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={photoPreview}
-                    alt="Captured identity photo"
-                    className="w-full h-full object-cover"
-                  />
-                )}
-
-                {/* Camera error state */}
-                {cameraError && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white gap-2">
-                    <Camera className="w-10 h-10 text-gray-400" />
-                    <p className="text-sm text-gray-300">Camera access denied</p>
-                    <p className="text-xs text-gray-500">Please allow camera access and try again</p>
-                  </div>
-                )}
-
-                {/* Liveness overlay: green circle border */}
-                {phase === 'liveness' && (
-                  <>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                      <div className="w-48 h-48 md:w-56 md:h-56 rounded-full border-4 border-green-400 animate-pulse" />
+            {/* Right: Instructions / status */}
+            <div className="space-y-4">
+              {phase === 'photo_ready' && (
+                <>
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                      <Shield className="w-4 h-4 text-gray-600" />
+                      <h4 className="text-sm font-semibold text-gray-900">Liveness Check Process</h4>
                     </div>
-                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm flex items-center gap-1.5">
+                    <div className="px-4 py-3 space-y-3">
+                      {LIVENESS_STEPS.map((step, i) => (
+                        <div key={step.action} className="flex items-center gap-3">
+                          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">{i + 1}</div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-800">{step.action}</p>
+                            <p className="text-xs text-gray-500">{step.description}</p>
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-600 flex-shrink-0">4</div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">Photo Captured</p>
+                          <p className="text-xs text-gray-500">Auto-capture after liveness check</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {faceError && (
+                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
+                      <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-red-700">{faceError}</p>
+                    </div>
+                  )}
+
+                  <button
+                    type="button" onClick={handleStartLiveness} disabled={cameraError}
+                    className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
+                  >
+                    {faceError ? 'Retry Liveness Check' : 'Start Liveness Check →'}
+                  </button>
+                </>
+              )}
+
+              {phase === 'liveness' && currentLivenessStep && (
+                <div className="space-y-4">
+                  {/* Step tracker */}
+                  <div className="flex items-center justify-between mb-1">
+                    <h4 className="text-sm font-semibold text-gray-900">Liveness Detection</h4>
+                    <span className="text-xs text-gray-500">{livenessStepIdx + 1} / {LIVENESS_STEPS.length}</span>
+                  </div>
+
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                    <div className="flex justify-center mb-2">
+                      <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                        {LivenessIcon && <LivenessIcon className={`w-6 h-6 ${currentLivenessStep.color}`} />}
+                      </div>
+                    </div>
+                    <p className="text-xl font-bold text-green-900">{currentLivenessStep.action}</p>
+                    <p className="text-xs text-green-700 mt-1">{currentLivenessStep.description}</p>
+                  </div>
+
+                  {/* Animated progress bar */}
+                  <div>
+                    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-500 rounded-full transition-none"
+                        style={{ width: `${livenessProgress}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 mt-1.5 text-green-600 text-xs font-medium">
                       <Loader2 className="w-3 h-3 animate-spin" />
-                      Performing Liveness Check...
+                      Detecting…
                     </div>
-                  </>
-                )}
-
-                {/* Countdown overlay */}
-                {phase === 'countdown' && (
-                  <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
-                    <span className="text-7xl font-bold text-white">{countdown}</span>
-                    <span className="text-sm text-gray-300 mt-2">Get ready...</span>
                   </div>
-                )}
 
-                {/* Camera Active badge (bottom-left) */}
-                {phase !== 'captured' && !cameraError && (
-                  <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-sm">
-                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                    Camera Active
+                  {/* Step dots */}
+                  <div className="flex items-center justify-center gap-2">
+                    {LIVENESS_STEPS.map((s, i) => (
+                      <div key={s.action} className={`h-2 rounded-full transition-all ${
+                        i < livenessStepIdx ? 'w-6 bg-green-500' :
+                        i === livenessStepIdx ? 'w-6 bg-green-400 animate-pulse' :
+                        'w-2 bg-gray-200'
+                      }`} />
+                    ))}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Live View badge (bottom-right) */}
-                {phase !== 'captured' && !cameraError && phase !== 'liveness' && (
-                  <div className="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full backdrop-blur-sm">
-                    Live View
+              {phase === 'countdown' && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
+                  <Camera className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
+                  <h4 className="text-sm font-semibold text-yellow-900">Capturing Photo…</h4>
+                  <p className="text-xs text-yellow-800 mt-1">Hold still and look at the camera</p>
+                  <div className="flex items-center justify-center gap-1 mt-3">
+                    <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                    <span className="text-xs text-green-700 font-medium">All liveness checks passed!</span>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* Right column */}
-              <div>{renderRightColumn()}</div>
+              {phase === 'captured' && (
+                <div className="space-y-3">
+                  <div className="bg-green-50 border border-green-300 rounded-xl p-4 flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-sm font-semibold text-green-900">Photo Captured!</h4>
+                      <p className="text-xs text-green-700 mt-1">Liveness check complete. Submitting verification…</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button" onClick={handleRetake}
+                    className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 font-medium py-2.5 px-5 rounded-xl hover:bg-gray-50 transition-colors text-sm"
+                  >
+                    <RefreshCw className="w-4 h-4" /> Retake Photo
+                  </button>
+                </div>
+              )}
             </div>
-
-            {/* Hidden canvas for frame capture */}
-            <canvas ref={canvasRef} className="hidden" />
           </div>
-        </div>
-
-        {/* Privacy card */}
-        {privacyCard}
-
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-2">
-          <button
-            type="button"
-            onClick={handleGoBackFromPhoto}
-            className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors"
-          >
-            &larr; Go Back
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              stopStream();
-            }}
-            className="inline-flex items-center gap-2 border border-red-300 text-red-600 font-medium py-2 px-5 rounded-lg hover:bg-red-50 transition-colors text-sm"
-          >
-            Cancel Interview
-          </button>
+          <canvas ref={canvasRef} className="hidden" />
         </div>
       </div>
-    );
-  }
 
-  return null;
+      {privacyCard}
+
+      <div className="flex items-center justify-between pt-2">
+        <button type="button" onClick={handleGoBackFromPhoto}
+          className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors">
+          ← Go Back
+        </button>
+      </div>
+    </div>
+  );
 }

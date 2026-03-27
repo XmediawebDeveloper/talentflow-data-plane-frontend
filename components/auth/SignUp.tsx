@@ -812,6 +812,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
       setOtpSent(true);
       setResendTimer(60);
+      setEmailError('');
       // Focus first OTP input
       setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
 

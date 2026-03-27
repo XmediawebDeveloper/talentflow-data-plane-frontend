@@ -299,8 +299,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {/* Edit / Continue Editing — available for draft and published */}
-              {(config.status === 'draft' || config.status === 'published') && config.jd_id && (
+              {/* Continue Editing — draft only */}
+              {config.status === 'draft' && config.jd_id && (
                 <button
                   onClick={() => {
                     const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
@@ -309,7 +309,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
                 >
                   <Pencil className="w-3.5 h-3.5" />
-                  {config.status === 'draft' ? 'Continue Editing' : 'Edit'}
+                  Continue Editing
                 </button>
               )}
               {onRefresh && (

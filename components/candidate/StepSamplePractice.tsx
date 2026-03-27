@@ -95,6 +95,8 @@ export default function StepSamplePractice({
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const recognitionRef = useRef<any>(null);
   const webSpeechFinalRef = useRef('');
+  // Ref so speakQuestion can trigger startRecording without a forward-dependency
+  const startRecordingRef = useRef<() => void>(() => {});
 
   // ── Webcam + mic setup on mount ──────────────────────────────────────────
 
@@ -205,6 +207,8 @@ export default function StepSamplePractice({
       utterance.onstart = () => setAiSpeaking(true);
       utterance.onend = () => {
         setAiSpeaking(false);
+        // Auto-start recording after question finishes — 400ms gap so TTS audio clears
+        setTimeout(() => { startRecordingRef.current(); }, 400);
       };
       utterance.onerror = (e) => {
         if ((e as SpeechSynthesisErrorEvent).error === 'interrupted') return;
@@ -315,34 +319,26 @@ export default function StepSamplePractice({
     try {
       const text = await candidateAIInterviewService.transcribePracticeAudio(token, audioBlob);
       if (text.trim()) {
-        // Backend result is more accurate — upgrade the transcript
         setTranscript(text);
         setInputMode('voice');
         setVoiceReady(true);
       } else if (!browserTranscript) {
-        setTranscribeError('No speech detected. Try again or type your answer below.');
+        setTranscribeError('No speech detected. Please try speaking again.');
       }
-    } catch (err: unknown) {
-      // If backend fails but we have a browser transcript, silently keep it
-      if (browserTranscript) {
-        // Already set above — don't show an error
-      } else {
-        const axiosErr = err as { message?: string; response?: { data?: { detail?: string } } };
-        const isBlocked =
-          !axiosErr.response &&
-          (axiosErr.message === 'Network Error' || axiosErr.message?.includes('ERR_BLOCKED'));
-        const msg = isBlocked
-          ? 'Request blocked by your browser or an ad-blocker extension. Please disable any ad-blockers for this page and try again, or type your answer below.'
-          : axiosErr.response?.data?.detail ||
-            'Transcription failed. Please try again or type your answer.';
-        setTranscribeError(msg);
+    } catch {
+      // Backend transcription unavailable — silently use browser transcript if present
+      if (!browserTranscript) {
+        setTranscribeError('Could not transcribe — please type your answer or try again.');
       }
+      // If browserTranscript exists it was already shown above — no error needed
     } finally {
       setIsTranscribing(false);
     }
   }, [token, liveTranscript, stopLiveTranscription]);
 
   const startRecording = useCallback(() => {
+    // Guard: don't start if already recording or TTS is still speaking
+    if (mediaRecorderRef.current?.state === 'recording') return;
     if (!mediaStreamRef.current?.active) return;
 
     // Audio-only stream for recording
@@ -376,6 +372,9 @@ export default function StepSamplePractice({
     // Start live transcription via Web Speech API
     startLiveTranscription();
   }, [startLiveTranscription]);
+
+  // Keep ref in sync so speakQuestion.onend can call the latest startRecording
+  useEffect(() => { startRecordingRef.current = startRecording; }, [startRecording]);
 
   const toggleRecording = useCallback(() => {
     if (isRecording) {
@@ -431,327 +430,209 @@ export default function StepSamplePractice({
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="text-center space-y-3">
+      <div className="text-center space-y-1">
         <span className="inline-block px-4 py-1.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
           Practice &amp; Final Check
         </span>
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900">
-          Let&apos;s Test Your Setup
-        </h2>
-        <p className="text-gray-600 max-w-2xl mx-auto">
-          The AI will ask you a practice question. Answer using your voice or by typing.
-          This helps verify your microphone and camera are working.
-        </p>
+        <h2 className="text-2xl font-bold text-gray-900">Let&apos;s Test Your Setup</h2>
+        <p className="text-gray-500 text-sm">Answer the practice question to verify your mic and camera — this won&apos;t be scored.</p>
       </div>
 
-      {/* 2-Column Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ── Left Top: Video Preview ─────────────────────────────────── */}
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <div className="bg-gray-800 px-5 py-3">
-            <h3 className="text-white font-semibold text-sm">Your Video Preview</h3>
-            <p className="text-gray-300 text-xs mt-0.5">
-              Make sure you&apos;re visible and well-lit
-            </p>
+      {/* ── Main interview-like panel ── */}
+      <div className="rounded-2xl overflow-hidden border border-gray-800 shadow-2xl bg-[#0A1020]">
+
+        {/* Top bar */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.07] bg-[#060D1A]">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            <span className="text-xs font-semibold text-gray-300 tracking-wide">PRACTICE SESSION</span>
           </div>
-          <div className="relative bg-gray-900 aspect-video">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
+          <div className="flex items-center gap-3 text-xs text-gray-500">
+            <span className={`flex items-center gap-1 ${cameraReady ? 'text-green-400' : 'text-gray-600'}`}>
+              <Camera className="w-3 h-3" /> {cameraReady ? 'Camera OK' : 'No Camera'}
+            </span>
+            <span className={`flex items-center gap-1 ${micReady ? 'text-green-400' : 'text-gray-600'}`}>
+              <Mic className="w-3 h-3" /> {micReady ? 'Mic OK' : 'No Mic'}
+            </span>
+          </div>
+        </div>
+
+        {/* 2-Column Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.06]">
+        {/* ── Left: AI Question Panel (dark) ── */}
+        <div className="flex flex-col bg-[#0A1020] p-5 gap-5" style={{ minHeight: '360px' }}>
+          {/* AI Avatar / waveform area */}
+          <div className="flex items-center gap-3">
+            <div className={`relative w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${aiSpeaking ? 'bg-[#7C3AED]' : 'bg-[#1E293B]'} transition-colors duration-300`}>
+              <MessageSquare className="w-5 h-5 text-white" />
+              {aiSpeaking && <span className="absolute inset-0 rounded-full bg-[#7C3AED]/40 animate-ping" />}
+            </div>
+            <div>
+              <p className="text-xs text-[#64748B] font-medium uppercase tracking-wide">AI Interviewer</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {aiSpeaking ? (
+                  <>
+                    {[0, 0.1, 0.2, 0.15, 0.05].map((delay, i) => (
+                      <span key={i} className="w-0.5 bg-[#7C3AED] rounded-full animate-pulse"
+                        style={{ height: `${8 + i * 3}px`, animationDelay: `${delay}s` }} />
+                    ))}
+                    <span className="text-xs text-[#7C3AED] font-medium ml-1">Speaking…</span>
+                  </>
+                ) : (
+                  <span className={`text-xs font-medium ${isRecording ? 'text-[#EF4444]' : 'text-[#3B82F6]'}`}>
+                    {isRecording ? '● Recording your answer' : isTranscribing ? 'Processing…' : 'Listening'}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Question bubble */}
+          <div className="bg-[#1E293B]/80 border border-white/[0.08] rounded-xl p-4 flex-1 flex flex-col justify-between gap-4">
+            <div>
+              <p className="text-[11px] text-[#64748B] font-medium uppercase tracking-wide mb-2">Practice Question</p>
+              <p className="text-[#E2E8F0] text-sm leading-relaxed font-medium">
+                &ldquo;{PRACTICE_QUESTION}&rdquo;
+              </p>
+            </div>
+
+            {/* Play button */}
+            {ttsSupported && (
+              <button
+                type="button"
+                onClick={speakQuestion}
+                disabled={aiSpeaking}
+                className={`self-start inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:cursor-not-allowed ${
+                  aiSpeaking
+                    ? 'bg-[#7C3AED]/20 text-[#A78BFA] border border-[#7C3AED]/30'
+                    : 'bg-[#3B82F6]/20 text-[#60A5FA] border border-[#3B82F6]/30 hover:bg-[#3B82F6]/30'
+                }`}
+              >
+                {aiSpeaking ? (
+                  <><Volume2 className="w-3.5 h-3.5" /> Playing…</>
+                ) : (
+                  <><Play className="w-3.5 h-3.5" /> {voiceReady ? 'Replay Question' : 'Play Question'}</>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* System status mini row */}
+          <div className="flex items-center gap-3 text-xs">
+            {statusItems.map(item => (
+              <span key={item.label} className={`flex items-center gap-1 ${item.ready ? 'text-[#10B981]' : 'text-[#475569]'}`}>
+                <item.icon className="w-3 h-3" />
+                {item.label}: {item.ready ? 'Ready' : 'Pending'}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Right: Your Video + Answer ── */}
+        <div className="flex flex-col bg-[#060D1A] p-5 gap-4" style={{ minHeight: '360px' }}>
+          {/* Video preview */}
+          <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
+            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+
             {/* Audio level bar */}
-            <div className="absolute bottom-0 left-0 right-0 px-3 pb-3">
-              <div className="h-1.5 bg-gray-700/60 rounded-full overflow-hidden">
+            <div className="absolute bottom-0 left-0 right-0 px-3 pb-2.5">
+              <div className="h-1 bg-gray-800/60 rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-75 ${
-                    audioLevel > 0.3 ? 'bg-green-400' : audioLevel > 0.05 ? 'bg-yellow-400' : 'bg-gray-500'
-                  }`}
+                  className={`h-full rounded-full transition-all duration-75 ${audioLevel > 0.3 ? 'bg-green-400' : audioLevel > 0.05 ? 'bg-yellow-400' : 'bg-gray-600'}`}
                   style={{ width: `${Math.max(audioLevel * 100, 2)}%` }}
                 />
               </div>
             </div>
-            {/* AI Speaking indicator */}
-            {aiSpeaking && (
-              <div className="absolute top-3 left-3 flex items-center gap-2 bg-gray-700/90 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
-                <div className="flex items-center gap-0.5">
-                  <span className="w-1 h-3 bg-white rounded-full animate-pulse" />
-                  <span className="w-1 h-4 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.15s' }} />
-                  <span className="w-1 h-2 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
-                  <span className="w-1 h-5 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
-                  <span className="w-1 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.25s' }} />
-                </div>
-                AI Speaking...
+
+            {/* Status badge */}
+            {(isRecording || isTranscribing) && (
+              <div className={`absolute top-2 left-2 flex items-center gap-1.5 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm ${isRecording ? 'bg-red-500/90' : 'bg-blue-600/90'}`}>
+                {isRecording ? (
+                  <><span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" /> Recording</>
+                ) : (
+                  <><Loader2 className="w-3 h-3 animate-spin" /> Transcribing…</>
+                )}
               </div>
             )}
-            {/* Recording indicator */}
-            {isRecording && !aiSpeaking && (
-              <div className="absolute top-3 left-3 flex items-center gap-2 bg-red-500/90 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
-                </span>
-                Recording...
-              </div>
-            )}
-            {/* Transcribing indicator */}
-            {isTranscribing && (
-              <div className="absolute top-3 left-3 flex items-center gap-2 bg-blue-600/90 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Transcribing...
-              </div>
-            )}
+
+            <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">You</div>
           </div>
-        </div>
 
-        {/* ── Right Top: Practice Question ────────────────────────────── */}
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden flex flex-col">
-          <div className="bg-gray-800 px-5 py-3">
-            <h3 className="text-white font-semibold text-sm">Practice Question</h3>
-            <p className="text-gray-300 text-xs mt-0.5">
-              This won&apos;t be recorded — just a test run
-            </p>
-          </div>
-          <div className="p-5 space-y-4 flex-1 flex flex-col">
-            {/* AI interviewer prompt */}
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <MessageSquare className="w-4 h-4 text-gray-500" />
-              <span>AI Interviewer asks:</span>
-              {aiSpeaking && (
-                <span className="inline-flex items-center gap-1 text-xs text-gray-600 font-medium">
-                  <span className="flex items-center gap-0.5">
-                    <span className="w-1 h-2 bg-gray-500 rounded-full animate-pulse" />
-                    <span className="w-1 h-3 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.15s' }} />
-                    <span className="w-1 h-2 bg-gray-500 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
+          {/* Your Answer + transcript */}
+          <div className="flex-1 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-[#64748B] font-medium uppercase tracking-wide">Your Answer</p>
+              <div className="flex items-center gap-2">
+                {isRecording && (
+                  <span className="flex items-center gap-1 text-xs text-[#EF4444] font-medium">
+                    <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-ping" /> Live…
                   </span>
-                  Speaking...
-                </span>
-              )}
-            </div>
-
-            {/* Question card */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <p className="text-gray-800 font-medium">
-                &ldquo;{PRACTICE_QUESTION}&rdquo;
-              </p>
-              {/* Play / Replay button — always shown, requires user click for reliable TTS */}
-              {ttsSupported && (
-                <button
-                  type="button"
-                  onClick={speakQuestion}
-                  disabled={aiSpeaking}
-                  className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-800 text-white text-xs font-semibold hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {aiSpeaking ? (
-                    <>
-                      <span className="flex items-center gap-0.5">
-                        <span className="w-1 h-2 bg-white rounded-full animate-pulse" />
-                        <span className="w-1 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
-                        <span className="w-1 h-2 bg-white rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                      </span>
-                      Playing...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-3 h-3" />
-                      Play Question
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-
-            {/* Your Answer header */}
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-gray-700">Your Answer:</p>
-              {!isRecording && !isTranscribing && !hasAnswer && (
-                <span className="text-xs text-gray-500 animate-pulse">Your turn to answer!</span>
-              )}
-              {isRecording && (
-                <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+                )}
+                {isTranscribing && (
+                  <span className="flex items-center gap-1 text-xs text-[#60A5FA]">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Enhancing…
                   </span>
-                  Transcribing live...
-                </span>
-              )}
-              {isTranscribing && (
-                <span className="text-xs text-blue-600 flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Enhancing transcript...
-                </span>
-              )}
-              {hasAnswer && !isTranscribing && !isRecording && (
-                <button
-                  type="button"
-                  onClick={resetPractice}
-                  className="ml-auto inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  Try Again
-                </button>
-              )}
+                )}
+                {hasAnswer && !isRecording && !isTranscribing && (
+                  <button type="button" onClick={resetPractice}
+                    className="flex items-center gap-1 text-xs text-[#64748B] hover:text-white transition-colors">
+                    <RefreshCw className="w-3 h-3" /> Retry
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Answer textarea — always visible */}
-            <div className="relative flex-1">
+            {/* Live/final transcript display */}
+            {(isRecording && liveTranscript) ? (
+              <div className="flex-1 bg-[#0F1A2E] border border-white/[0.06] rounded-lg p-3 overflow-y-auto min-h-[60px]">
+                <p className="text-[#CBD5E1] text-sm leading-relaxed">{liveTranscript}<span className="animate-pulse text-[#3B82F6]">▌</span></p>
+              </div>
+            ) : displayAnswer && !isRecording ? (
+              <div className="flex-1 bg-[#0F1A2E] border border-white/[0.06] rounded-lg p-3 overflow-y-auto min-h-[60px]">
+                <p className="text-[#CBD5E1] text-sm leading-relaxed">{displayAnswer}</p>
+              </div>
+            ) : (
               <textarea
-                value={displayAnswer}
-                onChange={(e) => {
-                  if (isRecording) return; // don't allow typing while recording
-                  setTypedAnswer(e.target.value);
-                  setInputMode('typing');
-                }}
-                placeholder={
-                  isRecording
-                    ? 'Listening… speak now — your words will appear here in real-time'
-                    : isTranscribing
-                    ? 'Enhancing your transcript with AI…'
-                    : 'Click "Start Recording" below or type your answer here...'
-                }
+                value={typedAnswer}
+                onChange={e => { if (!isRecording) { setTypedAnswer(e.target.value); setInputMode('typing'); } }}
+                placeholder={isRecording ? 'Listening… speak now' : 'Start recording or type your answer here…'}
                 readOnly={isRecording || isTranscribing}
-                className={`w-full h-full min-h-[80px] border rounded-lg p-3 text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-colors ${
-                  isRecording
-                    ? 'border-red-300 bg-red-50/30'
-                    : isTranscribing
-                    ? 'border-blue-300 bg-blue-50/30'
-                    : 'border-gray-300 bg-white'
-                }`}
-                rows={4}
+                className="flex-1 min-h-[60px] bg-[#0F1A2E] border border-white/[0.06] rounded-lg p-3 text-sm text-[#CBD5E1] placeholder-[#475569] resize-none focus:outline-none focus:border-[#3B82F6]/50 transition-colors"
+                rows={3}
               />
-            </div>
-
-            {/* Transcription error */}
-            {transcribeError && !isTranscribing && (
-              <p className="text-xs text-red-500">{transcribeError}</p>
             )}
 
-            {/* Voice / Record button */}
-            <div className="flex gap-3">
-              {micReady ? (
-                <button
-                  type="button"
-                  onClick={toggleRecording}
-                  disabled={isTranscribing}
-                  className={`flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
-                    isRecording
-                      ? 'bg-red-500 text-white hover:bg-red-600 shadow-md shadow-red-200'
-                      : 'bg-gray-900 text-white hover:bg-gray-800 shadow-md shadow-gray-200'
-                  }`}
-                >
-                  {isTranscribing ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Enhancing...
-                    </>
-                  ) : isRecording ? (
-                    <>
-                      <Square className="w-4 h-4" />
-                      Stop Recording
-                    </>
-                  ) : (
-                    <>
-                      <Mic className="w-4 h-4" />
-                      {hasAnswer ? 'Re-record Answer' : 'Start Recording'}
-                    </>
-                  )}
-                </button>
-              ) : (
-                <div className="flex-1 bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-center">
-                  <p className="text-xs text-amber-700">
-                    <MicOff className="w-3.5 h-3.5 inline mr-1" />
-                    Microphone not available. You can type your answer instead.
-                  </p>
-                </div>
-              )}
+            {transcribeError && !isTranscribing && (
+              <p className="text-xs text-red-400">{transcribeError}</p>
+            )}
+          </div>
+
+          {/* Record button */}
+          {micReady ? (
+            <button
+              type="button"
+              onClick={toggleRecording}
+              disabled={isTranscribing}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                isRecording
+                  ? 'bg-[#EF4444] text-white hover:bg-red-600 shadow-lg shadow-red-500/20'
+                  : 'bg-[#1E293B] text-[#E2E8F0] border border-white/[0.08] hover:bg-[#334155]'
+              }`}
+            >
+              {isTranscribing ? <><Loader2 className="w-4 h-4 animate-spin" /> Processing…</>
+                : isRecording ? <><Square className="w-4 h-4" /> Stop Recording</>
+                : <><Mic className="w-4 h-4" /> {hasAnswer ? 'Re-record' : 'Start Recording'}</>}
+            </button>
+          ) : (
+            <div className="bg-amber-950/40 border border-amber-800/30 rounded-xl p-2.5 text-center">
+              <p className="text-xs text-amber-400"><MicOff className="w-3.5 h-3.5 inline mr-1" />No microphone — type your answer above.</p>
             </div>
-
-            {/* Tip — always visible */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-auto">
-              <p className="text-xs text-gray-700 leading-relaxed">
-                <span className="font-semibold">Tip:</span> During the actual interview,
-                the AI will speak each question aloud and transcribe your spoken
-                response in real-time using our own AI transcription.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Left Bottom: System Status + What We're Testing ─────────── */}
-        <div className="space-y-6">
-          {/* System Status */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <h4 className="text-sm font-semibold text-gray-900 mb-4">
-              System Status
-            </h4>
-            <div className="space-y-3">
-              {statusItems.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <item.icon className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm text-gray-700">{item.label}</span>
-                  </div>
-                  <span
-                    className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-0.5 rounded-full ${
-                      item.ready
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {item.ready && <CheckCircle className="w-3 h-3" />}
-                    {item.ready ? 'Ready' : 'Pending'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* What We're Testing */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5 border-l-4 border-l-gray-500">
-            <h4 className="text-sm font-semibold text-gray-900 mb-3">
-              What We&apos;re Testing
-            </h4>
-            <ul className="space-y-2.5">
-              {checklistItems.map((item) => (
-                <li key={item.label} className="flex items-start gap-2.5">
-                  <span
-                    className={`mt-1.5 h-2 w-2 flex-shrink-0 rounded-full ${item.color}`}
-                  />
-                  <span className="text-sm text-gray-700">
-                    <span className="font-medium">{item.label}:</span>{' '}
-                    {item.desc}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        {/* ── Right Bottom: Selected Language ─────────────────────────── */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Globe className="w-4 h-4 text-gray-500" />
-            <h4 className="text-sm font-semibold text-gray-900">
-              Selected Language
-            </h4>
-          </div>
-          <p className="text-lg font-medium text-gray-800 mb-2">
-            {selectedLanguage}
-          </p>
-          <p className="text-sm text-gray-500 leading-relaxed">
-            The interview will be conducted in this language. You can change it
-            from the previous screen if needed.
-          </p>
+          )}
         </div>
       </div>
+      </div>{/* end outer dark panel */}
 
       {/* Footer Navigation */}
       <div className="flex items-center justify-between pt-2">

@@ -727,8 +727,8 @@ export default function AIInterview() {
                             </button>
                           )}
 
-                          {/* Edit / Continue Editing button */}
-                          {(config.status === 'draft' || config.status === 'published') && config.jd_id && (
+                          {/* Edit / Continue Editing button — draft only */}
+                          {config.status === 'draft' && config.jd_id && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`)}
                               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
@@ -779,13 +779,13 @@ export default function AIInterview() {
                                   <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                   View Details
                                 </button>
-                                {(config.status === 'draft' || config.status === 'published') && config.jd_id && (
+                                {config.status === 'draft' && config.jd_id && (
                                   <button
                                     onClick={() => { router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`); setOpenMenuId(null); }}
                                     className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                   >
                                     <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                    {config.status === 'draft' ? 'Continue Editing' : 'Edit Config'}
+                                    Continue Editing
                                   </button>
                                 )}
                                 {config.status === 'published' && (

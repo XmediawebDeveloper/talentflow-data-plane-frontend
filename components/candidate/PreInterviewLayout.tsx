@@ -10,6 +10,7 @@ const STEP_LABELS = [
   'Intro Video',
   'Language',
   'Practice',
+  'Interview',
 ];
 
 interface PreInterviewLayoutProps {
@@ -30,7 +31,7 @@ interface PreInterviewLayoutProps {
 
 export default function PreInterviewLayout({
   currentStep,
-  totalSteps = 6,
+  totalSteps = 7,
   position,
   duration,
   children,
@@ -49,8 +50,8 @@ export default function PreInterviewLayout({
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       {/* Progress Stepper */}
-      <nav className="bg-white/90 backdrop-blur-sm border-b border-gray-200 px-4 py-5 sm:px-6 sm:py-6">
-        <div className="mx-auto max-w-3xl">
+      <nav className="bg-white/90 backdrop-blur-sm border-b border-gray-200 px-4 py-4 sm:px-8 sm:py-5">
+        <div className="w-full max-w-6xl mx-auto">
           <div className="flex items-center justify-between">
             {steps.map((label, index) => {
               const stepNumber = index + 1;
@@ -119,7 +120,7 @@ export default function PreInterviewLayout({
 
       {/* Content */}
       <main className="flex flex-1 flex-col">
-        <div className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+        <div className="w-full max-w-6xl mx-auto flex-1 px-4 py-6 sm:px-8 sm:py-8">
           {children}
         </div>
       </main>
@@ -127,7 +128,7 @@ export default function PreInterviewLayout({
       {/* Footer */}
       {showFooter && (
         <footer className="sticky bottom-0 border-t border-gray-200 bg-white px-4 py-3 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] sm:px-6 sm:py-4">
-          <div className="mx-auto flex max-w-4xl items-center justify-between">
+          <div className="w-full max-w-6xl mx-auto flex items-center justify-between">
             <div>
               {shouldShowBack && (
                 <button

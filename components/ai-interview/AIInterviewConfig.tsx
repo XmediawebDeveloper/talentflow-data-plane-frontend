@@ -1152,6 +1152,7 @@ export default function AIInterviewConfig() {
         order: 2,
         jd_skills: jdSkills.length > 0 ? jdSkills : undefined,
         custom_skills: customSkills.length > 0 ? customSkills : undefined,
+        ...(mode === 'fixed' ? { planned_questions: timedQDist.mth } : {}),
       });
     }
 
@@ -1182,6 +1183,7 @@ export default function AIInterviewConfig() {
         order: 3,
         jd_skills: jdSkills.length > 0 ? jdSkills : undefined,
         custom_skills: customSkills.length > 0 ? customSkills : undefined,
+        ...(mode === 'fixed' ? { planned_questions: timedQDist.nth } : {}),
       });
     }
 
@@ -1201,6 +1203,7 @@ export default function AIInterviewConfig() {
         enabled: true,
         order: 1,
         ...(selectedHrQuestions.length > 0 ? { hr_questions: selectedHrQuestions } : {}),
+        ...(mode === 'fixed' ? { planned_questions: timedQDist.hr } : {}),
       });
     }
 

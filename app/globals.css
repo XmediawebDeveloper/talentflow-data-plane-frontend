@@ -700,6 +700,88 @@ a:focus:not(:focus-visible) {
 .dark .bg-indigo-50  { background-color: rgba(99, 102, 241, 0.15); }
 .dark .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.2); }
 
+/* ── Colored text (badges, status, priority labels) ────────── */
+.dark .text-blue-700   { color: #60a5fa; }
+.dark .text-blue-600   { color: #3b82f6; }
+.dark .text-blue-500   { color: #60a5fa; }
+.dark .text-blue-400   { color: #93c5fd; }
+.dark .text-green-700  { color: #4ade80; }
+.dark .text-green-600  { color: #22c55e; }
+.dark .text-green-500  { color: #4ade80; }
+.dark .text-yellow-700 { color: #fbbf24; }
+.dark .text-yellow-600 { color: #eab308; }
+.dark .text-yellow-500 { color: #facc15; }
+.dark .text-purple-700 { color: #c084fc; }
+.dark .text-purple-600 { color: #a855f7; }
+.dark .text-purple-500 { color: #c084fc; }
+.dark .text-indigo-700 { color: #818cf8; }
+.dark .text-indigo-600 { color: #6366f1; }
+.dark .text-teal-700   { color: #2dd4bf; }
+.dark .text-teal-600   { color: #14b8a6; }
+.dark .text-pink-700   { color: #f472b6; }
+.dark .text-pink-600   { color: #ec4899; }
+.dark .text-cyan-700   { color: #22d3ee; }
+.dark .text-cyan-600   { color: #06b6d4; }
+
+/* ── Colored border colors (badge outlines, card borders) ─── */
+.dark .border-red-200    { border-color: rgba(239, 68, 68, 0.35); }
+.dark .border-red-300    { border-color: rgba(239, 68, 68, 0.5); }
+.dark .border-orange-200 { border-color: rgba(249, 115, 22, 0.35); }
+.dark .border-orange-300 { border-color: rgba(249, 115, 22, 0.5); }
+.dark .border-yellow-200 { border-color: rgba(234, 179, 8, 0.35); }
+.dark .border-yellow-300 { border-color: rgba(234, 179, 8, 0.5); }
+.dark .border-blue-200   { border-color: rgba(59, 130, 246, 0.35); }
+.dark .border-blue-300   { border-color: rgba(59, 130, 246, 0.5); }
+.dark .border-green-200  { border-color: rgba(34, 197, 94, 0.35); }
+.dark .border-green-300  { border-color: rgba(34, 197, 94, 0.5); }
+.dark .border-purple-200 { border-color: rgba(168, 85, 247, 0.35); }
+.dark .border-purple-300 { border-color: rgba(168, 85, 247, 0.5); }
+.dark .border-amber-200  { border-color: rgba(245, 158, 11, 0.35); }
+.dark .border-amber-300  { border-color: rgba(245, 158, 11, 0.5); }
+.dark .border-indigo-200 { border-color: rgba(99, 102, 241, 0.35); }
+.dark .border-pink-200   { border-color: rgba(236, 72, 153, 0.35); }
+
+/* ── Hover border colors ─────────────────────────────────── */
+.dark .hover\:border-gray-200:hover { border-color: var(--border-dark); }
+.dark .hover\:border-gray-300:hover { border-color: var(--border-dark); }
+.dark .hover\:border-gray-400:hover { border-color: var(--text-muted); }
+
+/* ── Divide colors ───────────────────────────────────────── */
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border); }
+.dark .divide-gray-50  > :not([hidden]) ~ :not([hidden]) { border-color: var(--border); }
+
+/* ── Additional colored background tints ────────────────── */
+.dark .bg-teal-50   { background-color: rgba(20, 184, 166, 0.15); }
+.dark .bg-teal-100  { background-color: rgba(20, 184, 166, 0.2); }
+.dark .bg-pink-50   { background-color: rgba(236, 72, 153, 0.15); }
+.dark .bg-pink-100  { background-color: rgba(236, 72, 153, 0.2); }
+.dark .bg-cyan-50   { background-color: rgba(6, 182, 212, 0.15); }
+.dark .bg-cyan-100  { background-color: rgba(6, 182, 212, 0.2); }
+
+/* ── Opacity-modifier bg variants used in AI interview ──── */
+/* bg-white/60, bg-white/80 — keeps transparency on dark surfaces */
+.dark .bg-white\/60 { background-color: rgba(31, 41, 55, 0.6); }
+.dark .bg-white\/80 { background-color: rgba(31, 41, 55, 0.8); }
+.dark .bg-gray-50\/50 { background-color: rgba(31, 41, 55, 0.5); }
+
+/* ── Additional gray shades (progress bars, misc) ────────── */
+.dark .bg-gray-400 { background-color: #6b7280; }
+.dark .bg-gray-500 { background-color: #9ca3af; }
+.dark .bg-gray-600 { background-color: #374151; }
+
+/* ── Toggle / switch pseudo-element (thumb) ─────────────── */
+/* Targets after:bg-white thumb on toggle tracks */
+.dark .after\:bg-white::after { background-color: #d1d5db !important; }
+
+/* ── Focus ring colors for colored inputs ────────────────── */
+.dark .focus\:ring-purple-300:focus  { --tw-ring-color: rgba(168, 85, 247, 0.4); }
+.dark .focus\:ring-purple-400:focus  { --tw-ring-color: rgba(168, 85, 247, 0.5); }
+.dark .focus\:ring-blue-300:focus    { --tw-ring-color: rgba(59, 130, 246, 0.4); }
+.dark .focus\:ring-green-300:focus   { --tw-ring-color: rgba(34, 197, 94, 0.4); }
+.dark .focus\:border-purple-300:focus { border-color: rgba(168, 85, 247, 0.6); }
+.dark .focus\:border-blue-300:focus   { border-color: rgba(59, 130, 246, 0.6); }
+.dark .focus\:ring-gray-400:focus    { --tw-ring-color: var(--text-muted); }
+
 /* Dark mode focus indicators */
 .dark button:focus-visible,
 .dark a:focus-visible,

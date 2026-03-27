@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Info, AlertCircle, X } from 'lucide-react';
 import { useTerms } from '@/components/providers/TermsProvider';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 const urgencyConfig = {
   info: {
@@ -37,8 +38,9 @@ export default function TermsReminderBanner() {
     urgency,
     daysRemaining,
   } = useTerms();
+  const { isTenantAdmin } = useAuth();
 
-  if (!needsAcceptance || !isInGracePeriod || reminderDismissed) return null;
+  if (!needsAcceptance || !isInGracePeriod || reminderDismissed || !isTenantAdmin) return null;
 
   const config = urgencyConfig[urgency];
   const Icon = config.icon;

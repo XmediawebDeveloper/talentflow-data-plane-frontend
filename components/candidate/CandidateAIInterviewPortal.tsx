@@ -132,6 +132,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     loadInterview();
   }, [loadInterview]);
 
+  // Scroll to top on every step transition
+  useEffect(() => {
+    if (step !== 'loading' && step !== 'interview' && step !== 'completed' && step !== 'error') {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [step]);
+
   // Preload avatar assets when reaching system check
   useEffect(() => {
     if (step === 'system_check') {
@@ -381,6 +388,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           jdExperienceMax={interview.jd_experience_max}
           jdJobLevel={interview.jd_job_level}
           duration={interview.duration_minutes}
+          interviewType={interview.interview_type}
+          totalQuestions={interview.total_questions}
         />
       </PreInterviewLayout>
     );

@@ -12,7 +12,7 @@ interface TermsBlockingOverlayProps {
 
 export default function TermsBlockingOverlay({ accountSuspended }: TermsBlockingOverlayProps) {
   const { isBlocked, openAcceptanceModal, currentTerms } = useTerms();
-  const { logout } = useAuth();
+  const { logout, isTenantAdmin, user } = useAuth();
   const router = useRouter();
 
   // Don't render if not blocked, or if account is suspended (suspension overlay takes priority)
@@ -49,12 +49,25 @@ export default function TermsBlockingOverlay({ accountSuspended }: TermsBlocking
             {/* Content */}
             <div className="px-8 py-8">
               <div className="bg-blue-50 border-l-4 border-blue-500 p-6 rounded-r-lg mb-8">
-                <p className="text-blue-800 font-medium mb-2">
-                  Our Terms & Conditions have been updated and require your acceptance to continue.
-                </p>
-                <p className="text-blue-600 text-sm">
-                  The grace period for accepting the updated terms has expired. Please review and accept them to regain access.
-                </p>
+                {isTenantAdmin ? (
+                  <>
+                    <p className="text-blue-800 font-medium mb-2">
+                      Our Terms & Conditions have been updated and require your acceptance to continue.
+                    </p>
+                    <p className="text-blue-600 text-sm">
+                      The grace period for accepting the updated terms has expired. Please review and accept them to regain access.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-blue-800 font-medium mb-2">
+                      Your organization&apos;s administrator needs to accept the updated Terms & Conditions.
+                    </p>
+                    <p className="text-blue-600 text-sm">
+                      Access has been restricted until the account owner accepts the updated terms. Please contact your administrator{user?.tenantAdminEmail ? ` at ${user.tenantAdminEmail}` : ''} to restore access.
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="space-y-4 mb-8">
@@ -87,13 +100,15 @@ export default function TermsBlockingOverlay({ accountSuspended }: TermsBlocking
 
               {/* Actions */}
               <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={openAcceptanceModal}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-                >
-                  <FileText className="w-5 h-5" />
-                  Review & Accept Terms
-                </button>
+                {isTenantAdmin && (
+                  <button
+                    onClick={openAcceptanceModal}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                  >
+                    <FileText className="w-5 h-5" />
+                    Review & Accept Terms
+                  </button>
+                )}
 
                 <button
                   onClick={handleSignOut}

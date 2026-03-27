@@ -1969,7 +1969,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 ...skillCoverage.uncovered,
               ])).sort((a, b) => a.localeCompare(b));
               return (
-                <div className="px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] animate-fadeIn">
+                <div key={skillCoverage.round} className="px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] animate-fadeIn">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[#64748B] truncate mr-2" style={{ fontSize: 10, fontWeight: 500 }}>
                       Skills — {skillCoverage.round_name || skillCoverage.round}
