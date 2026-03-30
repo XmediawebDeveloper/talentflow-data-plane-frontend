@@ -4,6 +4,7 @@ import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, B
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { handleUnauthorized } from '@/lib/services/api';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 
@@ -61,6 +62,8 @@ interface CandidateScoringDetailPageProps {
 }
 
 export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack }: CandidateScoringDetailPageProps) {
+  const { isTenantAdmin, user } = useAuth();
+  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo'>('overview');
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
@@ -420,6 +423,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 </div>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
+              {canExport && (
               <button
                 onClick={handleDownloadScorecard}
                 className="w-full sm:w-auto px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 border-2 border-gray-300 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
@@ -428,6 +432,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                 <span className="hidden sm:inline">Download Scorecard</span>
                 <span className="sm:hidden">Download</span>
               </button>
+              )}
             </div>
           </div>
 

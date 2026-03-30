@@ -16,6 +16,7 @@ import {
 } from '@/lib/services/unitPoolService';
 import { toast } from '@/components/ui/enhanced-toast';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -522,6 +523,8 @@ function exportCSV(teams: TeamUsageSummary[], days: number) {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function TeamUsageAnalytics() {
+  const { isTenantAdmin, user } = useAuth();
+  const canExport = isTenantAdmin || !!user?.permissions?.canExportTeams;
   const [days, setDays] = useState(30);
   const [teams, setTeams] = useState<TeamUsageSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -572,14 +575,16 @@ export default function TeamUsageAnalytics() {
               <option value={365}>Last year</option>
             </select>
           </div>
-          <button
-            onClick={() => teams.length > 0 && exportCSV(teams, days)}
-            disabled={teams.length === 0 || loading}
-            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
+          {canExport && (
+            <button
+              onClick={() => teams.length > 0 && exportCSV(teams, days)}
+              disabled={teams.length === 0 || loading}
+              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+          )}
         </div>
       </div>
 

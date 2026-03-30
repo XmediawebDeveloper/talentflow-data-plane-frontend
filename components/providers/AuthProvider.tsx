@@ -106,6 +106,7 @@ interface AuthContextType {
   isReadOnlyRole: boolean;
   hasFeature: (feature: keyof FeatureFlags) => boolean;
   hasPermission: (permission: keyof Permission) => boolean;
+  hasPermissionCode: (code: string) => boolean;
   canAccessBilling: boolean;
   canManageUsers: boolean;
   canModifyData: boolean;
@@ -221,6 +222,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canExport: apiUser.permissions.can_export,
       canApiAccess: apiUser.permissions.can_api_access,
     },
+    permissionCodes: apiUser.permission_codes || [],
     phone: apiUser.phone,
     avatarUrl: apiUser.avatar_url,
     isActive: apiUser.is_active,
@@ -292,6 +294,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // tenant_admin bypasses all permission checks — no restrictions
     if (isTenantAdminRole(user.role)) return true;
     return user.permissions[permission] ?? false;
+  }, [user]);
+
+  // Check if user has a specific raw permission code (e.g. 'my_resumes:ai_match')
+  const hasPermissionCode = useCallback((code: string): boolean => {
+    if (!user) return false;
+    if (isTenantAdminRole(user.role)) return true;
+    return (user.permissionCodes ?? []).includes(code);
   }, [user]);
 
   // Restore session on mount
@@ -792,6 +801,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isReadOnlyRole,
         hasFeature,
         hasPermission,
+        hasPermissionCode,
         canAccessBilling,
         canManageUsers,
         canModifyData,

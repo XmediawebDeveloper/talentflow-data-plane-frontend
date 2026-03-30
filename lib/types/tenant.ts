@@ -155,6 +155,7 @@ export interface User {
   role: UserRole;
   tenantId: string;
   permissions: Permission;
+  permissionCodes?: string[];
   phone?: string;
   avatarUrl?: string;
   isActive?: boolean;

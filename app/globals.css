@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* ── Configure dark mode to use .dark class (matches next-themes) ─────── */
+@variant dark (&:where(.dark, .dark *));
+
 /* ── Linda speaking mouth animation ─────────────────────────────────── */
 @keyframes linda-talk {
   0%   { transform: scaleY(0.05); }

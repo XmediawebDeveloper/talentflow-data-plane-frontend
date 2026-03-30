@@ -265,6 +265,7 @@ interface ApiUser {
   permissions: UserPermissions;
   is_active: boolean;
   last_login?: string;
+  permission_ids?: number[];
 }
 
 // Default role labels for known roles - RBAC01-07
@@ -1020,6 +1021,7 @@ export default function UserManagement() {
         permissions: user.permissions || defaultPermissions,
         is_active: user.is_active ?? true,
         last_login: user.last_login,
+        permission_ids: Array.isArray(user.permission_ids) ? user.permission_ids : undefined,
       }));
 
       // DEBUG: Log loaded users
@@ -1222,24 +1224,33 @@ export default function UserManagement() {
         });
         console.log('[EDIT USER] Loaded custom permission IDs from backend:', Array.from(currentPermissionIds));
       } else if (Array.isArray(freshUserData.permission_ids) && freshUserData.permission_ids.length === 0) {
-        // Empty array: user has no custom permissions (e.g. newly invited user)
-        // Fall back to role default permissions so the modal shows what they actually have
-        const roleIdForDefaults = matchingRole?.id;
-        if (roleIdForDefaults) {
-          try {
-            const rolePerms = await userService.getRolePermissions(roleIdForDefaults);
-            rolePerms.permission_codes.forEach(code => {
-              const perm = permissionsForMapping.find(p => p.code === code);
-              if (perm) {
-                currentPermissionIds.add(perm.id);
-              }
-            });
-            console.log('[EDIT USER] Loaded role default permissions (user has no custom permissions):', Array.from(currentPermissionIds));
-          } catch (e) {
-            console.warn('[EDIT USER] Failed to load role defaults:', e);
-          }
+        // Empty array: either user has no custom permissions (new user) or GET query failed.
+        // Prefer the list-cached permission_ids (from loadUsers) if available — these are
+        // more accurate because loadUsers ran after the last save. Only fall back to role
+        // defaults when the list also has no data (truly new user with no saved permissions).
+        const listPermIds = user.permission_ids;
+        if (listPermIds && listPermIds.length > 0) {
+          listPermIds.forEach((id: number) => currentPermissionIds.add(id));
+          console.log('[EDIT USER] GET returned empty — using list-cached permission_ids:', Array.from(currentPermissionIds));
         } else {
-          console.log('[EDIT USER] No role ID available, showing empty permissions');
+          // Truly new user: no saved permissions anywhere, fall back to role defaults
+          const roleIdForDefaults = matchingRole?.id;
+          if (roleIdForDefaults) {
+            try {
+              const rolePerms = await userService.getRolePermissions(roleIdForDefaults);
+              rolePerms.permission_codes.forEach(code => {
+                const perm = permissionsForMapping.find(p => p.code === code);
+                if (perm) {
+                  currentPermissionIds.add(perm.id);
+                }
+              });
+              console.log('[EDIT USER] Loaded role default permissions (user has no custom permissions):', Array.from(currentPermissionIds));
+            } catch (e) {
+              console.warn('[EDIT USER] Failed to load role defaults:', e);
+            }
+          } else {
+            console.log('[EDIT USER] No role ID available, showing empty permissions');
+          }
         }
       } else {
         // Fallback: Map user's current permissions (boolean fields) to permission IDs if permission_ids not available
@@ -1325,6 +1336,11 @@ export default function UserManagement() {
         if (perm.code === 'export:execute' && freshUserData.permissions.can_export) hasPermission = true;
         if (perm.code === 'api:access' && freshUserData.permissions.can_api_access) hasPermission = true;
         if (perm.code === 'teams:view' && freshUserData.permissions.can_view_teams) hasPermission = true;
+        if (perm.code === 'teams:create' && freshUserData.permissions.can_create_teams) hasPermission = true;
+        if (perm.code === 'teams:update' && freshUserData.permissions.can_update_teams) hasPermission = true;
+        if (perm.code === 'teams:delete' && freshUserData.permissions.can_delete_teams) hasPermission = true;
+        if (perm.code === 'teams:view_reports' && freshUserData.permissions.can_view_team_usage) hasPermission = true;
+        if (perm.code === 'teams:export' && freshUserData.permissions.can_export) hasPermission = true;
 
         if (hasPermission) {
           currentPermissionIds.add(perm.id);
@@ -1644,9 +1660,8 @@ export default function UserManagement() {
       // Refresh current user's session unconditionally — handles WebSocket failures
       // where the permission-updated push never reached the affected user's browser.
       // Small delay lets the backend finish RBAC sync before we re-fetch.
-      setTimeout(async () => {
-        await refreshUser();
-        loadUsers();
+      setTimeout(() => {
+        Promise.all([refreshUser(), loadUsers()]);
       }, 300);
     } catch (error: any) {
       console.error('Error updating user:', error);

@@ -42,6 +42,8 @@ export default function JDListPage() {
   const jdPerms = useModulePermissions('jd');
   const { isTenantAdmin, user } = useAuth();
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
+  const canDeleteJd = isTenantAdmin || (user?.permissions?.canDeleteJd ?? false);
+  const canExportJd = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [jds, setJds] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -591,21 +593,27 @@ export default function JDListPage() {
               </button>
               {bulkActionsOpen && (
                 <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
-                  <button
-                    onClick={() => { handleExportJDs(); setBulkActionsOpen(false); }}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    <Download className="w-4 h-4 text-gray-500" />
-                    Export Selected to CSV
-                  </button>
-                  <div className="border-t border-gray-100 my-1" />
-                  <button
-                    onClick={() => { handleBulkDelete(); setBulkActionsOpen(false); }}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete Selected
-                  </button>
+                  {canExportJd && (
+                    <button
+                      onClick={() => { handleExportJDs(); setBulkActionsOpen(false); }}
+                      className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Download className="w-4 h-4 text-gray-500" />
+                      Export Selected to CSV
+                    </button>
+                  )}
+                  {canDeleteJd && (
+                    <>
+                      <div className="border-t border-gray-100 my-1" />
+                      <button
+                        onClick={() => { handleBulkDelete(); setBulkActionsOpen(false); }}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete Selected
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

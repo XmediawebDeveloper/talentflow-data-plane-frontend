@@ -25,6 +25,7 @@ import teamService, { TeamMembersUsageSummary, TeamMemberUsage as MemberUsage } 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Team } from '@/lib/services/teamService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 interface TeamMemberUsageProps {
   team: Team;
@@ -48,6 +49,8 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const isTenantAdmin = userRole === 'tenant_admin' || userRole === 'owner' || userRole === 'admin';
+  const { isTenantAdmin: authIsTenantAdmin, user } = useAuth();
+  const canExport = authIsTenantAdmin || !!user?.permissions?.canExport;
 
   useEffect(() => {
     if (isTenantAdmin) {
@@ -232,7 +235,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
               <option value={90}>Last 90 days</option>
             </select>
           </div>
-          {membersUsage?.members && membersUsage.members.length > 0 && (
+          {canExport && membersUsage?.members && membersUsage.members.length > 0 && (
             <button
               onClick={handleExport}
               className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"

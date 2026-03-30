@@ -201,6 +201,7 @@ export default function ResumeScoringPage({
   // ✅ RBAC: Get user permissions (bypass for tenant admin)
   const { user, isTenantAdmin } = useAuth();
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
+  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
 
   // Use persistent scoring progress context
   const {
@@ -1240,7 +1241,7 @@ export default function ResumeScoringPage({
                 </span>
               </div>
 
-              {selectedScoredResumes.length > 0 && (
+              {selectedScoredResumes.length > 0 && canExport && (
                 <button
                   onClick={handleBulkDownloadScorecards}
                   disabled={isBulkDownloading}

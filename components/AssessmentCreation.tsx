@@ -54,7 +54,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
-  const canCreateJd = isTenantAdmin || (user?.permissions?.canCreateJd ?? false);
+  const canCreateJd = isTenantAdmin || (user?.permissions?.canCreateJD ?? false);
   const { available: assessmentAvailable } = usePlanFeature('assessment');
 
   // Read initial step from URL, default to 'select-jd'

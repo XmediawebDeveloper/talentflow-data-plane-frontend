@@ -167,8 +167,8 @@ export default function TeamManagementPage() {
 
   // Handlers
   const handleOpenCreateModal = async () => {
-    if (currentUser?.role !== 'tenant_admin') {
-      toast.error('Only tenant administrators can create teams');
+    if (!canCreateTeams) {
+      toast.error('You do not have permission to create teams');
       return;
     }
 
@@ -292,7 +292,9 @@ export default function TeamManagementPage() {
 
   // Computed values
   const isTenantAdmin = currentUser?.role === 'tenant_admin';
-  const canCreateTeams = isTenantAdmin;
+  const canCreateTeams = isTenantAdmin || !!currentUser?.permissions?.can_create_teams;
+  const canEditTeams = isTenantAdmin || !!currentUser?.permissions?.can_update_teams;
+  const canDeleteTeams = isTenantAdmin || !!currentUser?.permissions?.can_delete_teams;
   const canViewUsageTab = isTenantAdmin || !!currentUser?.permissions?.can_view_team_usage;
   const canViewAnalyticsTab = isTenantAdmin || !!currentUser?.permissions?.can_view_analytics;
 
@@ -331,7 +333,7 @@ export default function TeamManagementPage() {
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Team Management</h1>
               <p className="text-gray-600">Manage teams, members, and view usage</p>
             </div>
-            {isTenantAdmin && (
+            {canCreateTeams && (
               <button
                 onClick={handleOpenCreateModal}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl transition-all shadow-lg bg-gray-800 text-white hover:bg-gray-900 hover:shadow-xl"
@@ -451,7 +453,7 @@ export default function TeamManagementPage() {
                 <TeamCard
                   key={team.id}
                   team={team}
-                  canManage={isTenantAdmin}
+                  canManage={canEditTeams}
                   onViewDetails={handleViewDetails}
                   onManageTeam={handleManageTeam}
                 />
@@ -564,7 +566,7 @@ export default function TeamManagementPage() {
         }
         availableUsers={availableUsers}
         isSubmitting={isUpdating}
-        onDelete={handleOpenDeleteDialog}
+        onDelete={canDeleteTeams ? handleOpenDeleteDialog : undefined}
         isDeleting={isDeleting}
       />
 

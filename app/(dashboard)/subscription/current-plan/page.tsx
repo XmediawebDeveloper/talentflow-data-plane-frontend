@@ -2646,8 +2646,13 @@ function CurrentPlanContent() {
                       ) : isOnTrial || isLocked || isExpiredSubscription ? (
                         'Choose Plan'
                       ) : (() => {
-                        // Compare tiers to show Upgrade or Downgrade
-                        const tierComparison = comparePlanTiers(currentPlan?.tier, plan.tier);
+                        // Compare tiers AND billing interval to show Upgrade or Downgrade
+                        const tierComparison = comparePlanTiers(
+                          currentPlan?.tier,
+                          plan.tier,
+                          currentPlanBillingPeriod,
+                          isYearly ? 'ANNUAL' : 'MONTHLY',
+                        );
                         return tierComparison === -1 ? 'Downgrade' : 'Upgrade';
                       })()}
                     </button>

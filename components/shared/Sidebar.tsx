@@ -288,7 +288,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       items: [
         { id: 'user-management', label: 'Users', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
-        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permissions: ['canManageUsers', 'canViewTeams', 'canViewTeamUsage', 'canViewAnalytics'], planFeature: 'teams' },
+        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canViewTeams', planFeature: 'teams' },
         { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat' },
       ]
     },
@@ -404,9 +404,14 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
 
   const visibleSections = filterSections(allSections);
 
+  const relatedPaths: Record<string, string[]> = {
+    '/recruitment/job-openings': ['/recruitment/job-details'],
+  };
+
   const isActive = (href?: string): boolean => {
     if (!href) return false;
-    return pathname === href || pathname.startsWith(href + '/');
+    if (pathname === href || pathname.startsWith(href + '/')) return true;
+    return (relatedPaths[href] || []).some(p => pathname === p || pathname.startsWith(p + '/'));
   };
 
   return (
@@ -467,20 +472,9 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                   }
                 }
 
-                // Plan feature gate: check BEFORE subscription status
+                // Plan feature gate: hide item completely if feature is not in plan
                 if (item.planFeature && !planFeaturesLoading && !hasPlanFeature(item.planFeature)) {
-                  const featureMeta = PLAN_FEATURE_METADATA[item.planFeature];
-                  return (
-                    <div
-                      key={item.id}
-                      className="w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm text-gray-400 cursor-not-allowed opacity-50"
-                      style={{ width: 'calc(100% - 16px)' }}
-                      title={`Upgrade your plan to access ${featureMeta?.name || item.label}`}
-                    >
-                      <Lock className="w-4 h-4 flex-shrink-0 text-gray-300" />
-                      <span>{item.label}</span>
-                    </div>
-                  );
+                  return null;
                 }
 
                 // Lock menus if subscriptionExpired is true OR undefined (loading/unknown)

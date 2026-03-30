@@ -309,7 +309,7 @@ function DraggableCardResumeRow({
 export default function MyResumesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isTenantAdmin, hasPermission, isLoading: authLoading } = useAuth();
+  const { user, isTenantAdmin, hasPermission, hasPermissionCode, isLoading: authLoading } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
@@ -1022,7 +1022,7 @@ export default function MyResumesPage() {
   const handleDeleteResumes = (ids: string[]) => {
     const names = ids.map(id => {
       const r = resumes.find(r => r.id === id);
-      return r?.candidate_name || r?.file_name || 'Unknown';
+      return r?.candidate_name || r?.file_name || 'this resume';
     });
     setDeleteResumeConfirm({ isOpen: true, ids, names });
   };
@@ -2294,13 +2294,13 @@ export default function MyResumesPage() {
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
             onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
-            onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleApplyToJob : undefined}
+            onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
             onDownload={handleBulkDownload}
-            onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onDelete={isTenantAdmin || hasPermissionCode('my_resumes:delete') ? () => handleDeleteResumes(selectedResumes) : undefined}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-            onAssessment={hasPlanFeature('assessment') && (hasPermission('canCreateAssessments') || isTenantAdmin) ? handleAssessment : undefined}
-            onArchive={() => handleArchiveResumes(selectedResumes)}
-            onAITalentMatch={hasPlanFeature('ai_talent_match') && (hasPermission('canRunAiMatch') || isTenantAdmin) ? handleAITalentMatch : undefined}
+            onAssessment={hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
+            onArchive={isTenantAdmin || hasPermissionCode('my_resumes:archive') ? () => handleArchiveResumes(selectedResumes) : undefined}
+            onAITalentMatch={hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
           />
         )}
 
@@ -2431,7 +2431,7 @@ export default function MyResumesPage() {
                   onSelectResume={handleSelectResume}
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
-                  onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleSingleResumeApplyToJob : undefined}
+                  onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
                   onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
                   onMoveToFolder={handleMoveToFolder}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
@@ -4206,12 +4206,20 @@ export default function MyResumesPage() {
               <Trash2 className="w-5 h-5 text-red-500" />
               Delete {deleteResumeConfirm.ids.length === 1 ? 'Resume' : `${deleteResumeConfirm.ids.length} Resumes`}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteResumeConfirm.ids.length === 1 ? (
-                <>Are you sure you want to delete <span className="font-medium text-gray-900">{deleteResumeConfirm.names[0]}</span>? This action cannot be undone.</>
-              ) : (
-                <>Are you sure you want to delete <span className="font-medium text-gray-900">{deleteResumeConfirm.ids.length} resumes</span>? This action cannot be undone.</>
-              )}
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-gray-600">
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Deletion is permanent and irreversible</li>
+                  <li>Deleted resumes cannot be recovered</li>
+                  <li>This action cannot be undone.</li>
+                </ul>
+                <p>
+                  {deleteResumeConfirm.ids.length === 1
+                    ? 'Are you sure you want to delete the resume?'
+                    : <>Are you sure you want to delete <span className="font-medium text-gray-900">{deleteResumeConfirm.ids.length} resumes</span>?</>
+                  }
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

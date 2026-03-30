@@ -50,6 +50,10 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'jd:invite', label: 'Invite' },
       { code: 'jd:add_applicants', label: 'Add Applicants' },
     ],
+    // Rule: JD Invite requires Assessment Share (invite uses assessment links)
+    dependencies: {
+      'jd:invite': ['assessments:share'],
+    },
   },
   {
     id: 'resume_scoring',
@@ -62,9 +66,15 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'scoring:invite', label: 'Invite' },
       { code: 'scoring:download', label: 'Download Scorecard' },
     ],
-    // Rule: RS access auto-enables Resume Upload (My Resumes) + Internal Database view
+    // Rule: Enable Score Resumes → auto-enable My Resumes upload + Internal DB view + JD Add Applicants
+    // Rule: Each sub-item requires Score Resumes to be enabled (one-directional; sub-items depend on Score Resumes, not vice versa)
+    // Rule: Scoring Invite also requires Assessment Share
+    // NOTE: scoring:score does NOT depend on sub-items — avoids circular deadlock
     dependencies: {
-      'scoring:score': ['my_resumes:upload', 'internal_db:read'],
+      'scoring:score': ['my_resumes:upload', 'internal_db:read', 'jd:add_applicants'],
+      'scoring:export': ['scoring:score'],
+      'scoring:invite': ['scoring:score', 'assessments:share'],
+      'scoring:download': ['scoring:score'],
     },
   },
   {
@@ -77,6 +87,10 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_match:score', label: 'Score Resumes' },
       { code: 'ai_match:export', label: 'Export' },
     ],
+    // Rule: AI Match Score Resumes requires Resume Scoring permission
+    dependencies: {
+      'ai_match:score': ['scoring:score'],
+    },
   },
   {
     id: 'my_resumes',
@@ -92,6 +106,10 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'my_resumes:ai_match', label: 'AI Talent Match' },
       { code: 'my_resumes:share', label: 'Share Resume' },
     ],
+    // Rule: Assessment invite from My Resumes requires Assessment Share
+    dependencies: {
+      'my_resumes:assessment': ['assessments:share'],
+    },
   },
   {
     id: 'internal_database',
@@ -106,6 +124,10 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'internal_db:ai_match', label: 'AI Talent Match' },
       { code: 'internal_db:share', label: 'Share Resume' },
     ],
+    // Rule: Assessment invite from Internal DB requires Assessment Share
+    dependencies: {
+      'internal_db:assessment': ['assessments:share'],
+    },
   },
   {
     id: 'assessments',

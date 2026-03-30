@@ -51,7 +51,7 @@ interface SearchFilters {
 
 export default function ResumeDatabasePage() {
   const router = useRouter();
-  const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -839,11 +839,11 @@ export default function ResumeDatabasePage() {
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
-            onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleBulkApplyToJob : undefined}
-            onDelete={isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
-            onResumeScoring={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleBulkResumeScoring : undefined}
-            onAssessment={hasPlanFeature('assessment') && (hasPermission('canCreateAssessments') || isTenantAdmin) ? handleBulkAssessment : undefined}
-            onAITalentMatch={hasPlanFeature('ai_talent_match') && (hasPermission('canRunAiMatch') || isTenantAdmin) ? handleBulkAITalentMatch : undefined}
+            onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job'))) ? handleBulkApplyToJob : undefined}
+            onDelete={isTenantAdmin || hasPermissionCode('internal_db:delete') ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onResumeScoring={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:scoring'))) ? handleBulkResumeScoring : undefined}
+            onAssessment={hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment'))) ? handleBulkAssessment : undefined}
+            onAITalentMatch={hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match'))) ? handleBulkAITalentMatch : undefined}
           />
         </div>
       )}
@@ -899,7 +899,7 @@ export default function ResumeDatabasePage() {
           onSelectResume={handleSelectResume}
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}
-          onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleApplyToJob : undefined}
+          onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job'))) ? handleApplyToJob : undefined}
           onDelete={isTenantAdmin ? (id) => handleDelete(id) : undefined}
           onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
           onVersion={handleShowVersionHistory}

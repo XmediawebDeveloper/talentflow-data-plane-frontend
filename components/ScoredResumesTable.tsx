@@ -93,6 +93,7 @@ export default function ScoredResumesTable({
 }: ScoredResumesTableProps) {
   const { tenant, isTenantAdmin, user } = useAuth();  // Get tenant info from auth context
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
+  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [showColumnModal, setShowColumnModal] = useState(false);
   const [internalSelectedResumes, setInternalSelectedResumes] = useState<string[]>([]);
 
@@ -532,6 +533,7 @@ export default function ScoredResumesTable({
           </button>
           {selectedResumes.length > 0 && (
             <>
+              {canExport && (
               <button
                 onClick={handleDownloadBulkScorecards}
                 disabled={bulkDownloading}
@@ -545,6 +547,8 @@ export default function ScoredResumesTable({
                 <span className="hidden sm:inline">{bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}</span>
                 <span className="sm:hidden">{selectedResumes.length}</span>
               </button>
+              )}
+              {canExport && (
               <button
                 onClick={handleExportExcel}
                 className="px-3 sm:px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
@@ -552,6 +556,7 @@ export default function ScoredResumesTable({
                 <FileDown className="w-4 h-4" />
                 <span className="hidden sm:inline">Export</span>
               </button>
+              )}
               {canCreateAssessments && (
                 <button
                   onClick={() => setShowBulkInviteModal(true)}
@@ -566,7 +571,7 @@ export default function ScoredResumesTable({
               )}
             </>
           )}
-          {selectedResumes.length === 0 && (
+          {selectedResumes.length === 0 && canExport && (
             <button
               onClick={handleExportExcel}
               className="px-3 sm:px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
@@ -912,7 +917,7 @@ export default function ScoredResumesTable({
                 {/* Assessment Column */}
                 <td className="py-3 px-4">
                   {/* Invite Button - For Exact Match & Partial Match */}
-                  {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') ? (
+                  {canCreateAssessments && (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') ? (
                     availableUnits === 0 ? (
                       <div className="relative group">
                         <button
@@ -1131,6 +1136,7 @@ export default function ScoredResumesTable({
                 )
               )}
               
+              {canExport && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1151,6 +1157,7 @@ export default function ScoredResumesTable({
                   </>
                 )}
               </button>
+              )}
             </div>
           </div>
         ))}

@@ -8,11 +8,14 @@ import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentEditModal from '@/components/AssessmentEditModal';
 import { assessmentService } from '@/lib/services';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 export default function AssessmentDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const assessmentId = params.id as string;
+  const { isTenantAdmin, isRecruiter } = useAuth();
+  const canInvite = isTenantAdmin || isRecruiter;
 
   const [assessment, setAssessment] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -143,7 +146,7 @@ export default function AssessmentDetailsPage() {
           onBack={handleBack}
           onEdit={() => setShowEditModal(true)}
           onPreview={() => setShowPreviewModal(true)}
-          onShare={() => setShowShareModal(true)}
+          onShare={canInvite ? () => setShowShareModal(true) : undefined}
           onViewResults={handleViewResults}
           onRefresh={fetchAssessment}
         />

@@ -478,76 +478,76 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             {/* Published JDs */}
             <div
-              className="p-4 rounded-lg border-2 border-green-200 bg-green-50 hover:border-green-300 transition-all cursor-pointer"
+              className="p-4 rounded-lg border-2 border-green-200 bg-green-50 hover:border-green-300 dark:bg-green-900/20 dark:border-green-800 dark:hover:border-green-700 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=published')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-600 mb-1 sm:mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-600 dark:text-green-400 mb-1 sm:mb-2">
                 {jdStatusCounts.published}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-green-100 rounded-lg">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
+                <div className="p-1.5 bg-green-100 dark:bg-green-900/40 rounded-lg">
+                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900">Published</h3>
-                  <p className="text-xs text-gray-600">Active job postings</p>
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Published</h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Active job postings</p>
                 </div>
               </div>
             </div>
 
             {/* Draft JDs */}
             <div
-              className="p-4 rounded-lg border-2 border-yellow-200 bg-yellow-50 hover:border-yellow-300 transition-all cursor-pointer"
+              className="p-4 rounded-lg border-2 border-yellow-200 bg-yellow-50 hover:border-yellow-300 dark:bg-yellow-900/20 dark:border-yellow-800 dark:hover:border-yellow-700 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=draft')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-600 mb-1 sm:mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-yellow-600 dark:text-yellow-400 mb-1 sm:mb-2">
                 {jdStatusCounts.draft}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-yellow-100 rounded-lg">
-                  <Edit2 className="h-4 w-4 text-yellow-600" />
+                <div className="p-1.5 bg-yellow-100 dark:bg-yellow-900/40 rounded-lg">
+                  <Edit2 className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900">Draft</h3>
-                  <p className="text-xs text-gray-600">Incomplete postings</p>
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Draft</h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Incomplete postings</p>
                 </div>
               </div>
             </div>
 
             {/* Disabled JDs */}
             <div
-              className="p-4 rounded-lg border-2 border-red-200 bg-red-50 hover:border-red-300 transition-all cursor-pointer"
+              className="p-4 rounded-lg border-2 border-red-200 bg-red-50 hover:border-red-300 dark:bg-red-900/20 dark:border-red-800 dark:hover:border-red-700 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=disabled')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-red-600 mb-1 sm:mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-red-600 dark:text-red-400 mb-1 sm:mb-2">
                 {jdStatusCounts.disabled}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-red-100 rounded-lg">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
+                <div className="p-1.5 bg-red-100 dark:bg-red-900/40 rounded-lg">
+                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900">Disabled</h3>
-                  <p className="text-xs text-gray-600">Temporarily hidden</p>
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Disabled</h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Temporarily hidden</p>
                 </div>
               </div>
             </div>
 
             {/* Archived JDs */}
             <div
-              className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50 hover:border-gray-300 transition-all cursor-pointer"
+              className="p-4 rounded-lg border-2 border-gray-200 bg-gray-50 hover:border-gray-300 dark:bg-gray-800 dark:border-gray-700 dark:hover:border-gray-600 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=archived')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-600 mb-1 sm:mb-2">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-600 dark:text-gray-300 mb-1 sm:mb-2">
                 {jdStatusCounts.archived}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-gray-100 rounded-lg">
-                  <Archive className="h-4 w-4 text-gray-600" />
+                <div className="p-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                  <Archive className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900">Archived</h3>
-                  <p className="text-xs text-gray-600">Closed postings</p>
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Archived</h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Closed postings</p>
                 </div>
               </div>
             </div>

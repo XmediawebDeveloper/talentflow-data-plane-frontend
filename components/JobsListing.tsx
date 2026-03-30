@@ -6,6 +6,7 @@ import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -88,6 +89,12 @@ interface JobsListingProps {
 
 export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter }: JobsListingProps) {
   const dialog = useGlobalDialog();
+  const { isTenantAdmin, user } = useAuth();
+  const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJd ?? false);
+  const canDeleteJd = isTenantAdmin || (user?.permissions?.canDeleteJd ?? false);
+  const canArchiveJd = isTenantAdmin || (user?.permissions?.canArchiveJd ?? false);
+  const canDisableJd = isTenantAdmin || (user?.permissions?.canDisableJd ?? false);
+  const canExportJd = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'all');
   const [creationMethodFilter, setCreationMethodFilter] = useState<'manual' | 'ai' | null>(null);
@@ -912,42 +919,52 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
                     {showBulkActions && (
                       <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                        <button
-                          onClick={handleBulkPublish}
-                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                        >
-                          <Send className="w-5 h-5 text-green-600" />
-                          Publish Selected (Drafts)
-                        </button>
-                        <button
-                          onClick={handleBulkDisable}
-                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                        >
-                          <Ban className="w-5 h-5 text-red-600" />
-                          Disable Selected (Published)
-                        </button>
-                        <button
-                          onClick={handleBulkArchive}
-                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                        >
-                          <Archive className="w-5 h-5 text-gray-600" />
-                          Archive Selected
-                        </button>
-                        <div className="border-t border-gray-200 my-2" />
-                        <button
-                          onClick={handleBulkExport}
-                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                        >
-                          <Download className="w-5 h-5 text-gray-700" />
-                          Export Selected to CSV
-                        </button>
-                        <button
-                          onClick={handleBulkDelete}
-                          className="w-full px-5 py-3 text-left text-base text-red-600 hover:bg-red-50 flex items-center gap-3"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                          Delete Selected
-                        </button>
+                        {canUpdateJd && (
+                          <button
+                            onClick={handleBulkPublish}
+                            className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          >
+                            <Send className="w-5 h-5 text-green-600" />
+                            Publish Selected (Drafts)
+                          </button>
+                        )}
+                        {canDisableJd && (
+                          <button
+                            onClick={handleBulkDisable}
+                            className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          >
+                            <Ban className="w-5 h-5 text-red-600" />
+                            Disable Selected (Published)
+                          </button>
+                        )}
+                        {canArchiveJd && (
+                          <button
+                            onClick={handleBulkArchive}
+                            className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          >
+                            <Archive className="w-5 h-5 text-gray-600" />
+                            Archive Selected
+                          </button>
+                        )}
+                        {(canExportJd || canDeleteJd) && <div className="border-t border-gray-200 my-2" />}
+                        {canExportJd && (
+                          <button
+                            onClick={handleBulkExport}
+                            className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          >
+                            <Download className="w-5 h-5 text-gray-700" />
+                            Export Selected to CSV
+                          </button>
+                        )}
+                        {canDeleteJd && (
+                          <button
+                            onClick={handleBulkDelete}
+                            className="w-full px-5 py-3 text-left text-base text-red-600 hover:bg-red-50 flex items-center gap-3"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                            Delete Selected
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>

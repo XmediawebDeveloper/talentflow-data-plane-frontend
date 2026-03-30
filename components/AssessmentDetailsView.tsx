@@ -1,6 +1,7 @@
 import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { assessmentService } from '@/lib/services';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -42,6 +43,8 @@ export default function AssessmentDetailsView({
 }: AssessmentDetailsViewProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const { isTenantAdmin, user } = useAuth();
+  const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'info'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -271,7 +274,7 @@ export default function AssessmentDetailsView({
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-              {onShare && (
+              {onShare && canCreateAssessments && (
                 <button
                   onClick={onShare}
                   className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm"
@@ -862,6 +865,7 @@ export default function AssessmentDetailsView({
               </div>
               <div className="p-3 sm:p-4 lg:p-6">
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
+                {canCreateAssessments && (
                 <button
                   onClick={async () => {
                     if (assessment.status === 'Draft') {
@@ -909,7 +913,9 @@ export default function AssessmentDetailsView({
                     {assessment.status === 'Draft' ? 'Publish first' : 'Share assessment URL'}
                   </div>
                 </button>
+                )}
 
+                {canExport && (
                 <button
                   onClick={async () => {
                     setActionLoading('export');
@@ -938,7 +944,9 @@ export default function AssessmentDetailsView({
                   <div className="text-sm font-medium text-gray-900">{actionLoading === 'export' ? 'Exporting...' : 'Export Results'}</div>
                   <div className="text-xs text-gray-600 mt-1">Download as CSV</div>
                 </button>
+                )}
 
+                {canCreateAssessments && (
                 <button
                   onClick={async () => {
                     setActionLoading('duplicate');
@@ -960,6 +968,7 @@ export default function AssessmentDetailsView({
                   <div className="text-sm font-medium text-gray-900">{actionLoading === 'duplicate' ? 'Duplicating...' : 'Duplicate'}</div>
                   <div className="text-xs text-gray-600 mt-1">Create a copy</div>
                 </button>
+                )}
 
                 {assessment.candidates > 0 && (
                   <button

@@ -72,6 +72,7 @@ export default function AITalentMatchPage({
 
   // ✅ RBAC: Check if user can run AI match operations (bypass for tenant admin)
   const canRunAiMatch = isTenantAdmin || (user?.permissions?.canRunAiMatch ?? false);
+  const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
 
 
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'results'>('history');
@@ -947,6 +948,7 @@ export default function AITalentMatchPage({
                     </div>
                   )}
                   <>
+                  {canRunScoring && (
                   <button
                       onClick={handleSubmitToScoring}
                       disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
@@ -959,6 +961,7 @@ export default function AITalentMatchPage({
                       <Target className="w-3 h-3 sm:w-4 sm:h-4" />
                       Score ({selectedCandidates.length})
                     </button>
+                  )}
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
                       onClick={handleAssessment}
@@ -2008,6 +2011,7 @@ export default function AITalentMatchPage({
                     </div>
                   )}
                   <>
+                  {canRunScoring && (
                   <button
                       onClick={handleSubmitToScoring}
                       disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
@@ -2020,6 +2024,7 @@ export default function AITalentMatchPage({
                       <Target className="w-3 h-3 sm:w-4 sm:h-4" />
                       Score ({selectedCandidates.length})
                     </button>
+                  )}
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
                       onClick={handleAssessment}

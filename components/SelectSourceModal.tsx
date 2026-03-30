@@ -36,11 +36,14 @@ export default function SelectSourceModal({
   onScoringComplete
 }: SelectSourceModalProps) {
   const router = useRouter();
-  const { user, tenant } = useAuth();
+  const { user, tenant, isTenantAdmin } = useAuth();
   const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
+
+  // Check if user has scoring permission
+  const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
 
   // State
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
@@ -400,26 +403,23 @@ export default function SelectSourceModal({
     const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && (!f.parent_id || f.parent_id === null));
     const rootId = rootFolder?.id;
 
-    // If no parentId specified, show all non-root folders
+    // If no parentId specified, show top-level folders (including root)
     let childFolders: typeof folders;
     if (parentId === undefined) {
-      // Show all folders except root itself
-      childFolders = folders.filter(f => {
-        // Skip root folder
-        if (f.name.toLowerCase() === 'root' && (!f.parent_id || f.parent_id === null)) {
-          return false;
-        }
-
-        // Include folders that are:
-        // 1. Children of root (parent_id === rootId)
-        // 2. OR have no parent/null parent (top-level folders)
-        // 3. OR have empty string parent
-        if (rootId) {
-          return f.parent_id === rootId || !f.parent_id || f.parent_id === null || f.parent_id === '';
-        } else {
-          return !f.parent_id || f.parent_id === null || f.parent_id === '';
-        }
-      });
+      if (rootId) {
+        // Show root folder first, then any other truly top-level folders (no parent, not root)
+        childFolders = folders.filter(f =>
+          (f.name.toLowerCase() === 'root' && (!f.parent_id || f.parent_id === null)) ||
+          (!f.parent_id || f.parent_id === null || f.parent_id === '')
+        );
+        // Put root first
+        childFolders = [
+          ...childFolders.filter(f => f.id === rootId),
+          ...childFolders.filter(f => f.id !== rootId),
+        ];
+      } else {
+        childFolders = folders.filter(f => !f.parent_id || f.parent_id === null || f.parent_id === '');
+      }
     } else {
       // Show children of specified parent
       childFolders = folders.filter(f => f.parent_id === parentId);
@@ -929,6 +929,7 @@ export default function SelectSourceModal({
               <button
                 onClick={handleSubmitForScoring}
                 disabled={(() => {
+                  if (!canRunScoring) return true;
                   if (selectedResumes.length === 0) return true;
                   if (submitting) return true;
                   const selectedFolderData = folders.find(f => f.id === selectedFolder);
@@ -938,6 +939,7 @@ export default function SelectSourceModal({
                   const hasArchivedResumes = selectedResumeObjects.some(r => r.is_archived === true);
                   return hasArchivedResumes;
                 })()}
+                title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
                 className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
               >
                 {submitting ? (
