@@ -369,17 +369,18 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
       }
 
       // ✅ STEP 2.4: Virus/malware scan (if enabled for tenant)
-      if (virusScanEnabled) {
-        const random = Math.random();
-        if (random < 0.02) { // 2% chance of virus detection for demo
-          errors.push({
-            fileName: file.name,
-            error: 'Security scan detected potential malware. File rejected for safety.',
-            type: 'virus'
-          });
-          return;
-        }
-      }
+      // TODO: Integrate real scan service (e.g. ClamAV / VirusTotal) here
+      // if (virusScanEnabled) {
+      //   const random = Math.random();
+      //   if (random < 0.02) { // 2% chance of virus detection for demo
+      //     errors.push({
+      //       fileName: file.name,
+      //       error: 'Security scan detected potential malware. File rejected for safety.',
+      //       type: 'virus'
+      //     });
+      //     return;
+      //   }
+      // }
 
       // File is valid
       validFiles.push(file);

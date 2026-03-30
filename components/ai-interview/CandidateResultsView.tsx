@@ -419,6 +419,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 <ClusterInsightsTab
                   clusterInsights={eval_.cluster_insights || []}
                   capabilityScore={eval_.capability_score ?? null}
+                  sectionScores={eval_.section_scores ?? null}
                 />
               )
             )}

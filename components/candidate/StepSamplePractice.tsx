@@ -192,22 +192,23 @@ export default function StepSamplePractice({
       return;
     }
 
-    // Chrome bug: calling speak() immediately after cancel() silently drops the utterance.
+    // Cancel any ongoing speech first
     window.speechSynthesis.cancel();
 
-    const doSpeak = () => {
+    const doSpeak = (voice: SpeechSynthesisVoice | null) => {
+      // Resume in case Chrome paused the synth engine
+      window.speechSynthesis.resume();
+
       const utterance = new SpeechSynthesisUtterance(PRACTICE_QUESTION);
       utterance.rate = 0.9;
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
-
-      const voice = pickVoice();
       if (voice) utterance.voice = voice;
 
       utterance.onstart = () => setAiSpeaking(true);
       utterance.onend = () => {
         setAiSpeaking(false);
-        // Auto-start recording after question finishes — 400ms gap so TTS audio clears
+        // Auto-start recording after question finishes — 400ms gap clears TTS echo
         setTimeout(() => { startRecordingRef.current(); }, 400);
       };
       utterance.onerror = (e) => {
@@ -219,8 +220,27 @@ export default function StepSamplePractice({
       window.speechSynthesis.speak(utterance);
     };
 
-    // 150ms delay after cancel() — fixes Chrome silent-drop bug
-    setTimeout(doSpeak, 150);
+    const trySpeak = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        // Voices already loaded — 150ms delay after cancel() to avoid Chrome silent-drop
+        setTimeout(() => doSpeak(pickVoice()), 150);
+      } else {
+        // Voices not yet loaded — wait for voiceschanged then speak
+        const onVoicesChanged = () => {
+          window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+          setTimeout(() => doSpeak(pickVoice()), 150);
+        };
+        window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
+        // Fallback: if voiceschanged never fires, speak with default voice after 1s
+        setTimeout(() => {
+          window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+          doSpeak(null);
+        }, 1000);
+      }
+    };
+
+    trySpeak();
   }, []);
 
   // ── Live transcription (Web Speech API) ──────────────────────────────────

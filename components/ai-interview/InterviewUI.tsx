@@ -1106,8 +1106,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       calibDoneRef.current = false;
       rmsWindowRef.current = [];
 
-      // Number of frames to use for noise floor calibration (~500ms at 4096/44.1kHz ≈ 93ms/frame)
-      const CALIB_FRAMES = 5;
+      // Skip the first CALIB_SKIP frames before calibrating — avoids capturing
+      // the candidate's opening words as "ambient noise".
+      const CALIB_SKIP = 8;   // ~750ms skip at 93ms/frame
+      const CALIB_FRAMES = 8; // collect 8 frames (~750ms) for the noise floor
       // Rolling window size for smoothed RMS (reduces single-frame spikes)
       const RMS_WINDOW = 8;
 
@@ -1125,18 +1127,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         for (let i = 0; i < input.length; i++) { sumSq += input[i] * input[i]; }
         const rms = Math.sqrt(sumSq / input.length);
 
-        // Adaptive noise floor: calibrate on first CALIB_FRAMES frames
+        // Adaptive noise floor: skip first CALIB_SKIP frames, then calibrate on next CALIB_FRAMES
         if (!calibDoneRef.current) {
-          calibSumRef.current += rms;
           calibFramesRef.current++;
-          if (calibFramesRef.current >= CALIB_FRAMES) {
-            const measuredFloor = calibSumRef.current / calibFramesRef.current;
-            // Use max of server threshold and 2× measured ambient noise
-            noiseFloorRef.current = Math.max(
-              silenceThresholdRef.current,
-              measuredFloor * 2
-            );
-            calibDoneRef.current = true;
+          // Skip initial frames so user speech doesn't pollute the noise measurement
+          if (calibFramesRef.current > CALIB_SKIP) {
+            calibSumRef.current += rms;
+            const measured = calibFramesRef.current - CALIB_SKIP;
+            if (measured >= CALIB_FRAMES) {
+              const measuredFloor = calibSumRef.current / measured;
+              // 1.5× multiplier — less aggressive than 2×, avoids treating soft speech as noise.
+              // Hard cap at 0.025 so a loud environment can't disable VAD entirely.
+              noiseFloorRef.current = Math.min(
+                Math.max(silenceThresholdRef.current, measuredFloor * 1.5),
+                0.025
+              );
+              calibDoneRef.current = true;
+            }
           }
           // Still send audio during calibration, just skip VAD decisions
         }

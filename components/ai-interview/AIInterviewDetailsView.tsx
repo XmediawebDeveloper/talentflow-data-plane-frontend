@@ -6,7 +6,7 @@ import {
   ArrowLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, Brain, Sparkles,
-  ExternalLink, Layers, Pencil,
+  ExternalLink, Layers, Pencil, Zap, Timer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -61,18 +61,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
     return config.rounds_config?.filter((r) => r.enabled !== false) || [];
   }, [config.rounds_config]);
 
-  // Parse clusters from special_instructions
-  const { mthClusters, nthClusters } = useMemo(() => {
+  // Parse clusters + interview mode from special_instructions
+  const { mthClusters, nthClusters, interviewMode } = useMemo(() => {
     try {
       const si = JSON.parse(config.special_instructions || '{}');
       return {
         mthClusters: (si.mth_clusters || []) as { id: string; name: string; priority: number; skills: string[]; reason?: string }[],
         nthClusters: (si.nth_clusters || []) as { id: string; name: string; priority: number; skills: string[]; reason?: string }[],
+        interviewMode: (si.interview_mode as string) || (config.duration_minutes === 0 ? 'flexible' : 'fixed'),
       };
     } catch {
-      return { mthClusters: [], nthClusters: [] };
+      return { mthClusters: [], nthClusters: [], interviewMode: config.duration_minutes === 0 ? 'flexible' : 'fixed' };
     }
-  }, [config.special_instructions]);
+  }, [config.special_instructions, config.duration_minutes]);
 
   const formattedDuration = useMemo(() => {
     const mins = config.duration_minutes;
@@ -276,9 +277,34 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                   <Clock className="w-3.5 h-3.5" />
                   {formattedDuration}
                 </span>
-                {enabledRounds.length > 0 && (
-                  <span>{enabledRounds.length} round{enabledRounds.length !== 1 ? 's' : ''}</span>
-                )}
+                <span className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full border ${
+                  interviewMode === 'flexible'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : 'bg-orange-50 text-orange-700 border-orange-200'
+                }`}>
+                  {interviewMode === 'flexible' ? (
+                    <><Zap className="w-3 h-3" /> Flexible</>
+                  ) : (
+                    <><Timer className="w-3 h-3" /> Fixed</>
+                  )}
+                </span>
+                {enabledRounds.length > 0 ? (
+                  <span className="flex items-center gap-1.5 flex-wrap">
+                    <Layers className="w-3.5 h-3.5 shrink-0" />
+                    {enabledRounds.map((r, i) => (
+                      <span key={i} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full border border-gray-200">
+                        {ROUND_LABELS[r.type] || r.type}
+                      </span>
+                    ))}
+                  </span>
+                ) : config.interview_type ? (
+                  <span className="flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 shrink-0" />
+                    <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full border border-gray-200">
+                      {config.interview_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                    </span>
+                  </span>
+                ) : null}
                 <span className="flex items-center gap-1">
                   <Users className="w-3.5 h-3.5" />
                   {invitationStats.total} invite{invitationStats.total !== 1 ? 's' : ''}

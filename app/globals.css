@@ -590,6 +590,7 @@ a:focus:not(:focus-visible) {
 .dark .hover\:text-gray-600:hover { color: var(--text-secondary); }
 
 /* ── Border colors ───────────────────────────────────────── */
+.dark .border-gray-50  { border-color: var(--border); }
 .dark .border-gray-100 { border-color: var(--border); }
 .dark .border-gray-200 { border-color: var(--border); }
 .dark .border-gray-300 { border-color: var(--border-dark); }
@@ -781,6 +782,40 @@ a:focus:not(:focus-visible) {
 .dark .focus\:border-purple-300:focus { border-color: rgba(168, 85, 247, 0.6); }
 .dark .focus\:border-blue-300:focus   { border-color: rgba(59, 130, 246, 0.6); }
 .dark .focus\:ring-gray-400:focus    { --tw-ring-color: var(--text-muted); }
+
+/* ── Emerald color family (used in AI interview skill tags) ─ */
+.dark .bg-emerald-50   { background-color: rgba(16, 185, 129, 0.15); }
+.dark .bg-emerald-100  { background-color: rgba(16, 185, 129, 0.2); }
+.dark .bg-emerald-500  { background-color: #10b981; }
+.dark .text-emerald-700 { color: #34d399; }
+.dark .text-emerald-600 { color: #10b981; }
+.dark .text-emerald-500 { color: #34d399; }
+.dark .text-emerald-100 { color: #d1fae5; }
+.dark .text-emerald-900 { color: #6ee7b7; }
+.dark .border-emerald-200 { border-color: rgba(16, 185, 129, 0.35); }
+.dark .border-emerald-300 { border-color: rgba(16, 185, 129, 0.5); }
+.dark .border-emerald-500 { border-color: #10b981; }
+.dark .from-emerald-50 { --tw-gradient-from: rgba(16, 185, 129, 0.1); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-emerald-100  { --tw-gradient-to: rgba(16, 185, 129, 0.15); }
+
+/* ── Selected card / active border (border-gray-900 used as active indicator) */
+.dark .border-gray-900 { border-color: #6b7280; }
+
+/* ── Amber opacity-modifier variant ─────────────────────── */
+.dark .bg-amber-50\/50 { background-color: rgba(245, 158, 11, 0.1); }
+.dark .bg-amber-100\/50 { background-color: rgba(245, 158, 11, 0.15); }
+
+/* ── Orange border variants ──────────────────────────────── */
+.dark .border-orange-400 { border-color: rgba(249, 115, 22, 0.6); }
+
+/* ── Shadow adjustments for dark mode cards ──────────────── */
+.dark .shadow-sm  { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.4); }
+.dark .shadow     { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5); }
+.dark .shadow-md  { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5); }
+.dark .shadow-lg  { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5); }
+
+/* ── Active tab / selected state (border-gray-800 used as tab indicator) */
+.dark .border-gray-800 { border-color: #9ca3af; }
 
 /* Dark mode focus indicators */
 .dark button:focus-visible,
