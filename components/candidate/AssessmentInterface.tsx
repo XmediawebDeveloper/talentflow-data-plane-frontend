@@ -73,6 +73,7 @@ interface AssessmentInterfaceProps {
   ) => Promise<SubmitAnswerResponse>;
   onComplete: () => void;
   onNavigate: (questionNumber: number) => void;
+  onTimeUpdate?: (remainingSeconds: number) => void;
   videoRef: RefObject<HTMLVideoElement | null>;
   stream: MediaStream | null;
   isCameraActive?: boolean;
@@ -91,6 +92,7 @@ export function AssessmentInterface({
   onAnswerSubmit,
   onComplete,
   onNavigate,
+  onTimeUpdate,
   videoRef,
   stream,
   isCameraActive = true,
@@ -172,6 +174,8 @@ export function AssessmentInterface({
   // Store parsed start time and total duration for accurate wall-clock computation
   const assessmentStartTimeRef = useRef<number>(0);
   const totalDurationSecsRef = useRef(durationMinutes * 60);
+  const isTimerPausedRef = useRef(false);
+  const globalTimeRemainingRef = useRef(0);
 
   // Initialize: compute from wall clock (not decrement-based) to be accurate
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
@@ -183,16 +187,38 @@ export function AssessmentInterface({
       if (ts.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts).getTime();
       return new Date(ts + '+05:30').getTime(); // naive IST → correct UTC ms
     };
-    const startTime = parseBackendTs(startedAt);
-    assessmentStartTimeRef.current = startTime;
+
     const totalDuration = durationMinutes * 60;
     totalDurationSecsRef.current = totalDuration;
+
+    // Restore from sessionStorage if saved during network disconnect or crash
+    try {
+      const saved = sessionStorage.getItem(`assessment_timer_${token}`);
+      if (saved) {
+        const { remainingSeconds, savedAt } = JSON.parse(saved);
+        const elapsedSinceReload = Math.floor((Date.now() - savedAt) / 1000);
+        const restored = Math.max(0, remainingSeconds - elapsedSinceReload);
+        if (restored > 0) {
+          sessionStorage.removeItem(`assessment_timer_${token}`);
+          // Adjust start ref so interval stays accurate with restored remaining time
+          assessmentStartTimeRef.current = Date.now() - ((totalDuration - restored) * 1000);
+          globalTimeRemainingRef.current = restored;
+          console.log('[TIMER] Restored from saved state:', { restored });
+          return restored;
+        }
+      }
+    } catch {}
+
+    // Normal wall-clock calculation
+    const startTime = parseBackendTs(startedAt);
+    assessmentStartTimeRef.current = startTime;
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const remaining = Math.max(0, totalDuration - elapsed);
     console.log('[TIMER] Calculating initial time:', {
-      startedAt, startTime, now: Date.now(), elapsed, totalDuration,
-      remaining: Math.max(0, totalDuration - elapsed)
+      startedAt, startTime, now: Date.now(), elapsed, totalDuration, remaining
     });
-    return Math.max(0, totalDuration - elapsed);
+    globalTimeRemainingRef.current = remaining;
+    return remaining;
   });
   const [isGlobalTimeExpired, setIsGlobalTimeExpired] = useState(false);
   const globalTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -399,27 +425,37 @@ export function AssessmentInterface({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [answer, token, currentQuestion.question_id, isCurrentAnswerLocked, questionStartTime]);
 
-  // 🌐 NETWORK STATUS: Monitor connection and retry queued requests
+  // 🌐 NETWORK STATUS: Pause timer on disconnect, reload silently on restore
   useEffect(() => {
     if (!isOnline) {
-      console.log('[NETWORK] Connection lost - showing offline banner');
+      console.log('[NETWORK] Connection lost - pausing timer');
+      isTimerPausedRef.current = true;
+      // Save current remaining time immediately so reload can restore it
+      try {
+        sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+          remainingSeconds: globalTimeRemainingRef.current,
+          savedAt: Date.now()
+        }));
+      } catch {}
       setShowNetworkBanner(true);
       setAutoSaveStatus('offline');
     } else {
+      if (isTimerPausedRef.current) {
+        // Was paused due to network loss — reload page to resume cleanly
+        console.log('[NETWORK] Connection restored - reloading to resume assessment');
+        window.location.reload();
+        return;
+      }
       console.log('[NETWORK] Connection restored - processing retry queue');
       setShowNetworkBanner(false);
-
-      // Auto-retry queued requests when connection is restored
       if (queueSize > 0) {
         setAutoSaveStatus('retrying');
         processQueue().then(() => {
-          if (queueSize === 0) {
-            setAutoSaveStatus('idle');
-          }
+          if (queueSize === 0) setAutoSaveStatus('idle');
         });
       }
     }
-  }, [isOnline, queueSize, processQueue]);
+  }, [isOnline, queueSize, processQueue, token]);
 
   // 🛡️ PROCTORING: Exit Fullscreen on Complete
   const exitFullscreen = async () => {
@@ -696,7 +732,7 @@ export function AssessmentInterface({
       if (!isGlobalTimeExpired) {
         console.log('[TIMER] Time expired! Triggering auto-complete');
         setIsGlobalTimeExpired(true);
-        // Auto-submit entire assessment when global timer expires
+        try { sessionStorage.removeItem(`assessment_timer_${token}`); } catch {}
         exitFullscreen();
         onComplete();
       }
@@ -706,14 +742,27 @@ export function AssessmentInterface({
     // Use wall-clock calculation on each tick for accuracy.
     // This prevents drift when the browser throttles background tabs or the system sleeps.
     globalTimerRef.current = setInterval(() => {
+      if (isTimerPausedRef.current) return;
+
       const elapsed = Math.floor((Date.now() - assessmentStartTimeRef.current) / 1000);
       const remaining = Math.max(0, totalDurationSecsRef.current - elapsed);
 
       setGlobalTimeRemaining(remaining);
+      globalTimeRemainingRef.current = remaining;
+      onTimeUpdate?.(remaining);
+
+      // Keep sessionStorage in sync for crash/error recovery
+      try {
+        sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+          remainingSeconds: remaining,
+          savedAt: Date.now()
+        }));
+      } catch {}
 
       if (remaining <= 0) {
         console.log('[TIMER] Timer reached zero during countdown');
         setIsGlobalTimeExpired(true);
+        try { sessionStorage.removeItem(`assessment_timer_${token}`); } catch {}
         exitFullscreen();
         onComplete();
       }

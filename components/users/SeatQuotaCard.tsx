@@ -11,7 +11,8 @@ import {
   Users,
   AlertTriangle,
   Plus,
-  TrendingUp
+  TrendingUp,
+  UserMinus,
 } from 'lucide-react';
 import { useQuota } from '@/contexts/QuotaContext';
 import AddSeatsModal from './AddSeatsModal';
@@ -32,12 +33,13 @@ interface SeatQuotaData {
 
 interface SeatQuotaCardProps {
   onRefresh?: () => void;
+  onDeactivateExcess?: (count: number) => void;
   compact?: boolean;
   refreshTrigger?: number; // Increment this to trigger a refresh
 }
 
 
-export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigger = 0 }: SeatQuotaCardProps) {
+export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact = false, refreshTrigger = 0 }: SeatQuotaCardProps) {
   const { quotaData } = useQuota();
   const isTrial = quotaData?.is_trial ?? false;
   const [loading, setLoading] = useState(true);
@@ -148,6 +150,24 @@ export default function SeatQuotaCard({ onRefresh, compact = false, refreshTrigg
             <p className="text-[10px] sm:text-xs text-red-500 mt-1.5 sm:mt-2">
               This may have occurred due to a recent plan downgrade.
             </p>
+            {onDeactivateExcess && (
+              <div className="mt-2 sm:mt-3 flex flex-wrap gap-2">
+                <button
+                  onClick={() => onDeactivateExcess(usersToDeactivate)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  <UserMinus className="w-3.5 h-3.5" />
+                  Deactivate {usersToDeactivate} Excess User{usersToDeactivate > 1 ? 's' : ''}
+                </button>
+                <button
+                  onClick={() => window.location.href = '/subscription/current-plan'}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 border border-red-300 text-red-700 hover:bg-red-100 text-xs font-medium rounded-lg transition-colors"
+                >
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  Upgrade Plan
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

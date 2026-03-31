@@ -43,8 +43,7 @@ export default function AssessmentResultsPage() {
   }, [assessmentId]);
 
   const handleBack = () => {
-    // Go back to assessment details page
-    router.push(`/recruitment/assessments/${assessmentId}`);
+    router.push('/recruitment/assessments');
   };
 
   if (isLoading) {

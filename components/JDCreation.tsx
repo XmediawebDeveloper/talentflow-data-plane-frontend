@@ -3406,8 +3406,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         setManualJD(prev => prev || effectiveEditingJD.description || '');  // Preserve user edits
       }
 
-      // Set lastExtractedJD to the loaded description so we can detect changes
-      setLastExtractedJD(effectiveEditingJD.description || '');
+      // Set lastExtractedJD to the loaded description only if extraction has already happened.
+      // For drafts saved at 'create' stage, leave it empty so handleNext triggers extraction.
+      if (effectiveEditingJD.creation_stage !== 'create') {
+        setLastExtractedJD(effectiveEditingJD.description || '');
+      }
 
       setStep(effectiveEditingJD.creation_stage);
       console.log('[TalentFlow] Set step to:', effectiveEditingJD.creation_stage);

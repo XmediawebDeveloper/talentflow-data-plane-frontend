@@ -44,7 +44,10 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [membersUsage, setMembersUsage] = useState<TeamMembersUsageSummary | null>(null);
-  const [selectedDays, setSelectedDays] = useState(30);
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [sortBy, setSortBy] = useState<'total' | 'name' | 'recent'>('total');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -57,14 +60,14 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
       fetchMembersUsage();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDays, team.id, isTenantAdmin]);
+  }, [fromDate, toDate, team.id, isTenantAdmin]);
 
   const fetchMembersUsage = async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const data = await teamService.getTeamMembersUsage(team.id, selectedDays);
+      const data = await teamService.getTeamMembersUsage(team.id, fromDate, toDate);
       setMembersUsage(data);
     } catch (err: any) {
       console.error('Error fetching members usage:', err);
@@ -111,9 +114,8 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
     if (!membersUsage?.members) return;
 
     const formattedData = formatMemberUsageForExport(membersUsage.members);
-    const dateStr = new Date().toISOString().split('T')[0];
     const teamSlug = team.name.toLowerCase().replace(/\s+/g, '-');
-    exportToCSV(formattedData, MEMBER_USAGE_COLUMNS, `${teamSlug}-member-usage-${dateStr}`);
+    exportToCSV(formattedData, MEMBER_USAGE_COLUMNS, `${teamSlug}-member-usage-${fromDate}-to-${toDate}`);
   };
 
   const formatLastActivity = (dateStr: string | null) => {
@@ -224,16 +226,22 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-500" />
-            <select
-              value={selectedDays}
-              onChange={(e) => setSelectedDays(Number(e.target.value))}
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate}
+              onChange={(e) => setFromDate(e.target.value)}
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
-            >
-              <option value={7}>Last 7 days</option>
-              <option value={30}>Last 30 days</option>
-              <option value={60}>Last 60 days</option>
-              <option value={90}>Last 90 days</option>
-            </select>
+            />
+            <span className="text-sm text-gray-500">to</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={(e) => setToDate(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
+            />
           </div>
           {canExport && membersUsage?.members && membersUsage.members.length > 0 && (
             <button

@@ -45,6 +45,7 @@ export default function AssessmentDetailsView({
   const dialog = useGlobalDialog();
   const { isTenantAdmin, user } = useAuth();
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
+  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'info'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);

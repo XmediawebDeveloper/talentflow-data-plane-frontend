@@ -259,6 +259,7 @@ const getCategoryPermissionIds = (
 
 interface ApiUser {
   id: string;
+  user_display_id?: string;
   name: string;
   email: string;
   role: string;  // Dynamic role from RBAC
@@ -1478,6 +1479,61 @@ export default function UserManagement() {
     }
   };
 
+  const handleDeactivateExcessUsers = async (countToDeactivate: number) => {
+    if (!confirm(`This will deactivate ${countToDeactivate} user(s) with the highest User IDs to bring you within your plan limit. Proceed?`)) return;
+
+    // Exclude owners and the currently logged-in user from auto-deactivation
+    const eligible = users.filter(u =>
+      u.is_active &&
+      u.role !== 'tenant_admin' &&
+      u.email !== currentUser?.email
+    );
+
+    // Sort descending by numeric part of user_display_id (e.g. US-004 → 4)
+    const sorted = [...eligible].sort((a, b) => {
+      const numA = parseInt(a.user_display_id?.replace(/\D/g, '') || '0', 10);
+      const numB = parseInt(b.user_display_id?.replace(/\D/g, '') || '0', 10);
+      return numB - numA;
+    });
+
+    const toDeactivate = sorted.slice(0, countToDeactivate);
+
+    if (toDeactivate.length === 0) {
+      toast.error('No eligible users to deactivate automatically. Please deactivate users manually.');
+      return;
+    }
+
+    const loadingId = 'deactivate-excess';
+    toast.loading(`Deactivating ${toDeactivate.length} user(s)...`, { id: loadingId });
+
+    let succeeded = 0;
+    let failed = 0;
+
+    for (const u of toDeactivate) {
+      try {
+        const res = await fetch(`${API_URL}/users/${u.id}/deactivate`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        });
+        if (res.ok) {
+          succeeded++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    toast.dismiss(loadingId);
+    if (succeeded > 0) toast.success(`${succeeded} user(s) deactivated successfully`);
+    if (failed > 0) toast.error(`${failed} user(s) could not be deactivated`);
+
+    loadUsers();
+    refreshLimits();
+    setSeatQuotaRefreshTrigger(prev => prev + 1);
+  };
+
   const handleUpdateUser = async () => {
     console.log('[UPDATE USER] Function called');
     console.log('[UPDATE USER] allPermissions state at function start:', {
@@ -1752,6 +1808,7 @@ export default function UserManagement() {
           <div className="mt-4 sm:mt-6">
             <SeatQuotaCard
               onRefresh={() => { loadUsers(); refreshLimits(); }}
+              onDeactivateExcess={handleDeactivateExcessUsers}
               compact
               refreshTrigger={seatQuotaRefreshTrigger}
             />

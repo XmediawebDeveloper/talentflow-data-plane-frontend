@@ -199,9 +199,13 @@ export function MultiLanguageCodeEditor({
         console.log('[LANGUAGE-FILTER] Compiler enabled, auto-selecting one language');
         const response = await candidateService.getAvailableLanguages(attemptId);
 
-        // Extract available language codes
-        const availableCodes = response.available_languages.map(lang => lang.code.toLowerCase());
-        const unavailableCodes = response.unavailable_languages.map(lang => lang.code.toLowerCase());
+        // Extract available language codes — resolve aliases so e.g. 'c#' → 'csharp'
+        const availableCodes = response.available_languages.map(lang =>
+          resolveLanguageAlias(lang.code.toLowerCase())
+        );
+        const unavailableCodes = response.unavailable_languages.map(lang =>
+          resolveLanguageAlias(lang.code.toLowerCase())
+        );
 
         // Filter assigned languages to only include those with compilers
         const filtered = assignedLanguages.filter(lang => {

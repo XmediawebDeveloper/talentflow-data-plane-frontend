@@ -14,6 +14,7 @@ import { LandingScreen } from './LandingScreen';
 import { ConsentModal } from './ConsentModal';
 import { SystemCheck } from './SystemCheck';
 import { AssessmentInterface } from './AssessmentInterface';
+import { AssessmentErrorBoundary } from './AssessmentErrorBoundary';
 import { ResultsScreen } from './ResultsScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
@@ -134,6 +135,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // State
   const [step, setStep] = useState<AssessmentStep>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [isExpiredLink, setIsExpiredLink] = useState(false);
   const [assessmentInfo, setAssessmentInfo] = useState<AssessmentInfo | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<CurrentQuestion | null>(null);
   const [assessmentData, setAssessmentData] = useState<StartAssessmentResponse | null>(null);
@@ -198,6 +200,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
   // Fullscreen enforcement — tracks whether assessment is running in fullscreen
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
+
+  // Tracks remaining time reported by AssessmentInterface — shown in fullscreen overlay
+  const [overlayTimeRemaining, setOverlayTimeRemaining] = useState<number | null>(null);
 
   useRefreshPrevention({
     enabled: isAssessmentActive,
@@ -449,15 +454,21 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         setStepSafe('landing');
       } else {
         // Cannot start (expired, etc)
-        setError(info.message || 'This assessment is not available');
+        const msg = info.message || 'This assessment is not available';
+        if (msg.toLowerCase().includes('expir')) {
+          setIsExpiredLink(true);
+        }
+        setError(msg);
         setStepSafe('error');
       }
     } catch (err) {
       if (isMountedRef.current) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load assessment';
-        // Handle duplicate session error with user-friendly message
         if (errorMessage === 'DUPLICATE_SESSION') {
           setError('This assessment is already open in another tab or browser. Please use the original tab to continue your assessment. Only one active session is allowed.');
+        } else if (errorMessage === 'LINK_EXPIRED') {
+          setIsExpiredLink(true);
+          setError('This assessment link has expired. Please contact your recruiter for a new link.');
         } else {
           setError(errorMessage);
         }
@@ -1007,14 +1018,14 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         return (
           <ErrorScreen
             message={error || 'An error occurred'}
-            onRetry={() => {
-            // Reset all flags before retry
-            isFlowActiveRef.current = false;
-            isStartingRef.current = false;
-            loadAssessmentInfo();
-          }}
-        />
-      );
+            onRetry={isExpiredLink ? undefined : () => {
+              isFlowActiveRef.current = false;
+              isStartingRef.current = false;
+              setIsExpiredLink(false);
+              loadAssessmentInfo();
+            }}
+          />
+        );
 
       // DISABLED: Identity verification removed - candidates can directly attend
       // case 'identity_verification':
@@ -1196,23 +1207,26 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         );
       }
       return (
-        <AssessmentInterface
-          token={token}
-          assessmentInfo={assessmentInfo!}
-          currentQuestion={currentQuestion}
-          progress={progress}
-          rounds={assessmentData?.rounds || []}
-          startedAt={assessmentData?.started_at || assessmentInfo?.attempt_started_at || new Date().toISOString()}
-          durationMinutes={assessmentInfo?.duration_minutes || 30}
-          onAnswerSubmit={handleAnswerSubmit}
-          onComplete={handleCompleteAssessment}
-          onNavigate={handleNavigateToQuestion}
-          videoRef={videoRef}
-          stream={cameraStream}
-          isCameraActive={proctoringState.isCameraActive}
-          isMicrophoneActive={proctoringState.isMicrophoneActive}
-          copyPasteBlocking={(assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true}
-        />
+        <AssessmentErrorBoundary token={token}>
+          <AssessmentInterface
+            token={token}
+            assessmentInfo={assessmentInfo!}
+            currentQuestion={currentQuestion}
+            progress={progress}
+            rounds={assessmentData?.rounds || []}
+            startedAt={assessmentData?.started_at || assessmentInfo?.attempt_started_at || new Date().toISOString()}
+            durationMinutes={assessmentInfo?.duration_minutes || 30}
+            onAnswerSubmit={handleAnswerSubmit}
+            onComplete={handleCompleteAssessment}
+            onNavigate={handleNavigateToQuestion}
+            onTimeUpdate={setOverlayTimeRemaining}
+            videoRef={videoRef}
+            stream={cameraStream}
+            isCameraActive={proctoringState.isCameraActive}
+            isMicrophoneActive={proctoringState.isMicrophoneActive}
+            copyPasteBlocking={(assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true}
+          />
+        </AssessmentErrorBoundary>
       );
 
     case 'completing':
@@ -1266,9 +1280,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           <div className="bg-white border-2 border-yellow-500 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
             <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-4">
               Please return to fullscreen mode to continue your assessment.
             </p>
+            {overlayTimeRemaining !== null && (
+              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg mb-6 font-mono font-bold text-lg ${
+                overlayTimeRemaining <= 300 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-800'
+              }`}>
+                <Monitor className="w-4 h-4" />
+                {String(Math.floor(overlayTimeRemaining / 60)).padStart(2, '0')}:{String(overlayTimeRemaining % 60).padStart(2, '0')} remaining
+              </div>
+            )}
             <button
               onClick={() => {
                 const el = document.documentElement as any;

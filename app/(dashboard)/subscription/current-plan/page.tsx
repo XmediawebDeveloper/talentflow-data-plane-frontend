@@ -2298,8 +2298,8 @@ function CurrentPlanContent() {
             </div>
 
             <p className="text-xs text-amber-600 mt-4">
-              Queued upgrades will automatically apply when your current plan expires.
-              Click "Apply Now" to upgrade immediately (remaining credits will be forfeited).
+              Queued plan changes will automatically apply when your current plan expires.
+              Click "Apply Now" to apply immediately (remaining credits will be forfeited).
             </p>
           </div>
         )}
@@ -3296,7 +3296,16 @@ function CurrentPlanContent() {
       })()}
 
       {/* Cancel Queued Upgrade Modal */}
-      {showCancelModal && selectedQueuedUpgrade && (
+      {showCancelModal && selectedQueuedUpgrade && (() => {
+        const cancelQueuedPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
+        const isCancelDowngrade = comparePlanTiers(
+          currentPlan?.tier,
+          cancelQueuedPlan?.tier,
+          currentPlanBillingPeriod,
+          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+        ) === -1;
+        const changeLabel = isCancelDowngrade ? 'Downgrade' : 'Upgrade';
+        return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
             {/* Modal Header */}
@@ -3307,8 +3316,8 @@ function CurrentPlanContent() {
                     <XCircle className="w-6 h-6 text-red-600" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Cancel Upgrade</h2>
-                    <p className="text-sm text-gray-600">Cancel queued plan upgrade</p>
+                    <h2 className="text-xl font-semibold text-gray-900">Cancel {changeLabel}</h2>
+                    <p className="text-sm text-gray-600">Cancel queued plan {changeLabel.toLowerCase()}</p>
                   </div>
                 </div>
                 <button
@@ -3332,16 +3341,16 @@ function CurrentPlanContent() {
                   <div>
                     <h4 className="font-semibold text-red-800 mb-1">Are you sure?</h4>
                     <p className="text-sm text-red-700">
-                      You are about to cancel the queued upgrade to <strong>{selectedQueuedUpgrade.new_plan_name}</strong>.
-                      If you paid for this upgrade, you may need to request a refund separately.
+                      You are about to cancel the queued {changeLabel.toLowerCase()} to <strong>{selectedQueuedUpgrade.new_plan_name}</strong>.
+                      If you paid for this {changeLabel.toLowerCase()}, you may need to request a refund separately.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Upgrade Details */}
+              {/* Plan Change Details */}
               <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                <h4 className="font-medium text-gray-900 text-sm">Upgrade Details</h4>
+                <h4 className="font-medium text-gray-900 text-sm">{changeLabel} Details</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-500">New Plan:</span>
@@ -3402,7 +3411,7 @@ function CurrentPlanContent() {
                   }}
                   className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                 >
-                  Keep Upgrade
+                  Keep {changeLabel}
                 </button>
                 <button
                   onClick={handleCancelUpgrade}
@@ -3417,7 +3426,7 @@ function CurrentPlanContent() {
                   ) : (
                     <>
                       <XCircle className="w-5 h-5" />
-                      Cancel Upgrade
+                      Cancel {changeLabel}
                     </>
                   )}
                 </button>
@@ -3425,7 +3434,8 @@ function CurrentPlanContent() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Downgrade Warning Modal */}
       {showDowngradeWarning && downgradeWarningData && (

@@ -45,12 +45,6 @@ const STATUS_STYLES: Record<string, string> = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function toDateParam(daysAgo: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return d.toISOString().split('T')[0];
-}
-
 function getCount(team: TeamUsageSummary, key: 'RS' | 'AS' | 'AIU' | 'RU') {
   return team.by_type[key]?.consumption_count ?? 0;
 }
@@ -150,7 +144,7 @@ function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
 
 // ─── Single member row ────────────────────────────────────────────────────────
 
-function MemberRow({ member, days }: { member: TeamMemberUsage; days: number }) {
+function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: string }) {
   const [expanded, setExpanded] = useState(false);
   const [entries, setEntries] = useState<ConsumptionLogEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -163,7 +157,7 @@ function MemberRow({ member, days }: { member: TeamMemberUsage; days: number }) 
     try {
       const res = await unitPoolService.getConsumptionHistory({
         user_id: member.user_id,
-        start_date: toDateParam(days),
+        start_date: fromDate,
         limit: 200,
       });
       const items: ConsumptionLogEntry[] = Array.isArray(res)
@@ -177,8 +171,8 @@ function MemberRow({ member, days }: { member: TeamMemberUsage; days: number }) 
     }
   };
 
-  // Reset on days change
-  useEffect(() => { setEntries(null); setExpanded(false); }, [days]);
+  // Reset on date change
+  useEffect(() => { setEntries(null); setExpanded(false); }, [fromDate]);
 
   const rs   = getMCount(member, 'RS');
   const as_  = getMUnits(member, 'AS');   // float for assessments
@@ -312,12 +306,14 @@ function MemberRow({ member, days }: { member: TeamMemberUsage; days: number }) 
 
 function TeamRow({
   team,
-  days,
+  fromDate,
+  toDate,
   expanded,
   onToggle,
 }: {
   team: TeamUsageSummary;
-  days: number;
+  fromDate: string;
+  toDate: string;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -329,12 +325,12 @@ function TeamRow({
     let cancelled = false;
     setLoadingMembers(true);
     setMembers(null);
-    teamService.getTeamMembersUsage(team.team_id, days)
+    teamService.getTeamMembersUsage(team.team_id, fromDate, toDate)
       .then(res => { if (!cancelled) setMembers(res.members); })
       .catch(() => { if (!cancelled) setMembers([]); })
       .finally(() => { if (!cancelled) setLoadingMembers(false); });
     return () => { cancelled = true; };
-  }, [expanded, team.team_id, days]);
+  }, [expanded, team.team_id, fromDate, toDate]);
 
   const rs  = getCount(team, 'RS');
   const as_ = getCount(team, 'AS');
@@ -464,7 +460,7 @@ function TeamRow({
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-50">
                     {members.map(m => (
-                      <MemberRow key={m.user_id} member={m} days={days} />
+                      <MemberRow key={m.user_id} member={m} fromDate={fromDate} />
                     ))}
                   </tbody>
                 </table>
@@ -501,7 +497,7 @@ function StatCard({ label, value, dot, loading }: {
 
 // ─── Export ───────────────────────────────────────────────────────────────────
 
-function exportCSV(teams: TeamUsageSummary[], days: number) {
+function exportCSV(teams: TeamUsageSummary[], fromDate: string, toDate: string) {
   const rows = [
     ['Team', 'RS', 'AS', 'AIU', 'Total', 'JDs Created', 'Assessments Created'],
     ...teams.map(t => [
@@ -515,7 +511,7 @@ function exportCSV(teams: TeamUsageSummary[], days: number) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `team-usage-${days}d-${new Date().toISOString().split('T')[0]}.csv`;
+  a.download = `team-usage-${fromDate}-to-${toDate}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -524,8 +520,11 @@ function exportCSV(teams: TeamUsageSummary[], days: number) {
 
 export default function TeamUsageAnalytics() {
   const { isTenantAdmin, user } = useAuth();
-  const canExport = isTenantAdmin || !!user?.permissions?.canExportTeams;
-  const [days, setDays] = useState(30);
+  const canExport = isTenantAdmin || !!user?.permissions?.canExport;
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [teams, setTeams] = useState<TeamUsageSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
@@ -534,7 +533,9 @@ export default function TeamUsageAnalytics() {
     setLoading(true);
     setExpandedTeamId(null);
     try {
-      const res = await teamService.getAllTeamsUsage(days);
+      const res = isTenantAdmin
+        ? await teamService.getAllTeamsUsage(fromDate, toDate)
+        : await teamService.getMyTeamsUsage(fromDate, toDate);
       setTeams(res.teams ?? []);
     } catch {
       toast.error({ title: 'Failed to load team usage', description: 'Please refresh and try again.' });
@@ -542,7 +543,7 @@ export default function TeamUsageAnalytics() {
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [fromDate, toDate, isTenantAdmin]);
 
   useEffect(() => { fetchTeams(); }, [fetchTeams]);
 
@@ -558,26 +559,35 @@ export default function TeamUsageAnalytics() {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <h2 className="text-lg font-semibold text-gray-900">Team Usage</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold text-gray-900">Team Usage</h2>
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isTenantAdmin ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+            {isTenantAdmin ? 'All Teams' : 'Your Teams'}
+          </span>
+        </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-400" />
-            <select
-              value={days}
-              onChange={e => setDays(Number(e.target.value))}
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate}
+              onChange={e => setFromDate(e.target.value)}
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-500"
-            >
-              <option value={7}>Last 7 days</option>
-              <option value={30}>Last 30 days</option>
-              <option value={60}>Last 60 days</option>
-              <option value={90}>Last 90 days</option>
-              <option value={180}>Last 6 months</option>
-              <option value={365}>Last year</option>
-            </select>
+            />
+            <span className="text-sm text-gray-500">to</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={e => setToDate(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-500"
+            />
           </div>
           {canExport && (
             <button
-              onClick={() => teams.length > 0 && exportCSV(teams, days)}
+              onClick={() => teams.length > 0 && exportCSV(teams, fromDate, toDate)}
               disabled={teams.length === 0 || loading}
               className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
             >
@@ -636,7 +646,8 @@ export default function TeamUsageAnalytics() {
                 <TeamRow
                   key={team.team_id}
                   team={team}
-                  days={days}
+                  fromDate={fromDate}
+                  toDate={toDate}
                   expanded={expandedTeamId === team.team_id}
                   onToggle={() => setExpandedTeamId(
                     expandedTeamId === team.team_id ? null : team.team_id

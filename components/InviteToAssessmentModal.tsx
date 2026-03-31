@@ -138,6 +138,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             candidate_name: candidate.name,
             candidate_email: candidate.email,
             invite_source: 'JD',
+            expiry_days: expiryDays,
           })
         )
       );

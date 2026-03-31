@@ -536,6 +536,10 @@ export const candidateService = {
           throw new Error('Unable to connect to server. Please check your internet connection and try again.');
         }
 
+        if (error.response.status === 410) {
+          throw new Error('LINK_EXPIRED');
+        }
+
         if (error.response.status === 401 || error.response.status === 403) {
           throw new Error('Invalid or expired assessment link. Please contact your recruiter for a new link.');
         }

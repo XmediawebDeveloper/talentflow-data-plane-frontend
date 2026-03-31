@@ -1,9 +1,10 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { CandidateAssessmentPortal } from '@/components/candidate/CandidateAssessmentPortal';
 
-export default function TakeAssessmentPage() {
+function TakeAssessmentContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const token = params.token as string;
@@ -11,4 +12,12 @@ export default function TakeAssessmentPage() {
   const role = searchParams.get('r') || undefined;
 
   return <CandidateAssessmentPortal token={token} candidateName={candidateName} role={role} />;
+}
+
+export default function TakeAssessmentPage() {
+  return (
+    <Suspense>
+      <TakeAssessmentContent />
+    </Suspense>
+  );
 }
