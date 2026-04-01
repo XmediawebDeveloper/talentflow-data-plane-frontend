@@ -125,8 +125,9 @@ export default function ResumeVersionsModal({
 
   const handleDownload = async (version: ResumeVersion) => {
     try {
-      // Use version.id directly as the resume ID for that version
-      const blob = await resumeService.download(version.id);
+      const blob = candidate.resumeId
+        ? await resumeService.downloadVersion(candidate.resumeId, version.id)
+        : await resumeService.download(version.id);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

@@ -59,8 +59,20 @@ interface SkillDragItem {
 /*  Constants                                                               */
 /* ─────────────────────────────────────────────────────────────────────── */
 
-const FIXED_TIME = { mth: 20, nth: 7, hr: 3 } as const;
 const DEFAULT_PCT = { mth: 70, nth: 20, hr: 10 } as const;
+
+function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
+  if (!nthEnabled && !hrEnabled) {
+    return { mthMinutes: 30, nthMinutes: 0, hrMinutes: 0, mthMaxClusters: 5, nthMaxClusters: 0 };
+  }
+  if (nthEnabled && !hrEnabled) {
+    return { mthMinutes: 20, nthMinutes: 10, hrMinutes: 0, mthMaxClusters: 3, nthMaxClusters: 2 };
+  }
+  if (nthEnabled && hrEnabled) {
+    return { mthMinutes: 16, nthMinutes: 8, hrMinutes: 6, mthMaxClusters: 3, nthMaxClusters: 2 };
+  }
+  return { mthMinutes: 20, nthMinutes: 0, hrMinutes: 10, mthMaxClusters: 3, nthMaxClusters: 0 };
+}
 
 const PRIORITY_LABELS: Record<number, { label: string; short: string; color: string; dot: string }> = {
   5: { label: 'P1 \u2013 Critical',   short: 'Critical',  color: 'bg-red-100 text-red-700 border-red-200',       dot: 'bg-red-500' },
@@ -78,6 +90,39 @@ const CURRENT_STEP = 3;
 
 function uid() {
   return Math.random().toString(36).slice(2, 9);
+}
+
+function allocateClusterMinutes(clusters: Cluster[], totalMinutes: number): Record<string, number> {
+  if (clusters.length === 0 || totalMinutes <= 0) return {};
+
+  const totalWeight = clusters.reduce((sum, cluster) => sum + cluster.priority, 0);
+  if (totalWeight <= 0) {
+    return Object.fromEntries(clusters.map(cluster => [cluster.id, 0]));
+  }
+
+  const baseAllocations = clusters.map((cluster, index) => {
+    const exact = (cluster.priority / totalWeight) * totalMinutes;
+    const base = Math.floor(exact);
+    return {
+      id: cluster.id,
+      base,
+      remainder: exact - base,
+      index,
+    };
+  });
+
+  let remaining = totalMinutes - baseAllocations.reduce((sum, item) => sum + item.base, 0);
+  baseAllocations.sort((a, b) => {
+    if (b.remainder !== a.remainder) return b.remainder - a.remainder;
+    return a.index - b.index;
+  });
+
+  for (let i = 0; i < baseAllocations.length && remaining > 0; i += 1) {
+    baseAllocations[i].base += 1;
+    remaining -= 1;
+  }
+
+  return Object.fromEntries(baseAllocations.map(item => [item.id, item.base]));
 }
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -185,19 +230,19 @@ function TimeAllocationSummary({
 }) {
   if (!isFixed || (mthClusters.length === 0 && nthClusters.length === 0)) return null;
 
+  const mthMinuteMap = allocateClusterMinutes(mthClusters, fixedMthMin);
+  const nthMinuteMap = allocateClusterMinutes(nthClusters, fixedNthMin);
   const rows: { name: string; priority: number; mins: number; category: string }[] = [];
-  const mthTotalWeight = mthClusters.reduce((s, c) => s + c.priority, 0);
   mthClusters.forEach(c => rows.push({
     name: c.name || 'Unnamed',
     priority: c.priority,
-    mins: mthTotalWeight > 0 ? Math.round((c.priority / mthTotalWeight) * fixedMthMin) : 0,
+    mins: mthMinuteMap[c.id] ?? 0,
     category: 'MTH',
   }));
-  const nthTotalWeight = nthClusters.reduce((s, c) => s + c.priority, 0);
   nthClusters.forEach(c => rows.push({
     name: c.name || 'Unnamed',
     priority: c.priority,
-    mins: nthTotalWeight > 0 ? Math.round((c.priority / nthTotalWeight) * fixedNthMin) : 0,
+    mins: nthMinuteMap[c.id] ?? 0,
     category: 'NTH',
   }));
 
@@ -387,8 +432,7 @@ function ClusterRow({
   cluster,
   index,
   category,
-  categoryTimeMin,
-  totalPriorityWeight,
+  clusterTime,
   expanded,
   onToggleExpand,
   onUpdate,
@@ -400,8 +444,7 @@ function ClusterRow({
   cluster: Cluster;
   index: number;
   category: 'mth' | 'nth';
-  categoryTimeMin: number;
-  totalPriorityWeight: number;
+  clusterTime: number;
   expanded: boolean;
   onToggleExpand: (id: string) => void;
   onUpdate: (id: string, updates: Partial<Cluster>) => void;
@@ -412,9 +455,6 @@ function ClusterRow({
 }) {
   const pInfo = PRIORITY_LABELS[cluster.priority] ?? PRIORITY_LABELS[3];
   const rowRef = useRef<HTMLDivElement>(null);
-  const clusterTime = totalPriorityWeight > 0
-    ? Math.round((cluster.priority / totalPriorityWeight) * categoryTimeMin)
-    : 0;
 
   /* Drag handle for reordering clusters */
   const [{ isDragging }, drag, dragPreview] = useDrag(() => ({
@@ -482,7 +522,7 @@ function ClusterRow({
         <span className="text-xs text-gray-400">
           {cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}
         </span>
-        {categoryTimeMin > 0 && (
+        {clusterTime > 0 && (
           <span className="text-xs text-gray-400 flex items-center gap-0.5">
             <Clock className="w-3 h-3" />
             {clusterTime} min
@@ -590,6 +630,7 @@ function CategorySection({
   onMoveSkill,
   onRemoveSkill,
   onAddCluster,
+  maxClusters,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -604,8 +645,10 @@ function CategorySection({
   onMoveSkill: (category: 'mth' | 'nth', skillName: string, fromClusterId: string, toClusterId: string) => void;
   onRemoveSkill: (skillName: string, clusterId: string) => void;
   onAddCluster: (category: 'mth' | 'nth') => void;
+  maxClusters: number;
 }) {
-  const totalPriorityWeight = clusters.reduce((s, c) => s + c.priority, 0);
+  const clusterMinuteMap = allocateClusterMinutes(clusters, timeMin);
+  const atLimit = maxClusters > 0 && clusters.length >= maxClusters;
 
   return (
     <div className="border border-gray-200 rounded-xl bg-white">
@@ -620,10 +663,25 @@ function CategorySection({
               {timeMin} min
             </span>
           )}
+          {maxClusters > 0 && (
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+              atLimit
+                ? 'bg-red-50 text-red-600 border-red-200'
+                : 'bg-gray-50 text-gray-500 border-gray-200'
+            }`}>
+              {clusters.length}/{maxClusters} clusters
+            </span>
+          )}
         </div>
         <button
           onClick={() => onAddCluster(category)}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-50 transition-colors"
+          disabled={atLimit}
+          title={atLimit ? `Maximum ${maxClusters} clusters allowed` : undefined}
+          className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium border rounded-lg transition-colors ${
+            atLimit
+              ? 'text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50'
+              : 'text-purple-700 border-purple-200 hover:bg-purple-50'
+          }`}
         >
           <Plus className="w-3.5 h-3.5" />
           Add Cluster
@@ -646,8 +704,7 @@ function CategorySection({
               cluster={cluster}
               index={idx}
               category={category}
-              categoryTimeMin={timeMin}
-              totalPriorityWeight={totalPriorityWeight}
+              clusterTime={clusterMinuteMap[cluster.id] ?? 0}
               expanded={expandedIds.has(cluster.id)}
               onToggleExpand={onToggleExpand}
               onUpdate={(id, updates) => onUpdateCluster(category, id, updates)}
@@ -691,8 +748,10 @@ export default function AIInterviewClusters() {
 
   /* Time / mode */
   const [isFixed, setIsFixed] = useState(true);
-  const [fixedMthMin, setFixedMthMin] = useState<number>(FIXED_TIME.mth);
-  const [fixedNthMin, setFixedNthMin] = useState<number>(FIXED_TIME.nth);
+  const [fixedMthMin, setFixedMthMin] = useState<number>(30);
+  const [fixedNthMin, setFixedNthMin] = useState<number>(0);
+  const [mthMaxClusters, setMthMaxClusters] = useState<number>(5);
+  const [nthMaxClusters, setNthMaxClusters] = useState<number>(0);
 
   /* UI state */
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -727,17 +786,23 @@ export default function AIInterviewClusters() {
         const draft = await aiInterviewService.get(id);
         setConfig(draft);
 
-        // Determine mode
-        const durationMin = draft.duration_minutes ?? 30;
-        const fixed = durationMin > 0;
-        setIsFixed(fixed);
-        setFixedMthMin(fixed ? FIXED_TIME.mth : 0);
-        setFixedNthMin(fixed ? FIXED_TIME.nth : 0);
-
         // Parse rounds_config for skills
         const rounds = draft.rounds_config ?? [];
         const mthRound = rounds.find(r => r.type === 'must_have_skills' || r.type === 'must_have' || r.type === 'must-have');
         const nthRound = rounds.find(r => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have' || r.type === 'nice-to-have');
+        const hrRound = rounds.find(r => r.type === 'hr');
+
+        // Determine mode and timed allocation
+        const durationMin = draft.duration_minutes ?? 30;
+        const fixed = durationMin > 0;
+        setIsFixed(fixed);
+        const nthEnabledForTimed = nthRound ? nthRound.enabled !== false : false;
+        const hrEnabledForTimed = hrRound ? hrRound.enabled !== false : false;
+        const timedAllocation = getTimedModeAllocation(nthEnabledForTimed, hrEnabledForTimed);
+        setFixedMthMin(fixed ? timedAllocation.mthMinutes : 0);
+        setFixedNthMin(fixed ? timedAllocation.nthMinutes : 0);
+        setMthMaxClusters(fixed ? timedAllocation.mthMaxClusters : 0);
+        setNthMaxClusters(fixed ? timedAllocation.nthMaxClusters : 0);
 
         // Parse special_instructions
         let si: Record<string, any> = {};
@@ -750,48 +815,63 @@ export default function AIInterviewClusters() {
         const mthTypes: Record<string, string> = si.skill_types?.mth || {};
         const nthTypes: Record<string, string> = si.skill_types?.nth || {};
 
-        // Build skills from round topics/jd_skills/custom_skills
+        // Build skills from jd_skills + custom_skills.
+        // Only fall back to topics[] when both jd_skills and custom_skills are absent —
+        // that covers legacy configs that stored skills in topics before the split was added.
+        // IMPORTANT: after buildUpdatedRoundsConfig() runs, topics[] holds cluster NAMES
+        // (e.g. "Backend Architecture"), NOT raw skills. Including them here would cause
+        // cluster names to appear as unassigned skills on the next load.
+        const buildSkillList = (round: any) => {
+          const jd = round.jd_skills ?? [];
+          const custom = round.custom_skills ?? [];
+          if (jd.length > 0 || custom.length > 0) {
+            return Array.from(new Set([...jd, ...custom]));
+          }
+          // Legacy fallback: skills were stored in topics before jd_skills/custom_skills existed
+          return Array.from(new Set(round.topics ?? []));
+        };
+
         if (mthRound) {
-          const allSkills = [
-            ...(mthRound.jd_skills ?? []),
-            ...(mthRound.custom_skills ?? []),
-            ...(mthRound.topics ?? []).filter(
-              t => !(mthRound.jd_skills ?? []).includes(t) && !(mthRound.custom_skills ?? []).includes(t)
-            ),
-          ];
-          const unique = Array.from(new Set(allSkills));
-          setMthSkills(toSkillEntries(unique, mthComments, mthTypes));
+          setMthSkills(toSkillEntries(buildSkillList(mthRound), mthComments, mthTypes));
         } else if (draft.jd_must_have_skills?.length) {
           setMthSkills(toSkillEntries(draft.jd_must_have_skills, mthComments, mthTypes));
         }
 
         if (nthRound) {
           setNthEnabled(nthRound.enabled !== false);
-          const allSkills = [
-            ...(nthRound.jd_skills ?? []),
-            ...(nthRound.custom_skills ?? []),
-            ...(nthRound.topics ?? []).filter(
-              t => !(nthRound.jd_skills ?? []).includes(t) && !(nthRound.custom_skills ?? []).includes(t)
-            ),
-          ];
-          const unique = Array.from(new Set(allSkills));
-          setNthSkills(toSkillEntries(unique, nthComments, nthTypes));
+          const skills = buildSkillList(nthRound);
+          setNthSkills(nthRound.enabled !== false ? toSkillEntries(skills, nthComments, nthTypes) : []);
         } else {
           setNthEnabled(false);
-          if (draft.jd_nice_to_have_skills?.length) {
-            setNthSkills(toSkillEntries(draft.jd_nice_to_have_skills, nthComments, nthTypes));
-          }
+          setNthSkills([]);
         }
 
-        // Restore clusters from special_instructions
+        // Restore clusters from special_instructions — trim to current scenario max.
+        // Rules:
+        //   MHS fixed: trim to mthMaxClusters; MHS flexible: no limit (keep all)
+        //   NHS enabled+fixed: trim to nthMaxClusters; NHS enabled+flexible: keep all
+        //   NHS disabled: always clear (regardless of what was saved)
         if (si.mth_clusters?.length) {
-          setMthClusters(si.mth_clusters.map((c: any) => ({
+          const mthMax = fixed ? timedAllocation.mthMaxClusters : 0;
+          const mthRaw: any[] = si.mth_clusters;
+          const mthTrimmed = mthMax > 0
+            ? [...mthRaw].sort((a, b) => (b.priority ?? 3) - (a.priority ?? 3)).slice(0, mthMax)
+            : mthRaw; // flexible mode (mthMax=0) → no cluster limit
+          setMthClusters(mthTrimmed.map((c: any) => ({
             ...c,
             priority: c.priority as Cluster['priority'],
           })));
         }
         if (si.nth_clusters?.length) {
-          setNthClusters(si.nth_clusters.map((c: any) => ({
+          const nthMax = fixed ? timedAllocation.nthMaxClusters : 0;
+          const nthRaw: any[] = si.nth_clusters;
+          // nthEnabledForTimed=false means NHS is disabled — always clear saved clusters
+          const nthTrimmed = !nthEnabledForTimed
+            ? []
+            : nthMax > 0
+            ? [...nthRaw].sort((a, b) => (b.priority ?? 3) - (a.priority ?? 3)).slice(0, nthMax)
+            : nthRaw; // flexible mode (nthMax=0, NHS enabled) → no cluster limit
+          setNthClusters(nthTrimmed.map((c: any) => ({
             ...c,
             priority: c.priority as Cluster['priority'],
           })));
@@ -871,6 +951,12 @@ export default function AIInterviewClusters() {
   }, []);
 
   const addCluster = useCallback((category: 'mth' | 'nth') => {
+    const maxAllowed = category === 'mth' ? mthMaxClusters : nthMaxClusters;
+    const current = category === 'mth' ? mthClusters : nthClusters;
+    if (maxAllowed > 0 && current.length >= maxAllowed) {
+      toast.error(`Maximum ${maxAllowed} clusters allowed for ${category === 'mth' ? 'Must-To-Have' : 'Nice-To-Have'} Skills`);
+      return;
+    }
     const newCluster: Cluster = {
       id: uid(),
       name: '',
@@ -881,7 +967,7 @@ export default function AIInterviewClusters() {
     const setter = category === 'mth' ? setMthClusters : setNthClusters;
     setter(prev => [...prev, newCluster]);
     setExpandedIds(prev => new Set(prev).add(newCluster.id));
-  }, []);
+  }, [mthMaxClusters, nthMaxClusters, mthClusters, nthClusters]);
 
   /* ── AI Generate ── */
   const handleGenerateClusters = async () => {
@@ -895,27 +981,47 @@ export default function AIInterviewClusters() {
       const sortedNth = [...nthSkills].sort(
         (a, b) => (weightOrder[skillWeights[a.name] ?? 'medium']) - (weightOrder[skillWeights[b.name] ?? 'medium'])
       );
+      const mthSkillNames = sortedMth.map(s => s.name.trim()).filter(Boolean);
+      const nthSkillNames = sortedNth.map(s => s.name.trim()).filter(Boolean);
+
+      if (mthSkillNames.length === 0 && nthSkillNames.length === 0) {
+        toast.error('Add at least one skill before generating clusters');
+        return;
+      }
+
       const result = await aiInterviewService.generateClusters(
-        sortedMth.map(s => s.name),
-        sortedNth.map(s => s.name),
+        mthSkillNames,
+        nthSkillNames,
         config?.position,
         undefined,
         fixedMthMin,
-        fixedNthMin,
+        nthSkillNames.length > 0 ? fixedNthMin : 0,
+        mthMaxClusters,
+        nthSkillNames.length > 0 ? nthMaxClusters : 0,
       );
-      if (result.mth_clusters) {
-        setMthClusters(result.mth_clusters.map(c => ({
+      if (mthSkillNames.length > 0 && result.mth_clusters) {
+        // Frontend hard-cap: enforce mthMaxClusters limit even if backend returns more
+        const mthRaw = result.mth_clusters;
+        const mthFinal = mthMaxClusters > 0 ? mthRaw.slice(0, mthMaxClusters) : mthRaw;
+        setMthClusters(mthFinal.map(c => ({
           ...c,
           priority: c.priority as Cluster['priority'],
           reason: c.reason || '',
         })));
+      } else {
+        setMthClusters([]);
       }
-      if (result.nth_clusters) {
-        setNthClusters(result.nth_clusters.map(c => ({
+      if (nthSkillNames.length > 0 && result.nth_clusters) {
+        // Frontend hard-cap: enforce nthMaxClusters limit even if backend returns more
+        const nthRaw = result.nth_clusters;
+        const nthFinal = nthMaxClusters > 0 ? nthRaw.slice(0, nthMaxClusters) : nthRaw;
+        setNthClusters(nthFinal.map(c => ({
           ...c,
           priority: c.priority as Cluster['priority'],
           reason: c.reason || '',
         })));
+      } else {
+        setNthClusters([]);
       }
       toast.success('Clusters generated!');
     } catch {
@@ -932,6 +1038,24 @@ export default function AIInterviewClusters() {
     const PRIORITY_WEIGHT: Record<number, number> = { 5: 60, 4: 50, 3: 40, 2: 30, 1: 20 };
     const rounds = [...(config?.rounds_config ?? [])];
 
+    // Helper: build name-keyed topic_time_minutes from cluster list + total minutes
+    const buildTopicTimeMap = (clusters: Cluster[], totalMin: number): Record<string, number> => {
+      if (clusters.length === 0 || totalMin <= 0) return {};
+      const totalWeight = clusters.reduce((s, c) => s + c.priority, 0);
+      if (totalWeight <= 0) return {};
+      const result: Record<string, number> = {};
+      let remaining = totalMin;
+      const sorted = [...clusters].sort((a, b) => b.priority - a.priority);
+      sorted.forEach((c, i) => {
+        const mins = i === sorted.length - 1
+          ? remaining
+          : Math.round((c.priority / totalWeight) * totalMin);
+        result[c.name] = Math.max(1, mins);
+        remaining -= result[c.name];
+      });
+      return result;
+    };
+
     // Update must-have round with mth cluster topics
     const mthIdx = rounds.findIndex(
       (r: any) => r.type === 'must_have_skills' || r.type === 'must_have'
@@ -939,23 +1063,21 @@ export default function AIInterviewClusters() {
     if (mthIdx >= 0 && mthClusters.length > 0) {
       const topics = mthClusters.map((c) => c.name);
       const topic_weights: Record<string, number> = {};
-      mthClusters.forEach((c) => {
-        topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40;
-      });
-      rounds[mthIdx] = { ...rounds[mthIdx], topics, topic_weights };
+      mthClusters.forEach((c) => { topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40; });
+      const topic_time_minutes = buildTopicTimeMap(mthClusters, fixedMthMin);
+      rounds[mthIdx] = { ...rounds[mthIdx], topics, topic_weights, topic_time_minutes };
     }
 
-    // Update nice-to-have round with nth cluster topics
+    // Update nice-to-have round with nth cluster topics (only when NHS enabled)
     const nthIdx = rounds.findIndex(
       (r: any) => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have'
     );
-    if (nthIdx >= 0 && nthClusters.length > 0) {
+    if (nthIdx >= 0 && nthEnabled && nthClusters.length > 0) {
       const topics = nthClusters.map((c) => c.name);
       const topic_weights: Record<string, number> = {};
-      nthClusters.forEach((c) => {
-        topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40;
-      });
-      rounds[nthIdx] = { ...rounds[nthIdx], topics, topic_weights };
+      nthClusters.forEach((c) => { topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40; });
+      const topic_time_minutes = buildTopicTimeMap(nthClusters, fixedNthMin);
+      rounds[nthIdx] = { ...rounds[nthIdx], topics, topic_weights, topic_time_minutes };
     }
 
     return rounds;
@@ -967,7 +1089,7 @@ export default function AIInterviewClusters() {
     try {
       const si = JSON.parse(config.special_instructions || '{}');
       si.mth_clusters = mthClusters;
-      si.nth_clusters = nthClusters;
+      si.nth_clusters = nthEnabled ? nthClusters : []; // don't persist NHS clusters when disabled
       si.skill_weights = skillWeights;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
@@ -1006,7 +1128,7 @@ export default function AIInterviewClusters() {
     try {
       const si = JSON.parse(config.special_instructions || '{}');
       si.mth_clusters = mthClusters;
-      si.nth_clusters = nthClusters;
+      si.nth_clusters = nthEnabled ? nthClusters : []; // don't persist NHS clusters when disabled
       si.skill_weights = skillWeights;
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
@@ -1033,12 +1155,14 @@ export default function AIInterviewClusters() {
   };
 
   /* ── Validation computed values (only meaningful when clusters exist) ── */
-  const hasClusters = mthClusters.length > 0 || nthClusters.length > 0;
-  const allAssignedMth = new Set(mthClusters.flatMap(c => c.skills));
-  const allAssignedNth = new Set(nthClusters.flatMap(c => c.skills));
-  const unassignedMth = hasClusters ? mthSkills.filter(s => !allAssignedMth.has(s.name)) : [];
-  const unassignedNth = hasClusters ? nthSkills.filter(s => !allAssignedNth.has(s.name)) : [];
-  const emptyClusters = [...mthClusters, ...nthClusters].filter(c => c.skills.length === 0);
+  const activeNthClusters = nthEnabled ? nthClusters : [];
+  const hasClusters = mthClusters.length > 0 || activeNthClusters.length > 0;
+  // Case-insensitive matching: LLM may return skill names with different casing
+  const allAssignedMth = new Set(mthClusters.flatMap(c => c.skills.map(s => s.toLowerCase().trim())));
+  const allAssignedNth = new Set(activeNthClusters.flatMap(c => c.skills.map(s => s.toLowerCase().trim())));
+  const unassignedMth = hasClusters ? mthSkills.filter(s => !allAssignedMth.has(s.name.toLowerCase().trim())) : [];
+  const unassignedNth = hasClusters && nthEnabled ? nthSkills.filter(s => !allAssignedNth.has(s.name.toLowerCase().trim())) : [];
+  const emptyClusters = [...mthClusters, ...activeNthClusters].filter(c => c.skills.length === 0);
   const hasIssues = unassignedMth.length > 0 || unassignedNth.length > 0 || emptyClusters.length > 0;
 
   /* ── Loading state ── */
@@ -1219,6 +1343,7 @@ export default function AIInterviewClusters() {
                 onMoveSkill={moveSkillBetweenClusters}
                 onRemoveSkill={removeSkillFromCluster}
                 onAddCluster={addCluster}
+                maxClusters={mthMaxClusters}
               />
 
               {/* Nice-To-Have Section */}
@@ -1237,6 +1362,7 @@ export default function AIInterviewClusters() {
                   onMoveSkill={moveSkillBetweenClusters}
                   onRemoveSkill={removeSkillFromCluster}
                   onAddCluster={addCluster}
+                  maxClusters={nthMaxClusters}
                 />
               )}
             </>
@@ -1246,7 +1372,7 @@ export default function AIInterviewClusters() {
           {!generating && (
             <TimeAllocationSummary
               mthClusters={mthClusters}
-              nthClusters={nthClusters}
+              nthClusters={activeNthClusters}
               fixedMthMin={fixedMthMin}
               fixedNthMin={fixedNthMin}
               isFixed={isFixed}

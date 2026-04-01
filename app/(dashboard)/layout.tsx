@@ -33,6 +33,31 @@ const adminRoutes = [
   '/analytics/activity-logs',
 ];
 
+const routePermissionRules: Array<{
+  prefix: string;
+  permissions?: string[];
+  allowAll?: boolean;
+}> = [
+  { prefix: '/recruitment/hr-question-bank', permissions: ['canViewHRQuestionBank', 'canCreateHRQuestionBank', 'canUpdateHRQuestionBank', 'canDeleteHRQuestionBank'] },
+  { prefix: '/organization/team-chat', allowAll: true },
+  { prefix: '/organization/team-management', permissions: ['canViewTeams', 'canCreateTeams'] },
+  { prefix: '/organization/user-management', permissions: ['canManageUsers'] },
+  { prefix: '/organization/company-profile', permissions: ['canManageSettings'] },
+  { prefix: '/subscription/current-plan', permissions: ['canViewCurrentPlan'] },
+  { prefix: '/subscription/usage-quotas', permissions: ['canViewUsage'] },
+  { prefix: '/subscription/payment-methods', permissions: ['canViewPaymentMethods'] },
+  { prefix: '/subscription/billing-history', permissions: ['canViewBillingHistory'] },
+  { prefix: '/subscription/refund-history', permissions: ['canViewRefundHistory'] },
+  { prefix: '/subscription/dispute-history', permissions: ['canViewDisputeHistory'] },
+  { prefix: '/subscription/unit-disputes', permissions: ['canViewUsage'] },
+  { prefix: '/settings/general-settings', allowAll: true },
+  { prefix: '/settings/permissions', permissions: ['canViewRoles'] },
+  { prefix: '/settings/api-management', permissions: ['canViewApiManagement'] },
+  { prefix: '/settings/branding', permissions: ['canViewBranding'] },
+  { prefix: '/settings/security', permissions: ['canViewSecuritySettings'] },
+  { prefix: '/settings/legal', permissions: ['canManageSettings'] },
+];
+
 // Paths allowed when subscription is expired/inactive
 const SUBSCRIPTION_ALLOWED_PATHS = [
   '/subscription/current-plan',
@@ -105,6 +130,12 @@ export default function DashboardLayout({
 
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const hasRoutePermission = useCallback((permission: string) => {
+    if (isTenantAdmin) return true;
+    const permissions = user?.permissions as Record<string, boolean | undefined> | undefined;
+    return !!permissions?.[permission];
+  }, [isTenantAdmin, user]);
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
 
@@ -192,20 +223,19 @@ export default function DashboardLayout({
     return () => window.removeEventListener(PAYMENT_PENDING_EVENT, handlePaymentPending as EventListener);
   }, []);
 
-  // Redirect to current-plan page when subscription is expired — admins only.
-  // Non-admins cannot access /subscription/current-plan (admin-only route) so redirecting
-  // them there causes an infinite loop. They see ExpiredAccountBlock instead.
+  // Redirect to current-plan when subscription is expired for users who can access it.
   useEffect(() => {
-    if (subscriptionExpired === true && !accountSuspended && isTenantAdmin && pathname) {
+    const canAccessCurrentPlan = hasRoutePermission('canViewCurrentPlan');
+    if (subscriptionExpired === true && !accountSuspended && canAccessCurrentPlan && pathname) {
       const isAllowed = SUBSCRIPTION_ALLOWED_PATHS.some(path =>
         pathname === path || pathname.startsWith(path + '/')
       );
       if (!isAllowed) {
-        console.log('[DASHBOARD] Subscription expired (admin), redirecting to current-plan from:', pathname);
+        console.log('[DASHBOARD] Subscription expired, redirecting to current-plan from:', pathname);
         router.push('/subscription/current-plan');
       }
     }
-  }, [subscriptionExpired, accountSuspended, isTenantAdmin, pathname, router]);
+  }, [subscriptionExpired, accountSuspended, hasRoutePermission, pathname, router]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -223,24 +253,16 @@ export default function DashboardLayout({
   // Client-side authorization check for admin routes
   useEffect(() => {
     if (!isLoading && isAuthenticated && user) {
-      // Exception: Team Chat is accessible to all users, even though it's under /organization
-      if (pathname === '/organization/team-chat' || pathname.startsWith('/organization/team-chat/')) {
-        return; // Allow access to all users
-      }
+      const matchingRule = routePermissionRules.find(rule =>
+        pathname === rule.prefix || pathname.startsWith(`${rule.prefix}/`)
+      );
 
-      // Exception: Team Management is accessible to users with teams permissions
-      if (pathname === '/organization/team-management' || pathname.startsWith('/organization/team-management/')) {
-        if (user.permissions?.canViewTeams || user.permissions?.canCreateTeams) return;
-      }
+      if (matchingRule) {
+        if (matchingRule.allowAll) return;
 
-      // Exception: User Management is accessible to users with user management permissions
-      if (pathname === '/organization/user-management' || pathname.startsWith('/organization/user-management/')) {
-        if (user.permissions?.canManageUsers) return;
-      }
-
-      // Exception: Profile Settings (/settings/general-settings) is accessible to ALL users
-      if (pathname === '/settings/general-settings' || pathname.startsWith('/settings/general-settings/')) {
-        return; // Allow access to all users regardless of role
+        if ((matchingRule.permissions || []).some(hasRoutePermission)) {
+          return;
+        }
       }
 
       const isAdminRoute = adminRoutes.some(route =>
@@ -253,7 +275,7 @@ export default function DashboardLayout({
         router.push('/dashboard');
       }
     }
-  }, [isLoading, isAuthenticated, user, pathname, isTenantAdmin, router]);
+  }, [hasRoutePermission, isLoading, isAuthenticated, user, pathname, isTenantAdmin, router]);
 
   // Check for pending scoring batches on login and show notification
   useEffect(() => {

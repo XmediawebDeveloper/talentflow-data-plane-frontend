@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/hooks/useAuth';
 import {
   ArrowLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
@@ -28,6 +29,37 @@ const ROUND_LABELS: Record<string, string> = {
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
+function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
+  if (!nthEnabled && !hrEnabled) {
+    return { mthQuestions: 15, nthQuestions: 0, hrQuestions: 0 };
+  }
+  if (nthEnabled && !hrEnabled) {
+    return { mthQuestions: 10, nthQuestions: 5, hrQuestions: 0 };
+  }
+  if (nthEnabled && hrEnabled) {
+    return { mthQuestions: 8, nthQuestions: 4, hrQuestions: 3 };
+  }
+  return { mthQuestions: 10, nthQuestions: 0, hrQuestions: 5 };
+}
+
+function getTimedModePercentages(nthEnabled: boolean, hrEnabled: boolean) {
+  const allocation = getTimedModeAllocation(nthEnabled, hrEnabled);
+  const scoringQuestionTotal = allocation.mthQuestions + allocation.nthQuestions;
+
+  if (scoringQuestionTotal <= 0) {
+    return { mth: 0, nth: 0, hr: 0 };
+  }
+
+  const mth = Math.round((allocation.mthQuestions / scoringQuestionTotal) * 100);
+  const nth = nthEnabled ? 100 - mth : 0;
+
+  return {
+    mth,
+    nth,
+    hr: 0,
+  };
+}
+
 interface AIInterviewDetailsViewProps {
   config: AIInterviewResponse;
   onBack: () => void;
@@ -36,6 +68,11 @@ interface AIInterviewDetailsViewProps {
 
 export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AIInterviewDetailsViewProps) {
   const router = useRouter();
+  const { user, isTenantAdmin } = useAuth();
+  const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
+  const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
+  const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
+  const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions'>('overview');
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -84,6 +121,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
     }
     return `${mins} min`;
   }, [config.duration_minutes]);
+
+  const displayPercentage = useCallback((type: string, storedPercentage: number) => {
+    if (interviewMode !== 'fixed') return storedPercentage;
+
+    const nthEnabled = enabledRounds.some((round) => round.type === 'nice_to_have_skills' || round.type === 'nice_to_have');
+    const hrEnabled = enabledRounds.some((round) => round.type === 'hr');
+    const percentages = getTimedModePercentages(nthEnabled, hrEnabled);
+
+    if (type === 'must_have_skills' || type === 'must_to_have' || type === 'technical') return percentages.mth;
+    if (type === 'nice_to_have_skills' || type === 'nice_to_have') return percentages.nth;
+    if (type === 'hr') return percentages.hr;
+    return storedPercentage;
+  }, [enabledRounds, interviewMode]);
 
   const loadActivity = useCallback(async () => {
     setActivityLoading(true);
@@ -326,7 +376,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
             </div>
             <div className="flex items-center gap-2">
               {/* Continue Editing — draft only */}
-              {config.status === 'draft' && config.jd_id && (
+              {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
                 <button
                   onClick={() => {
                     const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
@@ -388,7 +438,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
                           <span className="font-medium text-gray-900">
                             {ROUND_LABELS[round.type] || round.type}
                           </span>
-                          <span className="text-sm font-semibold text-gray-700">{round.percentage}%</span>
+                          <span className="text-sm font-semibold text-gray-700">{displayPercentage(round.type, round.percentage)}%</span>
                         </div>
                         <div className="text-xs text-gray-400 mb-2">
                           {round.duration_minutes > 0 ? `${round.duration_minutes} min` : 'Flexible'}
@@ -657,15 +707,17 @@ ${nthClusters.length > 0 ? `<h2>Nice-to-Have Skills (${nthClusters.length} clust
                       <span className="text-sm text-gray-700">Copy Link</span>
                     </button>
                   )}
-                  <button
-                    onClick={handleDuplicate}
-                    disabled={actionLoading}
-                    className="flex flex-col items-center gap-2 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-                  >
-                    <GitBranch className="w-5 h-5 text-gray-600" />
-                    <span className="text-sm text-gray-700">Duplicate</span>
-                  </button>
-                  {config.status !== 'archived' && (
+                  {canCreateAIInterviews && (
+                    <button
+                      onClick={handleDuplicate}
+                      disabled={actionLoading}
+                      className="flex flex-col items-center gap-2 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    >
+                      <GitBranch className="w-5 h-5 text-gray-600" />
+                      <span className="text-sm text-gray-700">Duplicate</span>
+                    </button>
+                  )}
+                  {config.status !== 'archived' && canArchiveAIInterviews && (
                     <button
                       onClick={() => setConfirmAction({
                         type: 'archive',
@@ -680,7 +732,7 @@ ${nthClusters.length > 0 ? `<h2>Nice-to-Have Skills (${nthClusters.length} clust
                       <span className="text-sm text-gray-700">Archive</span>
                     </button>
                   )}
-                  {config.status === 'archived' && (
+                  {config.status === 'archived' && canArchiveAIInterviews && (
                     <button
                       onClick={async () => {
                         setActionLoading(true);
@@ -701,19 +753,21 @@ ${nthClusters.length > 0 ? `<h2>Nice-to-Have Skills (${nthClusters.length} clust
                       <span className="text-sm text-gray-700">Unarchive</span>
                     </button>
                   )}
-                  <button
-                    onClick={() => setConfirmAction({
-                      type: 'delete',
-                      title: 'Delete Config',
-                      message: 'Are you sure you want to delete this configuration? This action cannot be undone.',
-                      onConfirm: handleDelete,
-                    })}
-                    disabled={actionLoading}
-                    className="flex flex-col items-center gap-2 p-4 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
-                  >
-                    <Trash2 className="w-5 h-5 text-red-500" />
-                    <span className="text-sm text-red-600">Delete</span>
-                  </button>
+                  {canDeleteAIInterviews && (
+                    <button
+                      onClick={() => setConfirmAction({
+                        type: 'delete',
+                        title: 'Delete Config',
+                        message: 'Are you sure you want to delete this configuration? This action cannot be undone.',
+                        onConfirm: handleDelete,
+                      })}
+                      disabled={actionLoading}
+                      className="flex flex-col items-center gap-2 p-4 border border-red-200 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="w-5 h-5 text-red-500" />
+                      <span className="text-sm text-red-600">Delete</span>
+                    </button>
+                  )}
                   {config.status === 'published' && recentActivity.length > 0 && (
                     <button
                       onClick={() => setShowResultsPopup(true)}

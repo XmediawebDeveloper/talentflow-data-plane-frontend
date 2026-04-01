@@ -181,6 +181,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const { user, hasPermission: authHasPermission } = useAuth();
   const canUpgradePlan = authHasPermission('canUpgradePlan');
   const canExportUsage = authHasPermission('canExportUsage');
+  const canPurchaseAddons = canUpgradePlan;
   const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
   const { hasPlanFeature } = usePlanFeatures();
 
@@ -1006,6 +1007,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                             <button
                               key={quota.quota_type}
                               onClick={() => {
+                                if (!canPurchaseAddons) {
+                                  return;
+                                }
                                 if (isAddonPurchaseBlocked) {
                                   setAddonPurchaseError(
                                     subscriptionSummary?.is_trial
@@ -1023,9 +1027,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                                   }
                                 }
                               }}
-                              title={isAddonPurchaseBlocked ? addonBlockedMessage : ""}
+                              disabled={!canPurchaseAddons}
+                              title={!canPurchaseAddons ? 'You do not have permission to purchase add-ons' : isAddonPurchaseBlocked ? addonBlockedMessage : ""}
                               className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
-                                isAddonPurchaseBlocked
+                                !canPurchaseAddons
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : isAddonPurchaseBlocked
                                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                   : quota.is_exceeded_critical
                                     ? 'bg-red-600 text-white hover:bg-red-700'
@@ -1037,11 +1044,11 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                               }`}
                             >
                               <Plus className="w-4 h-4" />
-                              Add {quota.name}
-                              {quota.is_exceeded && !isAddonPurchaseBlocked && (
+                              {canPurchaseAddons ? `Add ${quota.name}` : `${quota.name} Read Only`}
+                              {quota.is_exceeded && canPurchaseAddons && !isAddonPurchaseBlocked && (
                                 <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">+{formatNum(quota.exceeded_by)} over</span>
                               )}
-                              {quota.is_exhausted && !isAddonPurchaseBlocked && (
+                              {quota.is_exhausted && canPurchaseAddons && !isAddonPurchaseBlocked && (
                                 <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Exhausted</span>
                               )}
                             </button>
@@ -1236,6 +1243,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       </div>
 
       {/* Add-ons Section */}
+      {canPurchaseAddons && (
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 pb-8 sm:pb-12" data-section="addons">
         <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
           {/* Section Header */}
@@ -1426,6 +1434,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           )}
         </div>
       </div>
+      )}
 
       {/* Record Usage Modal */}
       {showRecordModal && (

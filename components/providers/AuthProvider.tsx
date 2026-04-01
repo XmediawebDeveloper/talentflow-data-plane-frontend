@@ -174,6 +174,10 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canUpdateAssessments: apiUser.permissions.can_update_assessments,
       canDeleteAssessments: apiUser.permissions.can_delete_assessments,
       canDownloadAssessmentPDF: apiUser.permissions.can_download_assessment_pdf,
+      canViewHRQuestionBank: apiUser.permissions.can_view_hr_question_bank,
+      canCreateHRQuestionBank: apiUser.permissions.can_create_hr_question_bank,
+      canUpdateHRQuestionBank: apiUser.permissions.can_update_hr_question_bank,
+      canDeleteHRQuestionBank: apiUser.permissions.can_delete_hr_question_bank,
       // Analytics & Reports
       canViewAnalytics: apiUser.permissions.can_view_analytics,
       // Settings & Admin
@@ -192,6 +196,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       // Granular settings section view permissions
       canViewGeneralSettings: apiUser.permissions.can_view_general_settings,
       canViewPermissionsRoles: apiUser.permissions.can_view_permissions_roles,
+      canViewRoles: apiUser.permissions.can_view_roles,
       canViewApiManagement: apiUser.permissions.can_view_api_management,
       canViewBranding: apiUser.permissions.can_view_branding,
       canViewSecuritySettings: apiUser.permissions.can_view_security_settings,
@@ -215,6 +220,14 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       // RBAC06: Feature permissions
       canViewScoring: apiUser.permissions.can_view_scoring,
       canRunScoring: apiUser.permissions.can_run_scoring,
+      canViewAIInterviews: apiUser.permissions.can_view_ai_interviews,
+      canCreateAIInterviews: apiUser.permissions.can_create_ai_interviews,
+      canUpdateAIInterviews: apiUser.permissions.can_update_ai_interviews,
+      canShareAIInterviews: apiUser.permissions.can_share_ai_interviews,
+      canInviteAIInterviews: apiUser.permissions.can_invite_ai_interviews,
+      canPublishAIInterviews: apiUser.permissions.can_publish_ai_interviews,
+      canArchiveAIInterviews: apiUser.permissions.can_archive_ai_interviews,
+      canDeleteAIInterviews: apiUser.permissions.can_delete_ai_interviews,
       canRunAiInterviews: apiUser.permissions.can_run_ai_interviews,
       canViewAiMatch: apiUser.permissions.can_view_ai_match,
       canRunAiMatch: apiUser.permissions.can_run_ai_match,

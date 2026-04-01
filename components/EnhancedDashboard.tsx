@@ -113,6 +113,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
   // Permission checks
   const canCreateJD = hasPermission('canCreateJD') || isTenantAdminRole;
+  const canUpdateJD = hasPermission('canUpdateJD') || isTenantAdminRole;
   const canUploadResumes = hasPermission('canUploadResumes') || isTenantAdminRole;
   const canViewResumes = hasPermission('canViewResumes') || isTenantAdminRole;
 
@@ -711,14 +712,16 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                         )}
                       </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleViewJobDetails(jd)}
-                      className="ml-2"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
+                    {canUpdateJD && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleViewJobDetails(jd)}
+                        className="ml-2"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

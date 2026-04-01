@@ -37,6 +37,10 @@ export interface Permission {
   canUpdateAssessments?: boolean;// Edit Assessments
   canDeleteAssessments?: boolean;// Delete Assessments
   canDownloadAssessmentPDF?: boolean;// Download PDF reports for assessment results
+  canViewHRQuestionBank?: boolean;
+  canCreateHRQuestionBank?: boolean;
+  canUpdateHRQuestionBank?: boolean;
+  canDeleteHRQuestionBank?: boolean;
 
   // Analytics & Reports
   canViewAnalytics: boolean;    // Reports & Analytics
@@ -60,6 +64,7 @@ export interface Permission {
   // Granular settings section view permissions
   canViewGeneralSettings?: boolean;
   canViewPermissionsRoles?: boolean;
+  canViewRoles?: boolean;
   canViewApiManagement?: boolean;
   canViewBranding?: boolean;
   canViewSecuritySettings?: boolean;
@@ -87,6 +92,14 @@ export interface Permission {
   // RBAC06: Feature flags
   canViewScoring?: boolean;      // NEW: View resume scoring page/results
   canRunScoring?: boolean;       // Run scoring operations
+  canViewAIInterviews?: boolean;
+  canCreateAIInterviews?: boolean;
+  canUpdateAIInterviews?: boolean;
+  canShareAIInterviews?: boolean;
+  canInviteAIInterviews?: boolean;
+  canPublishAIInterviews?: boolean;
+  canArchiveAIInterviews?: boolean;
+  canDeleteAIInterviews?: boolean;
   canRunAiInterviews?: boolean;
   canViewAiMatch?: boolean;      // NEW: View AI talent match page/results
   canRunAiMatch?: boolean;       // Run AI match operations

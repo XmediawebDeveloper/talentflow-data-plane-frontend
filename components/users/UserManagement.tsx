@@ -41,6 +41,7 @@ import AddSeatsModal from './AddSeatsModal';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuota } from '@/contexts/QuotaContext';
 import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
+import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 
 // Types
@@ -453,6 +454,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1
 export default function UserManagement() {
   const router = useRouter();
   const { user: currentUser, refreshUser } = useAuth();
+  const dialog = useGlobalDialog();
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -1210,9 +1212,11 @@ export default function UserManagement() {
     try {
       const freshUserData = await userService.getUser(user.id);
 
-      // Ensure permissions are loaded before mapping — handles race condition when user
-      // opens edit modal before loadAllPermissions() has finished on mount.
-      const permissionsForMapping = allPermissions.length > 0 ? allPermissions : await loadAllPermissions();
+      // Ensure permissions are loaded before mapping.
+      // Always refresh once here so newly backfilled tenant permissions
+      // (for example ai_interview:* / hr_question_bank:*) are visible
+      // immediately after a save without requiring a full page reload.
+      const permissionsForMapping = await loadAllPermissions();
 
       // Use permission_ids directly from backend response
       const currentPermissionIds = new Set<number>();
@@ -1224,6 +1228,13 @@ export default function UserManagement() {
           currentPermissionIds.add(id);
         });
         console.log('[EDIT USER] Loaded custom permission IDs from backend:', Array.from(currentPermissionIds));
+
+        const unresolvedIds = freshUserData.permission_ids.filter(
+          (id: number) => !permissionsForMapping.some(p => p.id === id)
+        );
+        if (unresolvedIds.length > 0) {
+          console.warn('[EDIT USER] Some permission IDs are still missing from RBAC permission metadata:', unresolvedIds);
+        }
       } else if (Array.isArray(freshUserData.permission_ids) && freshUserData.permission_ids.length === 0) {
         // Empty array: either user has no custom permissions (new user) or GET query failed.
         // Prefer the list-cached permission_ids (from loadUsers) if available — these are
@@ -1401,7 +1412,13 @@ export default function UserManagement() {
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (!confirm('Are you sure you want to deactivate this user?')) {
+    if (!await dialog.confirm({
+      title: 'Deactivate User',
+      message: 'Are you sure you want to deactivate this user?',
+      variant: 'warning',
+      confirmText: 'Deactivate',
+      cancelText: 'Cancel',
+    })) {
       return;
     }
 
@@ -1480,7 +1497,13 @@ export default function UserManagement() {
   };
 
   const handleDeactivateExcessUsers = async (countToDeactivate: number) => {
-    if (!confirm(`This will deactivate ${countToDeactivate} user(s) with the highest User IDs to bring you within your plan limit. Proceed?`)) return;
+    if (!await dialog.confirm({
+      title: 'User Limit Exceeded',
+      message: `This will deactivate the last created ${countToDeactivate} user(s) to bring your account back within the plan limit.`,
+      variant: 'warning',
+      confirmText: 'Deactivate Users',
+      cancelText: 'Cancel',
+    })) return;
 
     // Exclude owners and the currently logged-in user from auto-deactivation
     const eligible = users.filter(u =>
@@ -1489,7 +1512,8 @@ export default function UserManagement() {
       u.email !== currentUser?.email
     );
 
-    // Sort descending by numeric part of user_display_id (e.g. US-004 → 4)
+    // Sort descending by numeric part of user_display_id so the most recently created
+    // users are deactivated first (e.g. US-004 is newer than US-003).
     const sorted = [...eligible].sort((a, b) => {
       const numA = parseInt(a.user_display_id?.replace(/\D/g, '') || '0', 10);
       const numB = parseInt(b.user_display_id?.replace(/\D/g, '') || '0', 10);
@@ -1710,6 +1734,10 @@ export default function UserManagement() {
       });
 
       toast.success('User updated successfully');
+
+      // Refresh permission catalog too, because backend may have backfilled
+      // missing tenant permission rows while saving.
+      await loadAllPermissions();
 
       resetEditModal();
 

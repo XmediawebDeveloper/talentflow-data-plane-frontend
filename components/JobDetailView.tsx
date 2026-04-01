@@ -1553,6 +1553,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             jobTitle={job.title}
             jobId={job.id}
             canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
+            canBatchDownload={isTenantAdmin || (user?.permissions?.canExport ?? false)}
             onViewResultDetail={(result) => {
               if (onViewAssessmentResult) {
                 onViewAssessmentResult(result, job.title);

@@ -116,6 +116,7 @@ export default function Dashboard({
 
   // Permission checks
   const canCreateJD = hasPermission('canCreateJD') || isTenantAdmin;
+  const canUpdateJD = hasPermission('canUpdateJD') || isTenantAdmin;
 
   // Fetch Recent Activities
   const fetchRecentActivities = useCallback(async () => {
@@ -778,15 +779,17 @@ export default function Dashboard({
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 ml-4">
-                        <button
-                          onClick={() => onViewJobDetails?.(jd)}
-                          className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm flex items-center gap-2"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                          Continue Editing
-                        </button>
-                      </div>
+                      {canUpdateJD && (
+                        <div className="flex items-center gap-2 ml-4">
+                          <button
+                            onClick={() => onViewJobDetails?.(jd)}
+                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm flex items-center gap-2"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                            Continue Editing
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

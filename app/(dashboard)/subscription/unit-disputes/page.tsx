@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -75,6 +76,9 @@ const UNIT_TYPE_LABELS: Record<string, string> = {
 // --- Component ---
 
 export default function UnitDisputesPage() {
+  const { hasPermission } = useAuth();
+  const canExportDisputes = hasPermission('canExportUsage');
+  const canFileDispute = hasPermission('canUpgradePlan');
   const [loading, setLoading] = useState(true);
   const [disputes, setDisputes] = useState<UnitDispute[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -396,14 +400,16 @@ export default function UnitDisputesPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleExportCSV}
-                disabled={loading || filteredDisputes.length === 0}
-                className="px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 text-sm sm:text-base"
-              >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Export CSV</span>
-              </button>
+              {canExportDisputes && (
+                <button
+                  onClick={handleExportCSV}
+                  disabled={loading || filteredDisputes.length === 0}
+                  className="px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 text-sm sm:text-base"
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">Export CSV</span>
+                </button>
+              )}
               <button
                 onClick={fetchDisputes}
                 disabled={loading}
@@ -412,13 +418,15 @@ export default function UnitDisputesPage() {
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">Refresh</span>
               </button>
-              <button
-                onClick={openFileModal}
-                className="px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center gap-2 text-sm sm:text-base"
-              >
-                <Plus className="w-4 h-4" />
-                File Dispute
-              </button>
+              {canFileDispute && (
+                <button
+                  onClick={openFileModal}
+                  className="px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center gap-2 text-sm sm:text-base"
+                >
+                  <Plus className="w-4 h-4" />
+                  File Dispute
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -527,7 +535,7 @@ export default function UnitDisputesPage() {
                 Clear all filters
               </button>
             )}
-            {!hasActiveFilters && (
+            {!hasActiveFilters && canFileDispute && (
               <button
                 onClick={openFileModal}
                 className="mt-6 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium inline-flex items-center gap-2"

@@ -28,6 +28,7 @@ interface ParsedInstructions {
   mth_clusters?: Cluster[];
   nth_clusters?: Cluster[];
   skill_weights?: Record<string, 'high' | 'medium' | 'low'>;
+  interview_mode?: 'fixed' | 'flexible';
   [key: string]: unknown;
 }
 
@@ -37,6 +38,68 @@ interface ParsedInstructions {
 
 const STEPS = ['Select JD', 'Configure', 'Clusters', 'Preview & Publish'];
 const CURRENT_STEP = 4;
+
+function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
+  if (!nthEnabled && !hrEnabled) {
+    return {
+      mthMinutes: 30,
+      nthMinutes: 0,
+      hrMinutes: 0,
+      mthQuestions: 15,
+      nthQuestions: 0,
+      hrQuestions: 0,
+    };
+  }
+
+  if (nthEnabled && !hrEnabled) {
+    return {
+      mthMinutes: 20,
+      nthMinutes: 10,
+      hrMinutes: 0,
+      mthQuestions: 10,
+      nthQuestions: 5,
+      hrQuestions: 0,
+    };
+  }
+
+  if (nthEnabled && hrEnabled) {
+    return {
+      mthMinutes: 16,
+      nthMinutes: 8,
+      hrMinutes: 6,
+      mthQuestions: 8,
+      nthQuestions: 4,
+      hrQuestions: 3,
+    };
+  }
+
+  return {
+    mthMinutes: 20,
+    nthMinutes: 0,
+    hrMinutes: 10,
+    mthQuestions: 10,
+    nthQuestions: 0,
+    hrQuestions: 5,
+  };
+}
+
+function getTimedModePercentages(nthEnabled: boolean, hrEnabled: boolean) {
+  const allocation = getTimedModeAllocation(nthEnabled, hrEnabled);
+  const scoringQuestionTotal = allocation.mthQuestions + allocation.nthQuestions;
+
+  if (scoringQuestionTotal <= 0) {
+    return { mth: 0, nth: 0, hr: 0 };
+  }
+
+  const mth = Math.round((allocation.mthQuestions / scoringQuestionTotal) * 100);
+  const nth = nthEnabled ? 100 - mth : 0;
+
+  return {
+    mth,
+    nth,
+    hr: 0,
+  };
+}
 
 const PRIORITY_LABELS: Record<number, { label: string; color: string; dot: string }> = {
   5: { label: 'P5 – Critical',   color: 'bg-red-100 text-red-700 border-red-200',       dot: 'bg-red-500' },
@@ -96,6 +159,7 @@ export default function AIInterviewPreview() {
   const [mthClusters, setMthClusters] = useState<Cluster[]>([]);
   const [nthClusters, setNthClusters] = useState<Cluster[]>([]);
   const [skillWeights, setSkillWeights] = useState<Record<string, 'high' | 'medium' | 'low'>>({});
+  const [interviewMode, setInterviewMode] = useState<'fixed' | 'flexible'>('fixed');
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -120,9 +184,12 @@ export default function AIInterviewPreview() {
           setMthClusters(parsed.mth_clusters ?? []);
           setNthClusters(parsed.nth_clusters ?? []);
           setSkillWeights(parsed.skill_weights ?? {});
+          setInterviewMode(parsed.interview_mode === 'flexible' ? 'flexible' : 'fixed');
         } catch {
-          // Not JSON — ignore
+          setInterviewMode(data.duration_minutes === 0 ? 'flexible' : 'fixed');
         }
+      } else {
+        setInterviewMode(data.duration_minutes === 0 ? 'flexible' : 'fixed');
       }
     } catch {
       toast.error('Failed to load interview configuration');
@@ -136,7 +203,7 @@ export default function AIInterviewPreview() {
   }, [loadInterview]);
 
   /* Derived values */
-  const mode: 'fixed' | 'flexible' = interview?.interview_type === 'flexible' ? 'flexible' : 'fixed';
+  const mode: 'fixed' | 'flexible' = interviewMode;
   const duration = interview?.duration_minutes ?? 30;
   const position = interview?.position ?? interview?.jd_title ?? 'Untitled Position';
   const experienceLevel = interview?.jd_experience_level ?? '—';
@@ -146,26 +213,32 @@ export default function AIInterviewPreview() {
   const hrRound = rounds.find(r => r.type === 'hr');
 
   const enabledRounds = rounds.filter(r => r.enabled);
-  const totalPercentage = enabledRounds.reduce((s, r) => s + r.percentage, 0);
-
-  /* Skill-weight-adjusted durations (mirrors backend logic) */
-  const adjustedDurations = React.useMemo<Record<string, number>>(() => {
-    if (mode !== 'fixed' || Object.keys(skillWeights).length === 0) return {};
-    const WVAL: Record<string, number> = { high: 3, medium: 2, low: 1 };
-    const mthSkills = new Set(mthClusters.flatMap(c => c.skills));
-    const nthSkills = new Set(nthClusters.flatMap(c => c.skills));
-    const mthScore = [...mthSkills].reduce((s, sk) => s + (WVAL[skillWeights[sk] ?? 'medium'] ?? 2), 0);
-    const nthScore = [...nthSkills].reduce((s, sk) => s + (WVAL[skillWeights[sk] ?? 'medium'] ?? 2), 0);
-    if (mthScore + nthScore === 0) return {};
-    const mthR = enabledRounds.find(r => r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical');
-    const nthR = enabledRounds.find(r => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have');
-    if (!mthR || !nthR) return {};
-    const avail = (mthR.duration_minutes ?? 0) + (nthR.duration_minutes ?? 0);
-    if (avail === 0) return {};
-    const newMth = Math.max(5, Math.round(avail * mthScore / (mthScore + nthScore)));
-    const newNth = avail - newMth;
-    return { [mthR.type]: newMth, [nthR.type]: newNth };
-  }, [mode, skillWeights, mthClusters, nthClusters, enabledRounds]);
+  const timedAllocation = getTimedModeAllocation(!!(nthRound && nthRound.enabled), !!(hrRound && hrRound.enabled));
+  const timedPercentages = getTimedModePercentages(!!(nthRound && nthRound.enabled), !!(hrRound && hrRound.enabled));
+  const timedPreviewDurations = React.useMemo<Record<string, number>>(() => {
+    if (mode !== 'fixed') return {};
+    const map: Record<string, number> = {};
+    if (mthRound?.enabled) map[mthRound.type] = timedAllocation.mthMinutes;
+    if (nthRound?.enabled) map[nthRound.type] = timedAllocation.nthMinutes;
+    if (hrRound?.enabled) map[hrRound.type] = timedAllocation.hrMinutes;
+    return map;
+  }, [mode, mthRound, nthRound, hrRound, timedAllocation]);
+  const timedPreviewQuestions = React.useMemo<Record<string, number>>(() => {
+    if (mode !== 'fixed') return {};
+    const map: Record<string, number> = {};
+    if (mthRound?.enabled) map[mthRound.type] = timedAllocation.mthQuestions;
+    if (nthRound?.enabled) map[nthRound.type] = timedAllocation.nthQuestions;
+    if (hrRound?.enabled) map[hrRound.type] = timedAllocation.hrQuestions;
+    return map;
+  }, [mode, mthRound, nthRound, hrRound, timedAllocation]);
+  const roundPercentage = React.useCallback((round: AIInterviewRoundConfig) => {
+    if (mode !== 'fixed') return round.percentage;
+    if (round.type === 'must_have_skills' || round.type === 'must_to_have' || round.type === 'technical') return timedPercentages.mth;
+    if (round.type === 'nice_to_have_skills' || round.type === 'nice_to_have') return timedPercentages.nth;
+    if (round.type === 'hr') return timedPercentages.hr;
+    return round.percentage;
+  }, [mode, timedPercentages]);
+  const totalPercentage = enabledRounds.reduce((sum, round) => sum + roundPercentage(round), 0);
 
   const languages = interview?.available_languages ?? (interview?.ai_voice_language ? [interview.ai_voice_language] : ['English']);
 
@@ -412,12 +485,12 @@ export default function AIInterviewPreview() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-sm text-gray-700 font-medium">Must-To-Have</span>
-                  <span className="text-sm font-semibold text-gray-900">{mthRound.percentage}%</span>
+                  <span className="text-sm font-semibold text-gray-900">{roundPercentage(mthRound)}%</span>
                 </div>
                 <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gray-700 rounded-full transition-all"
-                    style={{ width: `${totalPercentage > 0 ? (mthRound.percentage / totalPercentage) * 100 : 0}%` }}
+                    style={{ width: `${totalPercentage > 0 ? (roundPercentage(mthRound) / totalPercentage) * 100 : 0}%` }}
                   />
                 </div>
               </div>
@@ -427,12 +500,12 @@ export default function AIInterviewPreview() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-sm text-gray-700 font-medium">Nice-To-Have</span>
-                  <span className="text-sm font-semibold text-gray-900">{nthRound.percentage}%</span>
+                  <span className="text-sm font-semibold text-gray-900">{roundPercentage(nthRound)}%</span>
                 </div>
                 <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-indigo-500 rounded-full transition-all"
-                    style={{ width: `${totalPercentage > 0 ? (nthRound.percentage / totalPercentage) * 100 : 0}%` }}
+                    style={{ width: `${totalPercentage > 0 ? (roundPercentage(nthRound) / totalPercentage) * 100 : 0}%` }}
                   />
                 </div>
               </div>
@@ -442,12 +515,12 @@ export default function AIInterviewPreview() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-sm text-gray-700 font-medium">HR Round</span>
-                  <span className="text-sm font-semibold text-gray-900">{hrRound.percentage}%</span>
+                  <span className="text-sm font-semibold text-gray-900">{roundPercentage(hrRound)}%</span>
                 </div>
                 <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-blue-500 rounded-full transition-all"
-                    style={{ width: `${totalPercentage > 0 ? (hrRound.percentage / totalPercentage) * 100 : 0}%` }}
+                    style={{ width: `${totalPercentage > 0 ? (roundPercentage(hrRound) / totalPercentage) * 100 : 0}%` }}
                   />
                 </div>
               </div>
@@ -468,6 +541,7 @@ export default function AIInterviewPreview() {
                   <tr className="bg-gray-50 text-left">
                     <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
                     <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Weight</th>
+                    <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
                     <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
                   </tr>
                 </thead>
@@ -477,22 +551,14 @@ export default function AIInterviewPreview() {
                       r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical' ? 'Must-To-Have' :
                       r.type === 'nice_to_have_skills' || r.type === 'nice_to_have' ? 'Nice-To-Have' :
                       r.type === 'hr' ? 'HR Round' : r.type;
-                    const adjMin = adjustedDurations[r.type];
-                    const isAdjusted = adjMin !== undefined && adjMin !== r.duration_minutes;
+                    const previewMin = timedPreviewDurations[r.type] ?? r.duration_minutes;
+                    const previewQuestions = timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0;
                     return (
                       <tr key={r.type}>
                         <td className="px-4 py-2.5 text-gray-900">{roundLabel}</td>
-                        <td className="px-4 py-2.5 text-gray-700 text-right">{r.percentage}%</td>
-                        <td className="px-4 py-2.5 text-gray-700 text-right">
-                          {isAdjusted ? (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="line-through text-gray-400 text-xs">{r.duration_minutes}</span>
-                              <span className="font-semibold text-gray-900">{adjMin} min</span>
-                            </span>
-                          ) : (
-                            <>{adjMin ?? r.duration_minutes} min</>
-                          )}
-                        </td>
+                        <td className="px-4 py-2.5 text-gray-700 text-right">{roundPercentage(r)}%</td>
+                        <td className="px-4 py-2.5 text-gray-700 text-right">{previewQuestions}</td>
+                        <td className="px-4 py-2.5 text-gray-700 text-right">{previewMin} min</td>
                       </tr>
                     );
                   })}
@@ -502,7 +568,10 @@ export default function AIInterviewPreview() {
                     <td className="px-4 py-2.5 text-gray-900">Total</td>
                     <td className="px-4 py-2.5 text-gray-900 text-right">{totalPercentage}%</td>
                     <td className="px-4 py-2.5 text-gray-900 text-right">
-                      {enabledRounds.reduce((s, r) => s + (adjustedDurations[r.type] ?? r.duration_minutes), 0)} min
+                      {enabledRounds.reduce((s, r) => s + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0)}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-900 text-right">
+                      {enabledRounds.reduce((s, r) => s + (timedPreviewDurations[r.type] ?? r.duration_minutes), 0)} min
                     </td>
                   </tr>
                 </tfoot>
@@ -593,6 +662,12 @@ export default function AIInterviewPreview() {
               </span>
             )}
           </div>
+          {mode === 'fixed' && hrRound?.enabled && (
+            <div className="mt-4 space-y-0 divide-y divide-gray-100">
+              <InfoRow label="Questions" value={`${timedAllocation.hrQuestions}`} />
+              <InfoRow label="Time" value={`${timedAllocation.hrMinutes} min`} />
+            </div>
+          )}
         </SectionCard>
 
         {/* ── Settings Card ── */}

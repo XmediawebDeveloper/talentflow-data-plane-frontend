@@ -54,9 +54,10 @@ interface AssessmentResultsTableProps {
   jobId?: string;
   onViewResultDetail?: (result: AssessmentResult, jobTitle?: string) => void;
   canDownloadPDF?: boolean;
+  canBatchDownload?: boolean;
 }
 
-export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail, canDownloadPDF = false }: AssessmentResultsTableProps) {
+export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail, canDownloadPDF = false, canBatchDownload = false }: AssessmentResultsTableProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const [searchTerm, setSearchTerm] = useState('');
@@ -386,13 +387,13 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const safeName = result?.candidateName?.replace(/[^a-zA-Z0-9]/g, '_') || resultId;
-      link.download = `Assessment_Report_${safeName}.pdf`;
+      const safeIdentifier = result?.candidateDisplayId?.replace(/[^a-zA-Z0-9]/g, '_') || `CID_${resultId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      link.download = `Assessment_Report_${safeIdentifier}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      console.log('[PDF] Download complete:', safeName);
+      console.log('[PDF] Download complete:', safeIdentifier);
       toast.success('PDF downloaded successfully!');
     } catch (error: any) {
       console.error('[PDF] Failed to download:', error);
@@ -503,7 +504,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             {/* Bulk Actions - When items are selected */}
             {selectedResults.length > 0 && (
               <>
-                {canDownloadPDF && (
+                {canBatchDownload && (
                   <button
                     onClick={handleDownloadBulkPDFs}
                     disabled={downloadingBulkPDF}

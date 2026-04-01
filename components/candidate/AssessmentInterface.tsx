@@ -104,6 +104,7 @@ export function AssessmentInterface({
     video_response_url?: string;
     selected_options?: string[];
     code_submission?: string;
+    code_input?: string;
     language?: string;
   };
 
@@ -113,6 +114,8 @@ export function AssessmentInterface({
         text_response: q.previous_answer.text_response || undefined,
         selected_options: q.previous_answer.selected_options || undefined,
         code_submission: q.previous_answer.code_submission || undefined,
+        code_input: q.previous_answer.code_input || undefined,
+        language: q.previous_answer.language || undefined,
       };
     }
     return {};
@@ -829,7 +832,9 @@ export function AssessmentInterface({
       setAnswer({
         text_response: currentQuestion.previous_answer.text_response || undefined,
         selected_options: currentQuestion.previous_answer.selected_options || undefined,
-        code_submission: currentQuestion.previous_answer.code_submission || undefined
+        code_submission: currentQuestion.previous_answer.code_submission || undefined,
+        code_input: currentQuestion.previous_answer.code_input || undefined,
+        language: currentQuestion.previous_answer.language || undefined,
       });
     } else {
       setAnswer({});

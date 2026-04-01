@@ -154,6 +154,21 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_interview:create', label: 'Create' },
       { code: 'ai_interview:update', label: 'Edit' },
       { code: 'ai_interview:share', label: 'Share' },
+      { code: 'ai_interview:invite', label: 'Invite' },
+      { code: 'ai_interview:publish', label: 'Publish' },
+      { code: 'ai_interview:archive', label: 'Archive' },
+      { code: 'ai_interview:delete', label: 'Delete' },
+    ],
+  },
+  {
+    id: 'hr_question_bank',
+    name: 'HR Question Bank',
+    description: 'Reusable HR question bank permissions',
+    viewCode: 'hr_question_bank:read',
+    actions: [
+      { code: 'hr_question_bank:create', label: 'Create' },
+      { code: 'hr_question_bank:update', label: 'Edit' },
+      { code: 'hr_question_bank:delete', label: 'Delete' },
     ],
   },
   {

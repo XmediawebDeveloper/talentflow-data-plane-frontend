@@ -128,49 +128,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
    * This ensures users ONLY see menus for permissions explicitly granted to them.
    */
 
-  // ✅ Permission dependencies (must match backend)
-  // If a permission has dependencies, ALL dependencies must be present for the feature to work
-  const PERMISSION_DEPENDENCIES: Record<string, string[]> = {
-    // VIEW permissions don't need dependencies (just need to see the page)
-    // RUN permissions need dependencies (need access to required data)
-
-    // AI Talent Match RUN requires both Internal DB and JD access
-    'canRunAiMatch': ['canViewAiMatch', 'canViewInternalDB', 'canReadJD'],
-
-    // Resume Scoring RUN requires JD and Resume access
-    'canRunScoring': ['canViewScoring', 'canReadJD', 'canViewResumes'],
-
-    // Assessments require JD access
-    'canCreateAssessments': ['canReadJD'],
-    'canUpdateAssessments': ['canViewAssessments', 'canReadJD'],
-    'canDeleteAssessments': ['canViewAssessments'],
-
-    // AI Interviews require Resume access
-    'canRunAiInterviews': ['canViewResumes'],
-
-    // Delete permissions require read permission (CRUD hierarchy)
-    'canDeleteJD': ['canReadJD'],
-    'canDeleteResumes': ['canViewResumes'],
-    'canDeleteInternalDB': ['canViewInternalDB'],
-    'canDeleteAssessments': ['canViewAssessments'],
-    'canDeleteUsers': ['canViewUsers'],
-    'canDeleteRoles': ['canViewRoles'],
-
-    // Update permissions require read permission (CRUD hierarchy)
-    'canUpdateJD': ['canReadJD'],
-    'canUpdateResumes': ['canViewResumes'],
-    'canUpdateInternalDB': ['canViewInternalDB'],
-    'canUpdateUsers': ['canViewUsers'],
-    'canUpdateRoles': ['canViewRoles'],
-
-    // Create permissions might require read permission (depends on feature)
-    'canCreateJD': [], // No dependency
-    'canCreateResumes': ['canViewResumes'], // Need to see resumes to create
-    'canCreateInternalDB': ['canViewInternalDB'], // Need to see DB to create
-    'canCreateUsers': ['canViewUsers'], // Need to see users to create
-    'canCreateRoles': ['canViewRoles'], // Need to see roles to create
-  };
-
   // Check if user has a specific permission
   const hasPermission = (permission?: string): boolean => {
     if (!permission) return true;
@@ -187,41 +144,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
     const hasAccess = user.permissions[permission as keyof typeof user.permissions] === true;
     console.log(`[SIDEBAR] Permission check: ${permission} = ${hasAccess}`);
     return hasAccess;
-  };
-
-  // NEW: Check permission AND all its dependencies
-  const hasAllRequiredPermissions = (permissions: string[]): boolean => {
-    if (isTenantAdmin) return true;
-
-    console.log(`[SIDEBAR] Checking all required permissions:`, permissions);
-
-    for (const perm of permissions) {
-      console.log(`[SIDEBAR] Checking permission: ${perm} = ${user?.permissions?.[perm as keyof typeof user.permissions]}`);
-
-      if (!user?.permissions || !user.permissions[perm as keyof typeof user.permissions]) {
-        console.log(`[SIDEBAR] Missing permission: ${perm}`);
-        return false;
-      }
-
-      // Check dependencies
-      const deps = PERMISSION_DEPENDENCIES[perm] || [];
-      if (deps.length > 0) {
-        console.log(`[SIDEBAR] Checking dependencies for ${perm}:`, deps);
-      }
-
-      for (const dep of deps) {
-        const hasDepValue = user?.permissions?.[dep as keyof typeof user.permissions];
-        console.log(`[SIDEBAR]   Dependency ${dep} = ${hasDepValue}`);
-
-        if (!user?.permissions || !user.permissions[dep as keyof typeof user.permissions]) {
-          console.log(`[SIDEBAR] Missing dependency: ${perm} requires ${dep}`);
-          return false;
-        }
-      }
-    }
-
-    console.log(`[SIDEBAR] All required permissions passed!`);
-    return true;
   };
 
   // Check if user has ANY of the specified permissions (for grouped checks)
@@ -277,7 +199,8 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       label: 'EVALUATION',
       items: [
         { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permissions: ['canViewAssessments', 'canCreateAssessments', 'canUpdateAssessments', 'canDeleteAssessments'], planFeature: 'assessment' },
-        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canRunAiInterviews'], planFeature: 'ai_interview' },
+        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canViewAIInterviews', 'canRunAiInterviews'], planFeature: 'ai_interview' },
+        { id: 'hr-question-bank', label: 'HR Question Bank', icon: ClipboardList, href: '/recruitment/hr-question-bank', permissions: ['canViewHRQuestionBank', 'canCreateHRQuestionBank', 'canUpdateHRQuestionBank', 'canDeleteHRQuestionBank'], planFeature: 'assessment' },
       ]
     },
 
@@ -335,7 +258,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       label: 'SETTINGS',
       items: [
         { id: 'general-settings', label: 'Profile Settings', icon: Settings, href: '/settings/general-settings' },
-        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canViewPermissionsRoles' },
+        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canViewRoles' },
         { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canViewApiManagement', planFeature: 'api_access' },
         { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canViewBranding' },
         // { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' }, // Hidden for demo
@@ -379,11 +302,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
 
         // Check permissions array (granular - show if ANY match)
         if (item.permissions && item.permissions.length > 0) {
-          // ✅ NEW: For specific features with dependencies, check ALL required permissions
-          if (item.id === 'ai-talent-match' || item.id === 'resume-scoring') {
-            return hasAllRequiredPermissions(item.permissions);
-          }
-          // For other items, use the existing ANY logic
           return hasAnyPermission(item.permissions);
         }
 

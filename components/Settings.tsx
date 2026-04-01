@@ -8,12 +8,13 @@ import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserPro
 import { toast } from 'sonner';
 
 export default function Settings() {
-  const { user, logout } = useAuth();
+  const { user, logout, hasPermission, isTenantAdmin } = useAuth();
   const { setTheme, theme: currentTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('profile');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const canEditSettings = isTenantAdmin || hasPermission('canManageSettings');
 
   // Change Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -138,6 +139,11 @@ export default function Settings() {
   }, []);
 
   const handleSave = async () => {
+    if (!canEditSettings) {
+      toast.error('You have view-only access to these settings');
+      return;
+    }
+
     setIsSaving(true);
     try {
       // Save profile if on profile tab
@@ -189,15 +195,31 @@ export default function Settings() {
     }
   };
 
+  const canAccessJobPreferences = isTenantAdmin || hasPermission('canCreateJD') || hasPermission('canUpdateJD') || hasPermission('canReadJD');
+  const canAccessWorkflow = isTenantAdmin ||
+    hasPermission('canCreateJD') ||
+    hasPermission('canUpdateJD') ||
+    hasPermission('canViewResumes') ||
+    hasPermission('canViewInternalDB') ||
+    hasPermission('canViewScoring') ||
+    hasPermission('canViewAiMatch');
+
   const tabs = [
-    { id: 'profile', label: 'My Profile', icon: User },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'job-preferences', label: 'Job Preferences', icon: Briefcase },
-    { id: 'workflow', label: 'Workflow', icon: Filter },
-    { id: 'privacy', label: 'Privacy & Security', icon: Shield },
-    { id: 'appearance', label: 'Appearance', icon: Palette },
-    { id: 'change-password', label: 'Change Password', icon: KeyRound },
+    { id: 'profile', label: 'My Profile', icon: User, visible: true },
+    { id: 'notifications', label: 'Notifications', icon: Bell, visible: true },
+    { id: 'job-preferences', label: 'Job Preferences', icon: Briefcase, visible: canAccessJobPreferences },
+    { id: 'workflow', label: 'Workflow', icon: Filter, visible: canAccessWorkflow },
+    { id: 'privacy', label: 'Privacy & Security', icon: Shield, visible: true },
+    { id: 'appearance', label: 'Appearance', icon: Palette, visible: true },
+    { id: 'change-password', label: 'Change Password', icon: KeyRound, visible: true },
   ];
+  const visibleTabs = tabs.filter(tab => tab.visible);
+
+  useEffect(() => {
+    if (!visibleTabs.some(tab => tab.id === activeTab)) {
+      setActiveTab(visibleTabs[0]?.id || 'profile');
+    }
+  }, [activeTab, visibleTabs]);
 
   if (isLoading) {
     return (
@@ -214,7 +236,7 @@ export default function Settings() {
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* Header */}
       <div className="mb-6 sm:mb-8">
-        <div className="block sm:flex sm:items-center sm:gap-3 mb-3">dashboard
+        <div className="block sm:flex sm:items-center sm:gap-3 mb-3">
           <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center shadow-lg">
             <User className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
           </div>
@@ -231,7 +253,7 @@ export default function Settings() {
         <div className="w-full lg:w-64 flex-shrink-0">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2 lg:sticky lg:top-8">
             <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">
-              {tabs.map((tab) => {
+              {visibleTabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
                   <button
@@ -262,6 +284,12 @@ export default function Settings() {
         {/* Right Content Area */}
         <div className="flex-1">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 lg:p-8">
+            {!canEditSettings && activeTab !== 'change-password' && (
+              <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                View-only access. You can review these settings, but you do not have permission to edit them.
+              </div>
+            )}
+
             {/* Profile Settings */}
             {activeTab === 'profile' && (
               <div>
@@ -272,88 +300,98 @@ export default function Settings() {
                   </div>
                 </div>
 
-                {/* Profile Picture */}
-                <div className="mb-8 pb-8 border-b border-gray-200">
-                  <label className="block text-sm font-medium text-gray-900 mb-3">Profile Picture</label>
-                  <div className="flex flex-col sm:flex-row items-center gap-4">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center shadow-lg text-2xl flex-shrink-0">
-                      {profileData.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
-                    </div>
-                    <div className="text-center sm:text-left">
-                      <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
-                        <button className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm">
-                          Upload New
-                        </button>
-                        <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm">
-                          Remove
-                        </button>
+                <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
+                  {/* Profile Picture */}
+                  <div className="mb-8 pb-8 border-b border-gray-200">
+                    <label className="block text-sm font-medium text-gray-900 mb-3">Profile Picture</label>
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 text-white flex items-center justify-center shadow-lg text-2xl flex-shrink-0">
+                        {profileData.full_name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U'}
                       </div>
-                      <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF. Max size 5MB.</p>
+                      <div className="text-center sm:text-left">
+                        <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
+                          <button
+                            type="button"
+                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Upload New
+                          </button>
+                          <button
+                            type="button"
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">JPG, PNG or GIF. Max size 5MB.</p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Form Fields */}
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                  {/* Form Fields */}
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">Full Name</label>
+                        <input
+                          type="text"
+                          value={profileData.full_name || ''}
+                          onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">Email Address</label>
+                        <input
+                          type="email"
+                          value={profileData.email || ''}
+                          disabled
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+                      </div>
+                    </div>
+
                     <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Full Name</label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-900 mb-2">Phone Number</label>
+                          <div className="relative">
+                            <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <input
+                              type="tel"
+                              value={profileData.phone || ''}
+                              onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-900 mb-2">Job Title</label>
+                          <div className="relative">
+                            <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <input
+                              type="text"
+                              value={profileData.job_title || ''}
+                              onChange={(e) => setProfileData({ ...profileData, job_title: e.target.value })}
+                              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">Department</label>
                       <input
                         type="text"
-                        value={profileData.full_name || ''}
-                        onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
+                        value={profileData.department || ''}
+                        onChange={(e) => setProfileData({ ...profileData, department: e.target.value })}
                         className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Email Address</label>
-                      <input
-                        type="email"
-                        value={profileData.email || ''}
-                        disabled
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
-                    </div>
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Phone Number</label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="tel"
-                          value={profileData.phone || ''}
-                          onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-900 mb-2">Job Title</label>
-                      <div className="relative">
-                        <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                        <input
-                          type="text"
-                          value={profileData.job_title || ''}
-                          onChange={(e) => setProfileData({ ...profileData, job_title: e.target.value })}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Department</label>
-                    <input
-                      type="text"
-                      value={profileData.department || ''}
-                      onChange={(e) => setProfileData({ ...profileData, department: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
-                    />
-                  </div>
-                </div>
+                </fieldset>
               </div>
             )}
 
@@ -367,102 +405,104 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  {/* Email Notifications */}
-                  <div>
-                    <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
-                      <Mail className="w-5 h-5 text-gray-800" />
-                      Email Notifications
-                    </h3>
-                    <div className="space-y-3">
-                      {[
-                        { key: 'email_new_applicant', label: 'New applicant submitted', desc: 'Get notified when a candidate applies to your job' },
-                        { key: 'email_assessment_complete', label: 'Assessment completed', desc: 'Receive alerts when candidates complete assessments' },
-                        { key: 'email_interview_scheduled', label: 'Interview scheduled', desc: 'Notifications for upcoming interviews' },
-                        { key: 'email_candidate_message', label: 'Candidate messages', desc: 'Get emails when candidates send you messages' },
-                        { key: 'email_job_expiring', label: 'Job expiring soon', desc: 'Reminders when your job postings are about to expire' },
-                      ].map((item) => (
-                        <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <div className="flex-1">
-                            <div className="text-sm text-gray-900 mb-1">{item.label}</div>
-                            <div className="text-xs text-gray-600">{item.desc}</div>
+                <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
+                  <div className="space-y-6">
+                    {/* Email Notifications */}
+                    <div>
+                      <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
+                        <Mail className="w-5 h-5 text-gray-800" />
+                        Email Notifications
+                      </h3>
+                      <div className="space-y-3">
+                        {[
+                          { key: 'email_new_applicant', label: 'New applicant submitted', desc: 'Get notified when a candidate applies to your job' },
+                          { key: 'email_assessment_complete', label: 'Assessment completed', desc: 'Receive alerts when candidates complete assessments' },
+                          { key: 'email_interview_scheduled', label: 'Interview scheduled', desc: 'Notifications for upcoming interviews' },
+                          { key: 'email_candidate_message', label: 'Candidate messages', desc: 'Get emails when candidates send you messages' },
+                          { key: 'email_job_expiring', label: 'Job expiring soon', desc: 'Reminders when your job postings are about to expire' },
+                        ].map((item) => (
+                          <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex-1">
+                              <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                              <div className="text-xs text-gray-600">{item.desc}</div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer ml-4">
+                              <input
+                                type="checkbox"
+                                checked={settings[item.key as keyof typeof settings] as boolean}
+                                onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
+                                className="sr-only peer"
+                              />
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                            </label>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer ml-4">
-                            <input
-                              type="checkbox"
-                              checked={settings[item.key as keyof typeof settings] as boolean}
-                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
-                              className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                          </label>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Push Notifications */}
-                  <div>
-                    <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
-                      <Bell className="w-5 h-5 text-gray-800" />
-                      Push Notifications
-                    </h3>
-                    <div className="space-y-3">
-                      {[
-                        { key: 'push_new_applicant', label: 'New applicant alerts', desc: 'Browser notifications for new applications' },
-                        { key: 'push_assessment_complete', label: 'Assessment completion', desc: 'Instant alerts for completed assessments' },
-                        { key: 'push_interview_reminder', label: 'Interview reminders', desc: 'Get reminded 15 minutes before interviews' },
-                        { key: 'push_candidate_viewed', label: 'Candidate profile views', desc: 'When candidates view your job postings' },
-                      ].map((item) => (
-                        <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <div className="flex-1">
-                            <div className="text-sm text-gray-900 mb-1">{item.label}</div>
-                            <div className="text-xs text-gray-600">{item.desc}</div>
+                    {/* Push Notifications */}
+                    <div>
+                      <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
+                        <Bell className="w-5 h-5 text-gray-800" />
+                        Push Notifications
+                      </h3>
+                      <div className="space-y-3">
+                        {[
+                          { key: 'push_new_applicant', label: 'New applicant alerts', desc: 'Browser notifications for new applications' },
+                          { key: 'push_assessment_complete', label: 'Assessment completion', desc: 'Instant alerts for completed assessments' },
+                          { key: 'push_interview_reminder', label: 'Interview reminders', desc: 'Get reminded 15 minutes before interviews' },
+                          { key: 'push_candidate_viewed', label: 'Candidate profile views', desc: 'When candidates view your job postings' },
+                        ].map((item) => (
+                          <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex-1">
+                              <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                              <div className="text-xs text-gray-600">{item.desc}</div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer ml-4">
+                              <input
+                                type="checkbox"
+                                checked={settings[item.key as keyof typeof settings] as boolean}
+                                onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
+                                className="sr-only peer"
+                              />
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                            </label>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer ml-4">
-                            <input
-                              type="checkbox"
-                              checked={settings[item.key as keyof typeof settings] as boolean}
-                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
-                              className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                          </label>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Digest Notifications */}
-                  <div>
-                    <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
-                      <Calendar className="w-5 h-5 text-green-600" />
-                      Digest & Reports
-                    </h3>
-                    <div className="space-y-3">
-                      {[
-                        { key: 'weekly_digest', label: 'Weekly activity digest', desc: 'Summary of weekly recruitment activity' },
-                        { key: 'monthly_report', label: 'Monthly performance report', desc: 'Detailed monthly analytics and insights' },
-                      ].map((item) => (
-                        <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <div className="flex-1">
-                            <div className="text-sm text-gray-900 mb-1">{item.label}</div>
-                            <div className="text-xs text-gray-600">{item.desc}</div>
+                    {/* Digest Notifications */}
+                    <div>
+                      <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-green-600" />
+                        Digest & Reports
+                      </h3>
+                      <div className="space-y-3">
+                        {[
+                          { key: 'weekly_digest', label: 'Weekly activity digest', desc: 'Summary of weekly recruitment activity' },
+                          { key: 'monthly_report', label: 'Monthly performance report', desc: 'Detailed monthly analytics and insights' },
+                        ].map((item) => (
+                          <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex-1">
+                              <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                              <div className="text-xs text-gray-600">{item.desc}</div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer ml-4">
+                              <input
+                                type="checkbox"
+                                checked={settings[item.key as keyof typeof settings] as boolean}
+                                onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
+                                className="sr-only peer"
+                              />
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                            </label>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer ml-4">
-                            <input
-                              type="checkbox"
-                              checked={settings[item.key as keyof typeof settings] as boolean}
-                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
-                              className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                          </label>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </fieldset>
               </div>
             )}
 
@@ -476,82 +516,84 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                    <div className="flex items-start gap-3">
-                      <Target className="w-5 h-5 text-gray-800 mt-0.5" />
-                      <div>
-                        <div className="text-sm font-medium text-gray-800 mb-1">Quick Tip</div>
-                        <div className="text-sm text-gray-900">These settings will be pre-filled when you create a new job posting, saving you time.</div>
+                <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
+                  <div className="space-y-6">
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <Target className="w-5 h-5 text-gray-800 mt-0.5" />
+                        <div>
+                          <div className="text-sm font-medium text-gray-800 mb-1">Quick Tip</div>
+                          <div className="text-sm text-gray-900">These settings will be pre-filled when you create a new job posting, saving you time.</div>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Default Job Type</label>
-                    <select
-                      value={settings.default_job_type || 'Full-time'}
-                      onChange={(e) => setSettings({ ...settings, default_job_type: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                    >
-                      <option>Full-time</option>
-                      <option>Part-time</option>
-                      <option>Contract</option>
-                      <option>Internship</option>
-                      <option>Temporary</option>
-                    </select>
-                  </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">Default Job Type</label>
+                      <select
+                        value={settings.default_job_type || 'Full-time'}
+                        onChange={(e) => setSettings({ ...settings, default_job_type: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                      >
+                        <option>Full-time</option>
+                        <option>Part-time</option>
+                        <option>Contract</option>
+                        <option>Internship</option>
+                        <option>Temporary</option>
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Default Location</label>
-                    <select
-                      value={settings.default_location || 'Remote'}
-                      onChange={(e) => setSettings({ ...settings, default_location: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                    >
-                      <option>Remote</option>
-                      <option>Hybrid</option>
-                      <option>On-site</option>
-                    </select>
-                  </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">Default Location</label>
+                      <select
+                        value={settings.default_location || 'Remote'}
+                        onChange={(e) => setSettings({ ...settings, default_location: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                      >
+                        <option>Remote</option>
+                        <option>Hybrid</option>
+                        <option>On-site</option>
+                      </select>
+                    </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Default Job Expiry (Days)</label>
-                    <input
-                      type="number"
-                      value={settings.default_expiry_days || 30}
-                      onChange={(e) => setSettings({ ...settings, default_expiry_days: parseInt(e.target.value) || 30 })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
-                      min="1"
-                      max="90"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Job postings will automatically expire after this many days</p>
-                  </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-900 mb-2">Default Job Expiry (Days)</label>
+                      <input
+                        type="number"
+                        value={settings.default_expiry_days || 30}
+                        onChange={(e) => setSettings({ ...settings, default_expiry_days: parseInt(e.target.value) || 30 })}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                        min="1"
+                        max="90"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Job postings will automatically expire after this many days</p>
+                    </div>
 
-                  <div className="space-y-3">
-                    {[
-                      { key: 'auto_save_jd', label: 'Auto-save job drafts', desc: 'Automatically save your progress when creating jobs' },
-                      { key: 'require_assessment', label: 'Require assessment by default', desc: 'Automatically require candidates to complete an assessment' },
-                      { key: 'auto_publish', label: 'Auto-publish jobs', desc: 'Automatically publish jobs after creation (skip draft)' },
-                    ].map((item) => (
-                      <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex-1">
-                          <div className="text-sm text-gray-900 mb-1">{item.label}</div>
-                          <div className="text-xs text-gray-600">{item.desc}</div>
+                    <div className="space-y-3">
+                      {[
+                        { key: 'auto_save_jd', label: 'Auto-save job drafts', desc: 'Automatically save your progress when creating jobs' },
+                        { key: 'require_assessment', label: 'Require assessment by default', desc: 'Automatically require candidates to complete an assessment' },
+                        { key: 'auto_publish', label: 'Auto-publish jobs', desc: 'Automatically publish jobs after creation (skip draft)' },
+                      ].map((item) => (
+                        <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <div className="flex-1">
+                            <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                            <div className="text-xs text-gray-600">{item.desc}</div>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer ml-4">
+                            <input
+                              type="checkbox"
+                              checked={settings[item.key as keyof typeof settings] as boolean}
+                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                          </label>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer ml-4">
-                          <input
-                            type="checkbox"
-                            checked={settings[item.key as keyof typeof settings] as boolean}
-                            onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                        </label>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                </fieldset>
               </div>
             )}
 
@@ -565,51 +607,53 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="text-base font-medium text-gray-900 mb-4">Resume Management</h3>
-                    <div className="space-y-3">
-                      {[
-                        { key: 'auto_screen_resumes', label: 'AI-powered auto-screening', desc: 'Automatically screen and rank resumes using AI' },
-                        { key: 'ai_assistance', label: 'AI assistance suggestions', desc: 'Get AI-powered suggestions while reviewing candidates' },
-                        { key: 'bulk_action_confirmation', label: 'Confirm bulk actions', desc: 'Show confirmation dialog for bulk operations' },
-                        { key: 'show_advanced_filters', label: 'Show advanced filters by default', desc: 'Display advanced filter options when searching resumes' },
-                      ].map((item) => (
-                        <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <div className="flex-1">
-                            <div className="text-sm text-gray-900 mb-1">{item.label}</div>
-                            <div className="text-xs text-gray-600">{item.desc}</div>
+                <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="text-base font-medium text-gray-900 mb-4">Resume Management</h3>
+                      <div className="space-y-3">
+                        {[
+                          { key: 'auto_screen_resumes', label: 'AI-powered auto-screening', desc: 'Automatically screen and rank resumes using AI' },
+                          { key: 'ai_assistance', label: 'AI assistance suggestions', desc: 'Get AI-powered suggestions while reviewing candidates' },
+                          { key: 'bulk_action_confirmation', label: 'Confirm bulk actions', desc: 'Show confirmation dialog for bulk operations' },
+                          { key: 'show_advanced_filters', label: 'Show advanced filters by default', desc: 'Display advanced filter options when searching resumes' },
+                        ].map((item) => (
+                          <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex-1">
+                              <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                              <div className="text-xs text-gray-600">{item.desc}</div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer ml-4">
+                              <input
+                                type="checkbox"
+                                checked={settings[item.key as keyof typeof settings] as boolean}
+                                onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
+                                className="sr-only peer"
+                              />
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                            </label>
                           </div>
-                          <label className="relative inline-flex items-center cursor-pointer ml-4">
-                            <input
-                              type="checkbox"
-                              checked={settings[item.key as keyof typeof settings] as boolean}
-                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
-                              className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                          </label>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-medium text-gray-900 mb-4">Default Sort Order</h3>
+                      <select
+                        value={settings.default_sort_order || 'latest'}
+                        onChange={(e) => setSettings({ ...settings, default_sort_order: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                      >
+                        <option value="latest">Latest First</option>
+                        <option value="name-asc">Name (A-Z)</option>
+                        <option value="name-desc">Name (Z-A)</option>
+                        <option value="experience-high">Experience (High to Low)</option>
+                        <option value="experience-low">Experience (Low to High)</option>
+                        <option value="lastUpdated">Last Updated</option>
+                      </select>
                     </div>
                   </div>
-
-                  <div>
-                    <h3 className="text-base font-medium text-gray-900 mb-4">Default Sort Order</h3>
-                    <select
-                      value={settings.default_sort_order || 'latest'}
-                      onChange={(e) => setSettings({ ...settings, default_sort_order: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                    >
-                      <option value="latest">Latest First</option>
-                      <option value="name-asc">Name (A-Z)</option>
-                      <option value="name-desc">Name (Z-A)</option>
-                      <option value="experience-high">Experience (High to Low)</option>
-                      <option value="experience-low">Experience (Low to High)</option>
-                      <option value="lastUpdated">Last Updated</option>
-                    </select>
-                  </div>
-                </div>
+                </fieldset>
               </div>
             )}
 
@@ -623,50 +667,51 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  {/* Privacy Settings */}
-                  <div>
-                    <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
-                      <Shield className="w-5 h-5 text-gray-800" />
-                      Privacy Settings
-                    </h3>
-                    <div className="space-y-4">
-                      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <label className="block text-sm text-gray-900 mb-2">Profile Visibility</label>
-                        <select
-                          value={settings.profile_visibility || 'team'}
-                          onChange={(e) => setSettings({ ...settings, profile_visibility: e.target.value })}
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
-                        >
-                          <option value="team">Team Only - Visible to team members</option>
-                          <option value="private">Private - Only visible to me</option>
-                        </select>
-                        <p className="text-xs text-gray-500 mt-2">Controls who can see your recruiter profile</p>
-                      </div>
-
-                      {[
-                        { key: 'show_email', label: 'Show email in profile', desc: 'Display your email address on your profile' },
-                        { key: 'show_phone', label: 'Show phone number', desc: 'Display your phone number on your profile' },
-                        { key: 'show_activity_status', label: 'Show activity status', desc: "Let team members see when you're online" },
-                      ].map((item) => (
-                        <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                          <div className="flex-1">
-                            <div className="text-sm text-gray-900 mb-1">{item.label}</div>
-                            <div className="text-xs text-gray-600">{item.desc}</div>
-                          </div>
-                          <label className="relative inline-flex items-center cursor-pointer ml-4">
-                            <input
-                              type="checkbox"
-                              checked={settings[item.key as keyof typeof settings] as boolean}
-                              onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
-                              className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                          </label>
+                <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
+                  <div className="space-y-6">
+                    {/* Privacy Settings */}
+                    <div>
+                      <h3 className="text-base font-medium text-gray-900 mb-4 flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-gray-800" />
+                        Privacy Settings
+                      </h3>
+                      <div className="space-y-4">
+                        <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                          <label className="block text-sm text-gray-900 mb-2">Profile Visibility</label>
+                          <select
+                            value={settings.profile_visibility || 'team'}
+                            onChange={(e) => setSettings({ ...settings, profile_visibility: e.target.value })}
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 bg-white"
+                          >
+                            <option value="team">Team Only - Visible to team members</option>
+                            <option value="private">Private - Only visible to me</option>
+                          </select>
+                          <p className="text-xs text-gray-500 mt-2">Controls who can see your recruiter profile</p>
                         </div>
-                      ))}
+
+                        {[
+                          { key: 'show_email', label: 'Show email in profile', desc: 'Display your email address on your profile' },
+                          { key: 'show_phone', label: 'Show phone number', desc: 'Display your phone number on your profile' },
+                          { key: 'show_activity_status', label: 'Show activity status', desc: "Let team members see when you're online" },
+                        ].map((item) => (
+                          <div key={item.key} className="flex items-start justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex-1">
+                              <div className="text-sm text-gray-900 mb-1">{item.label}</div>
+                              <div className="text-xs text-gray-600">{item.desc}</div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer ml-4">
+                              <input
+                                type="checkbox"
+                                checked={settings[item.key as keyof typeof settings] as boolean}
+                                onChange={(e) => setSettings({ ...settings, [item.key]: e.target.checked })}
+                                className="sr-only peer"
+                              />
+                              <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
 
                   {/* Security Settings */}
                   <div className="pt-6 border-t border-gray-200">
@@ -679,7 +724,8 @@ export default function Settings() {
                       please visit the <a href="/settings/security" className="text-blue-600 hover:underline">Security Settings</a> page.
                     </p>
                   </div>
-                </div>
+                  </div>
+                </fieldset>
               </div>
             )}
 
@@ -693,6 +739,7 @@ export default function Settings() {
                   </div>
                 </div>
 
+                <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
                 <div className="space-y-6">
                   {/* Theme */}
                   <div>
@@ -786,6 +833,7 @@ export default function Settings() {
                     <p className="text-xs text-gray-500 mt-1">The page you'll see first when you log in</p>
                   </div>
                 </div>
+                </fieldset>
               </div>
             )}
 
@@ -907,7 +955,7 @@ export default function Settings() {
             )}
 
             {/* Save Button — hidden on change-password tab */}
-            {activeTab !== 'change-password' && (
+            {activeTab !== 'change-password' && canEditSettings && (
             <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 flex flex-col-reverse sm:flex-row items-center justify-between gap-4">
               <div className="text-sm text-gray-600">
                 {saveSuccess && (

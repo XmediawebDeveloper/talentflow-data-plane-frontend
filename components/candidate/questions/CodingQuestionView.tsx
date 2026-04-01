@@ -10,6 +10,7 @@ interface CodingQuestionViewProps {
     video_response_url?: string;
     selected_options?: string[];
     code_submission?: string;
+    code_input?: string;
     language?: string;
   };
   onAnswerChange: (answer: {
@@ -17,6 +18,7 @@ interface CodingQuestionViewProps {
     video_response_url?: string;
     selected_options?: string[];
     code_submission?: string;
+    code_input?: string;
     language?: string;
   }) => void;
   allowLanguageChange?: boolean;

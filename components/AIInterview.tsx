@@ -30,7 +30,14 @@ type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'proces
 export default function AIInterview() {
   const router = useRouter();
   const { user, isTenantAdmin } = useAuth();
-  const canRunAiInterviews = isTenantAdmin || (user?.permissions?.canRunAiInterviews ?? false);
+  const canViewAIInterviews = isTenantAdmin || (user?.permissions?.canViewAIInterviews ?? user?.permissions?.canRunAiInterviews ?? false);
+  const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
+  const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
+  const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canShareAIInterviews;
+  const canInviteAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
+  const canPublishAIInterviews = isTenantAdmin || !!user?.permissions?.canPublishAIInterviews;
+  const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
+  const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
   const { available: aiInterviewAvailable } = usePlanFeature('ai_interview');
   const { quotaData } = useQuota();
 
@@ -518,14 +525,16 @@ export default function AIInterview() {
                 </div>
               </div>
             )}
-            <button
-              onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-              className="flex items-center gap-2 bg-gray-800 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg hover:bg-gray-900 transition-colors text-xs sm:text-sm"
-            >
-              <Settings className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-              <span className="hidden sm:inline">Browse Roles</span>
-              <span className="sm:hidden">Browse Roles</span>
-            </button>
+            {canCreateAIInterviews && (
+              <button
+                onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
+                className="flex items-center gap-2 bg-gray-800 text-white px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg hover:bg-gray-900 transition-colors text-xs sm:text-sm"
+              >
+                <Settings className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+                <span className="hidden sm:inline">Create AI Interview</span>
+                <span className="sm:hidden">Create AI Interview</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -630,13 +639,15 @@ export default function AIInterview() {
                   {activeTab !== 'archived' && (
                     <>
                       <p className="text-sm text-gray-400 mb-4">Create your first configuration to get started</p>
-                      <button
-                        onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                        className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
-                      >
-                        <Settings className="w-4 h-4" />
-                        Browse Roles
-                      </button>
+                      {canCreateAIInterviews && (
+                        <button
+                          onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
+                          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+                        >
+                          <Settings className="w-4 h-4" />
+                          Create AI Interview
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -716,7 +727,7 @@ export default function AIInterview() {
 
                         <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap" onClick={(e) => e.stopPropagation()}>
                           {/* Share Link button for published configs */}
-                          {config.status === 'published' && (
+                          {config.status === 'published' && canShareAIInterviews && (
                             <button
                               onClick={() => setShareConfig(config)}
                               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
@@ -728,7 +739,7 @@ export default function AIInterview() {
                           )}
 
                           {/* Edit / Continue Editing button — draft only */}
-                          {config.status === 'draft' && config.jd_id && (
+                          {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`)}
                               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
@@ -739,7 +750,7 @@ export default function AIInterview() {
                           )}
 
                           {/* Publish button for draft configs */}
-                          {config.status === 'draft' && (
+                          {config.status === 'draft' && canPublishAIInterviews && (
                             <button
                               onClick={() => handlePublishConfig(config)}
                               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
@@ -750,7 +761,7 @@ export default function AIInterview() {
                           )}
 
                           {/* Track Invites for published */}
-                          {config.status === 'published' && (
+                          {config.status === 'published' && canInviteAIInterviews && (
                             <button
                               onClick={() => handleViewInvitations(config)}
                               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors"
@@ -779,7 +790,7 @@ export default function AIInterview() {
                                   <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                   View Details
                                 </button>
-                                {config.status === 'draft' && config.jd_id && (
+                                {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
                                   <button
                                     onClick={() => { router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`); setOpenMenuId(null); }}
                                     className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -788,7 +799,7 @@ export default function AIInterview() {
                                     Continue Editing
                                   </button>
                                 )}
-                                {config.status === 'published' && (
+                                {config.status === 'published' && canShareAIInterviews && (
                                   <button
                                     onClick={() => handleCopyLink(config)}
                                     className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -797,7 +808,7 @@ export default function AIInterview() {
                                     Copy Link
                                   </button>
                                 )}
-                                {config.status === 'published' && (
+                                {config.status === 'published' && canInviteAIInterviews && (
                                   <button
                                     onClick={() => { setShareConfig(config); setOpenMenuId(null); }}
                                     className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -806,7 +817,7 @@ export default function AIInterview() {
                                     Share / Invite
                                   </button>
                                 )}
-                                {config.status === 'published' && (
+                                {config.status === 'published' && canInviteAIInterviews && (
                                   <button
                                     onClick={() => handleViewInvitations(config)}
                                     className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -815,7 +826,7 @@ export default function AIInterview() {
                                     View Invitations
                                   </button>
                                 )}
-                                {config.status === 'draft' && (
+                                {config.status === 'draft' && canPublishAIInterviews && (
                                   <button
                                     onClick={() => handlePublishConfig(config)}
                                     className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -824,14 +835,16 @@ export default function AIInterview() {
                                     Publish
                                   </button>
                                 )}
-                                <button
-                                  onClick={() => handleCloneConfig(config)}
-                                  className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                                >
-                                  <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  Duplicate
-                                </button>
-                                {config.status !== 'archived' && (
+                                {canCreateAIInterviews && (
+                                  <button
+                                    onClick={() => handleCloneConfig(config)}
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                  >
+                                    <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                    Duplicate
+                                  </button>
+                                )}
+                                {config.status !== 'archived' && canArchiveAIInterviews && (
                                   <button
                                     onClick={() => handleArchiveConfig(config)}
                                     className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -840,7 +853,7 @@ export default function AIInterview() {
                                     Archive
                                   </button>
                                 )}
-                                {config.status === 'archived' && (
+                                {config.status === 'archived' && canArchiveAIInterviews && (
                                   <button
                                     onClick={() => handleUnarchiveConfig(config)}
                                     className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -849,13 +862,15 @@ export default function AIInterview() {
                                     Unarchive
                                   </button>
                                 )}
-                                <button
-                                  onClick={() => handleDeleteConfig(config)}
-                                  className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                  Delete
-                                </button>
+                                {canDeleteAIInterviews && (
+                                  <button
+                                    onClick={() => handleDeleteConfig(config)}
+                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                    Delete
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>

@@ -86,6 +86,7 @@ export interface PublishedJD {
   nice_to_have_skills: string[];
   experience_min?: number;
   experience_max?: number;
+  domain_keywords?: string[];
   education_requirements?: Record<string, any>;
   description?: string;
   coding_required?: boolean;
@@ -622,7 +623,7 @@ export const aiInterviewService = {
   /**
    * Generate AI-powered skill clusters
    */
-  async generateClusters(mthSkills: string[], nthSkills: string[], jdTitle?: string, jdDescription?: string, mthTimeMin?: number, nthTimeMin?: number): Promise<{
+  async generateClusters(mthSkills: string[], nthSkills: string[], jdTitle?: string, jdDescription?: string, mthTimeMin?: number, nthTimeMin?: number, mthMaxClusters?: number, nthMaxClusters?: number): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
   }> {
@@ -634,6 +635,8 @@ export const aiInterviewService = {
         jd_description: jdDescription,
         mth_time_min: mthTimeMin,
         nth_time_min: nthTimeMin,
+        mth_max_clusters: mthMaxClusters,
+        nth_max_clusters: nthMaxClusters,
       });
       return response.data;
     } catch (error) {

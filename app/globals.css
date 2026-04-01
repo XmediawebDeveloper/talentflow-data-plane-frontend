@@ -75,6 +75,7 @@
   --ring: #374151;
   --input: #e5e7eb;
   --input-background: #ffffff;
+  color-scheme: light;
 }
 
 /* Markdown/Prose Styling for JD Preview */
@@ -278,59 +279,6 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #111827;
-    --foreground: #f9fafb;
-
-    /* Grey Theme Colors - Dark Mode */
-    --primary: #9ca3af;
-    --primary-hover: #d1d5db;
-    --primary-light: #6b7280;
-    --primary-foreground: #111827;
-
-    --secondary: #6b7280;
-    --secondary-hover: #9ca3af;
-    --secondary-foreground: #f9fafb;
-
-    --accent: #9ca3af;
-    --accent-light: #374151;
-    --accent-foreground: #f9fafb;
-
-    --surface: #1f2937;
-    --surface-hover: #374151;
-    --surface-active: #4b5563;
-
-    --border: #374151;
-    --border-dark: #4b5563;
-
-    --text-primary: #f9fafb;
-    --text-secondary: #d1d5db;
-    --text-muted: #9ca3af;
-
-    --sidebar-bg: #111827;
-    --sidebar-hover: #1f2937;
-    --sidebar-active: #374151;
-    --sidebar-text: #f9fafb;
-    --sidebar-text-muted: #9ca3af;
-
-    --header-bg: #1f2937;
-    --header-border: #374151;
-
-    /* Component tokens - Dark Mode */
-    --popover: #1f2937;
-    --popover-foreground: #f9fafb;
-    --card: #1f2937;
-    --card-foreground: #f9fafb;
-    --muted: #374151;
-    --muted-foreground: #9ca3af;
-    --destructive: #ef4444;
-    --ring: #9ca3af;
-    --input: #374151;
-    --input-background: #1f2937;
-  }
-}
-
 .dark {
   --background: #111827;
   --foreground: #f9fafb;
@@ -384,6 +332,7 @@
   color-scheme: dark;
 }
 
+html,
 body {
   background: var(--background);
   color: var(--foreground);

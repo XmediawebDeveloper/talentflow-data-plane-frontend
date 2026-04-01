@@ -1,10 +1,11 @@
 'use client';
 
 import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Building2, MapPin, Calendar, User, TrendingUp, Eye, Edit3, MoreVertical, Loader2, ChevronDown, ChevronUp, Lock } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import { assessmentService, jdService } from '@/lib/services';
+import api from '@/lib/services/api';
 import JDCreation from '@/components/JDCreation';
 import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
@@ -49,6 +50,29 @@ interface SectionConfig {
   topics: string[];
   enabled: boolean;
 }
+
+interface HRBankQuestion {
+  id: string;
+  text: string;
+  type: 'Text' | 'Yes/No';
+  time: number;
+  correct_answer?: string;
+  is_active: boolean;
+}
+
+interface HRQuestionFormState {
+  question_text: string;
+  answer_type: 'text' | 'yes_no';
+  correct_answer?: 'Yes' | 'No';
+  time_minutes: number;
+}
+
+const EMPTY_HR_QUESTION_FORM: HRQuestionFormState = {
+  question_text: '',
+  answer_type: 'text',
+  correct_answer: undefined,
+  time_minutes: 3,
+};
 
 export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings }: AssessmentCreationProps) {
   const router = useRouter();
@@ -344,21 +368,64 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [codingPopupMode, setCodingPopupMode] = useState<'enable' | 'disable'>('enable');
   const [selectedCodingLanguages, setSelectedCodingLanguages] = useState<string[]>([]);
 
-  // HR Question Bank - selectable questions for this assessment
-  const hrQuestionBank = [
-    { id: 'hr-1', text: 'Tell me about yourself', type: 'Text', time: 3 },
-    { id: 'hr-2', text: 'Describe your industry experience relevant to this role', type: 'Text', time: 3 },
-    { id: 'hr-3', text: 'Why should we hire you?', type: 'Text', time: 3 },
-    { id: 'hr-4', text: 'What is your expected salary?', type: 'Text', time: 3 },
-    { id: 'hr-5', text: 'Are you willing to relocate?', type: 'Yes/No', time: 1, correct_answer: 'Yes' },
-    { id: 'hr-6', text: 'Are you available for onsite work?', type: 'Yes/No', time: 1, correct_answer: 'Yes' },
-    { id: 'hr-7', text: 'Can you work under pressure?', type: 'Yes/No', time: 1, correct_answer: 'Yes' },
-    { id: 'hr-8', text: 'Are you comfortable working in a team?', type: 'Yes/No', time: 1, correct_answer: 'Yes' },
-    { id: 'hr-9', text: 'Are you open to learning new technologies?', type: 'Yes/No', time: 1, correct_answer: 'Yes' },
-    { id: 'hr-10', text: 'Can you join immediately or within notice period?', type: 'Yes/No', time: 1, correct_answer: 'Yes' },
-  ];
+  // HR Question Bank - loaded from the live question bank API for this tenant
+  const [hrQuestionBank, setHrQuestionBank] = useState<HRBankQuestion[]>([]);
+  const hrQuestionsInitializedRef = useRef(false);
   const HR_QUESTION_LIMIT = 5;
-  const [selectedHRQuestions, setSelectedHRQuestions] = useState<string[]>(hrQuestionBank.slice(0, HR_QUESTION_LIMIT).map(q => q.id)); // First 5 selected by default
+  const [selectedHRQuestions, setSelectedHRQuestions] = useState<string[]>([]);
+  const [showAddHRQuizModal, setShowAddHRQuizModal] = useState(false);
+  const [newHRQuestion, setNewHRQuestion] = useState<HRQuestionFormState>(EMPTY_HR_QUESTION_FORM);
+  const [isSavingHRQuestion, setIsSavingHRQuestion] = useState(false);
+
+  const loadHRQuestionBank = useCallback(async () => {
+    try {
+      const response = await api.get('/hr-question-bank');
+      const data = Array.isArray(response.data) ? response.data : [];
+      const mapped: HRBankQuestion[] = data
+        .map((q: any) => ({
+          id: q.id,
+          text: q.question_text,
+          type: q.answer_type === 'yes_no' ? 'Yes/No' : 'Text',
+          time: q.answer_type === 'yes_no' ? 1 : 3,
+          correct_answer: q.correct_answer || undefined,
+          is_active: q.is_active ?? true,
+        }))
+        .filter((q: HRBankQuestion) => q.is_active);
+      setHrQuestionBank(mapped);
+      return mapped;
+    } catch (error) {
+      console.error('[AssessmentCreation] Failed to load HR question bank:', error);
+      setHrQuestionBank([]);
+      toast.error('Failed to load HR Question Bank');
+      return [];
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHRQuestionBank();
+  }, [loadHRQuestionBank]);
+
+  useEffect(() => {
+    if (hrQuestionsInitializedRef.current || hrQuestionBank.length === 0) return;
+    if (editAssessmentId && !editingAssessment) return;
+
+    if (editAssessmentId && editingAssessment) {
+      const savedTopics = Array.isArray(editingAssessment.hr_topics) ? editingAssessment.hr_topics : [];
+      const selectedIds = savedTopics
+        .map((topic: any) => {
+          const topicText = (topic?.text || '').trim().toLowerCase();
+          return hrQuestionBank.find(q => q.text.trim().toLowerCase() === topicText)?.id || null;
+        })
+        .filter(Boolean)
+        .slice(0, HR_QUESTION_LIMIT) as string[];
+
+      setSelectedHRQuestions(selectedIds);
+    } else {
+      setSelectedHRQuestions(hrQuestionBank.slice(0, HR_QUESTION_LIMIT).map(q => q.id));
+    }
+
+    hrQuestionsInitializedRef.current = true;
+  }, [hrQuestionBank, editAssessmentId, editingAssessment]);
 
   const toggleHRQuestion = (id: string) => {
     setSelectedHRQuestions(prev => {
@@ -382,6 +449,47 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
   };
   const deselectAllHR = () => setSelectedHRQuestions([]);
+
+  const openAddHRQuizModal = () => {
+    setNewHRQuestion(EMPTY_HR_QUESTION_FORM);
+    setShowAddHRQuizModal(true);
+  };
+
+  const closeAddHRQuizModal = () => {
+    if (isSavingHRQuestion) return;
+    setShowAddHRQuizModal(false);
+    setNewHRQuestion(EMPTY_HR_QUESTION_FORM);
+  };
+
+  const handleSaveHRQuestion = async () => {
+    const questionText = newHRQuestion.question_text.trim();
+    if (!questionText) {
+      toast.error('Question text is required');
+      return;
+    }
+
+    setIsSavingHRQuestion(true);
+    try {
+      await api.post('/hr-question-bank', {
+        question_text: questionText,
+        answer_type: newHRQuestion.answer_type,
+        correct_answer: newHRQuestion.answer_type === 'yes_no' ? (newHRQuestion.correct_answer || 'Yes') : null,
+      });
+
+      const refreshedQuestions = await loadHRQuestionBank();
+      const createdQuestion = refreshedQuestions.find(q => q.text.trim().toLowerCase() === questionText.toLowerCase());
+      if (createdQuestion && selectedHRQuestions.length < HR_QUESTION_LIMIT) {
+        setSelectedHRQuestions(prev => (prev.includes(createdQuestion.id) ? prev : [...prev, createdQuestion.id]));
+      }
+
+      toast.success('Question added to HR Question Bank');
+      closeAddHRQuizModal();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to add HR question');
+    } finally {
+      setIsSavingHRQuestion(false);
+    }
+  };
 
   // Store previous percentages when coding is disabled (to restore when re-enabled)
   const [savedPercentagesBeforeCodingDisable, setSavedPercentagesBeforeCodingDisable] = useState<{
@@ -1883,8 +1991,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 )}
 
                 <div className="space-y-3 sm:space-y-4">
-                  {/* HR Question Bank Section - Only show when HR is enabled */}
-                  {selectedHRQuestions.length > 0 && (
+                  {/* HR Question Bank Section */}
+                  {(hrQuestionBank.length > 0 || selectedHRQuestions.length > 0) && (
                   <div className="p-3 sm:p-4 border border-gray-200 rounded-lg">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -1894,6 +2002,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">No Timer</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
+                        <button
+                          onClick={openAddHRQuizModal}
+                          className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-gray-700 hover:bg-gray-50 font-medium"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add Quiz
+                        </button>
                         <span className={`${selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-orange-600 font-medium' : 'text-gray-500'}`}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
                         <button onClick={selectAllHR} className="text-blue-600 hover:text-blue-800 font-medium">All</button>
                         <span className="text-gray-300">|</span>
@@ -1902,7 +2017,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     </div>
 
                     <div className="space-y-1.5 max-h-72 overflow-y-auto">
-                      {hrQuestionBank.map((q, idx) => {
+                      {hrQuestionBank.length === 0 ? (
+                        <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+                          No HR questions found. Add one to start building this section.
+                        </div>
+                      ) : hrQuestionBank.map((q, idx) => {
                         const isSelected = selectedHRQuestions.includes(q.id);
                         return (
                           <div
@@ -1934,7 +2053,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     </div>
 
                     <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-                      <span>Manage questions in HR Question Bank tab</span>
+                      <span>Questions are synced with the HR Question Bank</span>
                       <span className="font-medium text-gray-700">
                         Total: {hrQuestionBank.filter(q => selectedHRQuestions.includes(q.id)).reduce((sum, q) => sum + q.time, 0)} min
                       </span>
@@ -2545,6 +2664,107 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               <span className="sm:hidden">Done</span>
             </button>
           </div>
+
+          {showAddHRQuizModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4">
+              <div className="w-full max-w-5xl rounded-2xl border border-gray-700 bg-gray-800 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-gray-700 px-6 py-5">
+                  <h3 className="text-2xl font-semibold text-white">Add New Question</h3>
+                  <button onClick={closeAddHRQuizModal} className="text-gray-400 hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-6 px-6 py-6">
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-200">Question Text *</label>
+                    <input
+                      type="text"
+                      value={newHRQuestion.question_text}
+                      onChange={(e) => setNewHRQuestion(prev => ({ ...prev, question_text: e.target.value }))}
+                      placeholder="Enter the HR question..."
+                      className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-3 block text-sm font-medium text-gray-200">Answer Type</label>
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'text', correct_answer: undefined, time_minutes: 3 }))}
+                        className={`flex-1 rounded-xl border-2 px-4 py-4 text-xl font-medium transition-all ${
+                          newHRQuestion.answer_type === 'text'
+                            ? 'border-teal-500 bg-teal-950/40 text-teal-400'
+                            : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                        }`}
+                      >
+                        Text Answer (3 min)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: prev.correct_answer || 'Yes', time_minutes: 1 }))}
+                        className={`flex-1 rounded-xl border-2 px-4 py-4 text-xl font-medium transition-all ${
+                          newHRQuestion.answer_type === 'yes_no'
+                            ? 'border-gray-500 bg-gray-700 text-gray-100'
+                            : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                        }`}
+                      >
+                        Yes / No (1 min)
+                      </button>
+                    </div>
+                  </div>
+
+                  {newHRQuestion.answer_type === 'yes_no' && (
+                    <div>
+                      <label className="mb-3 block text-sm font-medium text-gray-200">Correct Answer *</label>
+                      <div className="flex flex-col gap-3 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'Yes' }))}
+                          className={`flex-1 rounded-xl border-2 px-4 py-3 text-base font-medium transition-all ${
+                            newHRQuestion.correct_answer === 'Yes'
+                              ? 'border-green-500 bg-green-950/40 text-green-400'
+                              : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                          }`}
+                        >
+                          Yes is correct
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'No' }))}
+                          className={`flex-1 rounded-xl border-2 px-4 py-3 text-base font-medium transition-all ${
+                            newHRQuestion.correct_answer === 'No'
+                              ? 'border-green-500 bg-green-950/40 text-green-400'
+                              : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                          }`}
+                        >
+                          No is correct
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-4 border-t border-gray-700 px-6 py-5">
+                  <button
+                    onClick={closeAddHRQuizModal}
+                    className="rounded-xl border border-gray-600 px-6 py-3 text-lg text-gray-200 hover:bg-gray-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveHRQuestion}
+                    disabled={isSavingHRQuestion}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-6 py-3 text-lg font-semibold text-gray-900 hover:bg-white disabled:opacity-60"
+                  >
+                    <FileText className="w-5 h-5" />
+                    {isSavingHRQuestion ? 'Saving...' : 'Save Question'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );

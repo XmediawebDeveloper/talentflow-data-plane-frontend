@@ -132,6 +132,18 @@ export interface User {
     can_update_assessments?: boolean;
     can_delete_assessments?: boolean;
     can_download_assessment_pdf?: boolean;
+    can_view_hr_question_bank?: boolean;
+    can_create_hr_question_bank?: boolean;
+    can_update_hr_question_bank?: boolean;
+    can_delete_hr_question_bank?: boolean;
+    can_view_ai_interviews?: boolean;
+    can_create_ai_interviews?: boolean;
+    can_update_ai_interviews?: boolean;
+    can_share_ai_interviews?: boolean;
+    can_invite_ai_interviews?: boolean;
+    can_publish_ai_interviews?: boolean;
+    can_archive_ai_interviews?: boolean;
+    can_delete_ai_interviews?: boolean;
   };
   // RBAC06: Feature flags
   feature_flags?: FeatureFlags;

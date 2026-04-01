@@ -3,6 +3,7 @@
 import { ArrowLeft, Briefcase, Plus, Loader2, Building2, MapPin, Clock, TrendingUp, Calendar, User, Users } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
@@ -10,6 +11,9 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 
 export default function AIInterviewJDSelection() {
   const router = useRouter();
+  const { user, isTenantAdmin } = useAuth();
+  const canCreateJD = isTenantAdmin || !!user?.permissions?.canCreateJD;
+  const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
   const [jds, setJds] = useState<PublishedJD[]>([]);
   const [loadingJds, setLoadingJds] = useState(true);
   const [jdSearch, setJdSearch] = useState('');
@@ -57,13 +61,15 @@ export default function AIInterviewJDSelection() {
               <p className="text-sm text-gray-500">Choose the JD that this AI interview will be based on</p>
             </div>
           </div>
-          <button
-            onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4" />
-            Create New Job
-          </button>
+          {canCreateJD && (
+            <button
+              onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" />
+              Create New Job
+            </button>
+          )}
         </div>
 
         {/* Search */}
@@ -88,13 +94,15 @@ export default function AIInterviewJDSelection() {
             <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-300" />
             <p className="text-gray-500 mb-2 text-sm">No published job descriptions found</p>
             <p className="text-xs sm:text-sm text-gray-400 mb-4">Create and publish a JD first to configure an AI interview</p>
-            <button
-              onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-              className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-              Create Job Description
-            </button>
+            {canCreateJD && (
+              <button
+                onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
+                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                Create Job Description
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">
@@ -184,14 +192,15 @@ export default function AIInterviewJDSelection() {
                       <span className="px-3 py-1.5 text-xs text-green-700 bg-green-50 rounded-lg border border-green-200">
                         AI Config Created
                       </span>
-                    ) : (
+                    ) : canCreateAIInterviews ? (
                       <button
                         onClick={() => handleSelectJd(jd)}
                         className="px-4 py-1.5 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
                       >
                         Select
                       </button>
-                    )}
+                    ) : null
+                    }
                   </div>
                 </div>
               );

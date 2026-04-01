@@ -18,6 +18,7 @@ interface AssessmentResultsProps {
   assessmentTitle: string;
   jdTitle?: string;
   canDownloadPDF?: boolean;
+  canBatchDownload?: boolean;
 }
 
 interface CandidateResult {
@@ -75,7 +76,7 @@ interface QuestionResult {
   type: 'multiple-choice' | 'text' | 'coding';
 }
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle, canDownloadPDF = false }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle, canDownloadPDF = false, canBatchDownload = false }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
@@ -448,7 +449,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   };
 
   // AS-25: Handle PDF download for individual candidate result
-  const handleDownloadPDF = async (candidateId: string, candidateName?: string) => {
+  const handleDownloadPDF = async (candidateId: string, candidateDisplayId?: string) => {
     if (downloadingPDF) return;
 
     setDownloadingPDF(candidateId);
@@ -459,10 +460,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const safeName = candidateName?.replace(/[^a-zA-Z0-9]/g, '_') || candidateId;
+      const safeIdentifier = candidateDisplayId?.replace(/[^a-zA-Z0-9]/g, '_') || `CID_${candidateId.replace(/[^a-zA-Z0-9]/g, '_')}`;
       const safeJdTitle = jdTitle?.replace(/[^a-zA-Z0-9]/g, '_') || 'Assessment';
       const pdfTimestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      link.download = `${safeName}_${safeJdTitle}_${pdfTimestamp}.pdf`;
+      link.download = `${safeIdentifier}_${safeJdTitle}_${pdfTimestamp}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -806,7 +807,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               {/* AS-26: Bulk PDF Download Button — only for users with download_pdf permission */}
-              {canDownloadPDF && selectedRows.length > 0 && (
+              {canBatchDownload && selectedRows.length > 0 && (
                 <button
                   onClick={handleDownloadBulkPDFs}
                   disabled={downloadingBulkPDF}
@@ -1385,7 +1386,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {/* AS-25: PDF Download Button — only for users with download_pdf permission */}
                           {canDownloadPDF && candidate.status === 'Completed' ? (
                             <button
-                              onClick={() => handleDownloadPDF(candidate.id, candidate.name)}
+                              onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                               disabled={downloadingPDF === candidate.id}
                               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"

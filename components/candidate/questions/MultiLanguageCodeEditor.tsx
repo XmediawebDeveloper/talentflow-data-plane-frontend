@@ -38,6 +38,7 @@ interface MultiLanguageCodeEditorProps {
     video_response_url?: string;
     selected_options?: string[];
     code_submission?: string;
+    code_input?: string;
     language?: string;
   };
   onAnswerChange: (answer: {
@@ -45,6 +46,7 @@ interface MultiLanguageCodeEditorProps {
     video_response_url?: string;
     selected_options?: string[];
     code_submission?: string;
+    code_input?: string;
     language?: string;
   }) => void;
   allowLanguageChange?: boolean; // If false, language is locked to what's assigned
@@ -66,6 +68,20 @@ interface ExecutionOutput {
   output?: string;
   error?: string;
   compile_error?: string;
+}
+
+function normalizeProgramOutput(output?: string | null): string {
+  if (!output) {
+    return '';
+  }
+
+  return output
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/\s+$/g, ''))
+    .join('\n')
+    .trim();
 }
 
 export function MultiLanguageCodeEditor({
@@ -100,7 +116,7 @@ export function MultiLanguageCodeEditor({
 
   const [selectedLanguage, setSelectedLanguage] = useState<string>(getInitialLanguage());
   const [code, setCode] = useState<string>('');
-  const [customInput, setCustomInput] = useState<string>(question.sample_input || '');
+  const [customInput, setCustomInput] = useState<string>(answer.code_input || question.sample_input || '');
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
   const [executionOutput, setExecutionOutput] = useState<ExecutionOutput | null>(null);
@@ -153,8 +169,14 @@ export function MultiLanguageCodeEditor({
     }
 
     setCode(initialCode);
+    setCustomInput(answer.code_input || question.sample_input || '');
     // Notify parent of the restored/initialized code so auto-save can track it
-    onAnswerChange({ ...answer, code_submission: initialCode, language: selectedLanguage });
+    onAnswerChange({
+      ...answer,
+      code_submission: initialCode,
+      code_input: answer.code_input || question.sample_input || '',
+      language: selectedLanguage,
+    });
   // question.question_id ensures this re-runs when navigating between questions,
   // so the editor shows the correct saved code for each question.
   }, [selectedLanguage, question.question_id]);
@@ -344,7 +366,13 @@ export function MultiLanguageCodeEditor({
       // Log input for debugging
       console.log('[CODE_EXEC] Running with input:', inputToUse ? `"${inputToUse.substring(0, 50)}..."` : '(empty)');
 
-      const result = await candidateService.executeCode(compilerLang, code, inputToUse);
+      const result = await candidateService.executeCode(
+        compilerLang,
+        code,
+        inputToUse,
+        attemptId,
+        question.question_id
+      );
 
       setExecutionOutput({
         success: result.success,
@@ -358,8 +386,8 @@ export function MultiLanguageCodeEditor({
         // Only compare if user is using the sample input
         const isUsingSampleInput = customInput.trim() === (question.sample_input || '').trim();
         if (isUsingSampleInput) {
-          const actualOutput = (result.output || '').trim();
-          const expectedOutput = question.sample_output.trim();
+          const actualOutput = normalizeProgramOutput(result.output);
+          const expectedOutput = normalizeProgramOutput(question.sample_output);
           const passed = actualOutput === expectedOutput;
 
           setTestResults([
@@ -411,19 +439,28 @@ export function MultiLanguageCodeEditor({
         attemptId,
         question.question_id,
         selectedLanguage,
-        code
+        code,
+        customInput
       );
 
       setSubmissionResult(result);
       setHasSubmitted(true);
 
       if (result.success) {
-        const passRate = (result.tests_passed / result.tests_total * 100).toFixed(0);
-        dialog.showDialog({
-          title: 'Submission Complete',
-          message: `${result.tests_passed}/${result.tests_total} test cases passed (${passRate}%)`,
-          type: result.score_percentage >= 50 ? 'success' : 'error',
-        });
+        if (result.syntax_valid === false || result.execution_status === 'syntax_error') {
+          dialog.showDialog({
+            title: 'Syntax Error',
+            message: result.error || result.message || 'Invalid code syntax. Execution was blocked.',
+            type: 'error',
+          });
+        } else {
+          const passRate = (result.tests_passed / result.tests_total * 100).toFixed(0);
+          dialog.showDialog({
+            title: 'Submission Complete',
+            message: `${result.tests_passed}/${result.tests_total} test cases passed (${passRate}%)`,
+            type: result.score_percentage >= 50 ? 'success' : 'error',
+          });
+        }
       } else {
         dialog.showDialog({
           title: 'Submission Failed',
@@ -972,7 +1009,11 @@ export function MultiLanguageCodeEditor({
               </label>
               {question.sample_input && customInput !== question.sample_input && (
                 <button
-                  onClick={() => setCustomInput(question.sample_input || '')}
+                  onClick={() => {
+                    const nextInput = question.sample_input || '';
+                    setCustomInput(nextInput);
+                    onAnswerChange({ ...answer, code_submission: code, code_input: nextInput, language: selectedLanguage });
+                  }}
                   className="text-xs text-blue-400 hover:text-blue-300"
                 >
                   Reset to sample input
@@ -981,7 +1022,11 @@ export function MultiLanguageCodeEditor({
             </div>
             <textarea
               value={customInput}
-              onChange={(e) => setCustomInput(e.target.value)}
+              onChange={(e) => {
+                const nextInput = e.target.value;
+                setCustomInput(nextInput);
+                onAnswerChange({ ...answer, code_submission: code, code_input: nextInput, language: selectedLanguage });
+              }}
               placeholder="Enter input for your program here (e.g., numbers, text that your code will read)..."
               className="w-full h-16 sm:h-20 bg-gray-900 text-green-400 font-mono text-sm p-2 sm:p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
             />

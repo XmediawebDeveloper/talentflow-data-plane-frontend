@@ -32,6 +32,7 @@ interface CandidateBasicInfo {
     score: number;
     totalScore: number;
     percentage: number;
+    weightedScore: number;
   }[];
 }
 
@@ -119,23 +120,15 @@ export default function CandidateResultDetails({
           status = 'Pending';
         }
 
-        // Map section scores - Use raw_score from backend (actual percentage)
+        // Map section scores directly from stored backend round scores.
         const sections = details.round_scores.map(round => {
-          // Calculate actual points from question evaluations for this round
-          const roundQuestions = details.question_evaluations.filter(
-            q => q.round_type === round.round_type
-          );
-          const totalMarks = roundQuestions.reduce((sum, q) => sum + (q.points_possible || 10), 0);
-          const obtainedMarks = roundQuestions.reduce((sum, q) => sum + (q.points_earned || 0), 0);
-
-          // Use raw_score from backend — it's the actual percentage
           const percentage = Math.round(round.raw_score ?? 0);
-
           return {
             name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
-            score: Math.round(obtainedMarks * 10) / 10, // Total obtained marks
-            totalScore: totalMarks, // Total marks possible
-            percentage: Math.min(percentage, 100) // Cap at 100%
+            score: round.questions_correct ?? 0,
+            totalScore: round.questions_total ?? 0,
+            percentage: Math.min(percentage, 100),
+            weightedScore: round.weighted_score ?? 0,
           };
         });
 
@@ -177,15 +170,13 @@ export default function CandidateResultDetails({
           if (details.scoring_status === 'completed') status = 'Completed';
           else if (details.scoring_status === 'pending') status = 'Pending';
           const sections = details.round_scores.map(round => {
-            const roundQuestions = details.question_evaluations.filter(q => q.round_type === round.round_type);
-            const totalMarks = roundQuestions.reduce((sum, q) => sum + (q.points_possible || 10), 0);
-            const obtainedMarks = roundQuestions.reduce((sum, q) => sum + (q.points_earned || 0), 0);
             const percentage = Math.min(Math.round(round.raw_score ?? 0), 100);
             return {
               name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
-              score: Math.round(obtainedMarks * 10) / 10,
-              totalScore: totalMarks,
+              score: round.questions_correct ?? 0,
+              totalScore: round.questions_total ?? 0,
               percentage,
+              weightedScore: round.weighted_score ?? 0,
             };
           });
           setCandidateData(prev => prev ? ({
@@ -571,9 +562,9 @@ export default function CandidateResultDetails({
                         )}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {section.score}/{section.totalScore} points
+                        {section.score}/{section.totalScore} correct
                         {!isHR && (
-                          <span className="text-gray-800 ml-2">• Pass: ≥7/10</span>
+                          <span className="text-gray-800 ml-2">• Weighted contribution: {section.weightedScore.toFixed(1)}%</span>
                         )}
                       </div>
                     </div>
@@ -1114,6 +1105,45 @@ export default function CandidateResultDetails({
                                     )}
                                   </div>
                                 </div>
+
+                                {q.question_type === 'coding' && (
+                                  <>
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                          <FileText className="w-4 h-4 text-blue-700" />
+                                        </div>
+                                        <div className="text-sm font-medium text-blue-900">CODE INPUT</div>
+                                      </div>
+                                      <div className="bg-blue-50 rounded-lg p-4 text-blue-950 font-mono text-sm overflow-x-auto">
+                                        <pre className="whitespace-pre-wrap">{q.candidate_code_input || 'No input provided'}</pre>
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                          <AlertCircle className="w-4 h-4 text-amber-700" />
+                                        </div>
+                                        <div className="text-sm font-medium text-amber-900">EXECUTION LOGS</div>
+                                        {q.candidate_code_execution_status && (
+                                          <span className="px-2 py-0.5 bg-amber-200 text-amber-900 rounded text-xs uppercase">
+                                            {q.candidate_code_execution_status.replace(/_/g, ' ')}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className={`rounded-lg p-4 font-mono text-sm overflow-x-auto ${
+                                        q.candidate_code_execution_error
+                                          ? 'bg-red-950 text-red-100'
+                                          : 'bg-gray-900 text-gray-100'
+                                      }`}>
+                                        <pre className="whitespace-pre-wrap">
+                                          {q.candidate_code_execution_error || q.candidate_code_execution_output || 'No execution logs available'}
+                                        </pre>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
 
                                 {/* Correct Answer (for MCQ) */}
                                 {q.correct_answer && q.correct_answer.length > 0 && (

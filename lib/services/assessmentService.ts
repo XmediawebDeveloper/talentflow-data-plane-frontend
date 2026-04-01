@@ -155,6 +155,10 @@ export interface QuestionEvaluation {
   candidate_answer_text?: string;
   candidate_selected_options?: string[];
   candidate_code_submission?: string;
+  candidate_code_input?: string;
+  candidate_code_execution_status?: string;
+  candidate_code_execution_output?: string;
+  candidate_code_execution_error?: string;
   options?: { id: string; text: string }[];
   correct_answer?: string[];
   ideal_answer?: string;  // Model/ideal answer for text questions (what a good answer should include)

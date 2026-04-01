@@ -246,6 +246,7 @@ export interface CurrentQuestion {
     selected_options: string[] | null;
     code_submission: string | null;
     language: string | null;  // Coding language used (python, java, etc.)
+    code_input: string | null;
     is_locked: boolean;  // True = submitted (not editable), False = draft (editable)
   } | null;
   // All question statuses for progress tracking
@@ -287,6 +288,7 @@ export interface AnswerSubmission {
   video_response_url?: string;
   selected_options?: string[];
   code_submission?: string;
+  code_input?: string;
   language?: string;
   time_taken_seconds?: number;  // Time spent on question
   is_draft?: boolean;  // True = draft (auto-save, editable), False = submitted (locked)
@@ -443,6 +445,8 @@ export interface CodeSubmissionResult {
   tests_total: number;
   test_results: TestCaseResult[];
   score_percentage: number;
+  syntax_valid?: boolean;
+  execution_status?: string;
   message: string;
   error?: string;
 }
@@ -1026,11 +1030,19 @@ export const candidateService = {
   /**
    * Execute code and get results
    */
-  async executeCode(language: string, code: string, stdin?: string): Promise<CodeExecutionResult> {
+  async executeCode(
+    language: string,
+    code: string,
+    stdin?: string,
+    attemptId?: string,
+    questionId?: string
+  ): Promise<CodeExecutionResult> {
     try {
       const response = await candidateApi.post<CodeExecutionResult>(
         `/candidate/code/run`,
         {
+          attempt_id: attemptId,
+          question_id: questionId,
           language,
           code,
           stdin: stdin || '',
@@ -1056,7 +1068,13 @@ export const candidateService = {
   /**
    * Submit code solution for evaluation against all test cases
    */
-  async submitCodeSolution(attemptId: string, questionId: string, language: string, code: string): Promise<CodeSubmissionResult> {
+  async submitCodeSolution(
+    attemptId: string,
+    questionId: string,
+    language: string,
+    code: string,
+    codeInput?: string
+  ): Promise<CodeSubmissionResult> {
     try {
       const response = await candidateApi.post<CodeSubmissionResult>(
         `/candidate/code/submit`,
@@ -1065,6 +1083,7 @@ export const candidateService = {
           question_id: questionId,
           language,
           code,
+          code_input: codeInput || '',
         }
       );
       return response.data;

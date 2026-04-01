@@ -1,6 +1,6 @@
 'use client'
 
-import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, FileText, Clock, GripVertical } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, Clock, GripVertical } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag } from 'react-dnd';
@@ -146,7 +146,6 @@ export default function ResumeTable({
   const [showMoveToFolderModal, setShowMoveToFolderModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showAddTagsModal, setShowAddTagsModal] = useState(false);
   const [selectedResumeForAction, setSelectedResumeForAction] = useState<Resume | null>(null);
@@ -574,29 +573,6 @@ export default function ResumeTable({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (onViewDetails) onViewDetails(resume);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                              >
-                                <FileText className="w-4 h-4 text-purple-600" />
-                                View Full Details
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedResumeForAction(resume);
-                                  setShowDuplicateModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                              >
-                                <Copy className="w-4 h-4 text-indigo-600" />
-                                Duplicate Resume
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
                                   setSelectedResumeForAction(resume);
                                   setShowShareModal(true);
                                   setActiveMenu(null);
@@ -809,7 +785,7 @@ export default function ResumeTable({
 
       {/* Edit Details Modal */}
       {showEditModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
@@ -907,63 +883,9 @@ export default function ResumeTable({
         </div>
       )}
 
-      {/* Duplicate Resume Modal */}
-      {showDuplicateModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                  <Copy className="w-5 h-5 text-indigo-600" />
-                </div>
-                <h2 className="text-gray-900">Duplicate Resume</h2>
-              </div>
-              <p className="text-sm text-gray-600">
-                Create a copy of {selectedResumeForAction.name}'s resume
-              </p>
-            </div>
-            <div className="p-6">
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
-                <p className="text-sm text-indigo-800">
-                  <strong>What will be duplicated?</strong>
-                </p>
-                <ul className="text-sm text-indigo-700 mt-2 space-y-1 ml-4 list-disc">
-                  <li>All candidate information</li>
-                  <li>Skills and experience data</li>
-                  <li>Resume attachments</li>
-                  <li>Tags and metadata</li>
-                </ul>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowDuplicateModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    toast.success('Resume duplicated successfully');
-                    setShowDuplicateModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Copy className="w-4 h-4" />
-                  Duplicate
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Share Resume Modal */}
       {showShareModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
@@ -1022,7 +944,7 @@ export default function ResumeTable({
 
       {/* Add Tags Modal */}
       {showAddTagsModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
@@ -1087,7 +1009,7 @@ export default function ResumeTable({
 
       {/* Archive Resume Modal */}
       {showArchiveModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">

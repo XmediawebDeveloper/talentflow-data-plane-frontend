@@ -112,6 +112,10 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         canUpdateAssessments: response.user.permissions.can_update_assessments,
         canDeleteAssessments: response.user.permissions.can_delete_assessments,
         canDownloadAssessmentPDF: response.user.permissions.can_download_assessment_pdf,
+        canViewHRQuestionBank: response.user.permissions.can_view_hr_question_bank,
+        canCreateHRQuestionBank: response.user.permissions.can_create_hr_question_bank,
+        canUpdateHRQuestionBank: response.user.permissions.can_update_hr_question_bank,
+        canDeleteHRQuestionBank: response.user.permissions.can_delete_hr_question_bank,
         // Analytics & Reports
         canViewAnalytics: response.user.permissions.can_view_analytics,
         // Settings & Admin
@@ -130,6 +134,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         // Granular settings section view permissions
         canViewGeneralSettings: response.user.permissions.can_view_general_settings,
         canViewPermissionsRoles: response.user.permissions.can_view_permissions_roles,
+        canViewRoles: response.user.permissions.can_view_roles,
         canViewApiManagement: response.user.permissions.can_view_api_management,
         canViewBranding: response.user.permissions.can_view_branding,
         canViewSecuritySettings: response.user.permissions.can_view_security_settings,
@@ -147,6 +152,14 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         // Feature permissions
         canViewScoring: response.user.permissions.can_view_scoring,
         canRunScoring: response.user.permissions.can_run_scoring,
+        canViewAIInterviews: response.user.permissions.can_view_ai_interviews,
+        canCreateAIInterviews: response.user.permissions.can_create_ai_interviews,
+        canUpdateAIInterviews: response.user.permissions.can_update_ai_interviews,
+        canShareAIInterviews: response.user.permissions.can_share_ai_interviews,
+        canInviteAIInterviews: response.user.permissions.can_invite_ai_interviews,
+        canPublishAIInterviews: response.user.permissions.can_publish_ai_interviews,
+        canArchiveAIInterviews: response.user.permissions.can_archive_ai_interviews,
+        canDeleteAIInterviews: response.user.permissions.can_delete_ai_interviews,
         canRunAiInterviews: response.user.permissions.can_run_ai_interviews,
         canViewAiMatch: response.user.permissions.can_view_ai_match,
         canRunAiMatch: response.user.permissions.can_run_ai_match,

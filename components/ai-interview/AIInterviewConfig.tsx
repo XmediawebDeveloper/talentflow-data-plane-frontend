@@ -60,8 +60,147 @@ interface CategoryConfig {
 /*  Constants                                                               */
 /* ─────────────────────────────────────────────────────────────────────── */
 
-const FIXED_TIME = { mth: 20, nth: 7, hr: 3 } as const;   // minutes (MOM §5)
 const DEFAULT_PCT = { mth: 70, nth: 20, hr: 10 } as const; // scoring weights (MOM §default)
+
+/**
+ * When sections are toggled on/off in flexible mode, proportionally redistribute
+ * percentages so they always sum to 100. Disabled sections are set to 0.
+ * Returns new [mthPct, nthPct, hrPct] tuple.
+ */
+function redistributeFlexPct(
+  mthPct: number, nthEnabled: boolean, nthPct: number, hrEnabled: boolean, hrPct: number,
+): [number, number, number] {
+  const values = [mthPct, nthEnabled ? nthPct : 0, hrEnabled ? hrPct : 0];
+  const total = values.reduce((s, v) => s + v, 0);
+
+  if (total === 100) return [values[0], values[1], values[2]];
+
+  if (total <= 0) {
+    // Fallback: equal split among enabled sections
+    const count = [true, nthEnabled, hrEnabled].filter(Boolean).length;
+    const base = Math.floor(100 / count);
+    const r: [number, number, number] = [base, nthEnabled ? base : 0, hrEnabled ? base : 0];
+    r[0] += 100 - r.reduce((s, v) => s + v, 0);
+    return r;
+  }
+
+  const scale = 100 / total;
+  const scaled: [number, number, number] = [
+    Math.round(values[0] * scale),
+    Math.round(values[1] * scale),
+    Math.round(values[2] * scale),
+  ];
+  // Fix rounding error by adjusting MHS (always enabled)
+  scaled[0] += 100 - scaled.reduce((s, v) => s + v, 0);
+  return scaled;
+}
+
+function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
+  if (!nthEnabled && !hrEnabled) {
+    return {
+      mthMinutes: 30,
+      nthMinutes: 0,
+      hrMinutes: 0,
+      mthQuestions: 15,
+      nthQuestions: 0,
+      hrQuestions: 0,
+      mthMaxClusters: 5,
+      nthMaxClusters: 0,
+    };
+  }
+
+  if (nthEnabled && !hrEnabled) {
+    return {
+      mthMinutes: 20,
+      nthMinutes: 10,
+      hrMinutes: 0,
+      mthQuestions: 10,
+      nthQuestions: 5,
+      hrQuestions: 0,
+      mthMaxClusters: 3,
+      nthMaxClusters: 2,
+    };
+  }
+
+  if (nthEnabled && hrEnabled) {
+    return {
+      mthMinutes: 16,
+      nthMinutes: 8,
+      hrMinutes: 6,
+      mthQuestions: 8,
+      nthQuestions: 4,
+      hrQuestions: 3,
+      mthMaxClusters: 3,
+      nthMaxClusters: 2,
+    };
+  }
+
+  return {
+    mthMinutes: 20,
+    nthMinutes: 0,
+    hrMinutes: 10,
+    mthQuestions: 10,
+    nthQuestions: 0,
+    hrQuestions: 5,
+    mthMaxClusters: 3,
+    nthMaxClusters: 0,
+  };
+}
+
+function getTimedModePercentages(nthEnabled: boolean, hrEnabled: boolean) {
+  const allocation = getTimedModeAllocation(nthEnabled, hrEnabled);
+  const scoringQuestionTotal = allocation.mthQuestions + allocation.nthQuestions;
+
+  if (scoringQuestionTotal <= 0) {
+    return { mth: 0, nth: 0, hr: 0 };
+  }
+
+  const mth = Math.round((allocation.mthQuestions / scoringQuestionTotal) * 100);
+  const nth = nthEnabled ? 100 - mth : 0;
+
+  return {
+    mth,
+    nth,
+    hr: 0,
+  };
+}
+
+function allocateClusterMinutes(
+  clusters: { id?: string; name?: string; priority: number }[],
+  totalMinutes: number,
+): Record<string, number> {
+  const namedClusters = clusters.filter(cluster => cluster.name);
+  if (namedClusters.length === 0 || totalMinutes <= 0) return {};
+
+  const totalWeight = namedClusters.reduce((sum, cluster) => sum + cluster.priority, 0);
+  if (totalWeight <= 0) {
+    return Object.fromEntries(namedClusters.map(cluster => [cluster.name as string, 0]));
+  }
+
+  const baseAllocations = namedClusters.map((cluster, index) => {
+    const exact = (cluster.priority / totalWeight) * totalMinutes;
+    const base = Math.floor(exact);
+    return {
+      name: cluster.name as string,
+      base,
+      remainder: exact - base,
+      index,
+    };
+  });
+
+  let remaining = totalMinutes - baseAllocations.reduce((sum, item) => sum + item.base, 0);
+  baseAllocations.sort((a, b) => {
+    if (b.remainder !== a.remainder) return b.remainder - a.remainder;
+    return a.index - b.index;
+  });
+
+  for (let i = 0; i < baseAllocations.length && remaining > 0; i += 1) {
+    baseAllocations[i].base += 1;
+    remaining -= 1;
+  }
+
+  return Object.fromEntries(baseAllocations.map(item => [item.name, item.base]));
+}
 
 const SUPPORTED_LANGUAGES = [
   'Afrikaans', 'Arabic', 'Armenian', 'Azerbaijani', 'Belarusian', 'Bosnian', 'Bulgarian',
@@ -115,6 +254,8 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
   const [skillToDelete, setSkillToDelete] = useState<string | null>(null);
   const [weightError, setWeightError] = useState(false);
+  const [newSkillName, setNewSkillName] = useState('');
+  const [addSkillError, setAddSkillError] = useState('');
 
   const jdSet = new Set(jdSkillNames.map(s => s.toLowerCase()));
   const color = category === 'mth'
@@ -126,6 +267,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
   // Find skills not assigned to any cluster
   const assignedSkillSet = new Set(config.clusters.flatMap(c => c.skills.map(s => s.toLowerCase())));
   const unclusteredSkills = config.skills.filter(s => !assignedSkillSet.has(s.name.toLowerCase()));
+  const normalizeSkillName = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
 
   const toggleCluster = (id: string) => {
     setCollapsedClusters(prev => {
@@ -153,6 +295,28 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
 
   const updateSkillType = (name: string, type: SkillType) => {
     onChange({ skills: config.skills.map(s => s.name === name ? { ...s, type } : s) });
+  };
+
+  const addSkill = () => {
+    const trimmed = newSkillName.trim().replace(/\s+/g, ' ');
+    if (!trimmed) {
+      setAddSkillError('Enter a skill name');
+      return;
+    }
+
+    const normalized = normalizeSkillName(trimmed);
+    const exists = config.skills.some(skill => normalizeSkillName(skill.name) === normalized);
+    if (exists) {
+      setAddSkillError('This skill already exists');
+      toast.error('Duplicate skills are not allowed');
+      return;
+    }
+
+    onChange({
+      skills: [...config.skills, { name: trimmed, comment: '', type: 'Skill' }],
+    });
+    setNewSkillName('');
+    setAddSkillError('');
   };
 
   const SKILL_TYPE_COLORS: Record<SkillType, string> = {
@@ -260,6 +424,45 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
       </div>
 
       <div className="p-4 space-y-4">
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Add Skill</span>
+            <span className="text-xs text-gray-400">Free text only</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <div className="flex-1">
+              <input
+                value={newSkillName}
+                onChange={(e) => {
+                  setNewSkillName(e.target.value);
+                  if (addSkillError) setAddSkillError('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addSkill();
+                  }
+                }}
+                placeholder={category === 'mth' ? 'Add a must-have skill' : 'Add a nice-to-have skill'}
+                className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-1 ${
+                  addSkillError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
+                }`}
+              />
+              {addSkillError && (
+                <p className="mt-1 text-[11px] text-red-500">{addSkillError}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={addSkill}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add
+            </button>
+          </div>
+        </div>
 
         {/* ── Clustered view: skills grouped by cluster topic ── */}
         {hasClusters && (
@@ -391,6 +594,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
   const [newQText, setNewQText] = useState('');
   const [newQType, setNewQType] = useState<'text' | 'yes_no'>('text');
   const [savingQ, setSavingQ] = useState(false);
+  const [questionError, setQuestionError] = useState('');
 
   const isOverLimit = mode === 'fixed' && questionCount > 0 && selectedIds.length > questionCount;
 
@@ -403,8 +607,11 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
   };
 
   const saveNewQuestion = async () => {
-    const text = newQText.trim();
-    if (!text) return;
+    const text = newQText.trim().replace(/\s+/g, ' ');
+    if (!text) {
+      setQuestionError('Enter a question');
+      return;
+    }
     setSavingQ(true);
     try {
       const res = await api.post('/hr-question-bank', { question_text: text, answer_type: newQType });
@@ -416,10 +623,13 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
       }
       setNewQText('');
       setNewQType('text');
+      setQuestionError('');
       setAddingQuestion(false);
       toast.success('Question added to bank');
-    } catch {
-      toast.error('Failed to add question');
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      if (typeof detail === 'string') setQuestionError(detail);
+      toast.error(detail || 'Failed to add question');
     } finally {
       setSavingQ(false);
     }
@@ -550,53 +760,71 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
               )}
             </div>
 
-            {/* Add Question */}
-            {addingQuestion ? (
-              <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
-                <textarea
-                  autoFocus
-                  rows={2}
-                  value={newQText}
-                  onChange={e => setNewQText(e.target.value)}
-                  placeholder="Enter question text…"
-                  className="w-full text-xs border border-gray-200 rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-gray-400 resize-none bg-white"
-                />
-                <div className="flex items-center gap-2">
-                  <select
-                    value={newQType}
-                    onChange={e => setNewQType(e.target.value as 'text' | 'yes_no')}
-                    className="text-xs border border-gray-200 rounded-md px-2 py-1 focus:outline-none bg-white"
-                  >
-                    <option value="text">Text answer</option>
-                    <option value="yes_no">Yes / No</option>
-                  </select>
-                  <div className="flex-1" />
-                  <button
-                    onClick={() => { setAddingQuestion(false); setNewQText(''); setNewQType('text'); }}
-                    className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={saveNewQuestion}
-                    disabled={savingQ || !newQText.trim()}
-                    className="flex items-center gap-1 text-xs bg-gray-900 text-white px-3 py-1.5 rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                    Save
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setAddingQuestion(true)}
-                className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:border-gray-400 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add Question
-              </button>
-            )}
           </>)}
+
+          {/* Add Question — available in both modes, persists to HR Question Bank */}
+          {addingQuestion ? (
+            <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-700">Add Question To HR Question Bank</span>
+                <span className="text-[11px] text-gray-400">Saved to database</span>
+              </div>
+              <textarea
+                autoFocus
+                rows={2}
+                value={newQText}
+                onChange={e => {
+                  setNewQText(e.target.value);
+                  if (questionError) setQuestionError('');
+                }}
+                placeholder="Enter question text…"
+                className={`w-full text-xs border rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-1 resize-none bg-white ${
+                  questionError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
+                }`}
+              />
+              {questionError && (
+                <p className="text-[11px] text-red-500">{questionError}</p>
+              )}
+              <div className="flex items-center gap-2">
+                <select
+                  value={newQType}
+                  onChange={e => setNewQType(e.target.value as 'text' | 'yes_no')}
+                  className="text-xs border border-gray-200 rounded-md px-2 py-1 focus:outline-none bg-white"
+                >
+                  <option value="text">Text answer</option>
+                  <option value="yes_no">Yes / No</option>
+                </select>
+                <div className="flex-1" />
+                <button
+                  onClick={() => {
+                    setAddingQuestion(false);
+                    setNewQText('');
+                    setNewQType('text');
+                    setQuestionError('');
+                  }}
+                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveNewQuestion}
+                  disabled={savingQ || !newQText.trim()}
+                  className="flex items-center gap-1 text-xs bg-gray-900 text-white px-3 py-1.5 rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  Save
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAddingQuestion(true)}
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:border-gray-400 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add Question
+            </button>
+          )}
 
           {/* Info */}
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-100">
@@ -866,11 +1094,11 @@ export default function AIInterviewConfig() {
                 setPerQuestionSeconds(Number(parsed.per_question_seconds));
               }
 
-              // Restore clusters
+              // Restore clusters (only restore NHS clusters if NHS round is present/enabled)
               if (parsed.mth_clusters?.length) {
                 setMth(prev => ({ ...prev, clusters: parsed.mth_clusters }));
               }
-              if (parsed.nth_clusters?.length) {
+              if (parsed.nth_clusters?.length && nthRound) {
                 setNth(prev => ({ ...prev, clusters: parsed.nth_clusters }));
               }
 
@@ -991,7 +1219,7 @@ export default function AIInterviewConfig() {
         const payload = {
           position: selectedJd.title,
           jd_id: selectedJd.id,
-          duration_minutes: FIXED_TIME.mth + (nth.enabled ? FIXED_TIME.nth : 0) + (hrEnabled ? FIXED_TIME.hr : 0),
+          duration_minutes: totalFixed,
           rounds_config: rounds,
           recording_enabled: recordingEnabled,
           available_languages: availableLanguages,
@@ -1023,10 +1251,11 @@ export default function AIInterviewConfig() {
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
 
-  // Effective time for fixed mode (MOM: if NTH not available → all to MTH)
-  const fixedMthMin = !nth.enabled ? FIXED_TIME.mth + FIXED_TIME.nth : FIXED_TIME.mth;
-  const fixedNthMin = nth.enabled ? FIXED_TIME.nth : 0;
-  const fixedHrMin  = hrEnabled ? FIXED_TIME.hr : 0;
+  const timedAllocation = getTimedModeAllocation(nth.enabled, hrEnabled);
+  const timedPercentages = getTimedModePercentages(nth.enabled, hrEnabled);
+  const fixedMthMin = timedAllocation.mthMinutes;
+  const fixedNthMin = timedAllocation.nthMinutes;
+  const fixedHrMin  = timedAllocation.hrMinutes;
   const totalFixed  = fixedMthMin + fixedNthMin + fixedHrMin;
 
   const totalPct = mth.percentage + (nth.enabled ? nth.percentage : 0) + (hrEnabled ? hrPct : 0);
@@ -1039,18 +1268,11 @@ export default function AIInterviewConfig() {
   const flexHrMin  = pctValid && hrEnabled   ? Math.round(hrPct / 100 * FLEXIBLE_TOTAL_MIN) : 0;
 
   // Static question distribution based on enabled sections (timed mode: total=15)
-  const timedQDist = (() => {
-    const mhs = true;
-    const nhs = nth.enabled;
-    const hr  = hrEnabled;
-    if (mhs && nhs && hr)  return { mth: 8, nth: 4, hr: 3 };
-    if (mhs && nhs)        return { mth: 9, nth: 6, hr: 0 };
-    if (mhs && hr)         return { mth: 10, nth: 0, hr: 5 };
-    if (nhs && hr)         return { mth: 0, nth: 9, hr: 6 };
-    if (mhs)               return { mth: 15, nth: 0, hr: 0 };
-    if (nhs)               return { mth: 0, nth: 15, hr: 0 };
-    return                        { mth: 0, nth: 0, hr: 15 };
-  })();
+  const timedQDist = {
+    mth: timedAllocation.mthQuestions,
+    nth: timedAllocation.nthQuestions,
+    hr: timedAllocation.hrQuestions,
+  };
 
   /* ── Video handlers ── */
   const handleVideoUpload = async (file: File, skipDurationCheck = false) => {
@@ -1132,18 +1354,16 @@ export default function AIInterviewConfig() {
       // Clusters → topics + topic_weights + topic_time_minutes
       const topics = mth.clusters.map(c => c.name).filter(Boolean);
       const topicWeights: Record<string, number> = {};
-      const topicTime: Record<string, number> = {};
-      const mthTotalW = mth.clusters.reduce((s, c) => s + c.priority, 0);
+      const topicTime = allocateClusterMinutes(mth.clusters, fixedMthMin);
       mth.clusters.forEach(c => {
         if (c.name) {
           topicWeights[c.name] = c.priority * 20;
-          topicTime[c.name] = mthTotalW > 0 ? Math.round((c.priority / mthTotalW) * fixedMthMin) : 0;
         }
       });
 
       rounds.push({
         type: 'must_have_skills',
-        percentage: mth.percentage,
+        percentage: mode === 'fixed' ? timedPercentages.mth : mth.percentage,
         duration_minutes: dur('mth'),
         topics,
         topic_weights: topics.length > 0 ? topicWeights : undefined,
@@ -1163,18 +1383,16 @@ export default function AIInterviewConfig() {
       const customSkills = nth.skills.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
       const topics = nth.clusters.map(c => c.name).filter(Boolean);
       const topicWeights: Record<string, number> = {};
-      const nthTopicTime: Record<string, number> = {};
-      const nthTotalW = nth.clusters.reduce((s, c) => s + c.priority, 0);
+      const nthTopicTime = allocateClusterMinutes(nth.clusters, fixedNthMin);
       nth.clusters.forEach(c => {
         if (c.name) {
           topicWeights[c.name] = c.priority * 20;
-          nthTopicTime[c.name] = nthTotalW > 0 ? Math.round((c.priority / nthTotalW) * fixedNthMin) : 0;
         }
       });
 
       rounds.push({
         type: 'nice_to_have_skills',
-        percentage: nth.percentage,
+        percentage: mode === 'fixed' ? timedPercentages.nth : nth.percentage,
         duration_minutes: dur('nth'),
         topics,
         topic_weights: topics.length > 0 ? topicWeights : undefined,
@@ -1197,7 +1415,7 @@ export default function AIInterviewConfig() {
 
       rounds.push({
         type: 'hr',
-        percentage: hrPct,
+        percentage: mode === 'fixed' ? timedPercentages.hr : hrPct,
         duration_minutes: dur('hr'),
         topics: ['Behavioural', 'Cultural Fit', 'Situational'],
         enabled: true,
@@ -1215,7 +1433,7 @@ export default function AIInterviewConfig() {
     interview_mode: mode,
     per_question_seconds: mode === 'fixed' ? perQuestionSeconds : undefined,
     mth_clusters: mth.clusters,
-    nth_clusters: nth.clusters,
+    nth_clusters: nth.enabled ? nth.clusters : [], // don't persist NHS clusters when NHS is disabled
     skill_comments: {
       mth: Object.fromEntries(mth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
       nth: Object.fromEntries(nth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
@@ -1279,36 +1497,80 @@ export default function AIInterviewConfig() {
       return;
     }
 
-    // 2. Generate clusters via API — only if none exist yet
-    const hasExistingClusters = (mth.clusters && mth.clusters.length > 0) || (nth.clusters && nth.clusters.length > 0);
+    // 2. Generate clusters via API when skill lists don't fully match existing clusters.
+    // Always regenerate when: (a) no clusters yet, (b) user added/removed/renamed skills,
+    // (c) scenario changed (NHS toggled, HR toggled) — any of these leave skills unassigned.
+    const currentMthSet = new Set(
+      mth.skills.map(s => s.name.toLowerCase().trim()).filter(Boolean)
+    );
+    const currentNthSet = new Set(
+      nth.enabled ? nth.skills.map(s => s.name.toLowerCase().trim()).filter(Boolean) : []
+    );
+    const clusteredMthSet = new Set(
+      (mth.clusters ?? []).flatMap(c => (c.skills ?? []).map((s: string) => s.toLowerCase().trim()))
+    );
+    const clusteredNthSet = new Set(
+      nth.enabled
+        ? (nth.clusters ?? []).flatMap(c => (c.skills ?? []).map((s: string) => s.toLowerCase().trim()))
+        : []
+    );
+    // Clusters match config when every current skill is covered AND counts are within limits
+    const mthClustersMatch =
+      mth.clusters.length > 0 &&
+      mth.clusters.length <= timedAllocation.mthMaxClusters &&
+      currentMthSet.size > 0 &&
+      [...currentMthSet].every(s => clusteredMthSet.has(s));
+    const nthClustersMatch =
+      !nth.enabled ||
+      (nth.clusters.length > 0 &&
+        nth.clusters.length <= timedAllocation.nthMaxClusters &&
+        currentNthSet.size > 0 &&
+        [...currentNthSet].every(s => clusteredNthSet.has(s)));
+    const needsRegeneration = !mthClustersMatch || !nthClustersMatch;
 
-    if (!hasExistingClusters) {
+    if (needsRegeneration) {
       setGeneratingClusters(true);
       try {
-        const result = await aiInterviewService.generateClusters(
-          mth.skills.map(s => s.name),
-          nth.enabled ? nth.skills.map(s => s.name) : [],
-          selectedJd.title,
-          selectedJd.description,
-          fixedMthMin,
-          nth.enabled ? fixedNthMin : 0,
-        );
+        const mthSkillNames = mth.skills
+          .map(s => s.name.trim())
+          .filter(Boolean);
+        const nthSkillNames = nth.enabled
+          ? nth.skills.map(s => s.name.trim()).filter(Boolean)
+          : [];
 
-        // Save generated clusters to the draft
-        const siObj = JSON.parse(buildClusterJson());
-        siObj.mth_clusters = result.mth_clusters.map(c => ({
-          ...c,
-          priority: c.priority as Cluster['priority'],
-          reason: c.reason || '',
-        }));
-        siObj.nth_clusters = result.nth_clusters.map(c => ({
-          ...c,
-          priority: c.priority as Cluster['priority'],
-          reason: c.reason || '',
-        }));
-        await aiInterviewService.update(existingDraftIdRef.current, {
-          special_instructions: JSON.stringify(siObj),
-        });
+        if (mthSkillNames.length > 0 || nthSkillNames.length > 0) {
+          const result = await aiInterviewService.generateClusters(
+            mthSkillNames,
+            nthSkillNames,
+            selectedJd.title,
+            selectedJd.description,
+            fixedMthMin,
+            nthSkillNames.length > 0 ? fixedNthMin : 0,
+            timedAllocation.mthMaxClusters,
+            nthSkillNames.length > 0 ? timedAllocation.nthMaxClusters : 0,
+          );
+
+          // Save generated clusters to the draft.
+          // Hard-cap to scenario limits in case backend returns more than allowed.
+          const siObj = JSON.parse(buildClusterJson());
+          const mthMax = timedAllocation.mthMaxClusters;
+          const nthMax = timedAllocation.nthMaxClusters;
+          const rawMth = mthSkillNames.length > 0 ? result.mth_clusters : [];
+          const rawNth = nthSkillNames.length > 0 ? result.nth_clusters : [];
+          siObj.mth_clusters = (mthMax > 0 ? rawMth.slice(0, mthMax) : rawMth).map(c => ({
+            ...c,
+            priority: c.priority as Cluster['priority'],
+            reason: c.reason || '',
+          }));
+          siObj.nth_clusters = (nthMax > 0 ? rawNth.slice(0, nthMax) : rawNth).map(c => ({
+            ...c,
+            priority: c.priority as Cluster['priority'],
+            reason: c.reason || '',
+          }));
+          await aiInterviewService.update(existingDraftIdRef.current, {
+            special_instructions: JSON.stringify(siObj),
+          });
+        }
       } catch {
         // Clusters generation failed — still navigate, user can generate on clusters page
         console.warn('Cluster generation failed, navigating without pre-generated clusters');
@@ -1498,7 +1760,18 @@ export default function AIInterviewConfig() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <div className="flex items-center gap-2">
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" checked={nth.enabled} onChange={() => setNth(prev => ({ ...prev, enabled: !prev.enabled }))} className="sr-only peer" />
+                    <input type="checkbox" checked={nth.enabled} onChange={() => {
+                      const newNthEnabled = !nth.enabled;
+                      setNth(prev => ({ ...prev, enabled: newNthEnabled }));
+                      if (mode === 'flexible') {
+                        const [newMth, newNth, newHr] = redistributeFlexPct(
+                          mth.percentage, newNthEnabled, nth.percentage, hrEnabled, hrPct,
+                        );
+                        setMth(prev => ({ ...prev, percentage: newMth }));
+                        if (newNthEnabled) setNth(prev => ({ ...prev, percentage: newNth }));
+                        setHrPct(newHr);
+                      }
+                    }} className="sr-only peer" />
                     <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gray-800 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
                   </label>
                   <Sparkles className="w-4 h-4 text-indigo-600" />
@@ -1529,7 +1802,18 @@ export default function AIInterviewConfig() {
               questionCount={timedQDist.hr}
               flexibleMinutes={flexHrMin}
               percentage={hrPct}
-              onToggle={() => setHrEnabled(e => !e)}
+              onToggle={() => {
+                const newHrEnabled = !hrEnabled;
+                setHrEnabled(newHrEnabled);
+                if (mode === 'flexible') {
+                  const [newMth, newNth, newHr] = redistributeFlexPct(
+                    mth.percentage, nth.enabled, nth.percentage, newHrEnabled, hrPct,
+                  );
+                  setMth(prev => ({ ...prev, percentage: newMth }));
+                  if (nth.enabled) setNth(prev => ({ ...prev, percentage: newNth }));
+                  setHrPct(newHr);
+                }
+              }}
               onPctChange={setHrPct}
               bankQuestions={hrBankQuestions}
               selectedIds={hrSelectedIds}
@@ -1804,32 +2088,103 @@ export default function AIInterviewConfig() {
             <div className="bg-white border border-gray-200 rounded-lg p-4 lg:sticky lg:top-6">
               <h3 className="font-semibold text-gray-900 text-sm mb-4">Configuration Summary</h3>
 
-              {/* Fixed mode: question budget */}
-              {mode === 'fixed' && (
-                <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
-                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-                    <span className="text-xs font-medium text-gray-500">Question Budget (Total: 15)</span>
+              {/* Job Details */}
+              <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
+                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                  <span className="text-xs font-medium text-gray-500">Job Details</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  <div className="px-3 py-2 flex items-start justify-between gap-2">
+                    <span className="text-xs text-gray-500 flex-shrink-0">Role Title</span>
+                    <span className="text-xs font-semibold text-gray-900 text-right">{selectedJd.title}</span>
                   </div>
-                  <table className="w-full text-xs">
-                    <tbody>
-                      <tr className="border-b border-gray-50">
-                        <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth} questions</td>
-                      </tr>
-                      {nth.enabled && (
+                  {(selectedJd.experience_min != null || selectedJd.experience_max != null) && (
+                    <div className="px-3 py-2 flex items-start justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-shrink-0">Experience</span>
+                      <span className="text-xs font-semibold text-gray-900 text-right">
+                        {selectedJd.experience_min != null && selectedJd.experience_max != null
+                          ? `${selectedJd.experience_min}–${selectedJd.experience_max} yrs`
+                          : selectedJd.experience_min != null
+                          ? `${selectedJd.experience_min}+ yrs`
+                          : `Up to ${selectedJd.experience_max} yrs`}
+                      </span>
+                    </div>
+                  )}
+                  {selectedJd.job_level && (
+                    <div className="px-3 py-2 flex items-start justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-shrink-0">Experience Level</span>
+                      <span className="text-xs font-semibold text-gray-900 text-right">{selectedJd.job_level}</span>
+                    </div>
+                  )}
+                  {selectedJd.domain_keywords && selectedJd.domain_keywords.length > 0 && (
+                    <div className="px-3 py-2">
+                      <span className="text-xs text-gray-500 block mb-1.5">Domain Context</span>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedJd.domain_keywords.slice(0, 6).map(kw => (
+                          <span key={kw} className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-700">{kw}</span>
+                        ))}
+                        {selectedJd.domain_keywords.length > 6 && (
+                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-500">+{selectedJd.domain_keywords.length - 6}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Fixed mode: question budget + time allocation */}
+              {mode === 'fixed' && (
+                <div className="space-y-3 mb-4">
+                  <div className="border border-gray-100 rounded-lg overflow-hidden">
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                      <span className="text-xs font-medium text-gray-500">Question Budget (Total: 15)</span>
+                    </div>
+                    <table className="w-full text-xs">
+                      <tbody>
                         <tr className="border-b border-gray-50">
-                          <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth} questions</td>
+                          <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth} questions</td>
                         </tr>
-                      )}
-                      {hrEnabled && (
-                        <tr>
-                          <td className="px-3 py-2 text-gray-600">HR Round</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr} questions</td>
+                        {nth.enabled && (
+                          <tr className="border-b border-gray-50">
+                            <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth} questions</td>
+                          </tr>
+                        )}
+                        {hrEnabled && (
+                          <tr>
+                            <td className="px-3 py-2 text-gray-600">HR Round</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr} questions</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="border border-gray-100 rounded-lg overflow-hidden">
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                      <span className="text-xs font-medium text-gray-500">Time Allocation (Total: {totalFixed} min)</span>
+                    </div>
+                    <table className="w-full text-xs">
+                      <tbody>
+                        <tr className="border-b border-gray-50">
+                          <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin} min</td>
                         </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        {nth.enabled && (
+                          <tr className="border-b border-gray-50">
+                            <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin} min</td>
+                          </tr>
+                        )}
+                        {hrEnabled && (
+                          <tr>
+                            <td className="px-3 py-2 text-gray-600">HR Round</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin} min</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 

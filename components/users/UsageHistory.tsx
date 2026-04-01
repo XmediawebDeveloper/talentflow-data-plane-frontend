@@ -11,25 +11,25 @@ import {
   Target,
   ClipboardCheck,
   Video,
+  Upload,
   Users,
-  TrendingUp,
   TrendingDown,
-  BarChart3,
   Download,
   Calendar,
   Filter,
   Search,
   RefreshCw,
   AlertTriangle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   X,
   FileText,
   FileSpreadsheet,
   CheckCircle2,
   XCircle,
   Clock,
-  Activity,
   Layers,
   Shield,
   User,
@@ -49,7 +49,8 @@ import {
   UsageSummaryResponse,
   getUnitTypeName,
 } from '@/lib/services/unitPoolService';
-import teamService, { AllTeamsUsageSummary } from '@/lib/services/teamService';
+import teamService, { AllTeamsUsageSummary, TeamMembersUsageSummary } from '@/lib/services/teamService';
+import userService, { ApiUser } from '@/lib/services/userService';
 import dashboardService, { SubscriptionUnits } from '@/lib/services/dashboardService';
 import { featurePermissionService, UserLimitsResponse } from '@/lib/services/featurePermissionService';
 
@@ -65,6 +66,18 @@ const UNIT_TYPE_CONFIG: Record<UnitType, { label: string; icon: LucideIcon; colo
   AIU: { label: 'AI Interview', icon: Video, color: 'text-emerald-700', bg: 'bg-emerald-50', bar: 'bg-emerald-500' },
 };
 
+const CONSUMPTION_COLUMNS: Array<{
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  iconClass: string;
+}> = [
+  { key: 'RS', label: 'Resume Scoring', icon: Target, iconClass: 'text-blue-500' },
+  { key: 'AS', label: 'Assessment', icon: ClipboardCheck, iconClass: 'text-purple-500' },
+  { key: 'AIU', label: 'AI Interview', icon: Video, iconClass: 'text-emerald-500' },
+  { key: 'RU', label: 'Resume Storage', icon: Upload, iconClass: 'text-amber-500' },
+];
+
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   SUCCESS: { label: 'Success', color: 'text-green-700', bg: 'bg-green-50' },
   FAILED: { label: 'Failed', color: 'text-red-700', bg: 'bg-red-50' },
@@ -77,43 +90,10 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 };
 
 type TabId = 'feature' | 'user' | 'team' | 'refunds';
-type PeriodPreset = 'this_month' | 'last_month' | 'this_quarter' | 'last_quarter' | 'custom';
 type ExportFormat = 'csv' | 'excel';
+type ExistingUser = Pick<ApiUser, 'id' | 'name' | 'email' | 'is_active'>;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function getPeriodDates(preset: PeriodPreset, customStart?: string, customEnd?: string): { start: Date; end: Date } {
-  const now = new Date();
-  switch (preset) {
-    case 'this_month': {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { start, end: now };
-    }
-    case 'last_month': {
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const end = new Date(now.getFullYear(), now.getMonth(), 0);
-      return { start, end };
-    }
-    case 'this_quarter': {
-      const quarter = Math.floor(now.getMonth() / 3);
-      const start = new Date(now.getFullYear(), quarter * 3, 1);
-      return { start, end: now };
-    }
-    case 'last_quarter': {
-      const quarter = Math.floor(now.getMonth() / 3);
-      const prevQ = quarter === 0 ? 3 : quarter - 1;
-      const year = quarter === 0 ? now.getFullYear() - 1 : now.getFullYear();
-      const start = new Date(year, prevQ * 3, 1);
-      const end = new Date(year, prevQ * 3 + 3, 0);
-      return { start, end };
-    }
-    case 'custom':
-      return {
-        start: customStart ? new Date(customStart) : new Date(now.getFullYear(), now.getMonth(), 1),
-        end: customEnd ? new Date(customEnd) : now,
-      };
-  }
-}
 
 function formatDateForInput(d: Date): string {
   return d.toISOString().split('T')[0];
@@ -553,12 +533,14 @@ function FeatureWiseTab({
 
 function UserWiseTab({
   items,
+  existingUsers,
   total,
   page,
   onPageChange,
   isLoading,
 }: {
   items: ConsumptionLogEntry[];
+  existingUsers: ExistingUser[];
   total: number;
   page: number;
   onPageChange: (p: number) => void;
@@ -569,18 +551,33 @@ function UserWiseTab({
     userId: string;
     userName: string;
     userEmail: string;
-    byType: Partial<Record<UnitType, number>>;
+    byType: Record<string, number>;
     total: number;
     successCount: number;
     failedCount: number;
     lastUsed: string;
+    isExistingUser: boolean;
   }>();
 
+  existingUsers.forEach((existingUser) => {
+    userMap.set(existingUser.id, {
+      userId: existingUser.id,
+      userName: existingUser.name || 'Unknown',
+      userEmail: existingUser.email || '—',
+      byType: {},
+      total: 0,
+      successCount: 0,
+      failedCount: 0,
+      lastUsed: '',
+      isExistingUser: true,
+    });
+  });
+
   items.forEach((entry) => {
-    const key = entry.user_id;
+    const key = entry.user_id || entry.user_email || entry.id;
     if (!userMap.has(key)) {
       userMap.set(key, {
-        userId: entry.user_id,
+        userId: entry.user_id || key,
         userName: entry.user_name || 'Unknown',
         userEmail: entry.user_email || '—',
         byType: {},
@@ -588,18 +585,36 @@ function UserWiseTab({
         successCount: 0,
         failedCount: 0,
         lastUsed: entry.created_at,
+        isExistingUser: false,
       });
     }
     const u = userMap.get(key)!;
+    if ((u.userName === 'Unknown' || !u.userName) && entry.user_name) {
+      u.userName = entry.user_name;
+    }
+    if ((u.userEmail === '—' || !u.userEmail) && entry.user_email) {
+      u.userEmail = entry.user_email;
+    }
     u.byType[entry.unit_type] = (u.byType[entry.unit_type] || 0) + entry.units_consumed;
-    u.total += entry.units_consumed;
+    if (entry.unit_type !== 'max_seats') {
+      u.total += entry.units_consumed;
+    }
     if (entry.status === 'SUCCESS') u.successCount++;
     else if (entry.status === 'FAILED' || entry.status === 'INSUFFICIENT_UNITS') u.failedCount++;
-    if (entry.created_at > u.lastUsed) u.lastUsed = entry.created_at;
+    if (!u.lastUsed || entry.created_at > u.lastUsed) u.lastUsed = entry.created_at;
   });
 
-  const users = Array.from(userMap.values()).sort((a, b) => b.total - a.total);
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const users = Array.from(userMap.values()).sort((a, b) => {
+    if (a.isExistingUser !== b.isExistingUser) {
+      return a.isExistingUser ? -1 : 1;
+    }
+    if (b.total !== a.total) {
+      return b.total - a.total;
+    }
+    return a.userName.localeCompare(b.userName);
+  });
+  const totalPages = Math.ceil(users.length / PAGE_SIZE);
+  const paginatedUsers = users.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   if (isLoading) {
     return (
@@ -626,22 +641,24 @@ function UserWiseTab({
             <tr className="border-b border-gray-100 bg-gray-50">
               <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">#</th>
               <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">User</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">
-                <span className="inline-flex items-center gap-1"><Target className="w-3 h-3 text-blue-500" /> RS</span>
-              </th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">
-                <span className="inline-flex items-center gap-1"><ClipboardCheck className="w-3 h-3 text-purple-500" /> AS</span>
-              </th>
-              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">
-                <span className="inline-flex items-center gap-1"><Video className="w-3 h-3 text-emerald-500" /> AIU</span>
-              </th>
+              {CONSUMPTION_COLUMNS.map((column) => {
+                const Icon = column.icon;
+                return (
+                  <th key={column.key} className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">
+                    <span className="inline-flex items-center gap-1">
+                      <Icon className={`w-3 h-3 ${column.iconClass}`} />
+                      {column.label}
+                    </span>
+                  </th>
+                );
+              })}
               <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Total</th>
               <th className="text-center px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Success / Failed</th>
               <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Last Active</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {users.map((u, idx) => (
+            {paginatedUsers.map((u, idx) => (
               <tr key={u.userId} className="hover:bg-gray-50/60 transition-colors">
                 <td className="px-4 py-3 text-gray-400 text-xs">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                 <td className="px-4 py-3">
@@ -655,9 +672,11 @@ function UserWiseTab({
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-right text-gray-700 font-medium">{u.byType.RS?.toLocaleString() || '—'}</td>
-                <td className="px-4 py-3 text-right text-gray-700 font-medium">{u.byType.AS?.toLocaleString() || '—'}</td>
-                <td className="px-4 py-3 text-right text-gray-700 font-medium">{u.byType.AIU?.toLocaleString() || '—'}</td>
+                {CONSUMPTION_COLUMNS.map((column) => (
+                  <td key={column.key} className="px-4 py-3 text-right text-gray-700 font-medium">
+                    {u.byType[column.key]?.toLocaleString() || '—'}
+                  </td>
+                ))}
                 <td className="px-4 py-3 text-right">
                   <span className="font-bold text-gray-900">{u.total.toLocaleString()}</span>
                 </td>
@@ -672,14 +691,14 @@ function UserWiseTab({
                     </span>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-gray-500 text-xs">{formatISTDate(u.lastUsed)}</td>
+                <td className="px-4 py-3 text-gray-500 text-xs">{u.lastUsed ? formatIST(u.lastUsed) : '—'}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       {totalPages > 1 && (
-        <Pagination page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE} onPageChange={onPageChange} />
+        <Pagination page={page} totalPages={totalPages} total={users.length} pageSize={PAGE_SIZE} onPageChange={onPageChange} />
       )}
     </div>
   );
@@ -689,11 +708,21 @@ function UserWiseTab({
 
 function TeamWiseTab({
   teamsData,
+  page,
+  onPageChange,
+  startDate,
+  endDate,
   isLoading,
 }: {
   teamsData: AllTeamsUsageSummary | null;
+  page: number;
+  onPageChange: (p: number) => void;
+  startDate: string;
+  endDate: string;
   isLoading: boolean;
 }) {
+  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -712,75 +741,238 @@ function TeamWiseTab({
     );
   }
 
+  const totalTeams = teamsData.teams.length;
+  const totalPages = Math.ceil(totalTeams / PAGE_SIZE);
+  const paginatedTeams = teamsData.teams.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100 bg-gray-50">
-            <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">#</th>
-            <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Team</th>
-            <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">
-              <span className="inline-flex items-center gap-1"><Target className="w-3 h-3 text-blue-500" /> RS</span>
-            </th>
-            <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">
-              <span className="inline-flex items-center gap-1"><ClipboardCheck className="w-3 h-3 text-purple-500" /> AS</span>
-            </th>
-            <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">
-              <span className="inline-flex items-center gap-1"><Video className="w-3 h-3 text-emerald-500" /> AIU</span>
-            </th>
-            <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">JDs Created</th>
-            <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Assessments</th>
-            <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Seats Used</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-50">
-          {teamsData.teams.map((team, idx) => {
-            const rsConsumed = team.by_type?.RS?.total_consumed ?? 0;
-            const asConsumed = team.by_type?.AS?.total_consumed ?? 0;
-            const aiuConsumed = team.by_type?.AIU?.total_consumed ?? 0;
-            const totalConsumed = rsConsumed + asConsumed + aiuConsumed;
-            return (
-              <tr key={team.team_id} className="hover:bg-gray-50/60 transition-colors">
-                <td className="px-4 py-3 text-gray-400 text-xs">{idx + 1}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0">
-                      <Users className="w-3.5 h-3.5 text-white" />
-                    </div>
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50">
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">#</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Team</th>
+              {CONSUMPTION_COLUMNS.map((column) => {
+                const Icon = column.icon;
+                return (
+                  <th key={column.key} className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">
+                    <span className="inline-flex items-center gap-1">
+                      <Icon className={`w-3 h-3 ${column.iconClass}`} />
+                      {column.label}
+                    </span>
+                  </th>
+                );
+              })}
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">JDs Created</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Assessments</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {paginatedTeams.map((team, idx) => {
+              const rsConsumed = team.by_type?.RS?.total_consumed ?? 0;
+              const asConsumed = team.by_type?.AS?.total_consumed ?? 0;
+              const aiuConsumed = team.by_type?.AIU?.total_consumed ?? 0;
+              const ruConsumed = team.by_type?.RU?.total_consumed ?? 0;
+              const totalConsumed = rsConsumed + asConsumed + aiuConsumed + ruConsumed;
+              const isExpanded = expandedTeamId === team.team_id;
+              return (
+                <React.Fragment key={team.team_id}>
+                  <tr
+                    className="hover:bg-gray-50/60 transition-colors cursor-pointer"
+                    onClick={() => setExpandedTeamId(isExpanded ? null : team.team_id)}
+                  >
+                    <td className="px-4 py-3 text-gray-400 text-xs">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="text-gray-400 hover:text-gray-600"
+                          aria-label={isExpanded ? 'Collapse team users' : 'Expand team users'}
+                        >
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0">
+                          <Users className="w-3.5 h-3.5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-800 text-xs">{team.team_name || 'Unnamed Team'}</p>
+                          <p className="text-gray-400 text-xs">{totalConsumed.toLocaleString()} units total</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-right text-gray-700 font-medium">{rsConsumed ? rsConsumed.toLocaleString() : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-700 font-medium">{asConsumed ? asConsumed.toLocaleString() : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-700 font-medium">{aiuConsumed ? aiuConsumed.toLocaleString() : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-700 font-medium">{ruConsumed ? ruConsumed.toLocaleString() : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">{team.jds_created?.toLocaleString() ?? '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">{team.assessments_created?.toLocaleString() ?? '—'}</td>
+                  </tr>
+                  {isExpanded && (
+                    <tr className="bg-gray-50/70">
+                      <td colSpan={8} className="px-4 py-4">
+                        <InlineTeamMembersUsage
+                          teamId={team.team_id}
+                          teamName={team.team_name || 'Unnamed Team'}
+                          startDate={startDate}
+                          endDate={endDate}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-200 bg-gray-50">
+              <td className="px-4 py-3" colSpan={2}>
+                <span className="text-xs font-semibold text-gray-600">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
+              </td>
+              <td className="px-4 py-3 text-right text-xs font-bold text-blue-700">
+                {teamsData.teams.reduce((s, t) => s + (t.by_type?.RS?.total_consumed ?? 0), 0).toLocaleString()}
+              </td>
+              <td className="px-4 py-3 text-right text-xs font-bold text-purple-700">
+                {teamsData.teams.reduce((s, t) => s + (t.by_type?.AS?.total_consumed ?? 0), 0).toLocaleString()}
+              </td>
+              <td className="px-4 py-3 text-right text-xs font-bold text-emerald-700">
+                {teamsData.teams.reduce((s, t) => s + (t.by_type?.AIU?.total_consumed ?? 0), 0).toLocaleString()}
+              </td>
+              <td className="px-4 py-3 text-right text-xs font-bold text-amber-700">
+                {teamsData.teams.reduce((s, t) => s + (t.by_type?.RU?.total_consumed ?? 0), 0).toLocaleString()}
+              </td>
+              <td colSpan={2} />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {totalPages > 1 && (
+        <Pagination page={page} totalPages={totalPages} total={totalTeams} pageSize={PAGE_SIZE} onPageChange={onPageChange} />
+      )}
+    </div>
+  );
+}
+
+function InlineTeamMembersUsage({
+  teamId,
+  teamName,
+  startDate,
+  endDate,
+}: {
+  teamId: string;
+  teamName: string;
+  startDate: string;
+  endDate: string;
+}) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [membersUsage, setMembersUsage] = useState<TeamMembersUsageSummary | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadMembersUsage = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await teamService.getTeamMembersUsage(teamId, startDate, endDate);
+        if (isMounted) {
+          setMembersUsage(data);
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setError(err?.response?.data?.detail?.message || err?.message || 'Failed to load team user usage');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadMembersUsage();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [endDate, startDate, teamId]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Loading team users usage...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        {error}
+      </div>
+    );
+  }
+
+  const members = membersUsage?.members || [];
+
+  if (!members.length) {
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-500">
+        No usage found for users in {teamName} during the selected date range.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">{teamName} Users</p>
+          <p className="text-xs text-gray-500">Usage details for team members</p>
+        </div>
+        <span className="text-xs font-medium text-gray-500">{members.length} user{members.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100 bg-white">
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">User</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Resume Scoring</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Assessment</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">AI Interview</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Resume Storage</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Total</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs uppercase tracking-wide">Last Active</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {members.map((member) => {
+              const rs = member.by_type?.RS?.total_consumed ?? 0;
+              const as = member.by_type?.AS?.total_consumed ?? 0;
+              const aiu = member.by_type?.AIU?.total_consumed ?? 0;
+              const ru = member.by_type?.RU?.total_consumed ?? 0;
+              const total = rs + as + aiu + ru;
+              return (
+                <tr key={member.user_id} className="hover:bg-gray-50/60 transition-colors">
+                  <td className="px-4 py-3">
                     <div>
-                      <p className="font-medium text-gray-800 text-xs">{team.team_name || 'Unnamed Team'}</p>
-                      <p className="text-gray-400 text-xs">{totalConsumed.toLocaleString()} units total</p>
+                      <p className="font-medium text-gray-800 text-xs">{member.user_name || 'Unknown User'}</p>
+                      <p className="text-gray-400 text-xs">{member.user_email || '—'}</p>
                     </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-right text-gray-700 font-medium">{rsConsumed ? rsConsumed.toLocaleString() : '—'}</td>
-                <td className="px-4 py-3 text-right text-gray-700 font-medium">{asConsumed ? asConsumed.toLocaleString() : '—'}</td>
-                <td className="px-4 py-3 text-right text-gray-700 font-medium">{aiuConsumed ? aiuConsumed.toLocaleString() : '—'}</td>
-                <td className="px-4 py-3 text-right text-gray-600">{team.jds_created?.toLocaleString() ?? '—'}</td>
-                <td className="px-4 py-3 text-right text-gray-600">{team.assessments_created?.toLocaleString() ?? '—'}</td>
-                <td className="px-4 py-3 text-right text-gray-600">{team.seats_used?.toLocaleString() ?? '—'}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-        <tfoot>
-          <tr className="border-t-2 border-gray-200 bg-gray-50">
-            <td className="px-4 py-3" colSpan={2}>
-              <span className="text-xs font-semibold text-gray-600">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
-            </td>
-            <td className="px-4 py-3 text-right text-xs font-bold text-blue-700">
-              {teamsData.teams.reduce((s, t) => s + (t.by_type?.RS?.total_consumed ?? 0), 0).toLocaleString()}
-            </td>
-            <td className="px-4 py-3 text-right text-xs font-bold text-purple-700">
-              {teamsData.teams.reduce((s, t) => s + (t.by_type?.AS?.total_consumed ?? 0), 0).toLocaleString()}
-            </td>
-            <td className="px-4 py-3 text-right text-xs font-bold text-emerald-700">
-              {teamsData.teams.reduce((s, t) => s + (t.by_type?.AIU?.total_consumed ?? 0), 0).toLocaleString()}
-            </td>
-            <td colSpan={3} />
-          </tr>
-        </tfoot>
-      </table>
+                  </td>
+                  <td className="px-4 py-3 text-right text-gray-700 font-medium">{rs ? rs.toLocaleString() : '—'}</td>
+                  <td className="px-4 py-3 text-right text-gray-700 font-medium">{as ? as.toLocaleString() : '—'}</td>
+                  <td className="px-4 py-3 text-right text-gray-700 font-medium">{aiu ? aiu.toLocaleString() : '—'}</td>
+                  <td className="px-4 py-3 text-right text-gray-700 font-medium">{ru ? ru.toLocaleString() : '—'}</td>
+                  <td className="px-4 py-3 text-right font-bold text-gray-900">{total.toLocaleString()}</td>
+                  <td className="px-4 py-3 text-gray-500 text-xs">{member.last_activity ? formatIST(member.last_activity) : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -909,14 +1101,19 @@ function RefundsTab({
 
 export default function UsageHistory() {
   const { user, isTenantAdmin } = useAuth();
+  const today = useMemo(() => new Date(), []);
+  const defaultStartDate = useMemo(
+    () => formatDateForInput(new Date(today.getFullYear(), today.getMonth(), 1)),
+    [today]
+  );
+  const defaultEndDate = useMemo(() => formatDateForInput(today), [today]);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<TabId>('feature');
+  const [activeTab, setActiveTab] = useState<TabId>('user');
 
   // Filters
-  const [periodPreset, setPeriodPreset] = useState<PeriodPreset>('this_month');
-  const [customStart, setCustomStart] = useState<string>('');
-  const [customEnd, setCustomEnd] = useState<string>('');
+  const [startDateInput, setStartDateInput] = useState<string>(defaultStartDate);
+  const [endDateInput, setEndDateInput] = useState<string>(defaultEndDate);
   const [filterUnitType, setFilterUnitType] = useState<UnitType | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchUser, setSearchUser] = useState('');
@@ -924,6 +1121,7 @@ export default function UsageHistory() {
   // Pagination per tab
   const [featurePage, setFeaturePage] = useState(1);
   const [userPage, setUserPage] = useState(1);
+  const [teamPage, setTeamPage] = useState(1);
   const [refundsPage, setRefundsPage] = useState(1);
 
   // Data
@@ -934,6 +1132,7 @@ export default function UsageHistory() {
   const [teamsData, setTeamsData] = useState<AllTeamsUsageSummary | null>(null);
   const [adjustmentItems, setAdjustmentItems] = useState<AdjustmentLogEntry[]>([]);
   const [adjustmentTotal, setAdjustmentTotal] = useState(0);
+  const [existingUsers, setExistingUsers] = useState<ExistingUser[]>([]);
   const [subscriptionUnits, setSubscriptionUnits] = useState<SubscriptionUnits | null>(null);
   const [userLimits, setUserLimits] = useState<UserLimitsResponse | null>(null);
 
@@ -950,9 +1149,22 @@ export default function UsageHistory() {
 
   // ── Computed date range (memoized to prevent infinite effect loops) ────────
   const { dateStart, dateEnd } = useMemo(() => {
-    const { start, end } = getPeriodDates(periodPreset, customStart, customEnd);
+    const start = startDateInput ? new Date(startDateInput) : new Date(defaultStartDate);
+    const end = endDateInput ? new Date(endDateInput) : new Date(defaultEndDate);
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      return {
+        dateStart: new Date(defaultStartDate),
+        dateEnd: new Date(defaultEndDate),
+      };
+    }
+
+    if (start > end) {
+      return { dateStart: end, dateEnd: end };
+    }
+
     return { dateStart: start, dateEnd: end };
-  }, [periodPreset, customStart, customEnd]);
+  }, [defaultEndDate, defaultStartDate, endDateInput, startDateInput]);
 
   // ── Access guard ─────────────────────────────────────────────────────────
   if (!isTenantAdmin) {
@@ -988,7 +1200,7 @@ export default function UsageHistory() {
   }, [dateStart, dateEnd]);
 
   // ── Load consumption history ───────────────────────────────────────────────
-  const loadConsumption = useCallback(async (page: number) => {
+  const loadConsumption = useCallback(async (page: number, mode: 'feature' | 'user' = 'feature') => {
     setIsLoadingConsumption(true);
     try {
       const res = await unitPoolService.getConsumptionHistory({
@@ -996,11 +1208,11 @@ export default function UsageHistory() {
         status: filterStatus === 'all' ? undefined : filterStatus,
         start_date: formatDateForInput(dateStart),
         end_date: formatDateForInput(dateEnd),
-        limit: PAGE_SIZE,
-        offset: (page - 1) * PAGE_SIZE,
+        limit: mode === 'user' ? 10000 : PAGE_SIZE,
+        offset: mode === 'user' ? 0 : (page - 1) * PAGE_SIZE,
       });
       setConsumptionItems(res.items);
-      setConsumptionTotal(res.total);
+      setConsumptionTotal(mode === 'user' ? res.items.length : res.total);
     } catch (err: any) {
       toast.error(err.message || 'Failed to load consumption history');
     } finally {
@@ -1020,6 +1232,34 @@ export default function UsageHistory() {
       setIsLoadingTeams(false);
     }
   }, [dateStart, dateEnd]);
+
+  const loadExistingUsers = useCallback(async () => {
+    try {
+      const allUsers: ExistingUser[] = [];
+      let page = 1;
+
+      while (page <= 20) {
+        const batch = await userService.listUsers({ page, page_size: 100 });
+        if (!batch.length) break;
+
+        allUsers.push(
+          ...batch.map((user) => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            is_active: user.is_active,
+          }))
+        );
+
+        if (batch.length < 100) break;
+        page += 1;
+      }
+
+      setExistingUsers(allUsers);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to load users');
+    }
+  }, []);
 
   // ── Load adjustments ────────────────────────────────────────────────────────
   const [adjustmentsUnavailable, setAdjustmentsUnavailable] = useState(false);
@@ -1059,19 +1299,28 @@ export default function UsageHistory() {
   useEffect(() => {
     setFeaturePage(1);
     setUserPage(1);
+    setTeamPage(1);
   }, [activeTab, filterUnitType, filterStatus, dateStart, dateEnd]);
 
   // Single consumption load effect — loadConsumption encodes all filter+date deps via useCallback
   useEffect(() => {
-    if (activeTab === 'feature' || activeTab === 'user') {
-      loadConsumption(featurePage);
+    if (activeTab === 'feature') {
+      loadConsumption(featurePage, 'feature');
+    } else if (activeTab === 'user') {
+      loadConsumption(userPage, 'user');
     }
-  }, [loadConsumption, featurePage]);
+  }, [activeTab, loadConsumption, featurePage, userPage]);
 
   // Teams
   useEffect(() => {
     if (activeTab === 'team') loadTeams();
   }, [loadTeams, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'user') {
+      loadExistingUsers();
+    }
+  }, [activeTab, loadExistingUsers]);
 
   // Adjustments — reset page when deps change
   useEffect(() => {
@@ -1087,7 +1336,11 @@ export default function UsageHistory() {
     setIsRefreshing(true);
     await Promise.all([
       loadPoolData(),
-      activeTab === 'feature' || activeTab === 'user' ? loadConsumption(featurePage) : Promise.resolve(),
+      activeTab === 'feature'
+        ? loadConsumption(featurePage, 'feature')
+        : activeTab === 'user'
+          ? Promise.all([loadConsumption(userPage, 'user'), loadExistingUsers()]).then(() => undefined)
+          : Promise.resolve(),
       activeTab === 'team' ? loadTeams() : Promise.resolve(),
       activeTab === 'refunds' ? loadAdjustments(refundsPage) : Promise.resolve(),
     ]);
@@ -1123,37 +1376,9 @@ export default function UsageHistory() {
     }
   };
 
-  // ── Summary stats for analytics row ───────────────────────────────────────
-  // Use subscriptionUnits (dashboard API) as primary — more accurate than unit pool status
-  const subUnitTypes = ['RS', 'AS', 'AIU'] as const;
-  const totalAllocated = subscriptionUnits
-    ? subUnitTypes.reduce((s, t) => {
-        const u = subscriptionUnits[t];
-        return s + (u && !u.is_unlimited ? u.limit : 0);
-      }, 0)
-    : pools
-    ? Object.values(pools.pools).reduce((s, p) => s + (p?.total_allocated ?? 0), 0)
-    : 0;
-  const totalConsumed = subscriptionUnits
-    ? subUnitTypes.reduce((s, t) => s + (subscriptionUnits[t]?.used ?? 0), 0)
-    : pools
-    ? Object.values(pools.pools).reduce((s, p) => s + (p?.total_consumed ?? 0), 0)
-    : 0;
-  const totalRemaining = subscriptionUnits
-    ? subUnitTypes.reduce((s, t) => {
-        const u = subscriptionUnits[t];
-        return s + (u && !u.is_unlimited ? u.available : 0);
-      }, 0)
-    : pools
-    ? Object.values(pools.pools).reduce((s, p) => s + (p?.available_units ?? 0), 0)
-    : 0;
-  const refundedEntries = consumptionItems.filter((e) => e.refund_flag === 'YES').length;
-
   const TABS: { id: TabId; label: string; icon: LucideIcon; count?: number }[] = [
-    { id: 'feature', label: 'Feature-Wise', icon: Layers, count: consumptionTotal || undefined },
     { id: 'user', label: 'User-Wise', icon: User },
     { id: 'team', label: 'Team-Wise', icon: Users, count: teamsData?.teams?.length || undefined },
-    { id: 'refunds', label: 'Refunds & Adjustments', icon: RefreshCw, count: adjustmentTotal || undefined },
   ];
 
   return (
@@ -1185,29 +1410,6 @@ export default function UsageHistory() {
         </div>
       </div>
 
-      {/* ── Analytics Summary Row ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: 'Total Purchased', value: totalAllocated.toLocaleString(), icon: BarChart3, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'Total Consumed', value: totalConsumed.toLocaleString(), icon: TrendingUp, color: 'text-orange-600', bg: 'bg-orange-50' },
-          { label: 'Total Remaining', value: totalRemaining.toLocaleString(), icon: Activity, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Refunded (filtered)', value: refundedEntries.toLocaleString(), icon: RefreshCw, color: 'text-teal-600', bg: 'bg-teal-50' },
-        ].map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div key={stat.label} className={`${isLoadingPools ? 'animate-pulse' : ''} bg-white rounded-xl border border-gray-200 p-4 shadow-sm`}>
-              <div className="flex items-center gap-2 mb-2">
-                <div className={`w-7 h-7 rounded-lg ${stat.bg} flex items-center justify-center`}>
-                  <Icon className={`w-3.5 h-3.5 ${stat.color}`} />
-                </div>
-                <span className="text-xs text-gray-500">{stat.label}</span>
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{isLoadingPools ? '…' : stat.value}</p>
-            </div>
-          );
-        })}
-      </div>
-
       {/* ── Feature Analytics Cards ── */}
       <AnalyticsCards
         pools={isLoadingPools ? null : pools}
@@ -1223,45 +1425,28 @@ export default function UsageHistory() {
           <span className="text-sm font-medium text-gray-700">Filters</span>
         </div>
         <div className="flex flex-wrap gap-3">
-          {/* Period Preset */}
+          {/* Date Range */}
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Period</label>
-            <select
-              value={periodPreset}
-              onChange={(e) => setPeriodPreset(e.target.value as PeriodPreset)}
+            <label className="text-xs text-gray-500">From</label>
+            <input
+              type="date"
+              value={startDateInput}
+              max={endDateInput || defaultEndDate}
+              onChange={(e) => setStartDateInput(e.target.value)}
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="this_month">This Month</option>
-              <option value="last_month">Last Month</option>
-              <option value="this_quarter">This Quarter</option>
-              <option value="last_quarter">Last Quarter</option>
-              <option value="custom">Custom Range</option>
-            </select>
+            />
           </div>
-
-          {/* Custom date range */}
-          {periodPreset === 'custom' && (
-            <>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-500">From</label>
-                <input
-                  type="date"
-                  value={customStart}
-                  onChange={(e) => setCustomStart(e.target.value)}
-                  className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-500">To</label>
-                <input
-                  type="date"
-                  value={customEnd}
-                  onChange={(e) => setCustomEnd(e.target.value)}
-                  className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </>
-          )}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-gray-500">To</label>
+            <input
+              type="date"
+              value={endDateInput}
+              min={startDateInput || defaultStartDate}
+              max={defaultEndDate}
+              onChange={(e) => setEndDateInput(e.target.value)}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
 
           {/* Feature Type */}
           <div className="flex flex-col gap-1">
@@ -1272,9 +1457,9 @@ export default function UsageHistory() {
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">All Features</option>
-              <option value="RS">Resume Scoring (RS)</option>
-              <option value="AS">Assessment (AS)</option>
-              <option value="AIU">AI Interview (AIU)</option>
+              <option value="RS">Resume Scoring</option>
+              <option value="AS">Assessment</option>
+              <option value="AIU">AI Interview</option>
             </select>
           </div>
 
@@ -1355,6 +1540,7 @@ export default function UsageHistory() {
           {activeTab === 'user' && (
             <UserWiseTab
               items={consumptionItems}
+              existingUsers={existingUsers}
               total={consumptionTotal}
               page={userPage}
               onPageChange={setUserPage}
@@ -1364,6 +1550,10 @@ export default function UsageHistory() {
           {activeTab === 'team' && (
             <TeamWiseTab
               teamsData={teamsData}
+              page={teamPage}
+              onPageChange={setTeamPage}
+              startDate={formatDateForInput(dateStart)}
+              endDate={formatDateForInput(dateEnd)}
               isLoading={isLoadingTeams}
             />
           )}

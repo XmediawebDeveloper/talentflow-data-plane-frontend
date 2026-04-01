@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Tag, Clock, Filter, X, Save, AlertCircle } from 'lucide-react';
 import api from '@/lib/services/api';
 import { toast } from '@/components/ui/enhanced-toast';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 // Question categories for HR round
 const HR_CATEGORIES = [
@@ -179,6 +180,11 @@ const DEFAULT_HR_QUESTIONS: HRQuestion[] = [
 ];
 
 export default function HRQuestionBank() {
+  const { user, isTenantAdmin } = useAuth();
+  const canViewHRQuestionBank = isTenantAdmin || !!user?.permissions?.canViewHRQuestionBank;
+  const canCreateHRQuestionBank = isTenantAdmin || !!user?.permissions?.canCreateHRQuestionBank;
+  const canUpdateHRQuestionBank = isTenantAdmin || !!user?.permissions?.canUpdateHRQuestionBank;
+  const canDeleteHRQuestionBank = isTenantAdmin || !!user?.permissions?.canDeleteHRQuestionBank;
   const [questions, setQuestions] = useState<HRQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -192,8 +198,12 @@ export default function HRQuestionBank() {
 
   // Load questions from API
   useEffect(() => {
-    loadQuestions();
-  }, []);
+    if (canViewHRQuestionBank) {
+      loadQuestions();
+    } else {
+      setLoading(false);
+    }
+  }, [canViewHRQuestionBank]);
 
   const loadQuestions = async () => {
     setLoading(true);
@@ -336,6 +346,12 @@ export default function HRQuestionBank() {
 
   return (
     <div className="space-y-6">
+      {!canViewHRQuestionBank ? (
+        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
+          You do not have permission to view the HR Question Bank.
+        </div>
+      ) : (
+        <>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -344,13 +360,15 @@ export default function HRQuestionBank() {
             Manage reusable HR questions for assessments. These questions can be used across multiple assessments.
           </p>
         </div>
-        <button
-          onClick={() => { setShowAddForm(true); setEditingId(null); setFormData(EMPTY_QUESTION); }}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm font-medium shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          Add Question
-        </button>
+        {canCreateHRQuestionBank && (
+          <button
+            onClick={() => { setShowAddForm(true); setEditingId(null); setFormData(EMPTY_QUESTION); }}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 text-sm font-medium shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            Add Question
+          </button>
+        )}
       </div>
 
       {/* Info */}
@@ -371,7 +389,7 @@ export default function HRQuestionBank() {
       </div>
 
       {/* Add/Edit Form */}
-      {showAddForm && (
+      {showAddForm && canCreateHRQuestionBank && (
         <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-900">
@@ -529,23 +547,29 @@ export default function HRQuestionBank() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleEdit(question); }}
-                    className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(question.id); }}
-                    className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {canUpdateHRQuestionBank && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleEdit(question); }}
+                      className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  {canDeleteHRQuestionBank && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(question.id); }}
+                      className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+        </>
       )}
     </div>
   );
