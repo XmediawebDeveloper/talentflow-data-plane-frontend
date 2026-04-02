@@ -90,33 +90,20 @@ export default function AITalentMatchRoute() {
           }
         }
 
-        // Transform grouped sessions to match history format
-        const history: MatchHistory[] = await Promise.all(
-          Array.from(sessionsByJob.values()).map(async (session: AIMatchSessionResponse) => {
-            // Find the job title
-            const job = transformedJobs.find(j => j.id === session.jd_id);
+        // Keep route load summary-only.
+        // Candidate details are fetched lazily when the user opens a specific session.
+        const history: MatchHistory[] = Array.from(sessionsByJob.values()).map((session: AIMatchSessionResponse) => {
+          const job = transformedJobs.find(j => j.id === session.jd_id);
 
-            // Fetch session details with results if needed
-            let candidates: any[] = [];
-            if (session.total_matches > 0) {
-              try {
-                const details = await aiMatchService.getSession(session.id);
-                candidates = details.candidates;
-              } catch (e) {
-                console.warn('Failed to fetch session details:', e);
-              }
-            }
-
-            return {
-              id: session.id,
-              jobId: session.jd_id || '',
-              jobTitle: job?.title || session.search_query || 'Unknown Job',
-              matchedAt: new Date(session.created_at),
-              totalMatches: session.total_matches,
-              matchedCandidates: candidates,
-            };
-          })
-        );
+          return {
+            id: session.id,
+            jobId: session.jd_id || '',
+            jobTitle: job?.title || session.search_query || 'Unknown Job',
+            matchedAt: new Date(session.created_at),
+            totalMatches: session.total_matches,
+            matchedCandidates: [],
+          };
+        });
 
         // Sort by most recent first
         history.sort((a, b) => b.matchedAt.getTime() - a.matchedAt.getTime());

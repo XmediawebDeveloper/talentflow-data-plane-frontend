@@ -5,6 +5,7 @@ import {
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
   MessageSquare, Info, AlertCircle, Timer, Zap,
   Video, Upload, Layers, ChevronRight, Camera, Play,
+  Lock, ArrowRightLeft,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -247,9 +248,15 @@ interface SkillSectionProps {
   questionCount: number;
   flexibleMinutes: number;
   onChange: (updated: Partial<CategoryConfig>) => void;
+  /** Flexible mode only: callback to transfer a skill to the opposite category */
+  onMoveSkill?: (skillName: string) => void;
+  /** Flexible mode only: true when clusters have been generated — locks add/remove */
+  isLocked?: boolean;
+  /** Flexible mode only: clears clusters so skills can be edited again */
+  onResetClusters?: () => void;
 }
 
-function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange }: SkillSectionProps) {
+function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange, onMoveSkill, isLocked = false, onResetClusters }: SkillSectionProps) {
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
   const [skillToDelete, setSkillToDelete] = useState<string | null>(null);
@@ -344,12 +351,25 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
           >
             <option value="Skill">Skill</option>
           </select>
-          <button
-            onClick={() => setSkillToDelete(skill.name)}
-            className="p-1 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
+          {/* Flexible mode: move skill to the other category */}
+          {mode === 'flexible' && onMoveSkill && !isLocked && (
+            <button
+              title={category === 'mth' ? 'Move to Nice-to-Have' : 'Move to Must-Have'}
+              onClick={() => onMoveSkill(skill.name)}
+              className="p-1 text-gray-300 hover:text-indigo-500 transition-colors opacity-0 group-hover:opacity-100"
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {/* Hide delete when locked in flexible mode */}
+          {!(mode === 'flexible' && isLocked) && (
+            <button
+              onClick={() => setSkillToDelete(skill.name)}
+              className="p-1 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
         {commentOpen === skill.name && (
           <div className="mt-1 ml-0.5 flex items-center gap-1.5">
@@ -425,6 +445,24 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
 
       <div className="p-4 space-y-4">
 
+        {/* Flexible mode: locked notice replaces the add-skill input */}
+        {mode === 'flexible' && isLocked ? (
+          <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+              <span className="text-xs text-amber-700">Skills locked after cluster generation.</span>
+            </div>
+            {onResetClusters && (
+              <button
+                type="button"
+                onClick={onResetClusters}
+                className="text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap"
+              >
+                Reset clusters to edit
+              </button>
+            )}
+          </div>
+        ) : (
         <div>
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Add Skill</span>
@@ -463,6 +501,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             </button>
           </div>
         </div>
+        )}
 
         {/* ── Clustered view: skills grouped by cluster topic ── */}
         {hasClusters && (
@@ -747,13 +786,6 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-800 leading-relaxed">{q.question_text}</p>
-                      <span className={`text-[10px] mt-1 px-1.5 py-0.5 rounded border inline-block ${
-                        q.answer_type === 'yes_no'
-                          ? 'bg-green-50 text-green-600 border-green-200'
-                          : 'bg-gray-50 text-gray-500 border-gray-200'
-                      }`}>
-                        {q.answer_type === 'yes_no' ? 'Yes / No' : 'Text'}
-                      </span>
                     </div>
                   </label>
                 ))
@@ -1251,6 +1283,51 @@ export default function AIInterviewConfig() {
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
 
+  /** Flexible mode: true once clusters have been generated — locks skill add/remove */
+  const flexSkillsLocked = mode === 'flexible' && mth.clusters.length > 0;
+
+  /** Flexible mode: clear all clusters so the recruiter can edit skills again */
+  const handleResetClusters = () => {
+    setMth(prev => ({ ...prev, clusters: [] }));
+    setNth(prev => ({ ...prev, clusters: [] }));
+  };
+
+  /** Flexible mode: move a skill from MHS → NHS */
+  const moveMthToNth = (skillName: string) => {
+    const skill = mth.skills.find(s => s.name === skillName);
+    if (!skill) return;
+    setMth(prev => ({
+      ...prev,
+      skills: prev.skills.filter(s => s.name !== skillName),
+      clusters: prev.clusters.map(c => ({
+        ...c,
+        skills: c.skills.filter(s => s.toLowerCase() !== skillName.toLowerCase()),
+      })),
+    }));
+    setNth(prev => ({
+      ...prev,
+      skills: [...prev.skills, skill],
+    }));
+  };
+
+  /** Flexible mode: move a skill from NHS → MHS */
+  const moveNthToMth = (skillName: string) => {
+    const skill = nth.skills.find(s => s.name === skillName);
+    if (!skill) return;
+    setNth(prev => ({
+      ...prev,
+      skills: prev.skills.filter(s => s.name !== skillName),
+      clusters: prev.clusters.map(c => ({
+        ...c,
+        skills: c.skills.filter(s => s.toLowerCase() !== skillName.toLowerCase()),
+      })),
+    }));
+    setMth(prev => ({
+      ...prev,
+      skills: [...prev.skills, skill],
+    }));
+  };
+
   const timedAllocation = getTimedModeAllocation(nth.enabled, hrEnabled);
   const timedPercentages = getTimedModePercentages(nth.enabled, hrEnabled);
   const fixedMthMin = timedAllocation.mthMinutes;
@@ -1260,6 +1337,19 @@ export default function AIInterviewConfig() {
 
   const totalPct = mth.percentage + (nth.enabled ? nth.percentage : 0) + (hrEnabled ? hrPct : 0);
   const pctValid = totalPct === 100;
+  const experienceRange =
+    selectedJd?.experience_min != null && selectedJd?.experience_max != null
+      ? `${selectedJd.experience_min}–${selectedJd.experience_max} yrs`
+      : selectedJd?.experience_min != null
+      ? `${selectedJd.experience_min}+ yrs`
+      : selectedJd?.experience_max != null
+      ? `Up to ${selectedJd.experience_max} yrs`
+      : '';
+  const experienceSummary = [experienceRange, selectedJd?.job_level].filter(Boolean).join(' • ');
+  const clusterMaxCountSummary = [
+    `Must-to-Have: ${timedAllocation.mthMaxClusters}`,
+    ...(nth.enabled ? [`Nice-to-Have: ${timedAllocation.nthMaxClusters}`] : []),
+  ].join(' | ');
 
   // Flexible mode: time split per section based on weight % × 30 min
   const FLEXIBLE_TOTAL_MIN = 30;
@@ -1432,6 +1522,8 @@ export default function AIInterviewConfig() {
   const buildClusterJson = () => JSON.stringify({
     interview_mode: mode,
     per_question_seconds: mode === 'fixed' ? perQuestionSeconds : undefined,
+    // Flexible mode: persist JD description so the Clusters page can send it to AI on re-generate
+    jd_description: mode === 'flexible' ? (selectedJd?.description ?? '') : undefined,
     mth_clusters: mth.clusters,
     nth_clusters: nth.enabled ? nth.clusters : [], // don't persist NHS clusters when NHS is disabled
     skill_comments: {
@@ -1487,6 +1579,19 @@ export default function AIInterviewConfig() {
   const handleContinueToClusters = async () => {
     if (!selectedJd) return;
     if (mode === 'flexible' && !pctValid) return;
+
+    // Flexible mode only: validate skill counts before proceeding
+    if (mode === 'flexible') {
+      if (mth.skills.length === 0 && nth.skills.length === 0) {
+        toast.error('No skills defined. Please add at least one Must-Have skill.');
+        return;
+      }
+      if (mth.skills.length === 0) {
+        toast.error('At least one Must-Have skill is required before generating clusters.');
+        return;
+      }
+    }
+
     isNavigatingRef.current = true;
 
     // 1. Save draft first
@@ -1727,10 +1832,10 @@ export default function AIInterviewConfig() {
                   >
                     <div className="flex items-center gap-2">
                       <Timer className={`w-4 h-4 ${mode === 'flexible' ? 'text-white' : 'text-gray-600'}`} />
-                      <span className="font-semibold text-sm">Flexible — 30 min</span>
+                      <span className="font-semibold text-sm">Conversational — 30 min</span>
                     </div>
                     <p className={`text-xs ${mode === 'flexible' ? 'text-gray-300' : 'text-gray-500'}`}>
-                      Candidate response time is capped. AI narration excluded.
+                      No per-question timer. AI adapts based on candidate responses.
                     </p>
                     <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'flexible' ? 'text-gray-400' : 'text-gray-400'}`}>
                       <div>Must-to-Have → {mth.percentage}% weight</div>
@@ -1753,6 +1858,9 @@ export default function AIInterviewConfig() {
               questionCount={timedQDist.mth}
               flexibleMinutes={flexMthMin}
               onChange={patch => setMth(prev => ({ ...prev, ...patch }))}
+              onMoveSkill={mode === 'flexible' && nth.enabled ? moveMthToNth : undefined}
+              isLocked={flexSkillsLocked}
+              onResetClusters={handleResetClusters}
             />
 
             {/* ── NTH ── */}
@@ -1790,6 +1898,9 @@ export default function AIInterviewConfig() {
                     questionCount={timedQDist.nth}
                     flexibleMinutes={flexNthMin}
                     onChange={patch => setNth(prev => ({ ...prev, ...patch }))}
+                    onMoveSkill={mode === 'flexible' ? moveNthToMth : undefined}
+                    isLocked={flexSkillsLocked}
+                    onResetClusters={handleResetClusters}
                   />
                 </div>
               )}
@@ -2098,22 +2209,18 @@ export default function AIInterviewConfig() {
                     <span className="text-xs text-gray-500 flex-shrink-0">Role Title</span>
                     <span className="text-xs font-semibold text-gray-900 text-right">{selectedJd.title}</span>
                   </div>
-                  {(selectedJd.experience_min != null || selectedJd.experience_max != null) && (
+                  {experienceSummary && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
                       <span className="text-xs text-gray-500 flex-shrink-0">Experience</span>
                       <span className="text-xs font-semibold text-gray-900 text-right">
-                        {selectedJd.experience_min != null && selectedJd.experience_max != null
-                          ? `${selectedJd.experience_min}–${selectedJd.experience_max} yrs`
-                          : selectedJd.experience_min != null
-                          ? `${selectedJd.experience_min}+ yrs`
-                          : `Up to ${selectedJd.experience_max} yrs`}
+                        {experienceSummary}
                       </span>
                     </div>
                   )}
-                  {selectedJd.job_level && (
+                  {selectedJd.industry_type && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Experience Level</span>
-                      <span className="text-xs font-semibold text-gray-900 text-right">{selectedJd.job_level}</span>
+                      <span className="text-xs text-gray-500 flex-shrink-0">Industry</span>
+                      <span className="text-xs font-semibold text-gray-900 text-right">{selectedJd.industry_type}</span>
                     </div>
                   )}
                   {selectedJd.domain_keywords && selectedJd.domain_keywords.length > 0 && (
@@ -2144,28 +2251,32 @@ export default function AIInterviewConfig() {
                       <thead>
                         <tr className="border-b border-gray-100">
                           <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
-                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Questions</th>
+                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
+                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
                           <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr className="border-b border-gray-50">
                           <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth}Q</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin} min</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthMaxClusters}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
                         </tr>
                         {nth.enabled && (
                           <tr className="border-b border-gray-50">
                             <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth}Q</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin} min</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthMaxClusters}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
                           </tr>
                         )}
                         {hrEnabled && (
                           <tr>
                             <td className="px-3 py-2 text-gray-600">HR Round</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr}Q</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin} min</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr}</td>
+                            <td className="px-3 py-2 text-right text-gray-400">—</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
                           </tr>
                         )}
                       </tbody>

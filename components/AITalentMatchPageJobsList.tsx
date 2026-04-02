@@ -48,7 +48,7 @@ export default function AITalentMatchPageJobsList({
 
   // Filter jobs: Only show Published/Active jobs, exclude Disabled jobs
   const publishedJobs = jobs.filter(j =>
-    (j.status === 'Published' || j.status === 'Active') && j.status !== 'Disabled'
+    j.status === 'Published' || j.status === 'Active'
   );
 
   // Apply filters
@@ -335,7 +335,7 @@ export default function AITalentMatchPageJobsList({
                                   <div className="flex items-center gap-1.5 sm:gap-2">
                                     <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-500" />
                                     <span className="text-xs sm:text-sm text-gray-700 font-medium">
-                                      {formatISTDate(latestMatch.matchedAt)}
+                                      {formatISTDate(latestMatch.matchedAt.toISOString())}
                                     </span>
                                   </div>
                                 </div>

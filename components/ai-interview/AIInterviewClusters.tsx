@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, CheckCircle2, Loader2, Shield, Star, Plus, X,
   Sparkles, GripVertical, ChevronDown, ChevronUp, Layers, Clock,
-  Trash2, AlertTriangle, CheckCheck, SlidersHorizontal, Info,
+  Trash2, AlertTriangle, CheckCheck, SlidersHorizontal, Info, Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -277,118 +277,6 @@ function TimeAllocationSummary({
   );
 }
 
-/* ── Finalize Confirmation Modal ── */
-function FinalizeModal({
-  mthClusters,
-  nthClusters,
-  unassignedMth,
-  unassignedNth,
-  emptyClusters,
-  saving,
-  onConfirm,
-  onCancel,
-}: {
-  mthClusters: Cluster[];
-  nthClusters: Cluster[];
-  unassignedMth: SkillEntry[];
-  unassignedNth: SkillEntry[];
-  emptyClusters: Cluster[];
-  saving: boolean;
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
-  const hasIssues = unassignedMth.length > 0 || unassignedNth.length > 0 || emptyClusters.length > 0;
-  const totalClusters = mthClusters.length + nthClusters.length;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
-        <div className={`px-6 py-4 border-b ${hasIssues ? 'border-yellow-100 bg-yellow-50' : 'border-green-100 bg-green-50'}`}>
-          <div className="flex items-center gap-3">
-            {hasIssues
-              ? <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0" />
-              : <CheckCheck className="w-5 h-5 text-green-600 flex-shrink-0" />
-            }
-            <div>
-              <h3 className="text-sm font-bold text-gray-900">
-                {hasIssues ? 'Review Before Finalizing' : 'Confirm Cluster Structure'}
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {hasIssues
-                  ? 'Some issues found. You can still proceed.'
-                  : 'Your cluster structure looks good and is ready to finalize.'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-6 py-4 space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="text-center p-3 bg-gray-50 rounded-lg">
-              <p className="text-xl font-bold text-gray-900">{totalClusters}</p>
-              <p className="text-[10px] text-gray-500 mt-0.5">Clusters</p>
-            </div>
-            <div className="text-center p-3 bg-gray-50 rounded-lg">
-              <p className="text-xl font-bold text-gray-900">{mthClusters.reduce((s, c) => s + c.skills.length, 0)}</p>
-              <p className="text-[10px] text-gray-500 mt-0.5">MTH Skills</p>
-            </div>
-            <div className="text-center p-3 bg-gray-50 rounded-lg">
-              <p className="text-xl font-bold text-gray-900">{nthClusters.reduce((s, c) => s + c.skills.length, 0)}</p>
-              <p className="text-[10px] text-gray-500 mt-0.5">NTH Skills</p>
-            </div>
-          </div>
-
-          {emptyClusters.length > 0 && (
-            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-semibold text-red-700">Empty clusters ({emptyClusters.length})</p>
-                <p className="text-xs text-red-600 mt-0.5">{emptyClusters.map(c => c.name || 'Unnamed').join(', ')}</p>
-              </div>
-            </div>
-          )}
-          {(unassignedMth.length > 0 || unassignedNth.length > 0) && (
-            <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <Info className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-semibold text-yellow-700">Unassigned skills</p>
-                {unassignedMth.length > 0 && (
-                  <p className="text-xs text-yellow-600 mt-0.5">MTH: {unassignedMth.map(s => s.name).join(', ')}</p>
-                )}
-                {unassignedNth.length > 0 && (
-                  <p className="text-xs text-yellow-600 mt-0.5">NTH: {unassignedNth.map(s => s.name).join(', ')}</p>
-                )}
-              </div>
-            </div>
-          )}
-          {!hasIssues && (
-            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <CheckCheck className="w-4 h-4 text-green-600 flex-shrink-0" />
-              <p className="text-xs text-green-700 font-medium">All skills are assigned. No issues found.</p>
-            </div>
-          )}
-        </div>
-
-        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3">
-          <button
-            onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Go Back &amp; Edit
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={saving}
-            className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition-colors"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCheck className="w-4 h-4" />}
-            {saving ? 'Saving...' : 'Finalize & Continue'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /* ── Draggable Skill Badge ── */
 function DraggableClusterSkill({
@@ -396,11 +284,13 @@ function DraggableClusterSkill({
   clusterId,
   category,
   onRemove,
+  isReadOnly = false,
 }: {
   skillName: string;
   clusterId: string;
   category: 'mth' | 'nth';
   onRemove: (skillName: string, clusterId: string) => void;
+  isReadOnly?: boolean;
 }) {
   const [{ isDragging }, drag] = useDrag(() => ({
     type: DND_TYPES.CLUSTER_SKILL,
@@ -410,19 +300,21 @@ function DraggableClusterSkill({
 
   return (
     <span
-      ref={drag as unknown as React.Ref<HTMLSpanElement>}
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border cursor-grab active:cursor-grabbing transition-opacity ${
-        isDragging ? 'opacity-40' : 'opacity-100'
-      } bg-white border-gray-200 text-gray-700 hover:border-gray-300`}
+      ref={isReadOnly ? undefined : drag as unknown as React.Ref<HTMLSpanElement>}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs border transition-opacity ${
+        isReadOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+      } ${isDragging ? 'opacity-40' : 'opacity-100'} bg-white border-gray-200 text-gray-700`}
     >
-      <GripVertical className="w-3 h-3 text-gray-300 flex-shrink-0" />
+      {!isReadOnly && <GripVertical className="w-3 h-3 text-gray-300 flex-shrink-0" />}
       {skillName}
-      <button
-        onClick={(e) => { e.stopPropagation(); onRemove(skillName, clusterId); }}
-        className="ml-0.5 text-gray-400 hover:text-red-500 transition-colors"
-      >
-        <X className="w-3 h-3" />
-      </button>
+      {!isReadOnly && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove(skillName, clusterId); }}
+          className="ml-0.5 text-gray-400 hover:text-red-500 transition-colors"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
     </span>
   );
 }
@@ -440,6 +332,7 @@ function ClusterRow({
   onReorder,
   onMoveSkill,
   onRemoveSkill,
+  isReadOnly = false,
 }: {
   cluster: Cluster;
   index: number;
@@ -452,6 +345,7 @@ function ClusterRow({
   onReorder: (fromIndex: number, toIndex: number) => void;
   onMoveSkill: (skillName: string, fromClusterId: string, toClusterId: string) => void;
   onRemoveSkill: (skillName: string, clusterId: string) => void;
+  isReadOnly?: boolean;
 }) {
   const pInfo = PRIORITY_LABELS[cluster.priority] ?? PRIORITY_LABELS[3];
   const rowRef = useRef<HTMLDivElement>(null);
@@ -507,9 +401,12 @@ function ClusterRow({
         className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
         onClick={() => onToggleExpand(cluster.id)}
       >
-        <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab active:cursor-grabbing p-0.5">
-          <GripVertical className="w-4 h-4 text-gray-300" />
-        </div>
+        {/* Hide drag handle when read-only (flexible finalized) */}
+        {!isReadOnly && (
+          <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab active:cursor-grabbing p-0.5">
+            <GripVertical className="w-4 h-4 text-gray-300" />
+          </div>
+        )}
         <PriorityBadge p={cluster.priority} />
         {cluster.skills.length === 0 && (
           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-red-100 text-red-600 border border-red-200 flex-shrink-0">
@@ -545,7 +442,8 @@ function ClusterRow({
               type="text"
               value={cluster.name}
               onChange={(e) => onUpdate(cluster.id, { name: e.target.value })}
-              className="mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300"
+              disabled={isReadOnly}
+              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 ${isReadOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
               placeholder="e.g. Core Backend Skills"
             />
           </div>
@@ -556,7 +454,8 @@ function ClusterRow({
             <select
               value={cluster.priority}
               onChange={(e) => onUpdate(cluster.id, { priority: Number(e.target.value) as Cluster['priority'] })}
-              className="mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 bg-white"
+              disabled={isReadOnly}
+              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 bg-white ${isReadOnly ? 'text-gray-500 cursor-not-allowed' : ''}`}
             >
               {[5, 4, 3, 2].map(p => (
                 <option key={p} value={p}>{PRIORITY_LABELS[p].label}</option>
@@ -570,8 +469,9 @@ function ClusterRow({
             <textarea
               value={cluster.reason ?? ''}
               onChange={(e) => onUpdate(cluster.id, { reason: e.target.value })}
+              disabled={isReadOnly}
               rows={2}
-              className="mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 resize-none"
+              className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 resize-none ${isReadOnly ? 'bg-gray-50 text-gray-500 cursor-not-allowed' : ''}`}
               placeholder="Why is this cluster important?"
             />
           </div>
@@ -590,25 +490,28 @@ function ClusterRow({
                     clusterId={cluster.id}
                     category={category}
                     onRemove={onRemoveSkill}
+                    isReadOnly={isReadOnly}
                   />
                 ))}
               </div>
             ) : (
               <p className="text-xs text-gray-400 mt-1">No skills assigned. Drag skills here from other clusters.</p>
             )}
-            <p className="text-[9px] text-gray-300 mt-1">Drag skills to move between clusters</p>
+            {!isReadOnly && <p className="text-[9px] text-gray-300 mt-1">Drag skills to move between clusters</p>}
           </div>
 
-          {/* Remove cluster button */}
-          <div className="flex justify-end pt-1">
-            <button
-              onClick={() => onRemove(cluster.id)}
-              className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors"
-            >
-              <Trash2 className="w-3 h-3" />
-              Remove Cluster
-            </button>
-          </div>
+          {/* Remove cluster button — hidden when read-only */}
+          {!isReadOnly && (
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => onRemove(cluster.id)}
+                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors"
+              >
+                <Trash2 className="w-3 h-3" />
+                Remove Cluster
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -631,6 +534,7 @@ function CategorySection({
   onRemoveSkill,
   onAddCluster,
   maxClusters,
+  isReadOnly = false,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -646,6 +550,7 @@ function CategorySection({
   onRemoveSkill: (skillName: string, clusterId: string) => void;
   onAddCluster: (category: 'mth' | 'nth') => void;
   maxClusters: number;
+  isReadOnly?: boolean;
 }) {
   const clusterMinuteMap = allocateClusterMinutes(clusters, timeMin);
   const atLimit = maxClusters > 0 && clusters.length >= maxClusters;
@@ -673,19 +578,22 @@ function CategorySection({
             </span>
           )}
         </div>
-        <button
-          onClick={() => onAddCluster(category)}
-          disabled={atLimit}
-          title={atLimit ? `Maximum ${maxClusters} clusters allowed` : undefined}
-          className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium border rounded-lg transition-colors ${
-            atLimit
-              ? 'text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50'
-              : 'text-purple-700 border-purple-200 hover:bg-purple-50'
-          }`}
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Add Cluster
-        </button>
+        {/* Hide Add Cluster when read-only (flexible finalized) */}
+        {!isReadOnly && (
+          <button
+            onClick={() => onAddCluster(category)}
+            disabled={atLimit}
+            title={atLimit ? `Maximum ${maxClusters} clusters allowed` : undefined}
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium border rounded-lg transition-colors ${
+              atLimit
+                ? 'text-gray-400 border-gray-200 cursor-not-allowed bg-gray-50'
+                : 'text-purple-700 border-purple-200 hover:bg-purple-50'
+            }`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Cluster
+          </button>
+        )}
       </div>
 
       {/* Cluster list */}
@@ -712,6 +620,7 @@ function CategorySection({
               onReorder={(from, to) => onReorderClusters(category, from, to)}
               onMoveSkill={(skillName, fromId, toId) => onMoveSkill(category, skillName, fromId, toId)}
               onRemoveSkill={onRemoveSkill}
+              isReadOnly={isReadOnly}
             />
           ))
         )}
@@ -752,11 +661,17 @@ export default function AIInterviewClusters() {
   const [fixedNthMin, setFixedNthMin] = useState<number>(0);
   const [mthMaxClusters, setMthMaxClusters] = useState<number>(5);
   const [nthMaxClusters, setNthMaxClusters] = useState<number>(0);
+  const [hrEnabled, setHrEnabled] = useState(false);
+  const [fixedHrMin, setFixedHrMin] = useState<number>(0);
 
   /* UI state */
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showWeightPanel, setShowWeightPanel] = useState(false);
-  const [showFinalizeModal, setShowFinalizeModal] = useState(false);
+
+  /* Flexible mode state */
+  const [isFlexible, setIsFlexible] = useState(false);
+  const [isFinalized, setIsFinalized] = useState(false);
+  const [jdDescription, setJdDescription] = useState('');
 
   /* Skill importance weights */
   const [skillWeights, setSkillWeights] = useState<Record<string, 'high' | 'medium' | 'low'>>({});
@@ -803,6 +718,8 @@ export default function AIInterviewClusters() {
         setFixedNthMin(fixed ? timedAllocation.nthMinutes : 0);
         setMthMaxClusters(fixed ? timedAllocation.mthMaxClusters : 0);
         setNthMaxClusters(fixed ? timedAllocation.nthMaxClusters : 0);
+        setHrEnabled(hrEnabledForTimed);
+        setFixedHrMin(fixed ? timedAllocation.hrMinutes : 0);
 
         // Parse special_instructions
         let si: Record<string, any> = {};
@@ -879,6 +796,15 @@ export default function AIInterviewClusters() {
         // Restore skill weights
         if (si.skill_weights) {
           setSkillWeights(si.skill_weights as Record<string, 'high' | 'medium' | 'low'>);
+        }
+
+        // Flexible mode: read interview_mode, finalization state, and JD description
+        if (si.interview_mode === 'flexible') {
+          setIsFlexible(true);
+          setIsFinalized(!!si.flexible_finalized);
+        }
+        if (si.jd_description) {
+          setJdDescription(si.jd_description as string);
         }
       } catch (err) {
         toast.error('Failed to load interview configuration');
@@ -993,36 +919,90 @@ export default function AIInterviewClusters() {
         mthSkillNames,
         nthSkillNames,
         config?.position,
-        undefined,
+        jdDescription || undefined,
         fixedMthMin,
         nthSkillNames.length > 0 ? fixedNthMin : 0,
         mthMaxClusters,
         nthSkillNames.length > 0 ? nthMaxClusters : 0,
       );
-      if (mthSkillNames.length > 0 && result.mth_clusters) {
-        // Frontend hard-cap: enforce mthMaxClusters limit even if backend returns more
-        const mthRaw = result.mth_clusters;
-        const mthFinal = mthMaxClusters > 0 ? mthRaw.slice(0, mthMaxClusters) : mthRaw;
-        setMthClusters(mthFinal.map(c => ({
-          ...c,
-          priority: c.priority as Cluster['priority'],
-          reason: c.reason || '',
-        })));
-      } else {
-        setMthClusters([]);
+      const newMthClusters: Cluster[] = mthSkillNames.length > 0 && result.mth_clusters
+        ? (() => {
+            const mthRaw = result.mth_clusters;
+            const mthFinal = mthMaxClusters > 0 ? mthRaw.slice(0, mthMaxClusters) : mthRaw;
+            return mthFinal.map(c => ({
+              ...c,
+              priority: c.priority as Cluster['priority'],
+              reason: c.reason || '',
+            }));
+          })()
+        : [];
+
+      const newNthClusters: Cluster[] = nthSkillNames.length > 0 && result.nth_clusters
+        ? (() => {
+            const nthRaw = result.nth_clusters;
+            const nthFinal = nthMaxClusters > 0 ? nthRaw.slice(0, nthMaxClusters) : nthRaw;
+            return nthFinal.map(c => ({
+              ...c,
+              priority: c.priority as Cluster['priority'],
+              reason: c.reason || '',
+            }));
+          })()
+        : [];
+
+      setMthClusters(newMthClusters);
+      setNthClusters(newNthClusters);
+
+      // Auto-save generated clusters immediately so they survive a page refresh.
+      // We use the local vars (not state) because setState is async and hasn't updated yet.
+      if (config && id) {
+        try {
+          const si = JSON.parse(config.special_instructions || '{}');
+          si.mth_clusters = newMthClusters;
+          si.nth_clusters = nthEnabled ? newNthClusters : [];
+
+          // Also update rounds_config topics/weights using the new cluster data
+          const PRIORITY_WEIGHT: Record<number, number> = { 5: 60, 4: 50, 3: 40, 2: 30, 1: 20 };
+          const buildTopicTimeMap = (clusters: Cluster[], totalMin: number): Record<string, number> => {
+            if (clusters.length === 0 || totalMin <= 0) return {};
+            const totalWeight = clusters.reduce((s, c) => s + c.priority, 0);
+            if (totalWeight <= 0) return {};
+            const res: Record<string, number> = {};
+            let remaining = totalMin;
+            const sorted = [...clusters].sort((a, b) => b.priority - a.priority);
+            sorted.forEach((c, i) => {
+              const mins = i === sorted.length - 1
+                ? remaining
+                : Math.round((c.priority / totalWeight) * totalMin);
+              res[c.name] = Math.max(1, mins);
+              remaining -= res[c.name];
+            });
+            return res;
+          };
+          const rounds = [...(config.rounds_config ?? [])];
+          const mthIdx = rounds.findIndex((r: any) => r.type === 'must_have_skills' || r.type === 'must_have');
+          if (mthIdx >= 0 && newMthClusters.length > 0) {
+            const topics = newMthClusters.map(c => c.name);
+            const topic_weights: Record<string, number> = {};
+            newMthClusters.forEach(c => { topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40; });
+            rounds[mthIdx] = { ...rounds[mthIdx], topics, topic_weights, topic_time_minutes: buildTopicTimeMap(newMthClusters, fixedMthMin) };
+          }
+          const nthIdx = rounds.findIndex((r: any) => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have');
+          if (nthIdx >= 0 && nthEnabled && newNthClusters.length > 0) {
+            const topics = newNthClusters.map(c => c.name);
+            const topic_weights: Record<string, number> = {};
+            newNthClusters.forEach(c => { topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40; });
+            rounds[nthIdx] = { ...rounds[nthIdx], topics, topic_weights, topic_time_minutes: buildTopicTimeMap(newNthClusters, fixedNthMin) };
+          }
+
+          await aiInterviewService.update(id, {
+            special_instructions: JSON.stringify(si),
+            rounds_config: rounds,
+          });
+        } catch {
+          // Non-fatal — clusters are visible in UI; user can still save manually
+        }
       }
-      if (nthSkillNames.length > 0 && result.nth_clusters) {
-        // Frontend hard-cap: enforce nthMaxClusters limit even if backend returns more
-        const nthRaw = result.nth_clusters;
-        const nthFinal = nthMaxClusters > 0 ? nthRaw.slice(0, nthMaxClusters) : nthRaw;
-        setNthClusters(nthFinal.map(c => ({
-          ...c,
-          priority: c.priority as Cluster['priority'],
-          reason: c.reason || '',
-        })));
-      } else {
-        setNthClusters([]);
-      }
+
       toast.success('Clusters generated!');
     } catch {
       toast.error('Failed to generate clusters');
@@ -1083,7 +1063,7 @@ export default function AIInterviewClusters() {
     return rounds;
   };
 
-  const saveAndNavigate = async (target: string) => {
+  const saveAndNavigate = async (target: string, finalize = false) => {
     if (!config || !id) return;
     setSaving(true);
     try {
@@ -1091,6 +1071,12 @@ export default function AIInterviewClusters() {
       si.mth_clusters = mthClusters;
       si.nth_clusters = nthEnabled ? nthClusters : []; // don't persist NHS clusters when disabled
       si.skill_weights = skillWeights;
+      // Flexible mode: always write flexible_finalized from current React state,
+      // not from stale config.special_instructions — this ensures handleReopenClusters
+      // (which sets isFinalized=false) is not overwritten by a subsequent Back/save.
+      if (isFlexible) {
+        si.flexible_finalized = finalize ? true : isFinalized;
+      }
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
@@ -1110,16 +1096,24 @@ export default function AIInterviewClusters() {
     );
   };
 
-  /* Show finalize modal instead of navigating directly */
   const handleContinue = () => {
-    setShowFinalizeModal(true);
+    saveAndNavigate(
+      '/recruitment/ai-interviews/jd-selection/ai-interview-config/preview?id=' + id,
+      true, // finalize = true → sets flexible_finalized in flexible mode
+    );
   };
 
-  const handleFinalizeConfirm = () => {
-    setShowFinalizeModal(false);
-    saveAndNavigate(
-      '/recruitment/ai-interviews/jd-selection/ai-interview-config/preview?id=' + id
-    );
+  /* Flexible mode: re-open finalized clusters for editing */
+  const handleReopenClusters = async () => {
+    if (!config || !id) return;
+    setIsFinalized(false);
+    try {
+      const si = JSON.parse(config.special_instructions || '{}');
+      si.flexible_finalized = false;
+      await aiInterviewService.update(id, { special_instructions: JSON.stringify(si) });
+    } catch {
+      toast.error('Failed to re-open clusters for editing');
+    }
   };
 
   const handleSaveAsDraft = async () => {
@@ -1130,6 +1124,10 @@ export default function AIInterviewClusters() {
       si.mth_clusters = mthClusters;
       si.nth_clusters = nthEnabled ? nthClusters : []; // don't persist NHS clusters when disabled
       si.skill_weights = skillWeights;
+      // Flexible mode: keep flexible_finalized in sync with current React state
+      if (isFlexible) {
+        si.flexible_finalized = isFinalized;
+      }
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
@@ -1260,24 +1258,28 @@ export default function AIInterviewClusters() {
                   <SlidersHorizontal className="w-4 h-4" />
                   Skill Importance
                 </button>
-                <button
-                  onClick={handleGenerateClusters}
-                  disabled={generating || saving}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {generating ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-4 h-4" />
-                  )}
-                  {generating ? 'Generating...' : 'Regenerate with AI'}
-                </button>
+                {/* Hide regenerate when flexible mode clusters are finalized */}
+                {!(isFlexible && isFinalized) && (
+                  <button
+                    onClick={handleGenerateClusters}
+                    disabled={generating || saving}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-lg hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {generating ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4" />
+                    )}
+                    {generating ? 'Generating...' : 'Regenerate with AI'}
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
-          {/* ── Main content ── */}
-          <div className="space-y-6 pb-24">
+          {/* ── Two-column layout: main content + config summary sidebar ── */}
+          <div className="flex gap-6 items-start">
+          <div className="flex-1 min-w-0 space-y-6 pb-24">
 
           {/* Skill Importance Panel */}
           {showWeightPanel && (
@@ -1287,6 +1289,25 @@ export default function AIInterviewClusters() {
               weights={skillWeights}
               onWeightChange={setSkillWeight}
             />
+          )}
+
+          {/* Flexible mode: finalized lock banner */}
+          {isFlexible && isFinalized && (
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+              <div className="flex items-center gap-2">
+                <Lock className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                <p className="text-xs font-semibold text-amber-800">
+                  Clusters are finalized and locked for editing.
+                </p>
+              </div>
+              <button
+                onClick={handleReopenClusters}
+                disabled={saving}
+                className="text-xs font-medium text-amber-700 hover:text-amber-900 underline whitespace-nowrap disabled:opacity-50"
+              >
+                Re-open for editing
+              </button>
+            </div>
           )}
 
           {/* Validation warning banner */}
@@ -1344,6 +1365,7 @@ export default function AIInterviewClusters() {
                 onRemoveSkill={removeSkillFromCluster}
                 onAddCluster={addCluster}
                 maxClusters={mthMaxClusters}
+                isReadOnly={isFlexible && isFinalized}
               />
 
               {/* Nice-To-Have Section */}
@@ -1363,6 +1385,7 @@ export default function AIInterviewClusters() {
                   onRemoveSkill={removeSkillFromCluster}
                   onAddCluster={addCluster}
                   maxClusters={nthMaxClusters}
+                  isReadOnly={isFlexible && isFinalized}
                 />
               )}
             </>
@@ -1429,19 +1452,6 @@ export default function AIInterviewClusters() {
         </div>
       </div>
 
-      {/* Finalize Confirmation Modal */}
-      {showFinalizeModal && (
-        <FinalizeModal
-          mthClusters={mthClusters}
-          nthClusters={nthClusters}
-          unassignedMth={unassignedMth}
-          unassignedNth={unassignedNth}
-          emptyClusters={emptyClusters}
-          saving={saving}
-          onConfirm={handleFinalizeConfirm}
-          onCancel={() => setShowFinalizeModal(false)}
-        />
-      )}
     </DndProvider>
   );
 }

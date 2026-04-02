@@ -143,6 +143,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const [progress, setProgress] = useState({ answered: 0, total: 0, percent: 0 });
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [completingStuck, setCompletingStuck] = useState(false);
+  const [hrAnswers, setHrAnswers] = useState<Record<string, string>>({});
+  const [isSavingHRAnswers, setIsSavingHRAnswers] = useState(false);
 
   // Proctoring warnings are displayed via ProctoringEventBus → ProctoringWarningModal
   // (no local state needed — modal subscribes to EventBus directly)
@@ -536,6 +538,53 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         setError(errorMessage);
       }
       setStepSafe('error');
+    }
+  };
+
+  const getHRQuestions = useCallback(() => {
+    if (assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0) {
+      return assessmentInfo.hr_topics.map((topic: any, idx: number) => ({
+        key: topic.question_text || topic.text || `hr-${idx}`,
+        text: topic.question_text || topic.text || '',
+        type: topic.answer_type || topic.type || 'text',
+      }));
+    }
+
+    return [
+      { key: 'Tell me about yourself', text: 'Tell me about yourself', type: 'text' },
+      { key: 'Describe your industry experience relevant to this role', text: 'Describe your industry experience relevant to this role', type: 'text' },
+      { key: 'Why should we hire you?', text: 'Why should we hire you?', type: 'text' },
+      { key: 'What is your expected salary?', text: 'What is your expected salary?', type: 'text' },
+      { key: 'Are you willing to relocate?', text: 'Are you willing to relocate?', type: 'yes_no' },
+      { key: 'Are you available for onsite work?', text: 'Are you available for onsite work?', type: 'yes_no' },
+      { key: 'Can you work under pressure?', text: 'Can you work under pressure?', type: 'yes_no' },
+      { key: 'Are you comfortable working in a team?', text: 'Are you comfortable working in a team?', type: 'yes_no' },
+      { key: 'Are you open to learning new technologies?', text: 'Are you open to learning new technologies?', type: 'yes_no' },
+      { key: 'Can you join immediately or within notice period?', text: 'Can you join immediately or within notice period?', type: 'yes_no' },
+    ];
+  }, [assessmentInfo?.hr_topics]);
+
+  const handleContinueFromHRQuestions = async () => {
+    try {
+      setIsSavingHRAnswers(true);
+      const hrQuestions = getHRQuestions();
+
+      await candidateService.saveHRAnswers(
+        token,
+        hrQuestions.map((question) => ({
+          question_text: question.text,
+          answer_type: question.type === 'Yes/No' ? 'yes_no' : question.type,
+          answer_text: hrAnswers[question.key] || '',
+        }))
+      );
+
+      setStepSafe('fullscreen_prompt');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save HR answers';
+      setError(errorMessage);
+      setStepSafe('error');
+    } finally {
+      setIsSavingHRAnswers(false);
     }
   };
 
@@ -1069,6 +1118,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       );
 
     case 'hr_questions':
+      const hrQuestions = getHRQuestions();
       return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
           {/* Header */}
@@ -1115,22 +1165,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
 
               <div className="space-y-4">
-                {(assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0
-                  ? assessmentInfo.hr_topics
-                  : [
-                    { text: 'Tell me about yourself', type: 'text' },
-                    { text: 'Describe your industry experience relevant to this role', type: 'text' },
-                    { text: 'Why should we hire you?', type: 'text' },
-                    { text: 'What is your expected salary?', type: 'text' },
-                    { text: 'Are you willing to relocate?', type: 'yes_no' },
-                    { text: 'Are you available for onsite work?', type: 'yes_no' },
-                    { text: 'Can you work under pressure?', type: 'yes_no' },
-                    { text: 'Are you comfortable working in a team?', type: 'yes_no' },
-                    { text: 'Are you open to learning new technologies?', type: 'yes_no' },
-                    { text: 'Can you join immediately or within notice period?', type: 'yes_no' },
-                  ]
-                ).map((q: any, idx: number) => {
+                {hrQuestions.map((q: any, idx: number) => {
                   const isYesNo = q.type === 'yes_no' || q.type === 'Yes/No';
+                  const selectedAnswer = hrAnswers[q.key] || '';
                   return (
                   <div key={idx} className="border border-gray-200 rounded-lg p-4">
                     <div className="flex items-start gap-3">
@@ -1147,14 +1184,18 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                             {['Yes', 'No'].map((option) => (
                               <button
                                 key={option}
-                                onClick={(e) => {
-                                  const container = e.currentTarget.parentElement;
-                                  container?.querySelectorAll('button').forEach(b => {
-                                    b.className = 'flex-1 px-4 py-2.5 rounded-lg border-2 border-gray-300 bg-white text-gray-700 text-sm font-medium hover:border-gray-400 transition-all';
-                                  });
-                                  e.currentTarget.className = 'flex-1 px-4 py-2.5 rounded-lg border-2 border-gray-800 bg-gray-800 text-white text-sm font-medium transition-all';
+                                type="button"
+                                onClick={() => {
+                                  setHrAnswers((prev) => ({
+                                    ...prev,
+                                    [q.key]: option
+                                  }));
                                 }}
-                                className="flex-1 px-4 py-2.5 rounded-lg border-2 border-gray-300 bg-white text-gray-700 text-sm font-medium hover:border-gray-400 transition-all"
+                                className={`flex-1 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                  selectedAnswer === option
+                                    ? 'border-gray-800 bg-gray-800 text-white'
+                                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                                }`}
                               >{option}</button>
                             ))}
                           </div>
@@ -1162,6 +1203,14 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                           <textarea
                             placeholder="Type your answer here..."
                             rows={3}
+                            value={selectedAnswer}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setHrAnswers((prev) => ({
+                                ...prev,
+                                [q.key]: value
+                              }));
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 text-black"
                           />
                         )}
@@ -1176,10 +1225,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             {/* Action Buttons */}
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setStepSafe('fullscreen_prompt')}
-                className="px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800"
+                type="button"
+                onClick={handleContinueFromHRQuestions}
+                disabled={isSavingHRAnswers}
+                className="px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                Continue to Assessment
+                {isSavingHRAnswers ? 'Saving Answers...' : 'Continue to Assessment'}
               </button>
             </div>
           </div>

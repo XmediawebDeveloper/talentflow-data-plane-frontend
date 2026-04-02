@@ -795,6 +795,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Refresh permissions when tab becomes visible again (e.g. admin changed role in another tab)
+  useEffect(() => {
+    if (!user) return;
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshUser();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user, refreshUser]);
+
   return (
     <AuthContext.Provider
       value={{

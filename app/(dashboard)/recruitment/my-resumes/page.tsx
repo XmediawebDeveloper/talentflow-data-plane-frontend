@@ -310,6 +310,13 @@ export default function MyResumesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isTenantAdmin, hasPermission, hasPermissionCode, isLoading: authLoading } = useAuth();
+  const canViewMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:read');
+  const canUploadMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
+  const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update');
+  const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
+  const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
+  const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
+  const canMoveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
   const { hasPlanFeature } = usePlanFeatures();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
@@ -2254,36 +2261,34 @@ export default function MyResumesPage() {
           <p className="text-xs sm:text-sm text-gray-600">Resumes uploaded by you</p>
         </div>
         <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-          <button
-            onClick={() => setIsUploadHistoryModalOpen(true)}
-            className="relative flex items-center justify-center gap-1.5 sm:gap-2 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors text-xs sm:text-sm flex-1 sm:flex-initial"
-          >
-            <History className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="hidden sm:inline">Upload History</span>
-            <span className="sm:hidden">History</span>
-            {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-5 w-5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-5 w-5 bg-blue-500 text-white text-xs items-center justify-center">
-                  {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length}
+          {canViewMyResumes && (
+            <button
+              onClick={() => setIsUploadHistoryModalOpen(true)}
+              className="relative flex items-center justify-center gap-1.5 sm:gap-2 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors text-xs sm:text-sm flex-1 sm:flex-initial"
+            >
+              <History className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Upload History</span>
+              <span className="sm:hidden">History</span>
+              {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 w-5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-5 w-5 bg-blue-500 text-white text-xs items-center justify-center">
+                    {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length}
+                  </span>
                 </span>
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            disabled={!authLoading && !hasPermission('canUploadResumes') && !isTenantAdmin}
-            title={!authLoading && !hasPermission('canUploadResumes') && !isTenantAdmin ? 'You do not have permission to upload resumes. Contact your administrator.' : 'Upload Resume'}
-            className={`flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-md transition-colors text-xs sm:text-sm flex-1 sm:flex-initial ${
-              authLoading || hasPermission('canUploadResumes') || isTenantAdmin
-                ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-            }`}
-          >
-            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="hidden sm:inline">Upload Resume</span>
-            <span className="sm:hidden">Upload</span>
-          </button>
+              )}
+            </button>
+          )}
+          {canUploadMyResumes && (
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-md transition-colors text-xs sm:text-sm flex-1 sm:flex-initial bg-gray-800 text-white hover:bg-gray-900 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Upload Resume</span>
+              <span className="sm:hidden">Upload</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -2293,13 +2298,13 @@ export default function MyResumesPage() {
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
-            onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
+            onMoveToFolder={canMoveMyResumes ? (folderId) => handleMoveToFolder(selectedResumes, folderId) : undefined}
             onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
             onDownload={handleBulkDownload}
-            onDelete={isTenantAdmin || hasPermissionCode('my_resumes:delete') ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onDelete={canDeleteMyResumes ? () => handleDeleteResumes(selectedResumes) : undefined}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
             onAssessment={hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
-            onArchive={isTenantAdmin || hasPermissionCode('my_resumes:archive') ? () => handleArchiveResumes(selectedResumes) : undefined}
+            onArchive={canArchiveMyResumes ? () => handleArchiveResumes(selectedResumes) : undefined}
             onAITalentMatch={hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
           />
         )}
@@ -2375,14 +2380,15 @@ export default function MyResumesPage() {
               folders={folders}
               selectedFolder={selectedFolder}
               onSelectFolder={(folderId: string) => { setSelectedFolder(folderId); setCurrentPage(1); }}
-              onCreateFolder={hasPermission('canUploadResumes') || isTenantAdmin ? handleCreateFolder : undefined}
-              onRenameFolder={hasPermission('canUpdateResumes') || isTenantAdmin ? handleRenameFolder : undefined}
-              onDeleteFolder={hasPermission('canDeleteResumes') || isTenantAdmin ? handleDeleteFolder : undefined}
+              onCreateFolder={canUploadMyResumes ? handleCreateFolder : undefined}
+              onRenameFolder={canUpdateMyResumes ? handleRenameFolder : undefined}
+              onDeleteFolder={canDeleteMyResumes ? handleDeleteFolder : undefined}
               onUploadToFolder={(folderId) => {
+                if (!canUploadMyResumes) return;
                 setSelectedFolder(folderId);
                 setIsUploadModalOpen(true);
               }}
-              onMoveToFolder={handleMoveToFolder}
+              onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
               selectedResumes={selectedResumes}
               resumes={resumes}
               width={folderTreeWidth}
@@ -2432,12 +2438,14 @@ export default function MyResumesPage() {
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
                   onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
-                  onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
-                  onMoveToFolder={handleMoveToFolder}
+                  onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
+                  onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                   onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
                   highlightQuery={appliedSearchQuery}
-                  onArchive={(resumeId) => handleArchiveResumes([resumeId])}
+                  onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
+                  canShare={canShareMyResumes}
+                  canTag={canUpdateMyResumes}
                   disablePagination={true}
                   isArchivedFolder={
                     folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
@@ -2745,7 +2753,7 @@ export default function MyResumesPage() {
                             isLast={index === folderResumes.length - 1}
                             onSelect={handleSelectResume}
                             onQuickView={(r) => setQuickViewResume(r)}
-                            onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? handleDelete : undefined}
+                            onDelete={canDeleteMyResumes ? handleDelete : undefined}
                             onViewDetails={(r) => router.push(`/recruitment/resume-view/${r.id}`)}
                           />
                         ))}
@@ -2803,7 +2811,7 @@ export default function MyResumesPage() {
                                   <Eye className="w-4 h-4" />
                                   View
                                 </button>
-                                {(hasPermission('canDeleteResumes') || isTenantAdmin) && (
+                                {canDeleteMyResumes && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handleDelete(resume.id); }}
                                     className="px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center gap-1"

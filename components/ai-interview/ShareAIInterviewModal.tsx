@@ -70,10 +70,19 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const [resumeDatabase, setResumeDatabase] = useState<Resume[]>([]);
   const [isLoadingResumes, setIsLoadingResumes] = useState(false);
 
-  // Email message
-  const [customMessage, setCustomMessage] = useState(
-    `Subject: Invitation to Complete Your AI Interview\n\nYou've been invited to complete an AI-powered interview as part of your application process.\n\nThis interview will take approximately 20–30 minutes and must be completed in one sitting.\n\nBefore You Begin:\n\n• Ensure you have a stable internet connection\n• Find a quiet place with good lighting\n• Your camera and microphone will be required\n• Use a laptop or desktop for the best experience\n\nDuring the session, our AI interviewer will guide you through each question step-by-step.\n\nPlease complete the interview by [deadline date].\n\nIf you experience any technical issues, contact us at support@talentflow.com.\n\nWe wish you the best of luck and look forward to learning more about you!`
-  );
+  // Email message — populated dynamically with config/user context
+  const [customMessage, setCustomMessage] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const companyName = (user as any)?.tenantName || 'Our Company';
+    const jobTitle = config.jd_title || config.position || 'the role';
+    const location = (config as any).jd_location ? `\nLocation: ${(config as any).jd_location}` : '';
+    setCustomMessage(
+      `Subject: Invitation to Complete Your AI Interview — ${jobTitle} at ${companyName}\n\nDear Candidate,\n\nWe are pleased to invite you to complete an AI-powered interview for the following position:\n\nRole: ${jobTitle}\nCompany: ${companyName}${location}\n\nThis interview will take approximately 20–30 minutes and must be completed in one sitting.\n\nBefore You Begin:\n\n• Ensure you have a stable internet connection\n• Find a quiet place with good lighting\n• Your camera and microphone will be required\n• Use a laptop or desktop for the best experience\n\nDuring the session, our AI interviewer will guide you through each question step-by-step.\n\nPlease complete the interview by [deadline date].\n\nIf you experience any technical issues, contact us at support@talentflow.com.\n\nWe wish you the best of luck and look forward to learning more about you!\n\nBest regards,\n${companyName} Talent Team`
+    );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
   const [expiryDays, setExpiryDays] = useState(7);
   const [sendCopy, setSendCopy] = useState(true);
 
@@ -180,20 +189,28 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   // Add selected resumes to candidates list
   const handleAddFromDatabase = () => {
     const selectedResumeData = resumeDatabase.filter((r) => selectedResumes.includes(r.id));
-    const newCandidates: CandidateEmail[] = selectedResumeData.map((resume) => ({
-      id: Date.now().toString() + Math.random(),
-      name: resume.name,
-      email: resume.email,
-      // scheduledDate: '',   // Commented out - schedule feature disabled for now
-      // scheduledTime: '',   // Commented out - schedule feature disabled for now
-      source: 'database' as const,
-      resumeId: resume.id,
-    }));
 
-    // Keep valid manual candidates
-    const validManualCandidates = candidates.filter((c) => c.source === 'manual' && c.name.trim() && c.email.trim());
+    // Keep valid manual/excel candidates
+    const validExisting = candidates.filter((c) => c.name.trim() && c.email.trim());
+    const existingEmails = new Set(validExisting.map((c) => c.email.toLowerCase().trim()));
 
-    setCandidates(validManualCandidates.length > 0 ? [...validManualCandidates, ...newCandidates] : newCandidates);
+    // Only add database entries whose email is not already in the list
+    const newCandidates: CandidateEmail[] = selectedResumeData
+      .filter((resume) => resume.email && !existingEmails.has(resume.email.toLowerCase().trim()))
+      .map((resume) => ({
+        id: Date.now().toString() + Math.random(),
+        name: resume.name,
+        email: resume.email,
+        source: 'database' as const,
+        resumeId: resume.id,
+      }));
+
+    const duplicateCount = selectedResumeData.length - newCandidates.length;
+    if (duplicateCount > 0) {
+      toast.warning(`${duplicateCount} candidate${duplicateCount > 1 ? 's' : ''} skipped — already in the list`);
+    }
+
+    setCandidates(validExisting.length > 0 ? [...validExisting, ...newCandidates] : newCandidates.length > 0 ? newCandidates : [{ id: '1', name: '', email: '', source: 'manual' }]);
     setSelectedResumes([]);
     setInputMode('manual');
   };
@@ -250,15 +267,23 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           return;
         }
 
-        // Remove duplicates by email
+        // Remove duplicates within the file itself
         const unique = parsed.filter(
           (c, i, arr) => i === arr.findIndex(x => x.email.toLowerCase() === c.email.toLowerCase())
         );
 
-        // Keep existing valid manual candidates and add new ones
+        // Keep existing valid candidates and skip emails already present
         const existingValid = candidates.filter(c => c.name.trim() && c.email.trim());
-        setCandidates(existingValid.length > 0 ? [...existingValid, ...unique] : unique);
-        toast.success(`${unique.length} candidate${unique.length !== 1 ? 's' : ''} imported from ${file.name}`);
+        const existingEmails = new Set(existingValid.map(c => c.email.toLowerCase().trim()));
+        const newOnly = unique.filter(c => !existingEmails.has(c.email.toLowerCase().trim()));
+
+        const skipped = unique.length - newOnly.length;
+        if (skipped > 0) {
+          toast.warning(`${skipped} duplicate${skipped > 1 ? 's' : ''} skipped — already in the list`);
+        }
+
+        setCandidates(existingValid.length > 0 ? [...existingValid, ...newOnly] : newOnly);
+        toast.success(`${newOnly.length} candidate${newOnly.length !== 1 ? 's' : ''} imported from ${file.name}`);
         setInputMode('manual');
       } catch (err) {
         console.error('Failed to parse Excel file:', err);
@@ -304,60 +329,90 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         return;
       }
 
-      for (const candidate of candidatesWithData) {
-        // Schedule date/time - commented out for now, uncomment when needed
-        // let scheduled_at: string | undefined;
-        // if (candidate.scheduledDate && candidate.scheduledTime) {
-        //   scheduled_at = new Date(`${candidate.scheduledDate}T${candidate.scheduledTime}`).toISOString();
-        // } else if (candidate.scheduledDate) {
-        //   scheduled_at = new Date(`${candidate.scheduledDate}T09:00:00`).toISOString();
-        // }
+      // Final dedup by email (keep first occurrence) in case duplicates slipped through
+      const seen = new Set<string>();
+      const deduped = candidatesWithData.filter((c) => {
+        const key = c.email.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
 
-        await aiInterviewService.inviteCandidate(config.id, {
-          candidate_name: candidate.name.trim(),
-          candidate_email: candidate.email.trim(),
-          // scheduled_at,  // Commented out - schedule feature disabled for now
-          custom_message: customMessage
-            ? customMessage.replace('[deadline date]', expiryDays > 0
-                ? formatISTDate(new Date(Date.now() + expiryDays * 86400000).toISOString())
-                : 'no specific deadline'
-              )
-            : undefined,
-          expiry_days: expiryDays,
-          base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
-        });
+      const resolvedMessage = customMessage
+        ? customMessage.replace('[deadline date]', expiryDays > 0
+            ? formatISTDate(new Date(Date.now() + expiryDays * 86400000).toISOString())
+            : 'no specific deadline'
+          )
+        : undefined;
+
+      let successCount = 0;
+      const alreadyInvited: string[] = [];
+      const tenantUserEmails: string[] = [];
+      const failed: string[] = [];
+
+      for (const candidate of deduped) {
+        try {
+          await aiInterviewService.inviteCandidate(config.id, {
+            candidate_name: candidate.name.trim(),
+            candidate_email: candidate.email.trim(),
+            resume_id: candidate.resumeId,
+            custom_message: resolvedMessage,
+            expiry_days: expiryDays,
+            base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+          });
+          successCount++;
+        } catch (err: any) {
+          const errCode = err?.response?.data?.error || err?.response?.data?.detail?.error || '';
+          const is409 =
+            err?.response?.status === 409 ||
+            err?.message?.includes('status code 409') ||
+            err?.message?.includes('already been invited') ||
+            errCode === 'DUPLICATE_INVITATION';
+          const isTenantUser =
+            err?.response?.status === 400 && errCode === 'TENANT_USER_EMAIL';
+          if (is409) {
+            alreadyInvited.push(candidate.email.trim());
+          } else if (isTenantUser) {
+            tenantUserEmails.push(candidate.email.trim());
+          } else {
+            failed.push(candidate.email.trim());
+            console.error(`Failed to invite ${candidate.email}:`, err);
+          }
+        }
       }
 
-      setSentCount(candidatesWithData.length);
       setIsSubmitting(false);
-      setShowSuccess(true);
-      setTimeout(() => {
-        setShowSuccess(false);
-        onInviteSent();
-        onClose();
-      }, 2000);
+
+      if (successCount > 0) {
+        setSentCount(successCount);
+        if (alreadyInvited.length > 0) {
+          toast.warning(`${alreadyInvited.length} already invited: ${alreadyInvited.join(', ')}`);
+        }
+        if (tenantUserEmails.length > 0) {
+          toast.error(`Team member emails cannot be invited: ${tenantUserEmails.join(', ')}`);
+        }
+        if (failed.length > 0) {
+          toast.error(`${failed.length} failed to send: ${failed.join(', ')}`);
+        }
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          onInviteSent();
+          onClose();
+        }, 2000);
+      } else if (tenantUserEmails.length > 0 && successCount === 0) {
+        // All blocked as team member emails
+        toast.error(`Cannot invite team member email${tenantUserEmails.length > 1 ? 's' : ''}: ${tenantUserEmails.join(', ')}. AI Interview invitations are for external candidates only.`);
+      } else if (alreadyInvited.length > 0 && failed.length === 0 && tenantUserEmails.length === 0) {
+        // All were duplicates
+        setDuplicateEmail(alreadyInvited.join(', '));
+        setShowDuplicateError(true);
+      } else {
+        toast.error('Failed to send invitations. Please try again.');
+      }
     } catch (error: any) {
       console.error('Failed to send invitations:', error);
       setIsSubmitting(false);
-
-      // Check for duplicate invitation error (409 Conflict)
-      const is409Error =
-        error?.response?.status === 409 ||
-        error?.message?.includes('status code 409') ||
-        error?.message?.includes('already been invited') ||
-        error?.message?.includes('DUPLICATE_INVITATION');
-
-      if (is409Error) {
-        const email =
-          error?.response?.data?.detail?.candidate_email ||
-          error?.response?.data?.candidate_email ||
-          candidates[0]?.email ||
-          'this candidate';
-        setDuplicateEmail(email);
-        setShowDuplicateError(true);
-        return;
-      }
-
       toast.error(`Failed to send invitations: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
@@ -789,6 +844,23 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   className="p-2 rounded-lg hover:bg-sky-50 transition-colors group" title="Share via Telegram"
                 >
                   <svg className="w-5 h-5 text-gray-400 group-hover:text-sky-500 transition-colors" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                </button>
+                {/* SMS */}
+                <button
+                  onClick={() => {
+                    const body = encodeURIComponent(`You've been invited to an AI Interview for ${config.jd_title || config.position}. Complete it here: ${interviewLink}`);
+                    // iOS uses sms:&body= ; Android uses sms:?body=
+                    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+                    window.location.href = isIOS ? `sms:&body=${body}` : `sms:?body=${body}`;
+                  }}
+                  className="p-2 rounded-lg hover:bg-green-50 transition-colors group" title="Share via SMS"
+                >
+                  <svg className="w-5 h-5 text-gray-400 group-hover:text-green-600 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    <line x1="9" y1="10" x2="9" y2="10"/>
+                    <line x1="12" y1="10" x2="12" y2="10"/>
+                    <line x1="15" y1="10" x2="15" y2="10"/>
+                  </svg>
                 </button>
               </div>
             </div>

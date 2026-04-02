@@ -13,8 +13,6 @@ import VersionHistoryModal from './VersionHistoryModal';
 import ResumeVersionSelector from './ResumeVersionSelector';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
-// ✅ PERMISSION FIX: Import permission hook for CRUD checks
-import { useModulePermissions } from '@/lib/hooks/usePermissions';
 
 // Drag item type for resumes
 const RESUME_DRAG_TYPE = 'RESUME';
@@ -82,6 +80,9 @@ interface ResumeTableProps {
   disablePagination?: boolean;
   isArchivedFolder?: boolean;
   archivedFolderId?: string;
+  canShare?: boolean;
+  canTag?: boolean;
+  canDownload?: boolean;
 }
 
 // Helper function to highlight matching text
@@ -131,10 +132,11 @@ export default function ResumeTable({
   disablePagination = false,
   isArchivedFolder = false,
   archivedFolderId,
+  canShare = false,
+  canTag = false,
+  canDownload = true,
 }: ResumeTableProps) {
   const router = useRouter();
-  // ✅ PERMISSION FIX: Get Resume CRUD permissions
-  const resumePerms = useModulePermissions('resume');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number; openUp: boolean }>({ top: 0, right: 0, openUp: false });
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
@@ -510,31 +512,33 @@ export default function ResumeTable({
                           <Briefcase className="w-4 h-4" />
                         </button>
                       )}
-                      <button
-                        onClick={async () => {
-                          try {
-                            toast.loading('Downloading resume...', { id: 'download' });
-                            const blob = await resumeService.download(resume.id);
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            // Use original filename to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
-                            a.download = resume.fileName || `${resume.name || 'resume'}.${resume.fileType || 'pdf'}`;
-                            document.body.appendChild(a);
-                            a.click();
-                            window.URL.revokeObjectURL(url);
-                            document.body.removeChild(a);
-                            toast.success('Resume downloaded', { id: 'download' });
-                          } catch (error) {
-                            console.error('Download failed:', error);
-                            toast.error('Failed to download resume', { id: 'download' });
-                          }
-                        }}
-                        className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                        title="Download Resume"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
+                      {canDownload && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              toast.loading('Downloading resume...', { id: 'download' });
+                              const blob = await resumeService.download(resume.id);
+                              const url = window.URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              // Use original filename to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
+                              a.download = resume.fileName || `${resume.name || 'resume'}.${resume.fileType || 'pdf'}`;
+                              document.body.appendChild(a);
+                              a.click();
+                              window.URL.revokeObjectURL(url);
+                              document.body.removeChild(a);
+                              toast.success('Resume downloaded', { id: 'download' });
+                            } catch (error) {
+                              console.error('Download failed:', error);
+                              toast.error('Failed to download resume', { id: 'download' });
+                            }
+                          }}
+                          className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                          title="Download Resume"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      )}
                       <div className="relative">
                         <button
                           onClick={(e) => {
@@ -570,76 +574,58 @@ export default function ResumeTable({
                                 : { top: menuPosition.top, right: menuPosition.right }
                               }
                             >
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedResumeForAction(resume);
-                                  setShowShareModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                              >
-                                <Share2 className="w-4 h-4 text-green-600" />
-                                Share Resume
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedResumeForAction(resume);
-                                  setShowAddTagsModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                              >
-                                <Tag className="w-4 h-4 text-cyan-600" />
-                                Add Tags
-                              </button>
-                              <div className="border-t border-gray-100 my-1"></div>
-                              {/* ✅ PERMISSION FIX: Archive requires delete permission */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!resumePerms.canDelete) {
-                                    toast.error('You do not have permission to archive resumes');
-                                    setActiveMenu(null);
-                                    return;
-                                  }
-                                  setSelectedResumeForAction(resume);
-                                  setShowArchiveModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                disabled={!resumePerms.canDelete}
-                                title={!resumePerms.canDelete ? 'You do not have permission to archive resumes' : ''}
-                                className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 ${
-                                  !resumePerms.canDelete
-                                    ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                    : 'text-gray-700 hover:bg-gray-50'
-                                }`}
-                              >
-                                <Archive className="w-4 h-4 text-gray-600" />
-                                Archive Resume
-                              </button>
-                              <div className="border-t border-gray-100 my-1"></div>
-                              {/* Delete: requires canDeleteResumes permission AND the parent page must pass onDelete (admins only in internal DB) */}
-                              {resumePerms.canDelete && !!onDelete && (
+                              {canShare && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (!resumePerms.canDelete) {
-                                      toast.error('You do not have permission to delete resumes');
-                                      setActiveMenu(null);
-                                      return;
-                                    }
+                                    setSelectedResumeForAction(resume);
+                                    setShowShareModal(true);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                                >
+                                  <Share2 className="w-4 h-4 text-green-600" />
+                                  Share Resume
+                                </button>
+                              )}
+                              {canTag && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedResumeForAction(resume);
+                                    setShowAddTagsModal(true);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                                >
+                                  <Tag className="w-4 h-4 text-cyan-600" />
+                                  Add Tags
+                                </button>
+                              )}
+                              {!!onArchive && (canShare || canTag) && <div className="border-t border-gray-100 my-1"></div>}
+                              {!!onArchive && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedResumeForAction(resume);
+                                    setShowArchiveModal(true);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm flex items-center gap-3 text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Archive className="w-4 h-4 text-gray-600" />
+                                  Archive Resume
+                                </button>
+                              )}
+                              {!!onDelete && <div className="border-t border-gray-100 my-1"></div>}
+                              {onDelete && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     onDelete?.(resume.id);
                                     setActiveMenu(null);
                                   }}
-                                  disabled={!resumePerms.canDelete}
-                                  title={!resumePerms.canDelete ? 'You do not have permission to delete resumes' : ''}
-                                  className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 ${
-                                    !resumePerms.canDelete
-                                      ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                      : 'text-red-600 hover:bg-red-50'
-                                  }`}
+                                  className="w-full text-left px-4 py-2 text-sm flex items-center gap-3 text-red-600 hover:bg-red-50"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                   Delete Resume
@@ -728,13 +714,15 @@ export default function ResumeTable({
                 <Eye className="w-4 h-4" />
                 View
               </button>
-              <button
-                onClick={() => handleApplyToJob(resume)}
-                className="flex-1 px-3 py-2 text-sm text-white bg-gray-800 hover:bg-gray-900 rounded-lg flex items-center justify-center gap-1"
-              >
-                <Briefcase className="w-4 h-4" />
-                Apply
-              </button>
+              {onApplyToJob && (
+                <button
+                  onClick={() => handleApplyToJob(resume)}
+                  className="flex-1 px-3 py-2 text-sm text-white bg-gray-800 hover:bg-gray-900 rounded-lg flex items-center justify-center gap-1"
+                >
+                  <Briefcase className="w-4 h-4" />
+                  Apply
+                </button>
+              )}
             </div>
           </div>
         ))}

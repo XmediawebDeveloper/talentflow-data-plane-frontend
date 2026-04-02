@@ -132,7 +132,7 @@ const EXPORT_COLUMNS = [
   { key: 'session_start',  label: 'Session Start' },
   { key: 'session_end',    label: 'Session End' },
   { key: 'duration',       label: 'Duration (s)' },
-  { key: 'refund',         label: 'Refund' },
+  { key: 'refund',         label: 'Refund Flag' },
   { key: 'ip_address',     label: 'IP Address' },
 ] as const;
 
@@ -1053,7 +1053,7 @@ export default function AuditTrailPage() {
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Error Origin</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Error Code</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Duration</th>
-                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Refund</th>
+                    <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Refund Flag</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Units</th>
                     <th className="px-4 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider"></th>
                   </tr>
@@ -1073,6 +1073,8 @@ export default function AuditTrailPage() {
                         <td className="px-4 py-4 whitespace-nowrap">
                           {log.user_display_id ? (
                             <span className="text-sm font-mono text-gray-700">{log.user_display_id}</span>
+                          ) : log.actor_role?.toLowerCase() === 'candidate' ? (
+                            <span className="text-sm font-mono text-blue-600">CID</span>
                           ) : (
                             <span className="text-sm text-gray-400">—</span>
                           )}
@@ -1376,12 +1378,12 @@ export default function AuditTrailPage() {
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                      <span className="text-[10px] sm:text-xs font-medium text-gray-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Refund</span>
+                      <span className="text-[10px] sm:text-xs font-medium text-gray-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Refund Flag</span>
                       <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold ${REFUND_FLAG_COLORS[selectedLog.refund_flag]}`}>
                         {selectedLog.refund_flag}
                       </span>
                     </div>
-                    {selectedLog.error_origin !== 'NONE' && (
+                    {selectedLog.error_origin !== 'NONE' && (selectedLog.units_consumed ?? 0) > 0 && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
                         <span className="text-[10px] sm:text-xs font-medium text-gray-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Billing Impact</span>
                         <span className="text-xs sm:text-sm text-gray-700 break-words">{getBillingImpact(selectedLog.error_origin).description}</span>

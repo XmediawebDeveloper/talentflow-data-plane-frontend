@@ -985,6 +985,7 @@ export default function CandidateResultDetails({
                 {detailedResult.round_scores.map((round, roundIdx) => {
                   const isActiveTab = activeTab === round.round_type;
                   if (!isActiveTab) return null;
+                  const isHRRound = round.round_type === 'hr';
 
                   const questionsForRound = detailedResult.question_evaluations.filter(
                     q => q.round_type === round.round_type
@@ -999,15 +1000,21 @@ export default function CandidateResultDetails({
                           <p className="text-sm text-gray-600 mt-1">
                             {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''} •
                             <span className="ml-1">
-                              {Math.round(questionsForRound.reduce((s, q) => s + (q.points_earned || 0), 0))}
-                              /{questionsForRound.reduce((s, q) => s + (q.points_possible || 10), 0)} points
+                              {isHRRound ? 'Informational only' : (
+                                <>
+                                  {Math.round(questionsForRound.reduce((s, q) => s + (q.points_earned || 0), 0))}
+                                  /{questionsForRound.reduce((s, q) => s + (q.points_possible || 10), 0)} points
+                                </>
+                              )}
                             </span>
                           </p>
                         </div>
                         <div className="text-left sm:text-right">
-                          <div className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Section Score</div>
-                          <div className={`text-xl sm:text-3xl ${getScoreColor(Math.round(round.raw_score ?? 0))}`}>
-                            {Math.round(round.raw_score ?? 0)}%
+                          <div className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
+                            {isHRRound ? 'Section Type' : 'Section Score'}
+                          </div>
+                          <div className={`text-xl sm:text-3xl ${isHRRound ? 'text-gray-400' : getScoreColor(Math.round(round.raw_score ?? 0))}`}>
+                            {isHRRound ? '—' : `${Math.round(round.raw_score ?? 0)}%`}
                           </div>
                         </div>
                       </div>
@@ -1017,9 +1024,13 @@ export default function CandidateResultDetails({
                         <div className="space-y-6">
                           {questionsForRound.map((q, qIdx) => (
                             <div key={qIdx} className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
+                              {(() => {
+                                const isTextQuestion = !['coding', 'single_choice', 'multiple_choice'].includes(q.question_type);
+                                return (
+                                  <>
                               {/* Question Header */}
                               <div className={`px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 ${
-                                q.is_correct ? 'bg-green-50' : 'bg-red-50'
+                                isTextQuestion ? 'bg-gray-50' : (q.is_correct ? 'bg-green-50' : 'bg-red-50')
                               }`}>
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                                   <div className="flex-1 min-w-0">
@@ -1039,35 +1050,37 @@ export default function CandidateResultDetails({
                                           : q.question_type === 'multiple_choice' ? 'Multiple Choice'
                                           : 'Text'}
                                       </span>
-                                      {q.is_correct ? (
+                                      {!isTextQuestion && (q.is_correct ? (
                                         <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Correct</span>
                                       ) : (
                                         <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">Incorrect</span>
-                                      )}
+                                      ))}
                                     </div>
                                     <div className="text-gray-900 leading-relaxed">{q.question_text}</div>
                                   </div>
-                                  <div className="sm:ml-6 text-left sm:text-right flex-shrink-0">
-                                    <div className="text-xs text-gray-600 mb-0.5 sm:mb-1">Score</div>
-                                    <div className="flex items-center gap-2">
-                                      {(() => {
-                                        // Normalize scores to be out of 10
-                                        const normalizedEarned = q.points_possible === 100 ? q.points_earned / 10 : q.points_earned;
-                                        const normalizedPossible = q.points_possible === 100 ? 10 : q.points_possible;
-                                        const percentage = (normalizedEarned / normalizedPossible) * 100;
+                                  {!isHRRound && (
+                                    <div className="sm:ml-6 text-left sm:text-right flex-shrink-0">
+                                      <div className="text-xs text-gray-600 mb-0.5 sm:mb-1">Score</div>
+                                      <div className="flex items-center gap-2">
+                                        {(() => {
+                                          // Normalize scores to be out of 10
+                                          const normalizedEarned = q.points_possible === 100 ? q.points_earned / 10 : q.points_earned;
+                                          const normalizedPossible = q.points_possible === 100 ? 10 : q.points_possible;
+                                          const percentage = (normalizedEarned / normalizedPossible) * 100;
 
-                                        return (
-                                          <>
-                                            <div className={`text-lg sm:text-2xl font-bold ${getScoreColor(percentage)}`}>
-                                              {Math.round(normalizedEarned)}
-                                            </div>
-                                            <div className="text-gray-400">/</div>
-                                            <div className="text-base sm:text-xl text-gray-600">{normalizedPossible}</div>
-                                          </>
-                                        );
-                                      })()}
+                                          return (
+                                            <>
+                                              <div className={`text-lg sm:text-2xl font-bold ${getScoreColor(percentage)}`}>
+                                                {Math.round(normalizedEarned)}
+                                              </div>
+                                              <div className="text-gray-400">/</div>
+                                              <div className="text-base sm:text-xl text-gray-600">{normalizedPossible}</div>
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -1110,12 +1123,12 @@ export default function CandidateResultDetails({
                                   <>
                                     <div>
                                       <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                          <FileText className="w-4 h-4 text-blue-700" />
+                                        <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                          <FileText className="w-4 h-4 text-yellow-700" />
                                         </div>
-                                        <div className="text-sm font-medium text-blue-900">CODE INPUT</div>
+                                        <div className="text-sm font-medium text-yellow-200">CODE INPUT</div>
                                       </div>
-                                      <div className="bg-blue-50 rounded-lg p-4 text-blue-950 font-mono text-sm overflow-x-auto">
+                                      <div className="bg-yellow-700 rounded-lg p-4 text-white font-mono text-sm overflow-x-auto border border-yellow-500">
                                         <pre className="whitespace-pre-wrap">{q.candidate_code_input || 'No input provided'}</pre>
                                       </div>
                                     </div>
@@ -1127,7 +1140,7 @@ export default function CandidateResultDetails({
                                         </div>
                                         <div className="text-sm font-medium text-amber-900">EXECUTION LOGS</div>
                                         {q.candidate_code_execution_status && (
-                                          <span className="px-2 py-0.5 bg-amber-200 text-amber-900 rounded text-xs uppercase">
+                                          <span className="px-2 py-0.5 bg-black text-white rounded text-xs uppercase font-medium">
                                             {q.candidate_code_execution_status.replace(/_/g, ' ')}
                                           </span>
                                         )}
@@ -1142,6 +1155,80 @@ export default function CandidateResultDetails({
                                         </pre>
                                       </div>
                                     </div>
+
+                                    {q.candidate_test_results?.details && q.candidate_test_results.details.length > 0 && (
+                                      <div>
+                                        <div className="flex items-center gap-2 mb-3">
+                                          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <FileText className="w-4 h-4 text-blue-700" />
+                                          </div>
+                                          <div className="text-sm font-medium text-blue-900">TEST CASES</div>
+                                        </div>
+                                        <div className="space-y-3">
+                                          {q.candidate_test_results.details.map((testCase, testCaseIdx) => (
+                                            <div key={testCaseIdx} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="text-sm font-medium text-gray-900">
+                                                  Test Case {testCase.test_number}
+                                                  {testCase.is_hidden ? ' (Hidden)' : ''}
+                                                </div>
+                                                <span className={`inline-flex w-fit items-center rounded px-2 py-0.5 text-xs font-medium uppercase ${
+                                                  testCase.passed
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-red-100 text-red-700'
+                                                }`}>
+                                                  {testCase.passed ? 'Pass' : 'Fail'}
+                                                </span>
+                                              </div>
+
+                                              <div className="grid gap-3 md:grid-cols-2">
+                                                <div>
+                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                    Test Case Input
+                                                  </div>
+                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200">
+                                                    <pre className="whitespace-pre-wrap">{testCase.input || (testCase.is_hidden ? 'Hidden test input' : 'No input')}</pre>
+                                                  </div>
+                                                </div>
+                                                <div>
+                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                    Expected Output
+                                                  </div>
+                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200">
+                                                    <pre className="whitespace-pre-wrap">{testCase.expected_output || (testCase.is_hidden ? 'Hidden expected output' : 'No expected output')}</pre>
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              {(testCase.actual_output || testCase.error) && (
+                                                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                                  {testCase.actual_output && (
+                                                    <div>
+                                                      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                        Actual Output
+                                                      </div>
+                                                      <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200">
+                                                        <pre className="whitespace-pre-wrap">{testCase.actual_output}</pre>
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  {testCase.error && (
+                                                    <div>
+                                                      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                        Error
+                                                      </div>
+                                                      <div className="rounded border border-red-200 bg-red-50 p-3 font-mono text-sm text-red-800">
+                                                        <pre className="whitespace-pre-wrap">{testCase.error}</pre>
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
                                   </>
                                 )}
 
@@ -1168,29 +1255,16 @@ export default function CandidateResultDetails({
                                   </div>
                                 )}
 
-                                {/* Ideal/Model Answer (for text questions) */}
-                                {q.ideal_answer && (!q.correct_answer || q.correct_answer.length === 0) && (
-                                  <div>
-                                    <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <FileText className="w-4 h-4 text-blue-600" />
-                                      </div>
-                                      <div className="text-sm font-medium text-blue-900">MODEL ANSWER</div>
-                                    </div>
-                                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                                      <p className="text-blue-800 leading-relaxed">{q.ideal_answer}</p>
-                                    </div>
-                                  </div>
-                                )}
-
                                 {/* AI Feedback */}
-                                {q.feedback && (
+                                {!isHRRound && q.feedback && (
                                   <div>
                                     <div className="flex items-center gap-2 mb-3">
                                       <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
                                         <FileText className="w-4 h-4 text-gray-800" />
                                       </div>
-                                      <div className="text-sm font-medium text-gray-800">AI FEEDBACK & EVALUATION</div>
+                                      <div className="text-sm font-medium text-gray-800">
+                                        {isTextQuestion ? 'WHY THIS SCORE WAS GIVEN' : 'AI FEEDBACK & EVALUATION'}
+                                      </div>
                                     </div>
                                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                                       <div className="text-gray-800 leading-relaxed">{q.feedback}</div>
@@ -1199,7 +1273,7 @@ export default function CandidateResultDetails({
                                 )}
 
                                 {/* Strengths */}
-                                {q.strengths && q.strengths.length > 0 && (
+                                {!isHRRound && q.strengths && q.strengths.length > 0 && (
                                   <div className="pt-4 border-t border-gray-200">
                                     <div className="bg-green-50 rounded-lg p-4">
                                       <div className="text-sm font-medium text-green-800 mb-2">Strengths</div>
@@ -1214,7 +1288,27 @@ export default function CandidateResultDetails({
                                     </div>
                                   </div>
                                 )}
+
+                                {/* Areas for Improvement */}
+                                {!isHRRound && q.areas_for_improvement && q.areas_for_improvement.length > 0 && (
+                                  <div className="pt-4 border-t border-gray-200">
+                                    <div className="bg-amber-50 rounded-lg p-4">
+                                      <div className="text-sm font-medium text-amber-900 mb-2">What to Improve</div>
+                                      <ul className="text-sm text-amber-800 space-y-1">
+                                        {q.areas_for_improvement.map((item, i) => (
+                                          <li key={i} className="flex items-start gap-2">
+                                            <AlertCircle className="w-3 h-3 mt-1 flex-shrink-0" />
+                                            {item}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
+                            </>
+                                );
+                              })()}
                             </div>
                           ))}
                         </div>

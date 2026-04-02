@@ -457,6 +457,18 @@ export interface PrepareAssessmentResponse {
   message: string;
 }
 
+export interface HRAnswerSubmissionItem {
+  question_text: string;
+  answer_type?: 'text' | 'yes_no';
+  answer_text?: string;
+}
+
+export interface HRAnswersSubmitResponse {
+  success: boolean;
+  saved_count: number;
+  message: string;
+}
+
 export interface GenerationStatusResponse {
   status: 'not_started' | 'generating' | 'ready' | 'failed';
   questions_ready: boolean;
@@ -606,6 +618,18 @@ export const candidateService = {
         throw new Error(error.response?.data?.detail || 'Failed to prepare assessment');
       }
       throw error;
+    }
+  },
+
+  async saveHRAnswers(token: string, answers: HRAnswerSubmissionItem[]): Promise<HRAnswersSubmitResponse> {
+    try {
+      const response = await retryApiCall(() =>
+        candidateApi.post<HRAnswersSubmitResponse>(`/candidate/assessment/${token}/hr-answers`, { answers })
+      );
+      return response.data;
+    } catch (error: any) {
+      const errorDetail = error?.response?.data?.detail;
+      throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Failed to save HR answers');
     }
   },
 

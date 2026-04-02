@@ -86,6 +86,7 @@ export interface PublishedJD {
   nice_to_have_skills: string[];
   experience_min?: number;
   experience_max?: number;
+  industry_type?: string;
   domain_keywords?: string[];
   education_requirements?: Record<string, any>;
   description?: string;
@@ -104,6 +105,7 @@ export interface AIInterviewInviteRequest {
   expiry_days?: number;
   custom_message?: string;
   base_url?: string;
+  resume_id?: string;
 }
 
 export interface AIInterviewResponse {
@@ -122,6 +124,7 @@ export interface AIInterviewResponse {
   jd_title?: string;
   jd_version?: number;
   jd_experience_level?: string;
+  jd_location?: string;
   jd_must_have_skills?: string[];
   jd_nice_to_have_skills?: string[];
   rounds_config?: AIInterviewRoundConfig[];

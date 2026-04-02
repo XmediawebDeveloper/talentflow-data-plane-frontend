@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle } from 'lucide-react';
+import { Sparkles, Target, Filter, Search, ChevronDown, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, FileText, Send, TrendingUp, Award, Clock, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -8,8 +8,7 @@ import AITalentMatchPageJobsList from './AITalentMatchPageJobsList';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import Pagination from './Pagination';
 import { recordUsage } from '@/lib/services/usageTrackingService';
-import { MatchedCandidate } from '@/lib/services/aiMatchService';
-import api from '@/lib/services/api';
+import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
 import { scoringService } from '@/lib/services/scoringService';
 import { resumeService } from '@/lib/services/resumeService';
 import { jdService } from '@/lib/services/jdService';
@@ -18,6 +17,7 @@ import { assessmentService } from '@/lib/services';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { useQuota } from '@/contexts/QuotaContext';
 
 interface Job {
   id: string;
@@ -69,6 +69,7 @@ export default function AITalentMatchPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasPermission, isTenantAdmin, user } = useAuth();
+  const { quotaData } = useQuota();
 
   // ✅ RBAC: Check if user can run AI match operations (bypass for tenant admin)
   const canRunAiMatch = isTenantAdmin || (user?.permissions?.canRunAiMatch ?? false);
@@ -118,6 +119,45 @@ export default function AITalentMatchPage({
     return 'System';
   };
 
+  const availableUnits = useMemo(() => {
+    const remaining = quotaData?.quotas?.RS?.total_remaining;
+    if (typeof remaining === 'number') return remaining;
+    if (typeof remaining === 'string') {
+      if (remaining.toLowerCase() === 'unlimited') return null;
+      const parsed = Number(remaining);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }, [quotaData]);
+
+  const getResolvedHistoryCandidates = (item: MatchHistory | null | undefined): MatchedCandidateWithVersions[] => {
+    if (!item) return [];
+    return historyCandidatesById[item.id] ?? item.matchedCandidates ?? [];
+  };
+
+  const loadHistoryCandidates = async (item: MatchHistory): Promise<MatchedCandidateWithVersions[]> => {
+    if (historyCandidatesById[item.id]) {
+      return historyCandidatesById[item.id];
+    }
+    if (item.totalMatches <= 0) {
+      return [];
+    }
+
+    setLoadingHistorySessionId(item.id);
+    try {
+      const details = await aiMatchService.getSession(item.id);
+      const candidates = details.candidates as MatchedCandidateWithVersions[];
+      setHistoryCandidatesById(prev => ({ ...prev, [item.id]: candidates }));
+      return candidates;
+    } catch (error) {
+      console.error('[AITalentMatch] Failed to fetch session details:', error);
+      toast.error('Failed to load matched candidates');
+      return [];
+    } finally {
+      setLoadingHistorySessionId(current => current === item.id ? null : current);
+    }
+  };
+
   // Helper to update URL params - use shallow routing to prevent full page reload
   const updateUrlParams = (params: { jdId?: string; view?: string }) => {
     const url = new URL(window.location.href);
@@ -161,9 +201,8 @@ export default function AITalentMatchPage({
   const [showVersionSelectForScoring, setShowVersionSelectForScoring] = useState(false);
   const [scoringCandidate, setScoringCandidate] = useState<MatchedCandidateWithVersions | null>(null);
   const [scoringVersions, setScoringVersions] = useState<any[]>([]);
-
-  // Available units from quota API
-  const [availableUnits, setAvailableUnits] = useState<number | null>(null);
+  const [historyCandidatesById, setHistoryCandidatesById] = useState<Record<string, MatchedCandidateWithVersions[]>>({});
+  const [loadingHistorySessionId, setLoadingHistorySessionId] = useState<string | null>(null);
 
   // Scored resume IDs for current JD
   const [scoredResumeIds, setScoredResumeIds] = useState<Set<string>>(new Set());
@@ -177,9 +216,16 @@ export default function AITalentMatchPage({
     }
     const fetchScored = async () => {
       try {
-        const response = await jdService.getScoredResumes(jobId, { page_size: 500 });
+        const allItems: any[] = [];
+        let page = 1;
+        while (true) {
+          const response = await jdService.getScoredResumes(jobId, { page_size: 100, page });
+          allItems.push(...(response.items || []));
+          if (allItems.length >= (response.total || 0) || (response.items || []).length < 100) break;
+          page++;
+        }
         const ids = new Set<string>(
-          (response.items || []).map((r: any) => r.resume_id).filter(Boolean)
+          allItems.map((r: any) => r.resume_id).filter(Boolean)
         );
         setScoredResumeIds(ids);
       } catch (e) {
@@ -188,6 +234,35 @@ export default function AITalentMatchPage({
     };
     fetchScored();
   }, [selectedHistoryItem, selectedJob, viewMode]);
+
+  useEffect(() => {
+    const hydrateSelectedHistory = async () => {
+      if (viewMode === 'details' && selectedHistoryItem) {
+        const resolvedCandidates = getResolvedHistoryCandidates(selectedHistoryItem);
+        if (selectedHistoryItem.totalMatches > 0 && resolvedCandidates.length === 0) {
+          const candidates = await loadHistoryCandidates(selectedHistoryItem);
+          setSelectedHistoryItem(prev => prev && prev.id === selectedHistoryItem.id
+            ? { ...prev, matchedCandidates: candidates }
+            : prev);
+        }
+        return;
+      }
+
+      if (viewMode === 'results' && selectedJob && matchedCandidates.length === 0) {
+        const historyItem = matchHistory.find(item => item.jobId === selectedJob);
+        if (!historyItem || historyItem.totalMatches <= 0) return;
+
+        const candidates = await loadHistoryCandidates(historyItem);
+        setMatchedCandidates(candidates);
+        setSelectedHistoryItem({
+          ...historyItem,
+          matchedCandidates: candidates,
+        });
+      }
+    };
+
+    hydrateSelectedHistory();
+  }, [viewMode, selectedHistoryItem, selectedJob, matchedCandidates.length, matchHistory, historyCandidatesById]);
 
   // Handle attachments click - fetch real versions
   const handleAttachmentsClick = async (candidate: MatchedCandidateWithVersions) => {
@@ -288,8 +363,7 @@ export default function AITalentMatchPage({
       // User clicked from history list - show details view
       const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
 
-      if (existingMatch && existingMatch.matchedCandidates.length > 0) {
-        // Show history details
+      if (existingMatch) {
         setSelectedHistoryItem(existingMatch);
         setViewMode('details');
       } else {
@@ -301,10 +375,10 @@ export default function AITalentMatchPage({
       // User clicked "AI Talent Match Results" - show existing results or empty state
       const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
 
-      if (existingMatch && existingMatch.matchedCandidates.length > 0) {
-        // Show existing results from history
+      if (existingMatch) {
+        const existingCandidates = getResolvedHistoryCandidates(existingMatch);
         setSelectedHistoryItem(existingMatch);
-        setMatchedCandidates(existingMatch.matchedCandidates);
+        setMatchedCandidates(existingCandidates);
         setViewMode('results');
       } else {
         // No results in history - but don't clear matchedCandidates if we just completed a match
@@ -333,23 +407,6 @@ export default function AITalentMatchPage({
       }, 300);
     }
   }, [jobs, matchHistory, searchParams]);
-
-  // Fetch available units on mount
-  useEffect(() => {
-    const fetchQuota = async () => {
-      try {
-        const response = await api.get('/usage/quota-status');
-        const quotas = response.data?.data?.quotas;
-        // AI Talent Match uses Resume Scoring (RS) quota
-        if (quotas?.RS) {
-          setAvailableUnits(quotas.RS.total_remaining || 0);
-        }
-      } catch (error) {
-        console.log('[AITalentMatchPage] Failed to load quota:', error);
-      }
-    };
-    fetchQuota();
-  }, []);
 
   const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
   const selectedJobData = jobs.find(j => j.id === selectedJob);
@@ -444,8 +501,9 @@ export default function AITalentMatchPage({
     }
 
     // Get the current candidates based on view mode
-    const currentCandidates = viewMode === 'results' ? matchedCandidates :
-                              selectedHistoryItem ? selectedHistoryItem.matchedCandidates : [];
+    const currentCandidates = viewMode === 'results'
+      ? matchedCandidates
+      : getResolvedHistoryCandidates(selectedHistoryItem);
 
     // Get selected candidates data
     const selected = currentCandidates.filter(c => selectedCandidates.includes(c.id));
@@ -594,8 +652,9 @@ export default function AITalentMatchPage({
     }
 
     // Extract candidate data from selected candidates
-    const currentCandidates = viewMode === 'results' ? matchedCandidates :
-                              selectedHistoryItem ? selectedHistoryItem.matchedCandidates : [];
+    const currentCandidates = viewMode === 'results'
+      ? matchedCandidates
+      : getResolvedHistoryCandidates(selectedHistoryItem);
     const candidateData = currentCandidates
       .filter(c => selectedCandidates.includes(c.id))
       .map((c, index) => ({
@@ -663,8 +722,9 @@ export default function AITalentMatchPage({
   };
 
   const getFilteredCandidates = (): MatchedCandidateWithVersions[] => {
-    const candidates: MatchedCandidateWithVersions[] = viewMode === 'results' ? matchedCandidates :
-                      selectedHistoryItem ? selectedHistoryItem.matchedCandidates : [];
+    const candidates: MatchedCandidateWithVersions[] = viewMode === 'results'
+      ? matchedCandidates
+      : getResolvedHistoryCandidates(selectedHistoryItem);
 
     const filtered = candidates.filter(candidate => {
       // Existing filters
@@ -784,7 +844,8 @@ export default function AITalentMatchPage({
 
     // Candidate-level filters: show history item if ANY candidate matches
     const hasCandidateFilters = historyFilterPhone !== '' || historyFilterLocation !== '' || historyFilterExpMin !== '' || historyFilterExpMax !== '';
-    const matchesCandidateFilters = !hasCandidateFilters || item.matchedCandidates.some(candidate => {
+    const historyCandidates = getResolvedHistoryCandidates(item);
+    const matchesCandidateFilters = !hasCandidateFilters || historyCandidates.length === 0 || historyCandidates.some(candidate => {
       const matchesPhone = historyFilterPhone === '' ||
         (candidate.phone && (
           candidate.phone.toLowerCase().includes(historyFilterPhone.toLowerCase()) ||
@@ -813,11 +874,13 @@ export default function AITalentMatchPage({
 
   // View: History Details
   if (viewMode === 'details' && selectedHistoryItem) {
+    const detailCandidates = getResolvedHistoryCandidates(selectedHistoryItem);
     const filteredCandidates = filteredCandidatesMemo;
     const paginatedCandidates = getPaginatedCandidates();
-    const excellentCount = selectedHistoryItem.matchedCandidates.filter(c => c.matchScore >= 85).length;
-    const goodCount = selectedHistoryItem.matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
-    const moderateCount = selectedHistoryItem.matchedCandidates.filter(c => c.matchScore < 70).length;
+    const excellentCount = detailCandidates.filter(c => c.matchScore >= 85).length;
+    const goodCount = detailCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
+    const moderateCount = detailCandidates.filter(c => c.matchScore < 70).length;
+    const isLoadingSelectedHistory = loadingHistorySessionId === selectedHistoryItem.id;
 
     return (
       <>
@@ -896,7 +959,7 @@ export default function AITalentMatchPage({
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600 mt-1">
                   <span className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
-                    {formatISTDate(selectedHistoryItem.matchedAt)}
+                    {formatISTDate(selectedHistoryItem.matchedAt.toISOString())}
                   </span>
                   <span className="flex items-center gap-1">
                     <User className="w-4 h-4" />
@@ -1023,6 +1086,14 @@ export default function AITalentMatchPage({
         </div>
 
         {/* Candidates List - Table View */}
+        {isLoadingSelectedHistory ? (
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="flex items-center gap-3 text-sm text-gray-600">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading matched candidates...
+            </div>
+          </div>
+        ) : (
         <div className="flex-1 overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 sticky top-0">
@@ -1175,6 +1246,7 @@ export default function AITalentMatchPage({
             </tbody>
           </table>
         </div>
+        )}
 
         {/* Pagination Controls */}
         {totalFilteredCandidates > 0 && (
@@ -1750,14 +1822,6 @@ export default function AITalentMatchPage({
             </div>
             <div className="grid gap-3 sm:gap-5">
             {filteredHistory.map((item) => {
-              const avgScore = item.matchedCandidates.length > 0
-                ? Math.round(item.matchedCandidates.reduce((sum, c) => sum + c.matchScore, 0) / item.matchedCandidates.length)
-                : 0;
-
-              const excellentCount = item.matchedCandidates.filter(c => c.matchScore >= 85).length;
-              const goodCount = item.matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
-              const moderateCount = item.matchedCandidates.filter(c => c.matchScore < 70).length;
-
               const jobData = jobs.find(j => j.id === item.jobId);
 
               return (
@@ -1808,7 +1872,7 @@ export default function AITalentMatchPage({
                         <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600">
                           <span className="flex items-center gap-1.5">
                             <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
-                            {formatISTDate(item.matchedAt)}
+                            {formatISTDate(item.matchedAt.toISOString())}
                           </span>
                           <span className="flex items-center gap-1.5">
                             <User className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -1907,6 +1971,10 @@ export default function AITalentMatchPage({
     const excellentCount = matchedCandidates.filter(c => c.matchScore >= 85).length;
     const goodCount = matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
     const moderateCount = matchedCandidates.filter(c => c.matchScore < 70).length;
+    const historyItemForSelectedJob = matchHistory.find(item => item.jobId === selectedJob);
+    const isLoadingResultsFromHistory =
+      loadingHistorySessionId !== null &&
+      (loadingHistorySessionId === selectedHistoryItem?.id || loadingHistorySessionId === historyItemForSelectedJob?.id);
 
     return (
       <main className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-blue-50 to-white">
@@ -2084,7 +2152,12 @@ export default function AITalentMatchPage({
 
         {/* Scrollable Candidates List */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6">
-          {matchedCandidates.length === 0 ? (
+          {isLoadingResultsFromHistory ? (
+            <div className="flex flex-col items-center justify-center h-full py-8 sm:py-16 px-4">
+              <Loader2 className="w-8 h-8 text-gray-500 animate-spin mb-4" />
+              <p className="text-sm sm:text-base text-gray-600 text-center">Loading matched candidates...</p>
+            </div>
+          ) : matchedCandidates.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full py-8 sm:py-16 px-4">
               <div className="w-14 h-14 sm:w-20 sm:h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4 sm:mb-6">
                 <Sparkles className="w-7 h-7 sm:w-10 sm:h-10 text-gray-400" />

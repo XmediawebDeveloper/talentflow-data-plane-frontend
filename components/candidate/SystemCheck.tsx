@@ -35,7 +35,6 @@ interface CheckStatus {
 export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const [cameraCheck, setCameraCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [micCheck, setMicCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
-  const [screenCheck, setScreenCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [internetCheck, setInternetCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [browserCheck, setBrowserCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [isChecking, setIsChecking] = useState(false);
@@ -145,11 +144,10 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     const allSuccess =
       cameraCheck.status === 'success' &&
       micCheck.status === 'success' &&
-      screenCheck.status === 'success' &&
       (internetCheck.status === 'success' || internetCheck.status === 'warning') &&
       browserCheck.status === 'success';
     setAllChecksComplete(allSuccess);
-  }, [cameraCheck, micCheck, screenCheck, internetCheck, browserCheck]);
+  }, [cameraCheck, micCheck, internetCheck, browserCheck]);
 
   const runAllChecks = async () => {
     setIsChecking(true);
@@ -157,7 +155,6 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     // Reset all checks including camera in use error
     setCameraCheck({ status: 'checking', message: 'Checking...' });
     setMicCheck({ status: 'checking', message: 'Checking...' });
-    setScreenCheck({ status: 'checking', message: 'Checking...' });
     setInternetCheck({ status: 'checking', message: 'Checking...' });
     setBrowserCheck({ status: 'checking', message: 'Checking...' });
     setCameraInUseError(''); // Clear previous camera in use error
@@ -167,7 +164,6 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     await checkInternet();
     startNetworkPolling(); // keep re-checking so slow→fast transitions update immediately
     await checkCameraAndMicrophone();  // Combined to avoid permission conflicts
-    await checkScreenShare();
 
     setIsChecking(false);
   };
@@ -413,27 +409,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     }
   };
 
-  const checkScreenShare = async () => {
-    try {
-      // We can't actually test screen sharing without showing the picker
-      // So we just check if the API is available
-      if ('getDisplayMedia' in navigator.mediaDevices) {
-        setScreenCheck({ status: 'success', message: 'Screen sharing available' });
-      } else {
-        setScreenCheck({ status: 'error', message: 'Screen sharing not supported' });
-      }
-    } catch {
-      setScreenCheck({ status: 'error', message: 'Screen sharing check failed' });
-    }
-  };
-
   const handleProceed = async () => {
     setIsSubmitting(true);
     try {
       const results: SystemCheckResult = {
         camera_available: cameraCheck.status === 'success',
         microphone_available: micCheck.status === 'success',
-        screen_share_available: screenCheck.status === 'success',
+        screen_share_available: false,
         browser_compatible: browserCheck.status === 'success',
         internet_speed_mbps: null
       };
@@ -687,19 +669,6 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                   <StatusIcon status={micCheck.status} />
                 </div>
 
-                {/* Screen Share */}
-                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-                      <Monitor className="w-6 h-6 text-indigo-600" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">Screen Sharing</p>
-                      <p className="text-sm text-gray-500">{screenCheck.message}</p>
-                    </div>
-                  </div>
-                  <StatusIcon status={screenCheck.status} />
-                </div>
               </div>
 
               {/* Status Message */}

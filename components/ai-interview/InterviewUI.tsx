@@ -1074,10 +1074,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
       mediaStreamRef.current = stream;
 
-      // Reuse existing recording context or create with default hardware sample rate
+      // Reuse existing recording context or create at 16 kHz so the browser
+      // handles the hardware→16kHz resampling (higher quality than manual interpolation).
       if (!recordingContextRef.current || recordingContextRef.current.state === 'closed') {
         try {
-          recordingContextRef.current = new AudioContext();
+          recordingContextRef.current = new AudioContext({ sampleRate: 16000 });
         } catch (err) {
           console.error('[InterviewUI] Failed to create recording AudioContext:', err);
           setStatus("Audio device error - please refresh");

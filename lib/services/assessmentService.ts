@@ -159,6 +159,28 @@ export interface QuestionEvaluation {
   candidate_code_execution_status?: string;
   candidate_code_execution_output?: string;
   candidate_code_execution_error?: string;
+  candidate_test_results?: {
+    passed?: number;
+    failed?: number;
+    total?: number;
+    points_earned?: number;
+    points_total?: number;
+    score_percentage?: number;
+    syntax_valid?: boolean;
+    execution_status?: string;
+    details?: Array<{
+      test_number: number;
+      passed: boolean;
+      input?: string | null;
+      expected_output?: string | null;
+      actual_output?: string | null;
+      error?: string | null;
+      is_hidden: boolean;
+      points: number;
+      points_earned: number;
+      status: string;
+    }>;
+  };
   options?: { id: string; text: string }[];
   correct_answer?: string[];
   ideal_answer?: string;  // Model/ideal answer for text questions (what a good answer should include)
