@@ -1401,53 +1401,152 @@ export default function AIInterviewClusters() {
               isFixed={isFixed}
             />
           )}
-        </div>
+          </div>{/* closes flex-1 min-w-0 main content */}
 
-        {/* ── Sticky footer ── */}
-        </div>
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10">
-          <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleBack}
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Configure
-              </button>
-              <button
-                onClick={handleDiscard}
-                disabled={saving}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-              >
-                <Trash2 className="w-4 h-4" />
-                Discard
-              </button>
+          {/* ── Configuration Summary sidebar ── */}
+          <div className="hidden lg:block w-64 xl:w-72 flex-shrink-0">
+            <div className="bg-white border border-gray-200 rounded-lg p-4 sticky top-6">
+              <h3 className="font-semibold text-gray-900 text-sm mb-4">Configuration Summary</h3>
+
+              {/* Job Details */}
+              {config && (
+                <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
+                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                    <span className="text-xs font-medium text-gray-500">Job Details</span>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    <div className="px-3 py-2 flex items-start justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-shrink-0">Role Title</span>
+                      <span className="text-xs font-semibold text-gray-900 text-right">{config.jd_title || config.position || '—'}</span>
+                    </div>
+                    {config.jd_experience_level && (
+                      <div className="px-3 py-2 flex items-start justify-between gap-2">
+                        <span className="text-xs text-gray-500 flex-shrink-0">Level</span>
+                        <span className="text-xs font-semibold text-gray-900 text-right">{config.jd_experience_level}</span>
+                      </div>
+                    )}
+                    {(config as any).jd_location && (
+                      <div className="px-3 py-2 flex items-start justify-between gap-2">
+                        <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
+                        <span className="text-xs font-semibold text-gray-900 text-right">{(config as any).jd_location}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Question Budget + Clusters */}
+              {isFixed && (
+                <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
+                  <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                    <span className="text-xs font-medium text-gray-500">Question Budget</span>
+                    <span className="text-xs text-gray-400">{fixedMthMin + fixedNthMin + fixedHrMin} min</span>
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-100">
+                        <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
+                        <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
+                        <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-gray-50">
+                        <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{mthMaxClusters}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
+                      </tr>
+                      {nthEnabled && (
+                        <tr className="border-b border-gray-50">
+                          <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{nthMaxClusters}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
+                        </tr>
+                      )}
+                      {hrEnabled && (
+                        <tr>
+                          <td className="px-3 py-2 text-gray-600">HR Round</td>
+                          <td className="px-3 py-2 text-right text-gray-400">—</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Cluster progress */}
+              <div className="border border-gray-100 rounded-lg overflow-hidden">
+                <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                  <span className="text-xs font-medium text-gray-500">Cluster Progress</span>
+                </div>
+                <div className="divide-y divide-gray-50">
+                  <div className="px-3 py-2 flex items-center justify-between">
+                    <span className="text-xs text-gray-500">Must-to-Have</span>
+                    <span className={`text-xs font-semibold ${mthClusters.length > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                      {mthClusters.length} / {mthMaxClusters}
+                    </span>
+                  </div>
+                  {nthEnabled && (
+                    <div className="px-3 py-2 flex items-center justify-between">
+                      <span className="text-xs text-gray-500">Nice-to-Have</span>
+                      <span className={`text-xs font-semibold ${nthClusters.length > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                        {nthClusters.length} / {nthMaxClusters}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleSaveAsDraft}
-                disabled={saving || generating}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Save as Draft
-              </button>
-              <button
-                onClick={handleContinue}
-                disabled={saving || generating}
-                className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {saving ? 'Saving...' : 'Continue to Preview'}
-                {!saving && (
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                )}
-              </button>
-            </div>
+          </div>
+
+          </div>{/* closes two-column flex */}
+        </div>{/* closes w-full */}
+      </div>{/* closes flex-1 p-4 */}
+
+      {/* ── Sticky footer ── */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10">
+        <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleBack}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Configure
+            </button>
+            <button
+              onClick={handleDiscard}
+              disabled={saving}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Trash2 className="w-4 h-4" />
+              Discard
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSaveAsDraft}
+              disabled={saving || generating}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Save as Draft
+            </button>
+            <button
+              onClick={handleContinue}
+              disabled={saving || generating}
+              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {saving ? 'Saving...' : 'Continue to Preview'}
+              {!saving && (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
       </div>

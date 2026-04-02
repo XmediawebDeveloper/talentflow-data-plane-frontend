@@ -1394,24 +1394,41 @@ export default function AuditTrailPage() {
               )}
 
               {/* Event Details - Friendly key-value display */}
-              {selectedLog.details && Object.entries(selectedLog.details).filter(([k, v]) => !['units_consumed_actual', 'balance_before', 'balance_after'].includes(k) && v !== null && v !== undefined).length > 0 && (
+              {selectedLog.details && Object.entries(selectedLog.details).filter(([k, v]) => {
+                const HIDDEN_KEYS = ['units_consumed_actual', 'balance_before', 'balance_after', 'units_deducted', 'pii_compliant'];
+                if (HIDDEN_KEYS.includes(k)) return false;
+                if (v === null || v === undefined) return false;
+                if (Array.isArray(v) && v.length === 0) return false;
+                return true;
+              }).length > 0 && (
                 <div>
                   <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-1.5 sm:mb-2.5">Event Details</p>
                   <div className="bg-gray-50 rounded-lg sm:rounded-xl divide-y divide-gray-100 overflow-hidden">
                     {Object.entries(selectedLog.details)
-                      .filter(([key, value]) => !['units_consumed_actual', 'balance_before', 'balance_after'].includes(key) && value !== null && value !== undefined)
+                      .filter(([key, value]) => {
+                        const HIDDEN_KEYS = ['units_consumed_actual', 'balance_before', 'balance_after', 'units_deducted', 'pii_compliant'];
+                        if (HIDDEN_KEYS.includes(key)) return false;
+                        if (value === null || value === undefined) return false;
+                        if (Array.isArray(value) && value.length === 0) return false;
+                        return true;
+                      })
                       .map(([key, value]) => (
                       <div key={key} className="flex items-start px-4 py-3 gap-4">
                         <span className="text-xs font-medium text-gray-500 min-w-[140px] flex-shrink-0 pt-0.5 capitalize">
-                          {key.replace(/_/g, ' ')}
+                          {(DETAIL_KEY_LABELS as Record<string, string>)[key] || key.replace(/_/g, ' ')}
                         </span>
                         <span className="text-sm text-gray-900 break-all">
                           {value === null || value === undefined
                             ? '—'
                             : typeof value === 'boolean'
                             ? value ? 'Yes' : 'No'
+                            : Array.isArray(value)
+                            ? value.join(', ')
                             : typeof value === 'object'
-                            ? JSON.stringify(value)
+                            ? Object.entries(value as Record<string, unknown>)
+                                .filter(([, v]) => v !== null && v !== undefined)
+                                .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)}`)
+                                .join(' · ')
                             : String(value)}
                         </span>
                       </div>
