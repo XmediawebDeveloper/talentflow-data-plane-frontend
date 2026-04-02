@@ -5,6 +5,8 @@ import {
   ArrowLeft, Clock, MessageSquare, ThumbsUp, ThumbsDown,
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
   BarChart3, Brain, FileText, Layers, Bot,
+  ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
+  Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -21,7 +23,50 @@ interface CandidateResultsViewProps {
   onBack: () => void;
 }
 
-type TabKey = 'overview' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'clusters';
+type TabKey = 'overview' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'clusters' | 'violations';
+
+/* ─── Proctoring helpers ─────────────────────────────────────────── */
+interface ViolationRecord {
+  event_type: string;
+  severity: string;
+  timestamp?: string;
+  details?: Record<string, unknown>;
+}
+
+const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string; border: string }> = {
+  tab_switch:               { label: 'Tab Switch',           icon: <Monitor className="w-4 h-4" />,      color: 'text-orange-600', bg: 'bg-orange-50',  border: 'border-orange-200' },
+  window_blur:              { label: 'Window Blur',          icon: <Eye className="w-4 h-4" />,           color: 'text-red-600',    bg: 'bg-red-50',     border: 'border-red-200'    },
+  copy_attempt:             { label: 'Copy Attempt',         icon: <Clipboard className="w-4 h-4" />,     color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
+  paste_attempt:            { label: 'Paste Attempt',        icon: <MousePointer className="w-4 h-4" />,  color: 'text-yellow-600', bg: 'bg-yellow-50', border: 'border-yellow-200' },
+  camera_disabled:          { label: 'Camera Disabled',      icon: <Camera className="w-4 h-4" />,        color: 'text-gray-600',   bg: 'bg-gray-50',   border: 'border-gray-200'   },
+  camera_obstructed:        { label: 'Camera Obstructed',    icon: <Eye className="w-4 h-4" />,           color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
+  microphone_disabled:      { label: 'Mic Disabled',         icon: <Mic className="w-4 h-4" />,           color: 'text-gray-600',   bg: 'bg-gray-50',   border: 'border-gray-200'   },
+  voice_detected:           { label: 'Voice Detected',       icon: <Volume2 className="w-4 h-4" />,       color: 'text-pink-600',   bg: 'bg-pink-50',   border: 'border-pink-200'   },
+  multiple_voices:          { label: 'Multiple Voices',      icon: <Volume2 className="w-4 h-4" />,       color: 'text-pink-700',   bg: 'bg-pink-50',   border: 'border-pink-200'   },
+  multiple_faces:           { label: 'Multiple Faces',       icon: <Users className="w-4 h-4" />,         color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-200' },
+  face_missing:             { label: 'Face Not Visible',     icon: <UserX className="w-4 h-4" />,         color: 'text-red-600',    bg: 'bg-red-50',    border: 'border-red-200'    },
+  gaze_away:                { label: 'Gaze Away',            icon: <Eye className="w-4 h-4" />,           color: 'text-orange-500', bg: 'bg-orange-50', border: 'border-orange-200' },
+  fullscreen_exit:          { label: 'Fullscreen Exit',      icon: <Maximize2 className="w-4 h-4" />,     color: 'text-blue-600',   bg: 'bg-blue-50',   border: 'border-blue-200'   },
+  screenshot_attempt:       { label: 'Screenshot Attempt',   icon: <Camera className="w-4 h-4" />,        color: 'text-amber-600',  bg: 'bg-amber-50',  border: 'border-amber-200'  },
+  screen_recording_attempt: { label: 'Screen Recording',     icon: <Video className="w-4 h-4" />,         color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200'  },
+  face_mismatch:            { label: 'Face Mismatch',        icon: <User className="w-4 h-4" />,          color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
+  face_identity_changed:    { label: 'Identity Changed',     icon: <UserX className="w-4 h-4" />,         color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
+  voice_mismatch:           { label: 'Voice Mismatch',       icon: <Mic className="w-4 h-4" />,           color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
+  voice_identity_changed:   { label: 'Voice ID Changed',     icon: <Mic className="w-4 h-4" />,           color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
+};
+
+function getRiskLevel(count: number): { label: string; color: string; bg: string; border: string } {
+  if (count === 0)  return { label: 'Clean',       color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-300' };
+  if (count <= 2)   return { label: 'Low Risk',    color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-200' };
+  if (count <= 5)   return { label: 'Medium Risk', color: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-300' };
+  return              { label: 'High Risk',    color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-300'   };
+}
+
+function formatTs(ts?: string) {
+  if (!ts) return '—';
+  try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+  catch { return '—'; }
+}
 
 export default function CandidateResultsView({ interview, onBack }: CandidateResultsViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
@@ -29,6 +74,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
+  const [violationPage, setViolationPage] = useState(1);
 
   // Fetch recording with auth headers and create blob URL
   useEffect(() => {
@@ -132,13 +178,47 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     return `${mins} min`;
   };
 
-  const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-    { key: 'overview', label: 'Overview', icon: <BarChart3 className="w-4 h-4" /> },
-    { key: 'clusters', label: 'Cluster Insights', icon: <Layers className="w-4 h-4" /> },
-    { key: 'sentiment', label: 'Sentiment', icon: <Brain className="w-4 h-4" /> },
-    { key: 'qa', label: 'Q&A', icon: <MessageSquare className="w-4 h-4" /> },
-    { key: 'recording', label: 'Recording', icon: <Video className="w-4 h-4" /> },
-    { key: 'transcript', label: 'Transcript', icon: <FileText className="w-4 h-4" /> },
+  // Proctoring violations from the interview object
+  const violations: ViolationRecord[] = useMemo(
+    () => interview.proctoring_violations ?? [],
+    [interview],
+  );
+  const totalViolations = violations.length;
+  const risk = getRiskLevel(totalViolations);
+
+  // Count by event type
+  const violationCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    violations.forEach(v => { map[v.event_type] = (map[v.event_type] ?? 0) + 1; });
+    return map;
+  }, [violations]);
+
+  // Group by minute+type for the event log table
+  const groupedViolations = useMemo(() => {
+    const map: Record<string, { event_type: string; severity: string; timestamp?: string; count: number }> = {};
+    violations.forEach(v => {
+      const minute = v.timestamp ? v.timestamp.slice(0, 16) : 'unknown';
+      const key = `${minute}__${v.event_type}`;
+      if (!map[key]) map[key] = { event_type: v.event_type, severity: v.severity, timestamp: v.timestamp, count: 0 };
+      map[key].count += 1;
+    });
+    return Object.values(map).sort((a, b) =>
+      (a.timestamp ?? '').localeCompare(b.timestamp ?? '')
+    );
+  }, [violations]);
+
+  const ROWS_PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(groupedViolations.length / ROWS_PER_PAGE));
+  const pagedViolations = groupedViolations.slice((violationPage - 1) * ROWS_PER_PAGE, violationPage * ROWS_PER_PAGE);
+
+  const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { key: 'overview',   label: 'Overview',        icon: <BarChart3 className="w-4 h-4" /> },
+    { key: 'clusters',   label: 'Cluster Insights', icon: <Layers className="w-4 h-4" /> },
+    { key: 'sentiment',  label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
+    { key: 'qa',         label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
+    { key: 'recording',  label: 'Recording',        icon: <Video className="w-4 h-4" /> },
+    { key: 'transcript', label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
+    { key: 'violations', label: 'Violations',       icon: <ShieldAlert className="w-4 h-4" />, badge: totalViolations },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -222,20 +302,33 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
         {/* Tabs */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-          <div className="border-b border-gray-200 px-6">
-            <div className="flex gap-1">
+          <div className="border-b border-gray-200 px-6 overflow-x-auto">
+            <div className="flex gap-1 min-w-max">
               {tabs.map(tab => (
                 <button
                   key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`flex items-center gap-1.5 py-4 px-3 text-sm border-b-2 transition-colors ${
+                  onClick={() => { setActiveTab(tab.key); setViolationPage(1); }}
+                  className={`flex items-center gap-1.5 py-4 px-3 text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === tab.key
-                      ? 'border-gray-800 text-gray-800 font-medium'
+                      ? tab.key === 'violations'
+                        ? 'border-red-500 text-red-700 font-medium'
+                        : 'border-gray-800 text-gray-800 font-medium'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
                   {tab.icon}
                   {tab.label}
+                  {tab.badge !== undefined && (
+                    <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                      tab.badge > 0
+                        ? activeTab === 'violations'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-red-100 text-red-600'
+                        : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {tab.badge}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -698,6 +791,160 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 );
               })()
             )}
+            {/* Violations Tab */}
+            {activeTab === 'violations' && (
+              <div className="space-y-6">
+
+                {/* Risk Level Banner */}
+                <div className={`flex items-center justify-between px-4 py-3 rounded-lg border ${risk.bg} ${risk.border}`}>
+                  <div className="flex items-center gap-3">
+                    <ShieldAlert className={`w-5 h-5 ${risk.color}`} />
+                    <div>
+                      <p className={`text-sm font-semibold ${risk.color}`}>
+                        Integrity Status: {risk.label}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {totalViolations === 0
+                          ? 'No violations detected during this interview.'
+                          : `${totalViolations} violation event${totalViolations !== 1 ? 's' : ''} recorded — 0–2 Low, 3–5 Medium, 6+ High`}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-2xl font-bold ${risk.color}`}>{totalViolations}</span>
+                </div>
+
+                {/* Violation Type Grid */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">Violation Breakdown</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {[
+                      'face_missing', 'multiple_faces', 'gaze_away',
+                      'tab_switch', 'window_blur', 'fullscreen_exit',
+                      'camera_disabled', 'camera_obstructed', 'microphone_disabled',
+                      'copy_attempt', 'paste_attempt',
+                      'voice_detected', 'multiple_voices',
+                      'face_mismatch', 'face_identity_changed',
+                      'voice_mismatch', 'voice_identity_changed',
+                      'screenshot_attempt', 'screen_recording_attempt',
+                    ].map(type => {
+                      const cfg = EVENT_CONFIG[type];
+                      const count = violationCounts[type] ?? 0;
+                      if (!cfg) return null;
+                      return (
+                        <div
+                          key={type}
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border ${
+                            count > 0 ? `${cfg.bg} ${cfg.border}` : 'bg-gray-50 border-gray-100'
+                          }`}
+                        >
+                          <span className={count > 0 ? cfg.color : 'text-gray-300'}>{cfg.icon}</span>
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-xs font-medium truncate ${count > 0 ? cfg.color : 'text-gray-400'}`}>
+                              {cfg.label}
+                            </p>
+                            <p className={`text-xs font-bold ${
+                              count >= 5 ? 'text-red-600' : count >= 3 ? 'text-orange-500' : count > 0 ? 'text-gray-700' : 'text-gray-300'
+                            }`}>
+                              {count}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Event Log Table */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">Event Log</h3>
+                  {groupedViolations.length === 0 ? (
+                    <div className="text-center py-12 bg-green-50 rounded-lg border border-green-200">
+                      <ShieldAlert className="w-8 h-8 text-green-400 mx-auto mb-2" />
+                      <p className="text-sm font-medium text-green-700">No violations recorded</p>
+                      <p className="text-xs text-green-500 mt-1">This interview completed with a clean integrity status.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 w-10">#</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Event</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Time</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">Severity</th>
+                              <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500">Count</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {pagedViolations.map((row, idx) => {
+                              const cfg = EVENT_CONFIG[row.event_type];
+                              const sev = row.severity?.toLowerCase() ?? 'low';
+                              const sevStyle =
+                                sev === 'high'   ? 'bg-red-100 text-red-700' :
+                                sev === 'medium' ? 'bg-orange-100 text-orange-700' :
+                                                   'bg-gray-100 text-gray-600';
+                              const countStyle =
+                                row.count >= 5 ? 'text-red-600 font-bold' :
+                                row.count >= 3 ? 'text-orange-500 font-semibold' :
+                                                 'text-gray-600';
+                              const globalIdx = (violationPage - 1) * ROWS_PER_PAGE + idx + 1;
+                              return (
+                                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                  <td className="px-4 py-2.5 text-xs text-gray-400">{globalIdx}</td>
+                                  <td className="px-4 py-2.5">
+                                    <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${
+                                      cfg ? `${cfg.bg} ${cfg.color}` : 'bg-gray-100 text-gray-600'
+                                    }`}>
+                                      {cfg?.icon}
+                                      {cfg?.label ?? row.event_type.replace(/_/g, ' ')}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-2.5 text-xs text-gray-500 font-mono">{formatTs(row.timestamp)}</td>
+                                  <td className="px-4 py-2.5">
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${sevStyle}`}>
+                                      {sev}
+                                    </span>
+                                  </td>
+                                  <td className={`px-4 py-2.5 text-right text-xs ${countStyle}`}>{row.count}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Pagination */}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between mt-3">
+                          <p className="text-xs text-gray-500">
+                            Showing {(violationPage - 1) * ROWS_PER_PAGE + 1}–{Math.min(violationPage * ROWS_PER_PAGE, groupedViolations.length)} of {groupedViolations.length} events
+                          </p>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setViolationPage(p => Math.max(1, p - 1))}
+                              disabled={violationPage === 1}
+                              className="p-1.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="text-xs text-gray-600 px-2">{violationPage} / {totalPages}</span>
+                            <button
+                              onClick={() => setViolationPage(p => Math.min(totalPages, p + 1))}
+                              disabled={violationPage === totalPages}
+                              className="p-1.5 rounded border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>

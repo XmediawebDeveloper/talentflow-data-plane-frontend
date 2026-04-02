@@ -74,6 +74,40 @@ const EMPTY_HR_QUESTION_FORM: HRQuestionFormState = {
   time_minutes: 3,
 };
 
+function getExperienceRange(job: Pick<Job, 'experience' | 'experience_min' | 'experience_max'>): { min: number; max: number } {
+  if (job.experience_min != null || job.experience_max != null) {
+    return {
+      min: Number(job.experience_min ?? 0),
+      max: Number(job.experience_max ?? 0),
+    };
+  }
+
+  const raw = String(job.experience || '').trim().toLowerCase();
+  if (!raw) return { min: 0, max: 0 };
+
+  const rangeMatch = raw.match(/(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)/);
+  if (rangeMatch) {
+    return {
+      min: Number(rangeMatch[1]),
+      max: Number(rangeMatch[2]),
+    };
+  }
+
+  const plusMatch = raw.match(/(\d+(?:\.\d+)?)\s*\+/);
+  if (plusMatch) {
+    const min = Number(plusMatch[1]);
+    return { min, max: min };
+  }
+
+  const singleMatch = raw.match(/(\d+(?:\.\d+)?)/);
+  if (singleMatch) {
+    const value = Number(singleMatch[1]);
+    return { min: value, max: value };
+  }
+
+  return { min: 0, max: 0 };
+}
+
 export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings }: AssessmentCreationProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -116,8 +150,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     if (!hasCoding) return { technical: 100, coding: 0 };
 
     const skillCount = job.skills?.length || 0;
-    const expMin = job.experience_min || 0;
-    const expMax = job.experience_max || 0;
+    const { min: expMin, max: expMax } = getExperienceRange(job);
     const avgExp = expMax > 0 ? (expMin + expMax) / 2 : expMin;
 
     // Determine experience level
@@ -491,6 +524,113 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
   };
 
+  const renderAddHRQuizModal = () => {
+    if (!showAddHRQuizModal) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4">
+        <div className="w-full max-w-5xl rounded-2xl border border-gray-700 bg-gray-800 shadow-2xl">
+          <div className="flex items-center justify-between border-b border-gray-700 px-6 py-5">
+            <h3 className="text-2xl font-semibold text-white">Add New Question</h3>
+            <button type="button" onClick={closeAddHRQuizModal} className="text-gray-400 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="space-y-6 px-6 py-6">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-200">Question Text *</label>
+              <input
+                type="text"
+                value={newHRQuestion.question_text}
+                onChange={(e) => setNewHRQuestion(prev => ({ ...prev, question_text: e.target.value }))}
+                placeholder="Enter the HR question..."
+                className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+
+            <div>
+              <label className="mb-3 block text-sm font-medium text-gray-200">Answer Type</label>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'text', correct_answer: undefined, time_minutes: 3 }))}
+                  className={`flex-1 rounded-xl border-2 px-4 py-4 text-xl font-medium transition-all ${
+                    newHRQuestion.answer_type === 'text'
+                      ? 'border-teal-500 bg-teal-950/40 text-teal-400'
+                      : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  Text Answer (3 min)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: prev.correct_answer || 'Yes', time_minutes: 1 }))}
+                  className={`flex-1 rounded-xl border-2 px-4 py-4 text-xl font-medium transition-all ${
+                    newHRQuestion.answer_type === 'yes_no'
+                      ? 'border-gray-500 bg-gray-700 text-gray-100'
+                      : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                  }`}
+                >
+                  Yes / No (1 min)
+                </button>
+              </div>
+            </div>
+
+            {newHRQuestion.answer_type === 'yes_no' && (
+              <div>
+                <label className="mb-3 block text-sm font-medium text-gray-200">Correct Answer *</label>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'Yes' }))}
+                    className={`flex-1 rounded-xl border-2 px-4 py-3 text-base font-medium transition-all ${
+                      newHRQuestion.correct_answer === 'Yes'
+                        ? 'border-green-500 bg-green-950/40 text-green-400'
+                        : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                    }`}
+                  >
+                    Yes is correct
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'No' }))}
+                    className={`flex-1 rounded-xl border-2 px-4 py-3 text-base font-medium transition-all ${
+                      newHRQuestion.correct_answer === 'No'
+                        ? 'border-green-500 bg-green-950/40 text-green-400'
+                        : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                    }`}
+                  >
+                    No is correct
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-4 border-t border-gray-700 px-6 py-5">
+            <button
+              type="button"
+              onClick={closeAddHRQuizModal}
+              className="rounded-xl border border-gray-600 px-6 py-3 text-lg text-gray-200 hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveHRQuestion}
+              disabled={isSavingHRQuestion}
+              className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-6 py-3 text-lg font-semibold text-gray-900 hover:bg-white disabled:opacity-60"
+            >
+              <FileText className="w-5 h-5" />
+              {isSavingHRQuestion ? 'Saving...' : 'Save Question'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Store previous percentages when coding is disabled (to restore when re-enabled)
   const [savedPercentagesBeforeCodingDisable, setSavedPercentagesBeforeCodingDisable] = useState<{
     hr: number;
@@ -538,6 +678,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           department: jd.department || 'General',
           location: jd.location || '',
           experience: jd.job_level || 'Mid-Level',
+          experience_min: jd.experience_min,
+          experience_max: jd.experience_max,
           skills: jd.must_have_skills || [],
           status: 'Published' as const,
           created: jd.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
@@ -1848,8 +1990,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
                 {/* Skill & Experience based calculation info */}
                 {selectedJob && (() => {
-                  const expMin = selectedJob.experience_min || 0;
-                  const expMax = selectedJob.experience_max || 0;
+                  const { min: expMin, max: expMax } = getExperienceRange(selectedJob);
                   const avgExp = expMax > 0 ? (expMin + expMax) / 2 : expMin;
                   const skillCount = selectedJob.skills?.length || 0;
                   let level = 'Entry';
@@ -2003,6 +2144,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       </div>
                       <div className="flex items-center gap-2 text-xs">
                         <button
+                          type="button"
                           onClick={openAddHRQuizModal}
                           className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-gray-700 hover:bg-gray-50 font-medium"
                         >
@@ -2010,9 +2152,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           Add Quiz
                         </button>
                         <span className={`${selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-orange-600 font-medium' : 'text-gray-500'}`}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
-                        <button onClick={selectAllHR} className="text-blue-600 hover:text-blue-800 font-medium">All</button>
+                        <button type="button" onClick={selectAllHR} className="text-blue-600 hover:text-blue-800 font-medium">All</button>
                         <span className="text-gray-300">|</span>
-                        <button onClick={deselectAllHR} className="text-gray-500 hover:text-gray-700 font-medium">None</button>
+                        <button type="button" onClick={deselectAllHR} className="text-gray-500 hover:text-gray-700 font-medium">None</button>
                       </div>
                     </div>
 
@@ -2463,6 +2605,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </div>
           </div>
         )}
+
+        {renderAddHRQuizModal()}
       </div>
     );
   }
@@ -2665,106 +2809,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             </button>
           </div>
 
-          {showAddHRQuizModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 px-4">
-              <div className="w-full max-w-5xl rounded-2xl border border-gray-700 bg-gray-800 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-gray-700 px-6 py-5">
-                  <h3 className="text-2xl font-semibold text-white">Add New Question</h3>
-                  <button onClick={closeAddHRQuizModal} className="text-gray-400 hover:text-white">
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="space-y-6 px-6 py-6">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-200">Question Text *</label>
-                    <input
-                      type="text"
-                      value={newHRQuestion.question_text}
-                      onChange={(e) => setNewHRQuestion(prev => ({ ...prev, question_text: e.target.value }))}
-                      placeholder="Enter the HR question..."
-                      className="w-full rounded-xl border border-gray-700 bg-gray-800 px-4 py-3 text-lg text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-3 block text-sm font-medium text-gray-200">Answer Type</label>
-                    <div className="flex flex-col gap-3 sm:flex-row">
-                      <button
-                        type="button"
-                        onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'text', correct_answer: undefined, time_minutes: 3 }))}
-                        className={`flex-1 rounded-xl border-2 px-4 py-4 text-xl font-medium transition-all ${
-                          newHRQuestion.answer_type === 'text'
-                            ? 'border-teal-500 bg-teal-950/40 text-teal-400'
-                            : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
-                        }`}
-                      >
-                        Text Answer (3 min)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setNewHRQuestion(prev => ({ ...prev, answer_type: 'yes_no', correct_answer: prev.correct_answer || 'Yes', time_minutes: 1 }))}
-                        className={`flex-1 rounded-xl border-2 px-4 py-4 text-xl font-medium transition-all ${
-                          newHRQuestion.answer_type === 'yes_no'
-                            ? 'border-gray-500 bg-gray-700 text-gray-100'
-                            : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
-                        }`}
-                      >
-                        Yes / No (1 min)
-                      </button>
-                    </div>
-                  </div>
-
-                  {newHRQuestion.answer_type === 'yes_no' && (
-                    <div>
-                      <label className="mb-3 block text-sm font-medium text-gray-200">Correct Answer *</label>
-                      <div className="flex flex-col gap-3 sm:flex-row">
-                        <button
-                          type="button"
-                          onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'Yes' }))}
-                          className={`flex-1 rounded-xl border-2 px-4 py-3 text-base font-medium transition-all ${
-                            newHRQuestion.correct_answer === 'Yes'
-                              ? 'border-green-500 bg-green-950/40 text-green-400'
-                              : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
-                          }`}
-                        >
-                          Yes is correct
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'No' }))}
-                          className={`flex-1 rounded-xl border-2 px-4 py-3 text-base font-medium transition-all ${
-                            newHRQuestion.correct_answer === 'No'
-                              ? 'border-green-500 bg-green-950/40 text-green-400'
-                              : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
-                          }`}
-                        >
-                          No is correct
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-end gap-4 border-t border-gray-700 px-6 py-5">
-                  <button
-                    onClick={closeAddHRQuizModal}
-                    className="rounded-xl border border-gray-600 px-6 py-3 text-lg text-gray-200 hover:bg-gray-700"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveHRQuestion}
-                    disabled={isSavingHRQuestion}
-                    className="inline-flex items-center gap-2 rounded-xl bg-gray-100 px-6 py-3 text-lg font-semibold text-gray-900 hover:bg-white disabled:opacity-60"
-                  >
-                    <FileText className="w-5 h-5" />
-                    {isSavingHRQuestion ? 'Saving...' : 'Save Question'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {renderAddHRQuizModal()}
         </div>
       </div>
     );

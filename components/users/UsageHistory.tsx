@@ -46,11 +46,11 @@ import {
   ConsumptionLogEntry,
   AdjustmentLogEntry,
   AllPoolsResponse,
+  ExistingUsageUser,
   UsageSummaryResponse,
   getUnitTypeName,
 } from '@/lib/services/unitPoolService';
 import teamService, { AllTeamsUsageSummary, TeamMembersUsageSummary } from '@/lib/services/teamService';
-import userService, { ApiUser } from '@/lib/services/userService';
 import dashboardService, { SubscriptionUnits } from '@/lib/services/dashboardService';
 import { featurePermissionService, UserLimitsResponse } from '@/lib/services/featurePermissionService';
 
@@ -91,7 +91,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
 
 type TabId = 'feature' | 'user' | 'team' | 'refunds';
 type ExportFormat = 'csv' | 'excel';
-type ExistingUser = Pick<ApiUser, 'id' | 'name' | 'email' | 'is_active'>;
+type ExistingUser = ExistingUsageUser;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -1212,7 +1212,8 @@ export default function UsageHistory() {
         offset: mode === 'user' ? 0 : (page - 1) * PAGE_SIZE,
       });
       setConsumptionItems(res.items);
-      setConsumptionTotal(mode === 'user' ? res.items.length : res.total);
+      setExistingUsers(res.users || []);
+      setConsumptionTotal(mode === 'user' ? (res.users?.length ?? res.items.length) : res.total);
     } catch (err: any) {
       toast.error(err.message || 'Failed to load consumption history');
     } finally {
@@ -1232,34 +1233,6 @@ export default function UsageHistory() {
       setIsLoadingTeams(false);
     }
   }, [dateStart, dateEnd]);
-
-  const loadExistingUsers = useCallback(async () => {
-    try {
-      const allUsers: ExistingUser[] = [];
-      let page = 1;
-
-      while (page <= 20) {
-        const batch = await userService.listUsers({ page, page_size: 100 });
-        if (!batch.length) break;
-
-        allUsers.push(
-          ...batch.map((user) => ({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            is_active: user.is_active,
-          }))
-        );
-
-        if (batch.length < 100) break;
-        page += 1;
-      }
-
-      setExistingUsers(allUsers);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to load users');
-    }
-  }, []);
 
   // ── Load adjustments ────────────────────────────────────────────────────────
   const [adjustmentsUnavailable, setAdjustmentsUnavailable] = useState(false);
@@ -1316,12 +1289,6 @@ export default function UsageHistory() {
     if (activeTab === 'team') loadTeams();
   }, [loadTeams, activeTab]);
 
-  useEffect(() => {
-    if (activeTab === 'user') {
-      loadExistingUsers();
-    }
-  }, [activeTab, loadExistingUsers]);
-
   // Adjustments — reset page when deps change
   useEffect(() => {
     setRefundsPage(1);
@@ -1339,7 +1306,7 @@ export default function UsageHistory() {
       activeTab === 'feature'
         ? loadConsumption(featurePage, 'feature')
         : activeTab === 'user'
-          ? Promise.all([loadConsumption(userPage, 'user'), loadExistingUsers()]).then(() => undefined)
+          ? loadConsumption(userPage, 'user')
           : Promise.resolve(),
       activeTab === 'team' ? loadTeams() : Promise.resolve(),
       activeTab === 'refunds' ? loadAdjustments(refundsPage) : Promise.resolve(),

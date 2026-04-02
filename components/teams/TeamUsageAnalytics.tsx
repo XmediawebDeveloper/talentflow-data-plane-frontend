@@ -4,7 +4,7 @@ import {
   Users, BarChart3, ChevronDown, ChevronRight,
   Loader2, Download, Calendar, FileText, ClipboardCheck, Upload,
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import teamService, {
   TeamUsageSummary,
   TeamMemberUsage,
@@ -516,6 +516,43 @@ function exportCSV(teams: TeamUsageSummary[], fromDate: string, toDate: string) 
   URL.revokeObjectURL(url);
 }
 
+async function exportUsersCSV(teams: TeamUsageSummary[], fromDate: string, toDate: string) {
+  const rows: (string | number | null)[][] = [
+    ['Team', 'Member Name', 'Member Email', 'RS Actions', 'AS Units', 'AIU Units', 'RU Actions', 'Total Actions', 'Last Active'],
+  ];
+
+  for (const team of teams) {
+    try {
+      const summary = await teamService.getTeamMembersUsage(team.team_id, fromDate, toDate);
+      for (const m of summary.members ?? []) {
+        const rs  = m.by_type['RS']?.consumption_count  ?? 0;
+        const as_ = m.by_type['AS']?.total_consumed      ?? 0;
+        const aiu = m.by_type['AIU']?.total_consumed     ?? 0;
+        const ru  = m.by_type['RU']?.consumption_count  ?? 0;
+        rows.push([
+          team.team_name ?? 'Unknown',
+          m.user_name ?? '',
+          m.user_email ?? '',
+          rs, as_, aiu, ru,
+          rs + ru,
+          m.last_active ?? '',
+        ]);
+      }
+    } catch {
+      // Skip teams we can't fetch
+    }
+  }
+
+  const csv = rows.map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `team-usage-by-user-${fromDate}-to-${toDate}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function TeamUsageAnalytics() {
@@ -528,6 +565,19 @@ export default function TeamUsageAnalytics() {
   const [teams, setTeams] = useState<TeamUsageSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportingUsers, setExportingUsers] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchTeams = useCallback(async () => {
     setLoading(true);
@@ -586,14 +636,46 @@ export default function TeamUsageAnalytics() {
             />
           </div>
           {canExport && (
-            <button
-              onClick={() => teams.length > 0 && exportCSV(teams, fromDate, toDate)}
-              disabled={teams.length === 0 || loading}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </button>
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                onClick={() => teams.length > 0 && !loading && setShowExportMenu(v => !v)}
+                disabled={teams.length === 0 || loading}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40"
+              >
+                <Download className="w-4 h-4" />
+                Export
+                <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+              </button>
+              {showExportMenu && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+                  <button
+                    onClick={() => { exportCSV(teams, fromDate, toDate); setShowExportMenu(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  >
+                    <FileText className="w-4 h-4 text-gray-400" />
+                    Team Level
+                  </button>
+                  <button
+                    disabled={exportingUsers}
+                    onClick={async () => {
+                      setShowExportMenu(false);
+                      setExportingUsers(true);
+                      try {
+                        await exportUsersCSV(teams, fromDate, toDate);
+                      } finally {
+                        setExportingUsers(false);
+                      }
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {exportingUsers
+                      ? <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                      : <Users className="w-4 h-4 text-gray-400" />}
+                    User Level (drill-down)
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

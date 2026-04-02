@@ -145,14 +145,28 @@ const getPermissionDependencies = (code: string): string[] => {
 // Helper to get a human-readable display name for a permission code
 const getPermissionDisplayName = (code: string): string => {
   for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
+    if (cat.viewCode === code) return cat.name;
     const action = cat.actions?.find(a => a.code === code);
     if (action) return action.label;
     for (const sub of cat.subCategories || []) {
+      if (sub.viewCode === code) return `View ${sub.name}`;
       const subAction = sub.actions.find(a => a.code === code);
       if (subAction) return `${subAction.label} (${sub.name})`;
     }
   }
   return code;
+};
+
+// Helper to get the category viewCode that owns a given permission code
+const getCategoryViewCodeFor = (code: string): string | null => {
+  for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
+    if (cat.viewCode === code) return cat.viewCode;
+    if (cat.actions?.some(a => a.code === code)) return cat.viewCode ?? null;
+    for (const sub of cat.subCategories || []) {
+      if (sub.actions.some(a => a.code === code)) return cat.viewCode ?? null;
+    }
+  }
+  return null;
 };
 
 // Helper to get which currently-enabled permissions block disabling the given code
@@ -2473,8 +2487,12 @@ export default function UserManagement() {
                               next.add(code);
                               // Auto-enable viewCode
                               if (category.viewCode) next.add(category.viewCode);
-                              // Handle dependencies
-                              deps.forEach(dep => next.add(dep));
+                              // Handle dependencies — also enable each dep's category viewCode
+                              deps.forEach(dep => {
+                                next.add(dep);
+                                const depViewCode = getCategoryViewCodeFor(dep);
+                                if (depViewCode) next.add(depViewCode);
+                              });
                               return next;
                             });
                             // Notify admin which dependencies were auto-enabled
@@ -2492,6 +2510,30 @@ export default function UserManagement() {
                           : true;
 
                         const toggleCategory = () => {
+                          if (isCategoryActive) {
+                            // Block if any code in this category is required by another active permission
+                            const allCategoryCodes = [
+                              ...(category.viewCode ? [category.viewCode] : []),
+                              ...(category.actions?.map(a => a.code) || []),
+                              ...(category.subCategories?.flatMap(s => [
+                                ...(s.viewCode ? [s.viewCode] : []),
+                                ...s.actions.map(a => a.code),
+                              ]) || []),
+                            ];
+                            const blockerNames = [
+                              ...new Set(
+                                allCategoryCodes.flatMap(c =>
+                                  getBlockingPermissions(c, editSelectedPermissionCodes)
+                                )
+                              ),
+                            ];
+                            if (blockerNames.length > 0) {
+                              toast.warning(
+                                `Cannot disable "${category.name}" — it's required by ${blockerNames.join(', ')}. Disable that permission first.`
+                              );
+                              return;
+                            }
+                          }
                           setEditSelectedPermissionCodes(prev => {
                             const next = new Set(prev);
                             if (isCategoryActive) {
@@ -2726,7 +2768,12 @@ export default function UserManagement() {
                                                 next.add(action.code);
                                                 if (sub.viewCode) next.add(sub.viewCode);
                                                 if (category.viewCode) next.add(category.viewCode);
-                                                deps.forEach(dep => next.add(dep));
+                                                // Also enable each dep's category viewCode
+                                                deps.forEach(dep => {
+                                                  next.add(dep);
+                                                  const depViewCode = getCategoryViewCodeFor(dep);
+                                                  if (depViewCode) next.add(depViewCode);
+                                                });
                                                 return next;
                                               });
                                               if (newlyEnabled.length > 0) {

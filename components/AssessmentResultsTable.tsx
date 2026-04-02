@@ -151,13 +151,18 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
   // Helper: determine display status from result
   const getResultStatus = (result: AssessmentResult): string => {
-    if (result.status === 'completed' || result.completed_at) return 'Completed';
+    if ((result.status === 'completed' || result.completed_at) && result.scoring_status === 'completed') return 'Completed';
     if (result.status === 'in_progress' || result.started_at) return 'In Progress';
+    if ((result.status === 'completed' || result.completed_at) && result.scoring_status !== 'completed') return 'In Progress';
     if (result.status === 'pending') return 'Pending';
     // Fallback: check completedDate string
     if (result.completedDate && result.completedDate !== 'In Progress' && result.completedDate !== 'Not started') return 'Completed';
     if (result.completedDate === 'In Progress') return 'In Progress';
     return 'Pending';
+  };
+
+  const canDownloadResultPdf = (result: AssessmentResult): boolean => {
+    return getResultStatus(result) === 'Completed' && result.scoring_status === 'completed';
   };
 
   // Helper: status badge colors
@@ -370,6 +375,10 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
     // Find the result to get assessmentId
     const result = results.find(r => r.id === resultId);
+    if (!result || !canDownloadResultPdf(result)) {
+      toast.error('PDF is available only after scoring is completed.');
+      return;
+    }
     const assessmentId = result?.assessmentId || jobId;
 
     console.log('[PDF] Starting download:', { assessmentId, resultId, hasAssessmentId: !!result?.assessmentId });
@@ -407,13 +416,23 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const handleDownloadBulkPDFs = async () => {
     if (downloadingBulkPDF || selectedResults.length === 0) return;
 
+    const eligibleResults = results.filter(r => selectedResults.includes(r.id) && canDownloadResultPdf(r));
+    if (eligibleResults.length === 0) {
+      toast.error('Select at least one fully scored result to download PDFs.');
+      return;
+    }
+
+    if (eligibleResults.length !== selectedResults.length) {
+      toast.info(`${selectedResults.length - eligibleResults.length} result(s) were skipped because scoring is not completed yet.`);
+    }
+
     // Get assessmentId from first selected result
-    const firstResult = results.find(r => selectedResults.includes(r.id));
+    const firstResult = eligibleResults[0];
     const assessmentId = firstResult?.assessmentId || jobId;
 
     setDownloadingBulkPDF(true);
     try {
-      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, selectedResults);
+      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, eligibleResults.map(r => r.id));
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -928,7 +947,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           View Details
                         </button>
                         )}
-                        {canDownloadPDF && getResultStatus(result) === 'Completed' && (
+                        {canDownloadPDF && canDownloadResultPdf(result) && (
                           <button
                             onClick={() => handleDownloadPDF(result.id)}
                             disabled={downloadingPDF === result.id}
@@ -1142,7 +1161,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       View Details
                     </button>
                     )}
-                    {canDownloadPDF && getResultStatus(result) === 'Completed' && (
+                    {canDownloadPDF && canDownloadResultPdf(result) && (
                       <button
                         onClick={() => handleDownloadPDF(result.id)}
                         disabled={downloadingPDF === result.id}

@@ -57,6 +57,8 @@ export default function CreateAssessmentPage() {
             department: jd.department,
             industry_type: jd.industry_type,
             experience: jd.experience_required,
+            experience_min: jd.experience_min,
+            experience_max: jd.experience_max,
             description: jd.description,
             skills: jd.must_have_skills || [],
             postedDate: jd.created_at,

@@ -151,11 +151,24 @@ export interface InitializePoolRequest {
   billing_cycle_days?: number;
 }
 
+export interface ExistingUsageUser {
+  id: string;
+  email: string;
+  name: string;
+  is_active: boolean;
+  last_login?: string | null;
+  created_at?: string | null;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
   limit: number;
   offset: number;
+  users?: ExistingUsageUser[];
+  visibility?: string;
+  source?: string;
+  note?: string | null;
 }
 
 // =========================================================================

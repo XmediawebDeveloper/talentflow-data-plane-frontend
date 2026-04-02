@@ -401,6 +401,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return formatIST(dateStr);
   };
 
+  const canDownloadResultPdf = (candidate: CandidateResult): boolean => {
+    return candidate.status === 'Completed' && candidate.scoring_status === 'completed';
+  };
+
   // Handle delete result
   const handleDeleteResult = async (resultId: string, candidateName: string) => {
     if (!await dialog.confirm({ title: 'Delete Result', message: `Are you sure you want to delete the result for ${candidateName}? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) {
@@ -452,6 +456,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const handleDownloadPDF = async (candidateId: string, candidateDisplayId?: string) => {
     if (downloadingPDF) return;
 
+    const candidate = candidateResults.find(c => c.id === candidateId);
+    if (!candidate || !canDownloadResultPdf(candidate)) {
+      toast.error('PDF is available only after scoring is completed.');
+      return;
+    }
+
     setDownloadingPDF(candidateId);
     try {
       const blob = await assessmentService.exportPDF(assessmentId, candidateId);
@@ -480,9 +490,19 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const handleDownloadBulkPDFs = async () => {
     if (downloadingBulkPDF || selectedRows.length === 0) return;
 
+    const eligibleCandidates = candidateResults.filter(c => selectedRows.includes(c.id) && canDownloadResultPdf(c));
+    if (eligibleCandidates.length === 0) {
+      toast.error('Select at least one fully scored result to download PDFs.');
+      return;
+    }
+
+    if (eligibleCandidates.length !== selectedRows.length) {
+      toast.info(`${selectedRows.length - eligibleCandidates.length} result(s) were skipped because scoring is not completed yet.`);
+    }
+
     setDownloadingBulkPDF(true);
     try {
-      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, selectedRows);
+      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, eligibleCandidates.map(c => c.id));
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -1384,7 +1404,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </button>
                           )}
                           {/* AS-25: PDF Download Button — only for users with download_pdf permission */}
-                          {canDownloadPDF && candidate.status === 'Completed' ? (
+                          {canDownloadPDF && canDownloadResultPdf(candidate) ? (
                             <button
                               onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                               disabled={downloadingPDF === candidate.id}

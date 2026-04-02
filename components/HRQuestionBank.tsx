@@ -389,7 +389,7 @@ export default function HRQuestionBank() {
       </div>
 
       {/* Add/Edit Form */}
-      {showAddForm && canCreateHRQuestionBank && (
+      {showAddForm && (editingId ? canUpdateHRQuestionBank : canCreateHRQuestionBank) && (
         <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4 shadow-sm">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-900">

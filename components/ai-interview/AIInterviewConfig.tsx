@@ -2132,53 +2132,39 @@ export default function AIInterviewConfig() {
                 </div>
               </div>
 
-              {/* Fixed mode: question budget + time allocation */}
+              {/* Fixed mode: question budget + time allocation (combined) */}
               {mode === 'fixed' && (
                 <div className="space-y-3 mb-4">
                   <div className="border border-gray-100 rounded-lg overflow-hidden">
-                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                       <span className="text-xs font-medium text-gray-500">Question Budget (Total: 15)</span>
+                      <span className="text-xs text-gray-400">{totalFixed} min</span>
                     </div>
                     <table className="w-full text-xs">
-                      <tbody>
-                        <tr className="border-b border-gray-50">
-                          <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth} questions</td>
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
+                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Questions</th>
+                          <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
                         </tr>
-                        {nth.enabled && (
-                          <tr className="border-b border-gray-50">
-                            <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth} questions</td>
-                          </tr>
-                        )}
-                        {hrEnabled && (
-                          <tr>
-                            <td className="px-3 py-2 text-gray-600">HR Round</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr} questions</td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="border border-gray-100 rounded-lg overflow-hidden">
-                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-                      <span className="text-xs font-medium text-gray-500">Time Allocation (Total: {totalFixed} min)</span>
-                    </div>
-                    <table className="w-full text-xs">
+                      </thead>
                       <tbody>
                         <tr className="border-b border-gray-50">
                           <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth}Q</td>
                           <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin} min</td>
                         </tr>
                         {nth.enabled && (
                           <tr className="border-b border-gray-50">
                             <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth}Q</td>
                             <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin} min</td>
                           </tr>
                         )}
                         {hrEnabled && (
                           <tr>
                             <td className="px-3 py-2 text-gray-600">HR Round</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr}Q</td>
                             <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin} min</td>
                           </tr>
                         )}
