@@ -228,7 +228,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     setIsLoading(true);
 
     try {
-      const response = await authService.login({ email, password, subdomain: subdomain || undefined });
+      const response = await authService.login({ email: email.toLowerCase().trim(), password, subdomain: subdomain || undefined });
 
       // Check if 2FA is required
       if (isTwoFactorRequired(response)) {

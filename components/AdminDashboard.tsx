@@ -230,7 +230,7 @@ export default function AdminDashboard({
             </div>
           ) : (
             /* Paid Plan Layout */
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
               <div>
                 <p className="text-xs text-gray-500 mb-1">Current Plan</p>
                 <p className="text-sm font-semibold text-gray-900">
@@ -263,12 +263,6 @@ export default function AdminDashboard({
                 <p className="text-xs text-gray-500 mb-1">Billing Period</p>
                 <p className="text-sm font-semibold text-gray-900 capitalize">
                   {quotaData?.plan_info?.billing_period?.toLowerCase() || '-'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Isolation</p>
-                <p className="text-sm font-semibold text-gray-900 capitalize">
-                  {(quotaData?.plan_info?.isolation_type || quotaData?.isolation_type || '-').toString().toLowerCase()}
                 </p>
               </div>
             </div>
