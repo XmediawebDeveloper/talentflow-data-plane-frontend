@@ -1200,12 +1200,12 @@ export default function CandidateResultDetails({
                                                 </div>
                                               </div>
 
-                                              {(testCase.actual_output || testCase.error) && (
+                                              {(testCase.actual_output || testCase.error || testCase.improvement_hint) && (
                                                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                                                   {testCase.actual_output && (
                                                     <div>
                                                       <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
-                                                        Actual Output
+                                                        Candidate Output
                                                       </div>
                                                       <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200">
                                                         <pre className="whitespace-pre-wrap">{testCase.actual_output}</pre>
@@ -1215,13 +1215,24 @@ export default function CandidateResultDetails({
                                                   {testCase.error && (
                                                     <div>
                                                       <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
-                                                        Error
+                                                        Why It Failed
                                                       </div>
                                                       <div className="rounded border border-red-200 bg-red-50 p-3 font-mono text-sm text-red-800">
                                                         <pre className="whitespace-pre-wrap">{testCase.error}</pre>
                                                       </div>
                                                     </div>
                                                   )}
+                                                </div>
+                                              )}
+
+                                              {testCase.improvement_hint && (
+                                                <div className="mt-3">
+                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                    What To Improve
+                                                  </div>
+                                                  <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                                    {testCase.improvement_hint}
+                                                  </div>
                                                 </div>
                                               )}
                                             </div>

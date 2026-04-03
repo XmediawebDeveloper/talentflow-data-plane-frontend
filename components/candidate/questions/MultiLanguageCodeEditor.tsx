@@ -70,20 +70,6 @@ interface ExecutionOutput {
   compile_error?: string;
 }
 
-function normalizeProgramOutput(output?: string | null): string {
-  if (!output) {
-    return '';
-  }
-
-  return output
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .map((line) => line.replace(/\s+$/g, ''))
-    .join('\n')
-    .trim();
-}
-
 export function MultiLanguageCodeEditor({
   question,
   answer,
@@ -116,7 +102,7 @@ export function MultiLanguageCodeEditor({
 
   const [selectedLanguage, setSelectedLanguage] = useState<string>(getInitialLanguage());
   const [code, setCode] = useState<string>('');
-  const [customInput, setCustomInput] = useState<string>(answer.code_input || question.sample_input || '');
+  const [customInput, setCustomInput] = useState<string>(answer.code_input || '');
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
   const [executionOutput, setExecutionOutput] = useState<ExecutionOutput | null>(null);
@@ -160,21 +146,22 @@ export function MultiLanguageCodeEditor({
     if (answer.code_submission && (!answer.language || answer.language === selectedLanguage)) {
       // Use existing answer if language matches OR if no language info is available (e.g., page refresh)
       initialCode = answer.code_submission;
-    } else if (question.starter_code?.[selectedLanguage]) {
-      // Use question's starter code for this language
-      initialCode = question.starter_code[selectedLanguage];
     } else {
-      // Use default template
-      initialCode = getLanguageTemplate(selectedLanguage);
+      // Fresh coding questions should start blank unless the candidate already has saved code.
+      initialCode = '';
     }
 
     setCode(initialCode);
-    setCustomInput(answer.code_input || question.sample_input || '');
+    setCustomInput(answer.code_input || '');
+    setExecutionOutput(null);
+    setSubmissionResult(null);
+    setTestResults(null);
+    setHasSubmitted(false);
     // Notify parent of the restored/initialized code so auto-save can track it
     onAnswerChange({
       ...answer,
       code_submission: initialCode,
-      code_input: answer.code_input || question.sample_input || '',
+      code_input: answer.code_input || '',
       language: selectedLanguage,
     });
   // question.question_id ensures this re-runs when navigating between questions,
@@ -322,7 +309,7 @@ export function MultiLanguageCodeEditor({
   };
 
   const handleResetCode = async () => {
-    const template = question.starter_code?.[selectedLanguage] || getLanguageTemplate(selectedLanguage);
+    const template = '';
     if (code !== template) {
       const confirmed = await dialog.confirm({
         title: 'Reset Code',
@@ -380,27 +367,6 @@ export function MultiLanguageCodeEditor({
         error: result.error,
         compile_error: result.compile_error,
       });
-
-      // Compare with expected output if input matches sample_input
-      if (result.success && question.sample_output && question.sample_input) {
-        // Only compare if user is using the sample input
-        const isUsingSampleInput = customInput.trim() === (question.sample_input || '').trim();
-        if (isUsingSampleInput) {
-          const actualOutput = normalizeProgramOutput(result.output);
-          const expectedOutput = normalizeProgramOutput(question.sample_output);
-          const passed = actualOutput === expectedOutput;
-
-          setTestResults([
-            {
-              passed,
-              input: question.sample_input || 'No input',
-              expected: expectedOutput,
-              actual: actualOutput,
-              error: passed ? undefined : 'Output does not match expected result',
-            },
-          ]);
-        }
-      }
     } catch (error) {
       console.error('Code execution error:', error);
       setExecutionOutput({
@@ -624,17 +590,6 @@ export function MultiLanguageCodeEditor({
             <div className="flex items-center gap-2 mb-3">
               <Terminal className="w-4 h-4 text-gray-600" />
               <span className="text-sm font-medium text-gray-800">Output</span>
-              {testResults && (
-                <span
-                  className={`px-2 py-0.5 rounded text-xs ${
-                    passedTests === totalTests
-                      ? 'bg-green-500 text-white'
-                      : 'bg-red-500 text-white'
-                  }`}
-                >
-                  {passedTests}/{totalTests}
-                </span>
-              )}
             </div>
 
             {isRunning ? (
@@ -682,59 +637,6 @@ export function MultiLanguageCodeEditor({
                     <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
                       {executionOutput.output}
                     </pre>
-                  </div>
-                )}
-
-                {/* Test Results */}
-                {testResults && testResults.length > 0 && (
-                  <div
-                    className={`p-3 rounded-lg ${
-                      passedTests === totalTests
-                        ? 'bg-green-50 border border-green-200'
-                        : 'bg-red-50 border border-red-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-3">
-                      {passedTests === totalTests ? (
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                      ) : (
-                        <XCircle className="w-5 h-5 text-red-600" />
-                      )}
-                      <p
-                        className={`font-medium text-sm ${
-                          passedTests === totalTests ? 'text-green-800' : 'text-red-800'
-                        }`}
-                      >
-                        {passedTests === totalTests
-                          ? 'Sample test passed!'
-                          : 'Sample test failed'}
-                      </p>
-                    </div>
-
-                    {testResults.map((result, idx) => (
-                      <div key={idx} className="space-y-2 text-sm">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <span className="text-gray-500 text-xs uppercase">Expected</span>
-                            <pre className="bg-white p-2 rounded mt-1 font-mono text-gray-700 text-xs">
-                              {result.expected}
-                            </pre>
-                          </div>
-                          <div>
-                            <span className="text-gray-500 text-xs uppercase">Your Output</span>
-                            <pre
-                              className={`p-2 rounded mt-1 font-mono text-xs ${
-                                result.passed
-                                  ? 'bg-white text-gray-700'
-                                  : 'bg-red-100 text-red-700'
-                              }`}
-                            >
-                              {result.actual || '(no output)'}
-                            </pre>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 )}
 

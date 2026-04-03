@@ -374,6 +374,7 @@ export default function StepSamplePractice({
       'audio/webm',
       'audio/ogg;codecs=opus',
       'audio/ogg',
+      'audio/mp4',  // Safari fallback
     ].find((m) => MediaRecorder.isTypeSupported(m)) || '';
 
     const mr = new MediaRecorder(audioStream, mimeType ? { mimeType } : undefined);

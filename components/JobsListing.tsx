@@ -691,7 +691,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             {/* Quick Status Filters */}
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               <span className="text-sm sm:text-base text-gray-600">Show:</span>
-              {['all', 'Published', 'Draft', 'Closed', 'Disabled', 'Archived'].map((status) => (
+              {['all', 'Published', 'Draft', 'Disabled', 'Archived'].map((status) => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status.toLowerCase())}

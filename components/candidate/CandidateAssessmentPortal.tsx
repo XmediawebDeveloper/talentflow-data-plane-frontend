@@ -131,6 +131,28 @@ interface CandidateAssessmentPortalProps {
   role?: string;
 }
 
+const getHRCompletedKey = (token: string) => `assessment_hr_completed_${token}`;
+
+const markHRCompleted = (token: string) => {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem(getHRCompletedKey(token), 'true');
+  localStorage.setItem(getHRCompletedKey(token), 'true');
+};
+
+const clearHRCompleted = (token: string) => {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(getHRCompletedKey(token));
+  localStorage.removeItem(getHRCompletedKey(token));
+};
+
+const isHRCompleted = (token: string) => {
+  if (typeof window === 'undefined') return false;
+  return (
+    sessionStorage.getItem(getHRCompletedKey(token)) === 'true' ||
+    localStorage.getItem(getHRCompletedKey(token)) === 'true'
+  );
+};
+
 export function CandidateAssessmentPortal({ token, candidateName, role }: CandidateAssessmentPortalProps) {
   // State
   const [step, setStep] = useState<AssessmentStep>('loading');
@@ -276,6 +298,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     console.log('[DEBUG] Mount effect triggered - calling loadAssessmentInfo');
     loadAssessmentInfo();
   }, [token]);
+
+  useEffect(() => {
+    if (step === 'completed' || step === 'results' || step === 'error') {
+      clearHRCompleted(token);
+    }
+  }, [step, token]);
 
   // Setup proctoring when assessment starts, stop when completed
   useEffect(() => {
@@ -452,6 +480,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         // Need to accept consent FIRST
         setStepSafe('consent');
       } else if (info.can_start) {
+        clearHRCompleted(token);
         // Consent accepted, show landing/preview
         setStepSafe('landing');
       } else {
@@ -578,6 +607,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         }))
       );
 
+      markHRCompleted(token);
       setStepSafe('fullscreen_prompt');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save HR answers';
@@ -629,7 +659,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     // Skip HR questions if none selected (hr_topics empty or has_hr_round is false)
     const hasHRQuestions = assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0;
-    if (hasHRQuestions) {
+    if (hasHRQuestions && !isHRCompleted(token)) {
       console.log('[PORTAL] System check complete, showing HR questions...');
       setStepSafe('hr_questions');
     } else {

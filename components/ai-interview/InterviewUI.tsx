@@ -1080,9 +1080,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         try {
           recordingContextRef.current = new AudioContext({ sampleRate: 16000 });
         } catch (err) {
-          console.error('[InterviewUI] Failed to create recording AudioContext:', err);
-          setStatus("Audio device error - please refresh");
-          return;
+          // Safari may reject non-hardware sample rates (NotSupportedError).
+          // Fall back to the device's native rate — the downsampleRatio below
+          // already handles any hardware sample rate dynamically.
+          try {
+            recordingContextRef.current = new AudioContext();
+          } catch (err2) {
+            console.error('[InterviewUI] Failed to create recording AudioContext:', err2);
+            setStatus("Audio device error - please refresh");
+            return;
+          }
         }
       }
       const ctx = recordingContextRef.current;

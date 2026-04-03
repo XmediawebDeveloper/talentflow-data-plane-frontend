@@ -49,7 +49,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   );
 
   // Invite state
-  const [expiryDays, setExpiryDays] = useState(7);
+  const [expiryDays, setExpiryDays] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 

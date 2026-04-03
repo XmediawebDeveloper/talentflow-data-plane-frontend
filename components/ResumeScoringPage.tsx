@@ -209,7 +209,8 @@ export default function ResumeScoringPage({
     updateItemStatus,
     getJobProgress,
     hasActiveScoring,
-    setOnRestorePanel
+    setOnRestorePanel,
+    setMainPanelOpen
   } = useScoringProgress();
 
   // Use props directly - data is fetched by the page route
@@ -265,6 +266,12 @@ export default function ResumeScoringPage({
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
 
+
+  // Hide global floating widget when BulkScoringProgressModal is open
+  useEffect(() => {
+    setMainPanelOpen(showProgressModal);
+    return () => { setMainPanelOpen(false); };
+  }, [showProgressModal, setMainPanelOpen]);
 
   // Helper: Convert job progress items to ScoringProgressItem[] for BulkScoringProgressModal
   const showBulkProgressFromJob = (jobId: string, jobTitle: string, items: any[]) => {

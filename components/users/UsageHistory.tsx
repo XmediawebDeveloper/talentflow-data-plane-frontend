@@ -1112,8 +1112,9 @@ export default function UsageHistory() {
   const [activeTab, setActiveTab] = useState<TabId>('user');
 
   // Filters
-  const [startDateInput, setStartDateInput] = useState<string>(defaultStartDate);
-  const [endDateInput, setEndDateInput] = useState<string>(defaultEndDate);
+  const [startDateInput, setStartDateInput] = useState<string>('');
+  const [endDateInput, setEndDateInput] = useState<string>('');
+  const [quickPeriod, setQuickPeriod] = useState<string>('');
   const [filterUnitType, setFilterUnitType] = useState<UnitType | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchUser, setSearchUser] = useState('');
@@ -1149,21 +1150,17 @@ export default function UsageHistory() {
 
   // ── Computed date range (memoized to prevent infinite effect loops) ────────
   const { dateStart, dateEnd } = useMemo(() => {
-    const start = startDateInput ? new Date(startDateInput) : new Date(defaultStartDate);
-    const end = endDateInput ? new Date(endDateInput) : new Date(defaultEndDate);
+    const start = startDateInput ? new Date(startDateInput) : null;
+    const end = endDateInput ? new Date(endDateInput) : null;
 
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return {
-        dateStart: new Date(defaultStartDate),
-        dateEnd: new Date(defaultEndDate),
-      };
-    }
-
-    if (start > end) {
+    if (start && end && start > end) {
       return { dateStart: end, dateEnd: end };
     }
 
-    return { dateStart: start, dateEnd: end };
+    return {
+      dateStart: start ?? new Date(defaultStartDate),
+      dateEnd: end ?? new Date(defaultEndDate),
+    };
   }, [defaultEndDate, defaultStartDate, endDateInput, startDateInput]);
 
   // ── Access guard ─────────────────────────────────────────────────────────
@@ -1206,8 +1203,8 @@ export default function UsageHistory() {
       const res = await unitPoolService.getConsumptionHistory({
         unit_type: filterUnitType === 'all' ? undefined : filterUnitType,
         status: filterStatus === 'all' ? undefined : filterStatus,
-        start_date: formatDateForInput(dateStart),
-        end_date: formatDateForInput(dateEnd),
+        start_date: startDateInput || undefined,
+        end_date: endDateInput || undefined,
         limit: mode === 'user' ? 10000 : PAGE_SIZE,
         offset: mode === 'user' ? 0 : (page - 1) * PAGE_SIZE,
       });
@@ -1225,7 +1222,7 @@ export default function UsageHistory() {
   const loadTeams = useCallback(async () => {
     setIsLoadingTeams(true);
     try {
-      const res = await teamService.getAllTeamsUsage(formatDateForInput(dateStart), formatDateForInput(dateEnd));
+      const res = await teamService.getAllTeamsUsage(startDateInput || undefined, endDateInput || undefined);
       setTeamsData(res);
     } catch (err: any) {
       toast.error(err.message || 'Failed to load team data');
@@ -1392,6 +1389,44 @@ export default function UsageHistory() {
           <span className="text-sm font-medium text-gray-700">Filters</span>
         </div>
         <div className="flex flex-wrap gap-3">
+          {/* Quick Period */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-gray-500">Period</label>
+            <select
+              value={quickPeriod}
+              onChange={(e) => {
+                const val = e.target.value;
+                setQuickPeriod(val);
+                if (!val) {
+                  setStartDateInput('');
+                  setEndDateInput('');
+                  return;
+                }
+                const now = new Date();
+                const end = formatDateForInput(now);
+                let start = '';
+                if (val === 'last_week') {
+                  const d = new Date(now); d.setDate(d.getDate() - 7); start = formatDateForInput(d);
+                } else if (val === 'last_month') {
+                  const d = new Date(now); d.setMonth(d.getMonth() - 1); start = formatDateForInput(d);
+                } else if (val === 'last_quarter') {
+                  const d = new Date(now); d.setMonth(d.getMonth() - 3); start = formatDateForInput(d);
+                } else if (val === 'last_year') {
+                  const d = new Date(now); d.setFullYear(d.getFullYear() - 1); start = formatDateForInput(d);
+                }
+                setStartDateInput(start);
+                setEndDateInput(end);
+              }}
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Time</option>
+              <option value="last_week">Last Week</option>
+              <option value="last_month">Last Month</option>
+              <option value="last_quarter">Last Quarter</option>
+              <option value="last_year">Last Year</option>
+            </select>
+          </div>
+
           {/* Date Range */}
           <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-500">From</label>
@@ -1399,7 +1434,7 @@ export default function UsageHistory() {
               type="date"
               value={startDateInput}
               max={endDateInput || defaultEndDate}
-              onChange={(e) => setStartDateInput(e.target.value)}
+              onChange={(e) => { setStartDateInput(e.target.value); setQuickPeriod(''); }}
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -1408,26 +1443,11 @@ export default function UsageHistory() {
             <input
               type="date"
               value={endDateInput}
-              min={startDateInput || defaultStartDate}
+              min={startDateInput || undefined}
               max={defaultEndDate}
-              onChange={(e) => setEndDateInput(e.target.value)}
+              onChange={(e) => { setEndDateInput(e.target.value); setQuickPeriod(''); }}
               className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-          </div>
-
-          {/* Feature Type */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">Feature</label>
-            <select
-              value={filterUnitType}
-              onChange={(e) => setFilterUnitType(e.target.value as UnitType | 'all')}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Features</option>
-              <option value="RS">Resume Scoring</option>
-              <option value="AS">Assessment</option>
-              <option value="AIU">AI Interview</option>
-            </select>
           </div>
 
           {/* Status */}
@@ -1449,16 +1469,6 @@ export default function UsageHistory() {
             </div>
           )}
 
-          {/* Date range indicator */}
-          <div className="flex flex-col gap-1 ml-auto">
-            <label className="text-xs text-gray-500">Viewing</label>
-            <div className="flex items-center gap-1.5 text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
-              <Calendar className="w-3.5 h-3.5 text-gray-400" />
-              <span>{formatDateForInput(dateStart)}</span>
-              <span className="text-gray-400">→</span>
-              <span>{formatDateForInput(dateEnd)}</span>
-            </div>
-          </div>
         </div>
       </div>
 

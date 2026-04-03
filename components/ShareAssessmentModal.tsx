@@ -164,7 +164,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   const [customMessage, setCustomMessage] = useState(
     `You have been invited to take an assessment:\n\nImportant Instructions:\n• Ensure you have a stable internet connection\n• Find a quiet place without distractions\n• Complete the assessment in one sitting\n• Your responses will be automatically saved\n\nGood luck!`
   );
-  const [expiryDays, setExpiryDays] = useState(7);
+  const [expiryDays, setExpiryDays] = useState(1);
   const [sendCopy, setSendCopy] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);

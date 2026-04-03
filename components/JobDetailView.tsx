@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -114,9 +114,13 @@ interface JobDetailViewProps {
   isTenantAdmin?: boolean; // JD15: Whether user is Owner (for disable/enable buttons)
   user?: User; // ✅ PERMISSIONS: User object for permission checking
   tenant?: Tenant; // ✅ PERMISSIONS: Tenant object for feature flag checking
+  prevId?: string | null;
+  nextId?: string | null;
+  currentIndex?: number;
+  totalCount?: number;
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, initialTab }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, initialTab, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
   const router = useRouter();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
@@ -823,13 +827,38 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
       {/* Header */}
       <div className="mb-4 sm:mb-6">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 text-sm sm:text-base"
-        >
-          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-          Back to Jobs
-        </button>
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm sm:text-base"
+          >
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+            Back to Jobs
+          </button>
+          {totalCount != null && totalCount > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => prevId && router.push(`/recruitment/job-details?id=${prevId}`)}
+                disabled={!prevId}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </button>
+              <span className="text-xs text-gray-400 whitespace-nowrap">
+                {(currentIndex ?? 0) + 1} / {totalCount}
+              </span>
+              <button
+                onClick={() => nextId && router.push(`/recruitment/job-details?id=${nextId}`)}
+                disabled={!nextId}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Job Details Card */}
         <div className="bg-white rounded-lg shadow-sm border-2 border-blue-200 p-3 sm:p-4 md:p-6">

@@ -12,6 +12,7 @@ import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
+import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
 import { formatIST } from '@/lib/utils/dateUtils';
 
 const ROUND_LABELS: Record<string, string> = {
@@ -605,12 +606,12 @@ export default function AIInterview() {
                 { key: 'all', label: 'All Configurations' },
                 { key: 'published', label: 'Published' },
                 { key: 'draft', label: 'Draft' },
-                { key: 'completed', label: 'Completed' },
-                { key: 'archived', label: 'Archived' },
-                { key: 'processing', label: 'Processing' },
-                { key: 'audit', label: 'Audit Log' },
+                // { key: 'completed', label: 'Completed' },
+                // { key: 'archived', label: 'Archived' },
+                // { key: 'processing', label: 'Processing' },
+                { key: 'audit', label: 'Activity Logs' },
                 { key: 'consent', label: 'Consent Logs' },
-                { key: 'settings', label: 'Settings' },
+                // { key: 'settings', label: 'Settings' },
               ].map(tab => (
                 <button
                   key={tab.key}
@@ -926,102 +927,10 @@ export default function AIInterview() {
             </div>
           )}
 
-          {/* Audit Log Tab */}
+          {/* Activity Logs Tab */}
           {activeTab === 'audit' && (
-            <div className="p-3 sm:p-6 overflow-hidden">
-              {/* Category filter */}
-              <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4 flex-wrap">
-                <span className="text-xs sm:text-sm text-gray-600">Filter:</span>
-                {[
-                  { key: 'all', label: 'All' },
-                  { key: 'config_lifecycle', label: 'Config Lifecycle' },
-                  { key: 'candidate_activity', label: 'Candidate Activity' },
-                ].map(cat => (
-                  <button
-                    key={cat.key}
-                    onClick={() => { setAuditCategory(cat.key); setAuditPage(1); }}
-                    className={`px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-full border transition-colors ${
-                      auditCategory === cat.key
-                        ? 'bg-gray-800 text-white border-gray-800'
-                        : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
-              </div>
-
-              {auditLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                </div>
-              ) : auditActivities.length === 0 ? (
-                <div className="text-center py-12">
-                  <Activity className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-                  <p className="text-gray-500">No audit activity found</p>
-                </div>
-              ) : (
-                <div className="space-y-2 sm:space-y-3">
-                  {auditActivities.map((activity) => {
-                    const isLifecycle = activity.category === 'config_lifecycle';
-                    return (
-                      <div key={activity.id} className="flex items-start gap-2 sm:gap-3 p-3 sm:p-4 border border-gray-200 rounded-lg overflow-hidden">
-                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          isLifecycle ? 'bg-blue-100' : 'bg-green-100'
-                        }`}>
-                          {isLifecycle ? (
-                            <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
-                          ) : (
-                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0 overflow-hidden">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium text-gray-900 text-xs sm:text-sm truncate">{activity.title}</span>
-                            <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs flex-shrink-0 ${
-                              isLifecycle ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'
-                            }`}>
-                              {isLifecycle ? 'Lifecycle' : 'Candidate'}
-                            </span>
-                          </div>
-                          <p className="text-xs sm:text-sm text-gray-500 mt-0.5 break-words">{activity.description}</p>
-                          <div className="flex items-center gap-2 sm:gap-3 mt-1 text-[10px] sm:text-xs text-gray-400 flex-wrap">
-                            {activity.actor_name && <span className="truncate">by {activity.actor_name}</span>}
-                            {activity.candidate_name && <span className="truncate">{activity.candidate_name}</span>}
-                            {activity.score != null && <span>Score: {activity.score}%</span>}
-                            <span className="flex-shrink-0">{formatIST(activity.timestamp)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Pagination */}
-                  {auditTotal > 50 && (
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-3 sm:pt-4 gap-2">
-                      <span className="text-xs sm:text-sm text-gray-500">
-                        Showing {((auditPage - 1) * 50) + 1}-{Math.min(auditPage * 50, auditTotal)} of {auditTotal}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setAuditPage(Math.max(1, auditPage - 1))}
-                          disabled={auditPage === 1}
-                          className="px-2.5 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Previous
-                        </button>
-                        <button
-                          onClick={() => setAuditPage(auditPage + 1)}
-                          disabled={auditPage * 50 >= auditTotal}
-                          className="px-2.5 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Next
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="p-3 sm:p-6">
+              <AIInterviewAuditTrail />
             </div>
           )}
 
@@ -1536,5 +1445,5 @@ function ConsentLogsWrapper() {
     );
   }
 
-  return <ConsentLogs compact />;
+  return <ConsentLogs compact defaultFeature="AI Interview" />;
 }

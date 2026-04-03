@@ -175,6 +175,7 @@ export interface QuestionEvaluation {
       expected_output?: string | null;
       actual_output?: string | null;
       error?: string | null;
+      improvement_hint?: string | null;
       is_hidden: boolean;
       points: number;
       points_earned: number;
@@ -560,7 +561,7 @@ export const assessmentService = {
           candidates: data.candidates,
           frontend_url: frontendUrl,
           custom_message: data.custom_message,
-          expiry_days: data.expiry_days || 7,
+          expiry_days: data.expiry_days ?? 1,
         }
       );
       // Dispatch event to refresh header quota display

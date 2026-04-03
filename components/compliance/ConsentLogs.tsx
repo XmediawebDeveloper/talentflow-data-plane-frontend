@@ -24,9 +24,10 @@ import { formatIST } from '@/lib/utils/dateUtils';
 
 interface ConsentLogsProps {
   compact?: boolean;
+  defaultFeature?: string;
 }
 
-export default function ConsentLogs({ compact = false }: ConsentLogsProps) {
+export default function ConsentLogs({ compact = false, defaultFeature = '' }: ConsentLogsProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [logs, setLogs] = useState<ConsentLog[]>([]);
   const [total, setTotal] = useState(0);
@@ -35,7 +36,7 @@ export default function ConsentLogs({ compact = false }: ConsentLogsProps) {
   const [showAuditTrail, setShowAuditTrail] = useState(false);
 
   // Filters
-  const [featureFilter, setFeatureFilter] = useState<string>('');
+  const [featureFilter, setFeatureFilter] = useState<string>(defaultFeature);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [emailFilter, setEmailFilter] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
@@ -145,16 +146,6 @@ export default function ConsentLogs({ compact = false }: ConsentLogsProps) {
             </div>
 
             <select
-              value={featureFilter}
-              onChange={(e) => setFeatureFilter(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="">All Features</option>
-              <option value="ASSESSMENT">Assessment</option>
-              <option value="AI_INTERVIEW">AI Interview</option>
-            </select>
-
-            <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
@@ -209,6 +200,9 @@ export default function ConsentLogs({ compact = false }: ConsentLogsProps) {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Assessment
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Candidate
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -226,14 +220,23 @@ export default function ConsentLogs({ compact = false }: ConsentLogsProps) {
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Date
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                Actions
-              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {logs.map((log) => (
               <tr key={log.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3">
+                  <div>
+                    {log.assessment_sequence_number && (
+                      <p className="text-xs font-medium text-gray-500">
+                        AS-{String(log.assessment_sequence_number).padStart(3, '0')}
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-900">
+                      {log.assessment_title || '—'}
+                    </p>
+                  </div>
+                </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-gray-400" />
@@ -290,17 +293,6 @@ export default function ConsentLogs({ compact = false }: ConsentLogsProps) {
                       {formatIST(log.created_at)}
                     </span>
                   </div>
-                </td>
-                <td className="px-4 py-3">
-                  <button
-                    onClick={() => {
-                      setSelectedLog(log);
-                      loadAuditTrail(log.id);
-                    }}
-                    className="text-purple-600 hover:text-purple-800 text-sm font-medium"
-                  >
-                    View Details
-                  </button>
                 </td>
               </tr>
             ))}

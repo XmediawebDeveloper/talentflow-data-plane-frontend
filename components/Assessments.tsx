@@ -1179,7 +1179,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 >
                   Draft
                 </button>
-                <button
+                {/* <button
                   onClick={() => setActiveTab('completed')}
                   className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'completed'
@@ -1188,7 +1188,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }`}
                 >
                   Completed
-                </button>
+                </button> */}
                 {isTenantAdmin && (
                   <>
                     <button
@@ -1217,7 +1217,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </button>
                   </>
                 )}
-                <button
+                {/* <button
                   onClick={() => setActiveTab('archived')}
                   className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'archived'
@@ -1226,7 +1226,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }`}
                 >
                   Archived
-                </button>
+                </button> */}
                 <button
                   onClick={() => setActiveTab('settings')}
                   className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
@@ -1274,7 +1274,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <AssessmentAuditTrail />
             ) : activeTab === 'consent' ? (
               /* Consent Logs Tab */
-              <ConsentLogs />
+              <ConsentLogs defaultFeature="ASSESSMENT" />
             ) : activeTab === 'settings' ? (
               /* Settings Tab with Sub-tabs */
               <div className="space-y-6">
