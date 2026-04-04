@@ -727,9 +727,13 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   <tr
                     className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
-                    }`}
+                    } ${getResultStatus(result) !== 'Pending' && onViewResultDetail ? 'cursor-pointer' : ''}`}
+                    onClick={() => {
+                      if (getResultStatus(result) === 'Pending' || !onViewResultDetail) return;
+                      onViewResultDetail(result, jobTitle);
+                    }}
                   >
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => handleSelectResult(result.id)}
                         className="p-1 hover:bg-gray-100 rounded"
@@ -931,7 +935,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     })}
 
                     {/* Actions */}
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         {getResultStatus(result) !== 'Pending' && (
                         <button

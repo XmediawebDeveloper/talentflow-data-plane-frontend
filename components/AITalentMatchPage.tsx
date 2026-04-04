@@ -1151,11 +1151,20 @@ export default function AITalentMatchPage({
               {paginatedCandidates.map((candidate, index) => (
                 <tr
                   key={candidate.id}
-                  className={`hover:bg-gray-50 transition-colors ${
+                  className={`hover:bg-gray-50 transition-colors cursor-pointer ${
                     selectedCandidates.includes(candidate.id) ? 'bg-blue-50' : ''
                   }`}
+                  onClick={() => {
+                    if (candidate.resumeId) {
+                      try {
+                        sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidatesMemo.map((c: any) => c.resumeId).filter(Boolean)));
+                        sessionStorage.setItem('resumeNavSource', 'ai-talent-match');
+                      } catch { /* ignore */ }
+                      router.push(`/recruitment/resume-view/${candidate.resumeId}`);
+                    }
+                  }}
                 >
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedCandidates.includes(candidate.id)}
@@ -2244,11 +2253,20 @@ export default function AITalentMatchPage({
                 {paginatedCandidates.map((candidate, index) => (
                   <tr
                     key={candidate.id}
-                    className={`hover:bg-gray-50 transition-colors ${
+                    className={`hover:bg-gray-50 transition-colors cursor-pointer ${
                       selectedCandidates.includes(candidate.id) ? 'bg-blue-50' : ''
                     }`}
+                    onClick={() => {
+                      if (candidate.resumeId) {
+                        try {
+                          sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidatesMemo.map((c: any) => c.resumeId).filter(Boolean)));
+                          sessionStorage.setItem('resumeNavSource', 'ai-talent-match');
+                        } catch { /* ignore */ }
+                        router.push(`/recruitment/resume-view/${candidate.resumeId}`);
+                      }
+                    }}
                   >
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedCandidates.includes(candidate.id)}

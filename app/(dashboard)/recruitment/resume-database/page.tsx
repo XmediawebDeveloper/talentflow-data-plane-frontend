@@ -901,7 +901,11 @@ export default function ResumeDatabasePage() {
           onQuickView={(resume) => setQuickViewResume(resume)}
           onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job'))) ? handleApplyToJob : undefined}
           onDelete={isTenantAdmin ? (id) => handleDelete(id) : undefined}
-          onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+          onViewDetails={(resume) => {
+            sessionStorage.setItem('resumeNavList', JSON.stringify(paginatedResumes.map((r) => r.id)));
+            sessionStorage.setItem('resumeNavSource', 'resume-database');
+            router.push(`/recruitment/resume-view/${resume.id}`);
+          }}
           onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}
         />

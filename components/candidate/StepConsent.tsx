@@ -108,12 +108,33 @@ export default function StepConsent({
     });
   }, [allChecked]);
 
+  const ALL_CONSENTS: ConsentState = {
+    consent_video: true, consent_audio: true,
+    consent_biometric: true, consent_ai_analysis: true, consent_terms: true,
+  };
+
+  const handleCheckboxClick = useCallback(() => {
+    if (consentAccepted) {
+      // uncheck — deselect all
+      setConsentAccepted(false);
+      setConsents({ consent_video: false, consent_audio: false, consent_biometric: false, consent_ai_analysis: false, consent_terms: false });
+    } else {
+      // check — select all, no modal
+      setConsentAccepted(true);
+      setConsents(ALL_CONSENTS);
+    }
+  }, [consentAccepted]);
+
   const handleModalAccept = useCallback(() => {
-    if (!allChecked || submitting) return;
+    if (!allChecked) return;
     setConsentAccepted(true);
     setShowConsentModal(false);
-    onAccept(consents);
-  }, [allChecked, submitting, consents, onAccept]);
+  }, [allChecked]);
+
+  const handleProceed = useCallback(() => {
+    if (!consentAccepted || submitting) return;
+    onAccept(consentAccepted ? ALL_CONSENTS : consents);
+  }, [consentAccepted, submitting, consents, onAccept]);
 
   const title = jdTitle || position || 'Interview Position';
   const expStr = jdExperienceMin != null && jdExperienceMax != null
@@ -180,26 +201,24 @@ export default function StepConsent({
       </div>
 
       {/* ── Interview stats cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">Interview Type</p>
-          <p className="text-lg font-bold text-gray-900 capitalize">{interviewType || 'Technical'}</p>
+      {((duration != null && duration > 0) || (totalQuestions != null && totalQuestions > 0)) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {duration != null && duration > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">
+                <span className="flex items-center gap-1"><Timer className="w-3 h-3" /> Expected Duration</span>
+              </p>
+              <p className="text-lg font-bold text-gray-900">{duration} min</p>
+            </div>
+          )}
+          {totalQuestions != null && totalQuestions > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">Total Questions</p>
+              <p className="text-lg font-bold text-gray-900">{totalQuestions} questions</p>
+            </div>
+          )}
         </div>
-        {duration != null && duration > 0 && (
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">
-              <span className="flex items-center gap-1"><Timer className="w-3 h-3" /> Expected Duration</span>
-            </p>
-            <p className="text-lg font-bold text-gray-900">{duration} min</p>
-          </div>
-        )}
-        {totalQuestions != null && totalQuestions > 0 && (
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">Total Questions</p>
-            <p className="text-lg font-bold text-gray-900">{totalQuestions} questions</p>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* ── JD Description ── */}
       {jdDescription && (
@@ -208,7 +227,14 @@ export default function StepConsent({
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">About the Role</h2>
           </div>
           <div className="p-5">
-            <div className="prose prose-sm prose-gray max-w-none text-gray-600 leading-relaxed">
+            <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed
+              prose-headings:text-gray-900 prose-headings:font-semibold
+              prose-p:text-gray-700 prose-p:my-1.5
+              prose-li:text-gray-700 prose-li:my-0.5
+              prose-strong:text-gray-900
+              prose-a:text-gray-700 prose-a:no-underline
+              prose-code:bg-gray-100 prose-code:text-gray-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
+              prose-pre:bg-gray-50 prose-pre:border prose-pre:border-gray-200 prose-pre:text-gray-700 prose-pre:rounded-lg prose-pre:text-sm prose-pre:font-normal">
               <ReactMarkdown>{descToShow || ''}</ReactMarkdown>
             </div>
             {isLongDesc && (
@@ -271,13 +297,13 @@ export default function StepConsent({
       </div>
 
       {/* ── Consent acceptance row ── */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
+      <div className={`bg-white border rounded-xl p-5 transition-colors ${consentAccepted ? 'border-green-300 bg-green-50/30' : 'border-gray-200'}`}>
         <div className="flex items-start gap-3">
           <div
             className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 cursor-pointer transition-all ${
               consentAccepted ? 'bg-gray-900 border-gray-900' : 'border-gray-300 hover:border-gray-500'
             }`}
-            onClick={() => !consentAccepted && setShowConsentModal(true)}
+            onClick={handleCheckboxClick}
           >
             {consentAccepted && <CheckCircle className="w-3.5 h-3.5 text-white" />}
           </div>
@@ -292,7 +318,7 @@ export default function StepConsent({
             </button>
             {' '}for AI Interview
             <p className="text-xs text-gray-500 mt-1">
-              Click &ldquo;consent and terms&rdquo; to review and accept all requirements, privacy policy and terms &amp; conditions for this AI-assisted video interview.
+              Checking this box selects all consents. You may click &ldquo;consent and terms&rdquo; to review the full privacy policy and terms.
             </p>
           </div>
         </div>
@@ -300,10 +326,25 @@ export default function StepConsent({
         {consentAccepted && (
           <div className="mt-3 flex items-center gap-2 text-green-700 text-sm font-medium">
             <CheckCircle className="w-4 h-4" />
-            Consent accepted — proceeding to next step…
+            All consents accepted
           </div>
         )}
       </div>
+
+      {/* ── Proceed button ── */}
+      <button
+        type="button"
+        onClick={handleProceed}
+        disabled={!consentAccepted || submitting}
+        className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3.5 px-4 rounded-xl hover:bg-gray-800 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {submitting ? 'Submitting…' : (
+          <>
+            Proceed
+            <ChevronRight className="w-4 h-4" />
+          </>
+        )}
+      </button>
 
       {/* ── Help ── */}
       <div className="flex items-center gap-2 text-sm text-gray-400 justify-center pb-2">
@@ -437,18 +478,13 @@ export default function StepConsent({
               <button
                 type="button"
                 onClick={handleModalAccept}
-                disabled={!allChecked || submitting}
+                disabled={!allChecked}
                 className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-4 rounded-xl hover:bg-gray-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {submitting ? 'Submitting…' : (
-                  <>
-                    Accept All &amp; Proceed
-                    <ChevronRight className="w-4 h-4" />
-                  </>
-                )}
+                Accept All &amp; Close
               </button>
               {!allChecked && (
-                <p className="text-xs text-gray-400 text-center">Please check all consent boxes above to proceed.</p>
+                <p className="text-xs text-gray-400 text-center">Please check all consent boxes above to confirm.</p>
               )}
             </div>
           </div>

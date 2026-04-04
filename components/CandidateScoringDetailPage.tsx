@@ -1,6 +1,6 @@
 'use client';
 
-import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronRight, Code, Languages, ArrowLeft, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, Code, Languages, ArrowLeft, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
@@ -59,9 +59,14 @@ interface CandidateScoringDetailPageProps {
   jobTitle: string;
   jobId: string;
   onBack: () => void;
+  onMinimize?: () => void;
+  currentIndex?: number;
+  totalCount?: number;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onBack, onMinimize, currentIndex, totalCount, onPrev, onNext }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user } = useAuth();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo'>('overview');
@@ -380,8 +385,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-white">
-      {/* Back Button */}
-      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6">
+      {/* Back Button + Prev/Next Navigation */}
+      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 flex items-center justify-between">
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-gray-800 hover:text-gray-900 font-medium transition-colors hover:gap-3 text-sm sm:text-base"
@@ -389,6 +394,30 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           Back to Scored Resumes
         </button>
+
+        {totalCount != null && totalCount > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onPrev}
+              disabled={!onPrev || currentIndex === 0}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous
+            </button>
+            <span className="text-xs text-gray-400 whitespace-nowrap">
+              {(currentIndex ?? 0) + 1} / {totalCount}
+            </span>
+            <button
+              onClick={onNext}
+              disabled={!onNext || currentIndex === totalCount - 1}
+              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+            >
+              Next
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Header */}

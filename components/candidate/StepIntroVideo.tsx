@@ -1,20 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   Play,
-  Briefcase,
-  FileText,
-  Clock,
   Globe,
   CheckCircle,
   ChevronRight,
   SkipForward,
-  X,
-  Building2,
-  BookOpen,
-  Lightbulb,
-  Timer,
 } from 'lucide-react';
 
 interface StepIntroVideoProps {
@@ -31,30 +23,6 @@ interface StepIntroVideoProps {
   onSkip: () => void;
   submitting?: boolean;
 }
-
-const EXPECT_ITEMS = [
-  {
-    icon: Building2,
-    title: 'Company Overview',
-    description: 'Learn about our mission, values, and culture',
-  },
-  {
-    icon: BookOpen,
-    title: 'Role Description',
-    description: 'Understand the responsibilities for the {position} position',
-  },
-  {
-    icon: Lightbulb,
-    title: 'Interview Instructions',
-    description:
-      'Get tips on how to make the most of this AI-powered interview',
-  },
-  {
-    icon: Timer,
-    title: 'Duration',
-    description: 'Maximum 1 minute introduction',
-  },
-];
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -76,6 +44,20 @@ export default function StepIntroVideo({
   const videoSrc = introductionVideoUrl
     ? `${API_BASE_URL}/candidate/ai-interview/${token}/intro-video`
     : null;
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoError, setVideoError] = useState(false);
+
+  // Auto-play the intro video when the step mounts.
+  // The user just clicked "Continue" (system check), so a recent user gesture
+  // is in scope and play() will be allowed by the browser without muting.
+  useEffect(() => {
+    if (!videoRef.current || !videoSrc) return;
+    videoRef.current.play().catch(() => {
+      // Autoplay blocked (no recent gesture) — video stays paused with controls visible
+    });
+  }, [videoSrc]);
+
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6">
       {/* Blue gradient header card */}
@@ -93,11 +75,22 @@ export default function StepIntroVideo({
       {videoSrc ? (
         <div className="space-y-4 text-center">
           <div className="flex justify-center">
-            <video
-              src={videoSrc}
-              controls
-              className="w-full max-w-2xl rounded-xl border border-gray-200 shadow-sm"
-            />
+            {videoError ? (
+              <div className="w-full max-w-2xl rounded-xl border border-red-200 bg-red-50 p-8 text-center">
+                <div className="text-red-500 text-4xl mb-3">⚠️</div>
+                <p className="text-red-700 font-medium">Failed to load the introduction video.</p>
+                <p className="text-red-500 text-sm mt-1">Please check your connection and refresh the page, or skip and continue.</p>
+              </div>
+            ) : (
+              <video
+                ref={videoRef}
+                src={videoSrc}
+                controls
+                playsInline
+                className="w-full max-w-2xl rounded-xl border border-gray-200 shadow-sm"
+                onError={() => setVideoError(true)}
+              />
+            )}
           </div>
 
           <div className="space-y-2">
@@ -130,70 +123,6 @@ export default function StepIntroVideo({
           </p>
         </div>
       )}
-
-      {/* What to Expect card */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-gray-900">
-          What to Expect
-        </h3>
-        <ul className="space-y-3">
-          {EXPECT_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const description = item.description.replace(
-              '{position}',
-              position
-            );
-            return (
-              <li key={item.title} className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <Icon className="w-4 h-4 text-gray-600" />
-                </div>
-                <div>
-                  <span className="font-medium text-gray-900">
-                    {item.title}:
-                  </span>{' '}
-                  <span className="text-gray-600 text-sm">{description}</span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
-      {/* Info row: Position | Interview Type | Duration */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center">
-            <Briefcase className="w-5 h-5 text-gray-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Position</p>
-            <p className="text-sm font-semibold text-gray-900">{position}</p>
-          </div>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center">
-            <FileText className="w-5 h-5 text-gray-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Interview Type</p>
-            <p className="text-sm font-semibold text-gray-900">
-              {interviewType}
-            </p>
-          </div>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
-          <div className="w-10 h-10 bg-gray-50 rounded-lg flex items-center justify-center">
-            <Clock className="w-5 h-5 text-gray-600" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500 font-medium">Duration</p>
-            <p className="text-sm font-semibold text-gray-900">
-              {duration} minutes
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* Language Selection (only if more than 1 language) */}
       {availableLanguages.length > 1 && (
@@ -247,16 +176,7 @@ export default function StepIntroVideo({
       )}
 
       {/* Footer actions */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-        <button
-          type="button"
-          onClick={onSkip}
-          className="text-sm text-red-500 hover:text-red-600 font-medium flex items-center gap-1"
-        >
-          <X className="w-4 h-4" />
-          Cancel Interview
-        </button>
-
+      <div className="flex items-center justify-end pt-2 border-t border-gray-100">
         <div className="flex items-center gap-3">
           <button
             type="button"

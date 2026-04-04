@@ -254,9 +254,13 @@ interface SkillSectionProps {
   isLocked?: boolean;
   /** Flexible mode only: clears clusters so skills can be edited again */
   onResetClusters?: () => void;
+  /** When true, always render the flat skills list even if clusters exist in state.
+   *  Clusters are preserved in state (saveDraft keeps them for the clusters page)
+   *  but are never rendered on this page. */
+  hideClustersView?: boolean;
 }
 
-function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange, onMoveSkill, isLocked = false, onResetClusters }: SkillSectionProps) {
+function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange, onMoveSkill, isLocked = false, onResetClusters, hideClustersView = false }: SkillSectionProps) {
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
   const [skillToDelete, setSkillToDelete] = useState<string | null>(null);
@@ -269,7 +273,8 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
     ? { tag: 'bg-purple-50 text-purple-700 border-purple-200', accent: 'text-purple-700' }
     : { tag: 'bg-indigo-50 text-indigo-700 border-indigo-200', accent: 'text-indigo-700' };
 
-  const hasClusters = config.clusters.length > 0;
+  // hideClustersView: clusters are kept in state for save integrity but not rendered here
+  const hasClusters = !hideClustersView && config.clusters.length > 0;
 
   // Find skills not assigned to any cluster
   const assignedSkillSet = new Set(config.clusters.flatMap(c => c.skills.map(s => s.toLowerCase())));
@@ -897,7 +902,7 @@ export default function AIInterviewConfig() {
     skills: [], clusters: [], percentage: DEFAULT_PCT.mth, enabled: true,
   });
   const [nth, setNth] = useState<CategoryConfig>({
-    skills: [], clusters: [], percentage: DEFAULT_PCT.nth, enabled: true,
+    skills: [], clusters: [], percentage: DEFAULT_PCT.nth, enabled: false,
   });
   const [hrPct, setHrPct] = useState<number>(DEFAULT_PCT.hr);
   const [hrEnabled, setHrEnabled] = useState(true);
@@ -1077,7 +1082,7 @@ export default function AIInterviewConfig() {
                 : (jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? []),
               clusters: [],
               percentage: nthRound.percentage ?? DEFAULT_PCT.nth,
-              enabled: true,
+              enabled: nthRound.enabled !== false,
             });
           } else {
             setNth(prev => ({
@@ -1170,6 +1175,7 @@ export default function AIInterviewConfig() {
           }));
           setNth(prev => ({
             ...prev,
+            enabled: (jd.nice_to_have_skills?.length ?? 0) > 0,
             skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
           }));
         } else {
@@ -1180,6 +1186,7 @@ export default function AIInterviewConfig() {
           }));
           setNth(prev => ({
             ...prev,
+            enabled: (jd.nice_to_have_skills?.length ?? 0) > 0,
             skills: jd.nice_to_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
           }));
         }
@@ -1210,13 +1217,16 @@ export default function AIInterviewConfig() {
 
   /* ── Navigation guards ── */
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (selectedJd && !isNavigatingRef.current) {
-        e.preventDefault(); e.returnValue = '';
-      }
+    if (!selectedJd) return;
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      if (isNavigatingRef.current) return;
+      window.history.pushState(null, '', window.location.href);
+      setPendingNavigation('__back__');
+      setShowUnsavedDialog(true);
     };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, [selectedJd]);
 
   useEffect(() => {
@@ -1258,7 +1268,7 @@ export default function AIInterviewConfig() {
           title: `${selectedJd.title} - AI Interview`,
           save_as_draft: true,
           special_instructions: buildClusterJson(),
-          introduction_video_url: introVideoUrl || undefined,
+          introduction_video_url: introVideoUrl || null,
         };
 
         if (existingDraftIdRef.current) {
@@ -1283,8 +1293,10 @@ export default function AIInterviewConfig() {
   /* ── Derived values ── */
   const nthAvailable = nth.skills.length > 0 || nth.enabled;
 
-  /** Flexible mode: true once clusters have been generated — locks skill add/remove */
-  const flexSkillsLocked = mode === 'flexible' && mth.clusters.length > 0;
+  /** Flexible mode: skills are never locked on the configure page — cluster editing
+   *  happens exclusively on the clusters page, so adding/removing skills here must
+   *  always be allowed regardless of whether clusters have been generated. */
+  const flexSkillsLocked = false;
 
   /** Flexible mode: clear all clusters so the recruiter can edit skills again */
   const handleResetClusters = () => {
@@ -1292,22 +1304,51 @@ export default function AIInterviewConfig() {
     setNth(prev => ({ ...prev, clusters: [] }));
   };
 
-  /** Flexible mode: move a skill from MHS → NHS */
+  /** Flexible mode: move a skill from MHS → NHS.
+   *  If NHS is currently disabled, it is auto-enabled and percentages are redistributed. */
   const moveMthToNth = (skillName: string) => {
     const skill = mth.skills.find(s => s.name === skillName);
     if (!skill) return;
-    setMth(prev => ({
-      ...prev,
-      skills: prev.skills.filter(s => s.name !== skillName),
-      clusters: prev.clusters.map(c => ({
-        ...c,
-        skills: c.skills.filter(s => s.toLowerCase() !== skillName.toLowerCase()),
-      })),
-    }));
-    setNth(prev => ({
-      ...prev,
-      skills: [...prev.skills, skill],
-    }));
+
+    if (!nth.enabled) {
+      // Auto-enable NHS and redistribute scoring weights
+      const [newMthPct, newNthPct, newHrPct] = redistributeFlexPct(
+        mth.percentage, true, nth.percentage, hrEnabled, hrPct,
+      );
+      setMth(prev => ({
+        ...prev,
+        percentage: newMthPct,
+        skills: prev.skills.filter(s => s.name !== skillName),
+        clusters: prev.clusters.map(c => ({
+          ...c,
+          skills: c.skills.filter(s => s.toLowerCase() !== skillName.toLowerCase()),
+        })),
+      }));
+      setNth(prev => {
+        const alreadyExists = prev.skills.some(s => s.name.toLowerCase() === skillName.toLowerCase());
+        return {
+          ...prev,
+          enabled: true,
+          percentage: newNthPct,
+          skills: alreadyExists ? prev.skills : [...prev.skills, skill],
+        };
+      });
+      setHrPct(newHrPct);
+      toast.success(`"${skillName}" moved to Nice-to-Have. NHS section enabled.`);
+    } else {
+      setMth(prev => ({
+        ...prev,
+        skills: prev.skills.filter(s => s.name !== skillName),
+        clusters: prev.clusters.map(c => ({
+          ...c,
+          skills: c.skills.filter(s => s.toLowerCase() !== skillName.toLowerCase()),
+        })),
+      }));
+      setNth(prev => {
+        const alreadyExists = prev.skills.some(s => s.name.toLowerCase() === skillName.toLowerCase());
+        return alreadyExists ? prev : { ...prev, skills: [...prev.skills, skill] };
+      });
+    }
   };
 
   /** Flexible mode: move a skill from NHS → MHS */
@@ -1334,6 +1375,11 @@ export default function AIInterviewConfig() {
   const fixedNthMin = timedAllocation.nthMinutes;
   const fixedHrMin  = timedAllocation.hrMinutes;
   const totalFixed  = fixedMthMin + fixedNthMin + fixedHrMin;
+
+  // Flexible mode enforces fixed cluster limits (MHS ≤ 3, NHS ≤ 2) regardless of which
+  // sections are enabled. Fixed mode uses scenario-based limits from timedAllocation.
+  const effectiveMthMax = mode === 'flexible' ? 3 : timedAllocation.mthMaxClusters;
+  const effectiveNthMax = mode === 'flexible' ? 2 : timedAllocation.nthMaxClusters;
 
   const totalPct = mth.percentage + (nth.enabled ? nth.percentage : 0) + (hrEnabled ? hrPct : 0);
   const pctValid = totalPct === 100;
@@ -1622,13 +1668,13 @@ export default function AIInterviewConfig() {
     // Clusters match config when every current skill is covered AND counts are within limits
     const mthClustersMatch =
       mth.clusters.length > 0 &&
-      mth.clusters.length <= timedAllocation.mthMaxClusters &&
+      mth.clusters.length <= effectiveMthMax &&
       currentMthSet.size > 0 &&
       [...currentMthSet].every(s => clusteredMthSet.has(s));
     const nthClustersMatch =
       !nth.enabled ||
       (nth.clusters.length > 0 &&
-        nth.clusters.length <= timedAllocation.nthMaxClusters &&
+        nth.clusters.length <= effectiveNthMax &&
         currentNthSet.size > 0 &&
         [...currentNthSet].every(s => clusteredNthSet.has(s)));
     const needsRegeneration = !mthClustersMatch || !nthClustersMatch;
@@ -1651,15 +1697,15 @@ export default function AIInterviewConfig() {
             selectedJd.description,
             fixedMthMin,
             nthSkillNames.length > 0 ? fixedNthMin : 0,
-            timedAllocation.mthMaxClusters,
-            nthSkillNames.length > 0 ? timedAllocation.nthMaxClusters : 0,
+            effectiveMthMax,
+            nthSkillNames.length > 0 ? effectiveNthMax : 0,
           );
 
           // Save generated clusters to the draft.
           // Hard-cap to scenario limits in case backend returns more than allowed.
           const siObj = JSON.parse(buildClusterJson());
-          const mthMax = timedAllocation.mthMaxClusters;
-          const nthMax = timedAllocation.nthMaxClusters;
+          const mthMax = effectiveMthMax;
+          const nthMax = effectiveNthMax;
           const rawMth = mthSkillNames.length > 0 ? result.mth_clusters : [];
           const rawNth = nthSkillNames.length > 0 ? result.nth_clusters : [];
           siObj.mth_clusters = (mthMax > 0 ? rawMth.slice(0, mthMax) : rawMth).map(c => ({
@@ -1700,7 +1746,8 @@ export default function AIInterviewConfig() {
     isNavigatingRef.current = true;
     await saveDraft(true);
     toast.success('Draft saved');
-    if (pendingNavigation) router.push(pendingNavigation);
+    if (pendingNavigation === '__back__') router.back();
+    else if (pendingNavigation) router.push(pendingNavigation);
     setPendingNavigation(null);
   };
 
@@ -1716,7 +1763,8 @@ export default function AIInterviewConfig() {
         // Silent — don't block navigation on delete failure
       }
     }
-    if (pendingNavigation) router.push(pendingNavigation);
+    if (pendingNavigation === '__back__') router.back();
+    else if (pendingNavigation) router.push(pendingNavigation);
     setPendingNavigation(null);
   };
 
@@ -1811,7 +1859,7 @@ export default function AIInterviewConfig() {
                   >
                     <div className="flex items-center gap-2">
                       <Timer className={`w-4 h-4 ${mode === 'fixed' ? 'text-white' : 'text-gray-600'}`} />
-                      <span className="font-semibold text-sm">Fixed — 30 min</span>
+                      <span className="font-semibold text-sm">Timed Mode — 30 min</span>
                     </div>
                     <p className={`text-xs ${mode === 'fixed' ? 'text-gray-300' : 'text-gray-500'}`}>
                       Candidate response time is capped. AI narration excluded.
@@ -1858,9 +1906,10 @@ export default function AIInterviewConfig() {
               questionCount={timedQDist.mth}
               flexibleMinutes={flexMthMin}
               onChange={patch => setMth(prev => ({ ...prev, ...patch }))}
-              onMoveSkill={mode === 'flexible' && nth.enabled ? moveMthToNth : undefined}
+              onMoveSkill={mode === 'flexible' ? moveMthToNth : undefined}
               isLocked={flexSkillsLocked}
               onResetClusters={handleResetClusters}
+              hideClustersView
             />
 
             {/* ── NTH ── */}
@@ -1901,6 +1950,7 @@ export default function AIInterviewConfig() {
                     onMoveSkill={mode === 'flexible' ? moveNthToMth : undefined}
                     isLocked={flexSkillsLocked}
                     onResetClusters={handleResetClusters}
+                    hideClustersView
                   />
                 </div>
               )}

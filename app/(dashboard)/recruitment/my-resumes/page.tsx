@@ -1503,6 +1503,10 @@ export default function MyResumesPage() {
 
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
+      if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
+        toast.error('Folder name must not contain HTML or script content');
+        return;
+      }
       // Helper to get all folders including nested children
       const getAllFolders = (folderList: FolderType[]): FolderType[] => {
         const result: FolderType[] = [];
@@ -1561,6 +1565,10 @@ export default function MyResumesPage() {
 
   const handleRenameFolder = async (id: string, name: string) => {
     try {
+      if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
+        toast.error('Folder name must not contain HTML or script content');
+        return;
+      }
       // Prevent renaming "Archived Resumes" folder
       const folderToRename = folders.find(f => f.id === id);
       if (folderToRename && folderToRename.name === 'Archived Resumes' && !folderToRename.parentId) {
@@ -2441,7 +2449,11 @@ export default function MyResumesPage() {
                   onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
                   onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-                  onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+                  onViewDetails={(resume) => {
+                    sessionStorage.setItem('resumeNavList', JSON.stringify(filteredResumes.map((r) => r.id)));
+                    sessionStorage.setItem('resumeNavSource', 'my-resumes');
+                    router.push(`/recruitment/resume-view/${resume.id}`);
+                  }}
                   highlightQuery={appliedSearchQuery}
                   onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
                   canShare={canShareMyResumes}
@@ -2754,7 +2766,11 @@ export default function MyResumesPage() {
                             onSelect={handleSelectResume}
                             onQuickView={(r) => setQuickViewResume(r)}
                             onDelete={canDeleteMyResumes ? handleDelete : undefined}
-                            onViewDetails={(r) => router.push(`/recruitment/resume-view/${r.id}`)}
+                            onViewDetails={(r) => {
+                              sessionStorage.setItem('resumeNavList', JSON.stringify(folderResumes.map((x) => x.id)));
+                              sessionStorage.setItem('resumeNavSource', 'my-resumes');
+                              router.push(`/recruitment/resume-view/${r.id}`);
+                            }}
                           />
                         ))}
                         </div>
@@ -2767,7 +2783,11 @@ export default function MyResumesPage() {
                               className={`bg-white border rounded-lg p-4 cursor-pointer hover:shadow-md transition-all ${
                                 selectedResumes.includes(resume.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
                               }`}
-                              onClick={() => router.push(`/recruitment/resume-view/${resume.id}`)}
+                              onClick={() => {
+                                sessionStorage.setItem('resumeNavList', JSON.stringify(folderResumes.map((x) => x.id)));
+                                sessionStorage.setItem('resumeNavSource', 'my-resumes');
+                                router.push(`/recruitment/resume-view/${resume.id}`);
+                              }}
                             >
                               <div className="flex items-start gap-3 mb-3">
                                 <input

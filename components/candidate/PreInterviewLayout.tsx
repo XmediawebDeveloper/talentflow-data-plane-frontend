@@ -16,6 +16,7 @@ const STEP_LABELS = [
 interface PreInterviewLayoutProps {
   currentStep: number;
   totalSteps?: number;
+  stepLabels?: string[];
   position?: string;
   duration?: number;
   children: React.ReactNode;
@@ -32,6 +33,7 @@ interface PreInterviewLayoutProps {
 export default function PreInterviewLayout({
   currentStep,
   totalSteps = 7,
+  stepLabels,
   position,
   duration,
   children,
@@ -45,7 +47,7 @@ export default function PreInterviewLayout({
   showFooter = true,
 }: PreInterviewLayoutProps) {
   const shouldShowBack = showBack !== undefined ? showBack : currentStep > 1;
-  const steps = STEP_LABELS.slice(0, totalSteps);
+  const steps = stepLabels ?? STEP_LABELS.slice(0, totalSteps);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">

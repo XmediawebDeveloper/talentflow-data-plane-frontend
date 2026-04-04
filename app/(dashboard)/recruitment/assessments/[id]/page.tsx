@@ -20,6 +20,25 @@ export default function AssessmentDetailsPage() {
   const [assessment, setAssessment] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [allAssessmentIds, setAllAssessmentIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchAllIds = async () => {
+      try {
+        const ids: string[] = [];
+        let page = 1;
+        while (true) {
+          const res = await assessmentService.list({ page_size: 100, page });
+          const items = res.items ?? res ?? [];
+          ids.push(...items.map((a: any) => a.id));
+          if (ids.length >= (res.total ?? items.length) || items.length < 100) break;
+          page++;
+        }
+        setAllAssessmentIds(ids);
+      } catch { /* ignore */ }
+    };
+    fetchAllIds();
+  }, []);
 
   // Modal states
   const [showShareModal, setShowShareModal] = useState(false);
@@ -149,6 +168,14 @@ export default function AssessmentDetailsPage() {
           onShare={canInvite ? () => setShowShareModal(true) : undefined}
           onViewResults={handleViewResults}
           onRefresh={fetchAssessment}
+          currentIndex={allAssessmentIds.indexOf(assessmentId)}
+          totalCount={allAssessmentIds.length}
+          onPrev={allAssessmentIds.indexOf(assessmentId) > 0
+            ? () => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) - 1]}`)
+            : undefined}
+          onNext={allAssessmentIds.indexOf(assessmentId) >= 0 && allAssessmentIds.indexOf(assessmentId) < allAssessmentIds.length - 1
+            ? () => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) + 1]}`)
+            : undefined}
         />
 
         {/* Modals */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
@@ -17,6 +17,10 @@ interface CandidateResultDetailsProps {
   jdTitle?: string;
   jdId?: string;
   assessmentVersion?: number | null;
+  currentIndex?: number;
+  totalCount?: number;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
 interface CandidateBasicInfo {
@@ -46,6 +50,10 @@ export default function CandidateResultDetails({
   jdTitle,
   jdId,
   assessmentVersion,
+  currentIndex,
+  totalCount,
+  onPrev,
+  onNext,
 }: CandidateResultDetailsProps) {
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -338,13 +346,38 @@ export default function CandidateResultDetails({
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-[72px] sm:top-[88px] z-10">
         <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 transition-colors text-sm sm:text-base"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            Back to Results Overview
-          </button>
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
+            >
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              Back to Results Overview
+            </button>
+            {totalCount != null && totalCount > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onPrev}
+                  disabled={!onPrev || currentIndex === 0}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                <span className="text-sm text-gray-600 font-medium px-1">
+                  {(currentIndex ?? 0) + 1} / {totalCount}
+                </span>
+                <button
+                  onClick={onNext}
+                  disabled={!onNext || currentIndex === totalCount - 1}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
               <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0">
@@ -1200,18 +1233,8 @@ export default function CandidateResultDetails({
                                                 </div>
                                               </div>
 
-                                              {(testCase.actual_output || testCase.error || testCase.improvement_hint) && (
+                                              {(testCase.error || testCase.improvement_hint) && (
                                                 <div className="mt-3 grid gap-3 md:grid-cols-2">
-                                                  {testCase.actual_output && (
-                                                    <div>
-                                                      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
-                                                        Candidate Output
-                                                      </div>
-                                                      <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200">
-                                                        <pre className="whitespace-pre-wrap">{testCase.actual_output}</pre>
-                                                      </div>
-                                                    </div>
-                                                  )}
                                                   {testCase.error && (
                                                     <div>
                                                       <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">

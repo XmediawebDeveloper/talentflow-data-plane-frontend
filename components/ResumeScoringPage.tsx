@@ -1109,15 +1109,29 @@ export default function ResumeScoringPage({
 
   // View Candidate Scoring Detail Page
   if (viewMode === 'candidateView' && selectedCandidateForView && selectedHistoryItem) {
+    const _scoredList = selectedHistoryItem.scoredResumes ?? [];
+    const _currentIdx = _scoredList.findIndex((r: any) => (r.id ?? r.resumeId) === (selectedCandidateForView.id ?? selectedCandidateForView.resumeId));
+
+    const _goToCandidate = (candidate: any) => {
+      setSelectedCandidateForView(candidate);
+      router.push(
+        `/recruitment/resume-scoring?jd_id=${selectedHistoryItem.jobId}&score_id=${candidate.id ?? candidate.resumeId}`,
+        { scroll: false }
+      );
+    };
+
     return (
       <CandidateScoringDetailPage
         resume={selectedCandidateForView}
         jobTitle={selectedHistoryItem.jobTitle}
         jobId={selectedHistoryItem.jobId}
+        currentIndex={_currentIdx >= 0 ? _currentIdx : undefined}
+        totalCount={_scoredList.length}
+        onPrev={_currentIdx > 0 ? () => _goToCandidate(_scoredList[_currentIdx - 1]) : undefined}
+        onNext={_currentIdx < _scoredList.length - 1 ? () => _goToCandidate(_scoredList[_currentIdx + 1]) : undefined}
         onBack={() => {
           setSelectedCandidateForView(null);
           setViewMode('details');
-          // Update URL to remove score_id, keep jd_id
           router.push(`/recruitment/resume-scoring?jd_id=${selectedHistoryItem.jobId}`, { scroll: false });
         }}
         onMinimize={() => {
@@ -1791,7 +1805,16 @@ export default function ResumeScoringPage({
                 return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow"
+                    className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => {
+                      setSelectedHistoryItem(item);
+                      setViewMode('details');
+                      onLoadJdScores?.(item.jobId, item.jobTitle);
+                      try {
+                        localStorage.setItem('lastViewedScoringJdId', item.jobId);
+                      } catch (e) {}
+                      router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                    }}
                   >
                     <div className="flex flex-col sm:flex-row items-start gap-4">
                       {/* Scoring icon - like AI Talent Match */}
@@ -1939,7 +1962,8 @@ export default function ResumeScoringPage({
                           View Progress
                         </button>
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedHistoryItem(item);
                             setViewMode('details');
                             onLoadJdScores?.(item.jobId, item.jobTitle);

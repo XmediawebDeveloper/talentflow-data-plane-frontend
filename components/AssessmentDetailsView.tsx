@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -17,6 +17,10 @@ interface AssessmentDetailsViewProps {
   onShare?: () => void;
   onViewResults: () => void;
   onRefresh?: () => void;
+  currentIndex?: number;
+  totalCount?: number;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
 interface Section {
@@ -39,7 +43,11 @@ export default function AssessmentDetailsView({
   onPreview,
   onShare,
   onViewResults,
-  onRefresh
+  onRefresh,
+  currentIndex,
+  totalCount,
+  onPrev,
+  onNext,
 }: AssessmentDetailsViewProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
@@ -201,13 +209,38 @@ export default function AssessmentDetailsView({
       {/* Sticky Header */}
       <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-gray-600 sticky top-0 z-20 shadow-lg">
         <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-5">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 sm:gap-2 text-white/90 hover:text-white mb-3 sm:mb-4 transition-colors text-sm sm:text-base"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            Back to Assessments
-          </button>
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1.5 sm:gap-2 text-white/90 hover:text-white transition-colors text-sm sm:text-base"
+            >
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              Back to Assessments
+            </button>
+            {totalCount != null && totalCount > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onPrev}
+                  disabled={!onPrev || currentIndex === 0}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                <span className="text-sm text-white/80 font-medium px-1">
+                  {(currentIndex ?? 0) + 1} / {totalCount}
+                </span>
+                <button
+                  onClick={onNext}
+                  disabled={!onNext || currentIndex === totalCount - 1}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
           
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
             <div className="flex items-start gap-2 sm:gap-3 lg:gap-4 min-w-0">

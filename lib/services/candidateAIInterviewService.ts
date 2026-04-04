@@ -201,6 +201,22 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  async sendOtp(token: string, email: string): Promise<{ message: string }> {
+    const response = await candidateApi.post<{ message: string }>(
+      `/candidate/ai-interview/${token}/send-otp`,
+      { email },
+    );
+    return response.data;
+  },
+
+  async verifyOtp(token: string, email: string, otp: string): Promise<{ verified: boolean; message: string }> {
+    const response = await candidateApi.post<{ verified: boolean; message: string }>(
+      `/candidate/ai-interview/${token}/verify-otp`,
+      { email, otp },
+    );
+    return response.data;
+  },
+
   async reportProctorEvent(
     token: string,
     event: { event_type: string; timestamp?: string; details?: Record<string, any> },

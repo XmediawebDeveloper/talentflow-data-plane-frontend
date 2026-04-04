@@ -3,10 +3,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Shield, Camera, Lock, AlertCircle, Mail, User,
-  CheckCircle, RefreshCw, Loader2, Smile, Eye, ArrowRight,
+  CheckCircle, RefreshCw, Loader2, Smile, Eye, ArrowRight, KeyRound,
 } from 'lucide-react';
+import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 
 interface StepIdentityProps {
+  token: string;
   candidateName?: string;
   candidateEmail?: string;
   position?: string;
@@ -22,6 +24,7 @@ const LIVENESS_STEPS = [
 const STEP_DURATION_MS = 2200;
 
 export default function StepIdentity({
+  token,
   candidateName = '',
   candidateEmail = '',
   position = 'this position',
@@ -39,6 +42,16 @@ export default function StepIdentity({
   const [cameraError, setCameraError] = useState(false);
   const [faceError, setFaceError] = useState<string | null>(null);
 
+  // OTP states
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -46,7 +59,54 @@ export default function StepIdentity({
   const animFrameRef = useRef<number | null>(null);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const isFormValid = name.trim() !== '' && email.trim() !== '' && isEmailValid;
+  const isFormValid = name.trim() !== '' && email.trim() !== '' && isEmailValid && otpVerified;
+
+  const startCooldown = useCallback(() => {
+    setResendCooldown(60);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown(prev => {
+        if (prev <= 1) { clearInterval(cooldownRef.current!); cooldownRef.current = null; return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  const handleSendOtp = useCallback(async () => {
+    if (!isEmailValid || otpSending) return;
+    setOtpSending(true);
+    setOtpError(null);
+    try {
+      await candidateAIInterviewService.sendOtp(token, email.trim());
+      setOtpSent(true);
+      setOtpCode('');
+      setOtpVerified(false);
+      startCooldown();
+    } catch {
+      setOtpError('Failed to send OTP. Please try again.');
+    } finally {
+      setOtpSending(false);
+    }
+  }, [isEmailValid, otpSending, token, email, startCooldown]);
+
+  const handleVerifyOtp = useCallback(async () => {
+    if (otpCode.length < 4 || otpVerifying) return;
+    setOtpVerifying(true);
+    setOtpError(null);
+    try {
+      const res = await candidateAIInterviewService.verifyOtp(token, email.trim(), otpCode.trim());
+      if (res.verified) {
+        setOtpVerified(true);
+        setOtpError(null);
+      } else {
+        setOtpError(res.message || 'Invalid OTP. Please try again.');
+      }
+    } catch {
+      setOtpError('Invalid or expired OTP. Please try again.');
+    } finally {
+      setOtpVerifying(false);
+    }
+  }, [otpCode, otpVerifying, token, email]);
+
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -61,6 +121,7 @@ export default function StepIdentity({
     return () => {
       stopStream();
       if (photoPreview) URL.revokeObjectURL(photoPreview);
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -187,6 +248,47 @@ export default function StepIdentity({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, photoBlob]);
 
+  // ── Progress stepper (2 sections) ──
+  const isPhotoPhase = phase !== 'form';
+  const isComplete = phase === 'captured';
+
+  const progressStepper = (
+    <div className="flex items-center justify-center mb-6">
+      {/* Step 1 */}
+      <div className="flex flex-col items-center gap-1.5">
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${
+          isPhotoPhase
+            ? 'bg-gray-900 border-gray-900 text-white'
+            : 'bg-gray-900 border-gray-900 text-white'
+        }`}>
+          {isPhotoPhase ? <CheckCircle className="w-5 h-5" /> : '1'}
+        </div>
+        <span className={`text-xs font-medium ${isPhotoPhase ? 'text-gray-500' : 'text-gray-900'}`}>
+          Candidate Details
+        </span>
+      </div>
+
+      {/* Connector */}
+      <div className={`h-0.5 w-20 mx-2 mb-5 transition-all ${isPhotoPhase ? 'bg-gray-900' : 'bg-gray-200'}`} />
+
+      {/* Step 2 */}
+      <div className="flex flex-col items-center gap-1.5">
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all ${
+          isComplete
+            ? 'bg-gray-900 border-gray-900 text-white'
+            : isPhotoPhase
+              ? 'bg-gray-900 border-gray-900 text-white'
+              : 'bg-white border-gray-300 text-gray-400'
+        }`}>
+          {isComplete ? <CheckCircle className="w-5 h-5" /> : '2'}
+        </div>
+        <span className={`text-xs font-medium ${isPhotoPhase ? 'text-gray-900' : 'text-gray-400'}`}>
+          Live Photo Capture
+        </span>
+      </div>
+    </div>
+  );
+
   // ── Privacy card ──
   const privacyCard = (
     <div className="bg-gray-50 rounded-xl p-4 flex items-start gap-3">
@@ -205,6 +307,7 @@ export default function StepIdentity({
   if (phase === 'form') {
     return (
       <div className="w-full max-w-2xl mx-auto space-y-6">
+        {progressStepper}
         <div className="text-center">
           <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
             <Shield className="w-3.5 h-3.5" /> Identity Verification
@@ -240,17 +343,75 @@ export default function StepIdentity({
               />
             </div>
 
-            <div>
-              <label htmlFor="identity-email" className="flex items-center gap-1.5 text-sm font-medium text-gray-900 mb-1.5">
+            <div className="space-y-3">
+              <label htmlFor="identity-email" className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
                 <Mail className="w-4 h-4 text-gray-500" /> Email Address <span className="text-red-500">*</span>
               </label>
-              <input
-                id="identity-email" type="email" value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="e.g. john.smith@example.com"
-                readOnly={!!candidateEmail}
-                className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors ${candidateEmail ? 'bg-gray-50 cursor-not-allowed' : ''}`}
-              />
+              <div className="flex gap-2">
+                <input
+                  id="identity-email" type="email" value={email}
+                  readOnly
+                  className={`flex-1 px-4 py-2.5 border rounded-lg text-sm bg-gray-50 cursor-not-allowed transition-colors ${
+                    otpVerified ? 'border-green-400 bg-green-50' : 'border-gray-200'
+                  }`}
+                />
+                {!otpVerified && (
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={!isEmailValid || otpSending || resendCooldown > 0}
+                    className="flex-shrink-0 flex items-center gap-1.5 bg-gray-800 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    {otpSending
+                      ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
+                      : otpSent && resendCooldown > 0
+                        ? `Resend (${resendCooldown}s)`
+                        : otpSent ? 'Resend OTP' : 'Get OTP'
+                    }
+                  </button>
+                )}
+                {otpVerified && (
+                  <div className="flex items-center gap-1.5 text-green-700 text-sm font-medium px-3">
+                    <CheckCircle className="w-4 h-4" /> Verified
+                  </div>
+                )}
+              </div>
+
+              {/* OTP input — shown after OTP sent, hidden once verified */}
+              {otpSent && !otpVerified && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+                    <KeyRound className="w-4 h-4 text-gray-500" /> Enter OTP <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError(null); }}
+                      onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
+                      placeholder="Enter 6-digit OTP"
+                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 tracking-widest font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleVerifyOtp}
+                      disabled={otpCode.length < 4 || otpVerifying}
+                      className="flex-shrink-0 flex items-center gap-1.5 bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {otpVerifying ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying…</> : 'Verify OTP'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500">OTP sent to <span className="font-medium">{email}</span>. Check your inbox.</p>
+                </div>
+              )}
+
+              {otpError && (
+                <div className="flex items-center gap-2 text-red-600 text-sm">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" /> {otpError}
+                </div>
+              )}
             </div>
 
             {privacyCard}
@@ -261,9 +422,14 @@ export default function StepIdentity({
           <button
             type="button" onClick={handleFormSubmit}
             disabled={!isFormValid || submitting}
-            className="inline-flex items-center gap-2 bg-gray-900 text-white font-semibold py-2.5 px-6 rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
+            className="inline-flex items-center gap-2 bg-gray-900 text-white font-semibold py-2.5 px-6 rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm shadow-sm"
           >
-            {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</> : <>Continue to Photo <ArrowRight className="w-4 h-4" /></>}
+            {submitting
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
+              : !otpVerified
+                ? <>Verify Email to Continue <ArrowRight className="w-4 h-4" /></>
+                : <>Continue to Photo <ArrowRight className="w-4 h-4" /></>
+            }
           </button>
         </div>
       </div>
@@ -276,6 +442,7 @@ export default function StepIdentity({
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
+      {progressStepper}
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <Camera className="w-3.5 h-3.5" /> Live Photo Capture

@@ -18,6 +18,7 @@ import VersionHistoryModal from './VersionHistoryModal';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
 import ResumeDetailView from './ResumeDetailView';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
+import CandidateResultDetails from './CandidateResultDetails';
 import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
@@ -169,6 +170,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // Assessment results state
   const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
+  const [viewingAssessmentResult, setViewingAssessmentResult] = useState<any | null>(null);
 
   // AI Talent Match state
   const [aiMatchSessions, setAiMatchSessions] = useState<AIMatchSessionResponse[]>([]);
@@ -813,12 +815,64 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
   // Show CandidateScoringDetailPage when viewing a scored resume (same as ResumeScoringPage)
   if (viewingScoredResume) {
+    const _scoredIdx = scoredResumes.findIndex((r: any) => (r.resumeId || r.resume_id) === (viewingScoredResume.resumeId || viewingScoredResume.resume_id));
+    const _goToScoredCandidate = (idx: number) => {
+      const r = scoredResumes[idx];
+      if (!r) return;
+      setViewingScoredResume({
+        ...r,
+        candidateName: r.candidateName || 'Unknown',
+        email: r.email || '',
+        phone: r.phone || '',
+        matchStatus: r.matchStatus || 'No Match',
+        scorePercentage: r.scorePercentage || 0,
+        scoredDate: r.scoredDate || new Date().toISOString(),
+        scoredBy: r.scoredBy || 'System',
+        matchedSkills: r.matchedSkills || r.technicalSkills || r.skills || [],
+        missingSkills: r.missingSkills || [],
+      });
+    };
     return (
       <CandidateScoringDetailPage
         resume={viewingScoredResume}
         jobTitle={job.title}
         jobId={job.id}
         onBack={() => setViewingScoredResume(null)}
+        currentIndex={_scoredIdx >= 0 ? _scoredIdx : undefined}
+        totalCount={scoredResumes.length}
+        onPrev={_scoredIdx > 0 ? () => _goToScoredCandidate(_scoredIdx - 1) : undefined}
+        onNext={_scoredIdx >= 0 && _scoredIdx < scoredResumes.length - 1 ? () => _goToScoredCandidate(_scoredIdx + 1) : undefined}
+      />
+    );
+  }
+
+  // Show CandidateResultDetails inline when viewing an assessment result
+  if (viewingAssessmentResult) {
+    const aId = viewingAssessmentResult.assessmentId || job.id;
+    const _nonPendingResults = assessmentResults.filter((r: any) => {
+      const s = r.status || '';
+      return s.toLowerCase() !== 'pending';
+    });
+    const _arIdx = _nonPendingResults.findIndex((r: any) => r.id === viewingAssessmentResult.id);
+    const _goToResult = (idx: number) => {
+      const r = _nonPendingResults[idx];
+      if (r) setViewingAssessmentResult(r);
+    };
+    return (
+      <CandidateResultDetails
+        onBack={() => setViewingAssessmentResult(null)}
+        assessmentId={aId}
+        assessmentShortId={viewingAssessmentResult.assessmentShortId}
+        candidateId={viewingAssessmentResult.id}
+        candidateDisplayId={viewingAssessmentResult.candidateDisplayId}
+        assessmentTitle={viewingAssessmentResult.assessmentName || job.title}
+        jdTitle={job.title}
+        jdId={job.id}
+        assessmentVersion={viewingAssessmentResult.assessmentVersion}
+        currentIndex={_arIdx >= 0 ? _arIdx : undefined}
+        totalCount={_nonPendingResults.length}
+        onPrev={_arIdx > 0 ? () => _goToResult(_arIdx - 1) : undefined}
+        onNext={_arIdx >= 0 && _arIdx < _nonPendingResults.length - 1 ? () => _goToResult(_arIdx + 1) : undefined}
       />
     );
   }
@@ -1584,9 +1638,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
             canBatchDownload={isTenantAdmin || (user?.permissions?.canExport ?? false)}
             onViewResultDetail={(result) => {
-              if (onViewAssessmentResult) {
-                onViewAssessmentResult(result, job.title);
-              }
+              setViewingAssessmentResult(result);
             }}
           />
         </div>
@@ -1606,6 +1658,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             const scoredIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
             return !scoredIds.has(c.resumeId);
           }))}
+          onViewCandidate={(candidate) => router.push(`/recruitment/resume-view/${candidate.resumeId}`)}
         />
       )}
 
@@ -2043,6 +2096,7 @@ function AIMatchTabContent({
   onRunMatch,
   onScoreSelected,
   onScoreAll,
+  onViewCandidate,
 }: {
   candidates: MatchedCandidate[];
   scoredResumes: any[];
@@ -2052,6 +2106,7 @@ function AIMatchTabContent({
   onRunMatch: () => void;
   onScoreSelected: (selected: MatchedCandidate[]) => void;
   onScoreAll: () => void;
+  onViewCandidate?: (candidate: MatchedCandidate) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -2285,9 +2340,18 @@ function AIMatchTabContent({
                   return (
                     <tr
                       key={candidate.resumeId}
-                      className={`hover:bg-gray-50 transition-colors ${selectedIds.has(candidate.resumeId) ? 'bg-blue-50' : ''}`}
+                      className={`hover:bg-gray-50 transition-colors cursor-pointer ${selectedIds.has(candidate.resumeId) ? 'bg-blue-50' : ''}`}
+                      onClick={() => {
+                        if (onViewCandidate) {
+                          try {
+                            sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidates.map((c) => c.resumeId)));
+                            sessionStorage.setItem('resumeNavSource', 'job-details');
+                          } catch { /* ignore */ }
+                          onViewCandidate(candidate);
+                        }
+                      }}
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedIds.has(candidate.resumeId)}
@@ -2332,7 +2396,7 @@ function AIMatchTabContent({
                       <td className="px-4 py-3 text-sm text-gray-600">{candidate.experience || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{uploadDate}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 text-xs font-medium">
                           <Paperclip className="w-3.5 h-3.5" />
                           {candidate.attachmentCount ?? 1}

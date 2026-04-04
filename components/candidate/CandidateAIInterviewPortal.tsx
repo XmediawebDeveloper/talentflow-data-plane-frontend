@@ -31,19 +31,30 @@ type Step =
   | 'completed'
   | 'error';
 
-// Map pre-interview steps to stepper numbers (1-6)
-const STEP_NUMBER: Record<string, number> = {
-  consent: 1,
-  identity: 2,
-  system_check: 3,
-  intro_video: 4,
-  language_select: 5,
-  sample_practice: 6,
+// Static fallbacks (used before interview data loads)
+const STEP_NUMBER_WITH_VIDEO: Record<string, number> = {
+  consent: 1, identity: 2, system_check: 3,
+  intro_video: 4, language_select: 5, sample_practice: 6,
+};
+const STEP_NUMBER_WITHOUT_VIDEO: Record<string, number> = {
+  consent: 1, identity: 2, system_check: 3,
+  language_select: 4, sample_practice: 5,
 };
 
-const PRE_INTERVIEW_STEPS: Step[] = [
-  'consent', 'identity', 'system_check',
-  'intro_video', 'language_select', 'sample_practice',
+const STEP_LABELS_WITH_VIDEO = [
+  'Job Details & Consent', 'Identity', 'System Check',
+  'Intro Video', 'Language', 'Practice', 'Interview',
+];
+const STEP_LABELS_WITHOUT_VIDEO = [
+  'Job Details & Consent', 'Identity', 'System Check',
+  'Language', 'Practice', 'Interview',
+];
+
+const PRE_STEPS_WITH_VIDEO: Step[] = [
+  'consent', 'identity', 'system_check', 'intro_video', 'language_select', 'sample_practice',
+];
+const PRE_STEPS_WITHOUT_VIDEO: Step[] = [
+  'consent', 'identity', 'system_check', 'language_select', 'sample_practice',
 ];
 
 interface Props {
@@ -196,7 +207,12 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       network: 'stable',
       ai_engine: 'ready',
     }).catch(() => {});
-    setStep('intro_video');
+    // Skip intro_video step entirely if no video is configured
+    if (interview?.introduction_video_url) {
+      setStep('intro_video');
+    } else {
+      setStep('language_select');
+    }
   };
 
   const handleIntroVideoContinue = async () => {
@@ -240,6 +256,22 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       (window as any).__interviewAudioContext = ctx;
     } catch (e) {
       console.warn('[Portal] Failed to pre-create AudioContext:', e);
+    }
+
+    // Request fullscreen — must be called in user gesture context
+    try {
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        await el.requestFullscreen();
+      } else if ((el as any).webkitRequestFullscreen) {
+        await (el as any).webkitRequestFullscreen();
+      } else if ((el as any).mozRequestFullScreen) {
+        await (el as any).mozRequestFullScreen();
+      } else if ((el as any).msRequestFullscreen) {
+        await (el as any).msRequestFullscreen();
+      }
+    } catch {
+      // Fullscreen denied or not supported — continue without it
     }
 
     try {
@@ -344,23 +376,31 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     );
   }
 
-  // ========== PRE-INTERVIEW STEPS (1-7) ==========
+  // ========== PRE-INTERVIEW STEPS (dynamic based on intro video) ==========
+  const hasIntroVideo = !!interview?.introduction_video_url;
+  const STEP_NUMBER   = hasIntroVideo ? STEP_NUMBER_WITH_VIDEO   : STEP_NUMBER_WITHOUT_VIDEO;
+  const PRE_STEPS     = hasIntroVideo ? PRE_STEPS_WITH_VIDEO      : PRE_STEPS_WITHOUT_VIDEO;
+  const stepLabels    = hasIntroVideo ? STEP_LABELS_WITH_VIDEO    : STEP_LABELS_WITHOUT_VIDEO;
+  const totalSteps    = stepLabels.length;
+
   const currentStepNumber = STEP_NUMBER[step] || 1;
 
   // Navigation helpers
   const goBack = () => {
-    const idx = PRE_INTERVIEW_STEPS.indexOf(step);
-    if (idx > 0) setStep(PRE_INTERVIEW_STEPS[idx - 1]);
+    const idx = PRE_STEPS.indexOf(step);
+    if (idx > 0) setStep(PRE_STEPS[idx - 1]);
   };
 
   const goNext = () => {
-    const idx = PRE_INTERVIEW_STEPS.indexOf(step);
-    if (idx < PRE_INTERVIEW_STEPS.length - 1) setStep(PRE_INTERVIEW_STEPS[idx + 1]);
+    const idx = PRE_STEPS.indexOf(step);
+    if (idx < PRE_STEPS.length - 1) setStep(PRE_STEPS[idx + 1]);
   };
 
   // Determine layout props based on current step
   const layoutProps = {
     currentStep: currentStepNumber,
+    totalSteps,
+    stepLabels,
     position: interview?.position || interview?.jd_title || '',
     duration: interview?.duration_minutes,
     showBack: currentStepNumber > 1,
@@ -400,6 +440,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     return (
       <PreInterviewLayout {...layoutProps} showNext={false} showFooter={false}>
         <StepIdentity
+          token={token}
           candidateName={interview.candidate_name}
           candidateEmail={interview.candidate_email}
           onVerify={handleIdentityVerify}

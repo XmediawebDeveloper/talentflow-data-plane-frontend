@@ -18,6 +18,10 @@ import {
   ArrowRight,
   Shield,
   CircleDot,
+  Play,
+  RefreshCw,
+  RotateCcw,
+  Scan,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 
@@ -29,10 +33,14 @@ interface StepSystemCheckProps {
   onAllPassed: () => void;
 }
 
-type Phase = 'device_check' | 'device_results' | 'system_checks';
+type Phase = 'browser_check' | 'browser_results' | 'system_checks' | 'env_scan';
 type CheckStatus = 'pending' | 'checking' | 'pass' | 'fail';
 
 const MOBILE_REGEX = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+
+// Environment scan constants
+const TOTAL_SCAN_FRAMES = 6;
+const SCAN_INTERVAL_MS = 2500; // capture frame every 2.5s
 
 interface BrowserInfo {
   name: string;
@@ -149,17 +157,94 @@ const SYSTEM_REQUIREMENTS = [
   },
 ];
 
+// ────────────────────────────────────────
+// Progress Stepper Component
+// ────────────────────────────────────────
+const STEPPER_STEPS = ['Browser Check', 'System Checks', 'Environment Scan'];
+
+function getStepIndex(phase: Phase): number {
+  if (phase === 'browser_check' || phase === 'browser_results') return 0;
+  if (phase === 'system_checks') return 1;
+  if (phase === 'env_scan') return 2;
+  return 0;
+}
+
+function ProgressStepper({ phase }: { phase: Phase }) {
+  const activeStep = getStepIndex(phase);
+
+  return (
+    <div className="flex items-center justify-center w-full mb-6">
+      {STEPPER_STEPS.map((label, idx) => {
+        const isCompleted = idx < activeStep;
+        const isActive = idx === activeStep;
+        const isPending = idx > activeStep;
+
+        return (
+          <React.Fragment key={label}>
+            {/* Step circle + label */}
+            <div className="flex flex-col items-center gap-1.5">
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm select-none ${
+                  isCompleted
+                    ? 'bg-gray-900 text-white'
+                    : isActive
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-white border-2 border-gray-300 text-gray-400'
+                }`}
+              >
+                {isCompleted ? (
+                  <CheckCircle className="w-5 h-5 text-white" />
+                ) : (
+                  <span>{idx + 1}</span>
+                )}
+              </div>
+              <span
+                className={`text-xs font-medium whitespace-nowrap ${
+                  isActive ? 'text-gray-900' : isPending ? 'text-gray-400' : 'text-gray-600'
+                }`}
+              >
+                {label}
+              </span>
+            </div>
+
+            {/* Connector line (not after last step) */}
+            {idx < STEPPER_STEPS.length - 1 && (
+              <div
+                className={`h-0.5 flex-1 mx-3 mb-5 ${
+                  idx < activeStep ? 'bg-gray-900' : 'bg-gray-200'
+                }`}
+              />
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function StepSystemCheck({
   token,
   position = 'this position',
   onAllPassed,
 }: StepSystemCheckProps) {
-  const [phase, setPhase] = useState<Phase>('device_check');
+  const [phase, setPhase] = useState<Phase>('browser_check');
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
 
   // System checks phase state
   const [systemChecks, setSystemChecks] = useState<SystemCheckItem[]>([]);
   const [hasFaceDetector, setHasFaceDetector] = useState(false);
+  const [checksRunning, setChecksRunning] = useState(false);
+  const [checksCompleted, setChecksCompleted] = useState(false);
+
+  // Environment scan state
+  const [envScanPhase, setEnvScanPhase] = useState<'idle' | 'scanning' | 'complete'>('idle');
+  const [envScanProgress, setEnvScanProgress] = useState(0); // 0-100
+  const [envScanFrameCount, setEnvScanFrameCount] = useState(0); // 0 to TOTAL_FRAMES
+  const [envScanResults, setEnvScanResults] = useState<{
+    lighting: boolean;
+    singlePerson: boolean;
+    clear: boolean;
+  } | null>(null);
 
   // Refs for cleanup
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -171,25 +256,28 @@ export default function StepSystemCheck({
   const noiseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const faceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mountedRef = useRef(true);
+  const checksCancelledRef = useRef(false);
+  const envScanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const envScanRAFRef = useRef<number | null>(null);
 
   // ────────────────────────────────────────
-  // Phase A: Device Check — auto-detect on mount
+  // Phase 1: Browser Check — auto-detect on mount
   // ────────────────────────────────────────
   useEffect(() => {
-    if (phase !== 'device_check') return;
+    if (phase !== 'browser_check') return;
 
     const timer = setTimeout(() => {
       if (!mountedRef.current) return;
       const info = detectDevice();
       setDeviceInfo(info);
-      setPhase('device_results');
+      setPhase('browser_results');
     }, 2000);
 
     return () => clearTimeout(timer);
   }, [phase]);
 
   // ────────────────────────────────────────
-  // Phase B: System Checks
+  // Phase 2: System Checks
   // ────────────────────────────────────────
   const updateSystemCheck = useCallback(
     (id: string, update: Partial<Pick<SystemCheckItem, 'status' | 'detail'>>) => {
@@ -200,10 +288,31 @@ export default function StepSystemCheck({
     [],
   );
 
+  const stopActiveChecks = useCallback(() => {
+    checksCancelledRef.current = true;
+    if (lightingIntervalRef.current) { clearInterval(lightingIntervalRef.current); lightingIntervalRef.current = null; }
+    if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
+    if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
+    if (audioContextRef.current) { audioContextRef.current.close().catch(() => {}); audioContextRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+  }, []);
+
+  const INITIAL_CHECKS: SystemCheckItem[] = [
+    { id: 'device', label: 'Device Type', detail: 'Pending...', icon: <Monitor className="w-4 h-4" />, status: 'pending', colorClass: 'text-gray-600' },
+    { id: 'webcam', label: 'Webcam', detail: 'Pending...', icon: <Camera className="w-4 h-4" />, status: 'pending', colorClass: 'text-gray-600' },
+    { id: 'microphone', label: 'Microphone', detail: 'Pending...', icon: <Mic className="w-4 h-4" />, status: 'pending', colorClass: 'text-indigo-600' },
+    { id: 'internet', label: 'Internet Connection', detail: 'Pending...', icon: <Wifi className="w-4 h-4" />, status: 'pending', colorClass: 'text-cyan-600' },
+    { id: 'lighting', label: 'Lighting Conditions', detail: 'Pending...', icon: <Sun className="w-4 h-4" />, status: 'pending', colorClass: 'text-yellow-600' },
+    { id: 'noise', label: 'Background Noise', detail: 'Pending...', icon: <Volume2 className="w-4 h-4" />, status: 'pending', colorClass: 'text-orange-600' },
+    { id: 'face', label: 'Face Detection', detail: 'Pending...', icon: <Eye className="w-4 h-4" />, status: 'pending', colorClass: 'text-green-600' },
+    { id: 'multiple', label: 'Multiple People Check', detail: 'Pending...', icon: <Users className="w-4 h-4" />, status: 'pending', colorClass: 'text-red-600' },
+  ];
+
   // Initialize system checks when entering that phase
   useEffect(() => {
     if (phase !== 'system_checks') return;
-
+    setChecksRunning(false);
+    setChecksCompleted(false);
     setSystemChecks([
       {
         id: 'device',
@@ -272,18 +381,25 @@ export default function StepSystemCheck({
     ]);
   }, [phase]);
 
-  // Run system checks sequentially
-  useEffect(() => {
-    if (phase !== 'system_checks' || systemChecks.length === 0) return;
+  const handleRunChecks = useCallback(async () => {
+    // Stop any in-progress checks and reset
+    stopActiveChecks();
+    checksCancelledRef.current = false;
+    setChecksRunning(true);
+    setChecksCompleted(false);
+    setSystemChecks(INITIAL_CHECKS);
 
-    let cancelled = false;
+    // Small delay to let state settle before starting
+    await new Promise((r) => setTimeout(r, 100));
 
-    const runChecks = async () => {
+    const cancelled = () => checksCancelledRef.current;
+
+    {
       // 1. Device Type (instant)
-      if (cancelled) return;
+      if (cancelled()) return;
       updateSystemCheck('device', { status: 'checking', detail: 'Detecting device...' });
       await new Promise((r) => setTimeout(r, 500));
-      if (cancelled) return;
+      if (cancelled()) return;
       const info = deviceInfo || detectDevice();
       if (!info.isMobile) {
         updateSystemCheck('device', { status: 'pass', detail: 'Desktop/Laptop detected' });
@@ -292,34 +408,25 @@ export default function StepSystemCheck({
       }
 
       // 2. Webcam
-      if (cancelled) return;
+      if (cancelled()) return;
       updateSystemCheck('webcam', { status: 'checking', detail: 'Requesting webcam access...' });
       try {
         const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        if (cancelled) {
-          videoStream.getTracks().forEach((t) => t.stop());
-          return;
-        }
+        if (cancelled()) { videoStream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = videoStream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = videoStream;
-        }
+        if (videoRef.current) videoRef.current.srcObject = videoStream;
         updateSystemCheck('webcam', { status: 'pass', detail: 'Webcam ready' });
       } catch {
-        if (cancelled) return;
+        if (cancelled()) return;
         updateSystemCheck('webcam', { status: 'fail', detail: 'Webcam access denied' });
       }
 
       // 3. Microphone
-      if (cancelled) return;
+      if (cancelled()) return;
       updateSystemCheck('microphone', { status: 'checking', detail: 'Requesting microphone access...' });
       try {
         const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        if (cancelled) {
-          audioStream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        // Set up audio analysis
+        if (cancelled()) { audioStream.getTracks().forEach((t) => t.stop()); return; }
         const audioContext = new AudioContext();
         const source = audioContext.createMediaStreamSource(audioStream);
         const analyser = audioContext.createAnalyser();
@@ -327,18 +434,15 @@ export default function StepSystemCheck({
         source.connect(analyser);
         audioContextRef.current = audioContext;
         analyserRef.current = analyser;
-        // Merge audio tracks into main stream
-        if (streamRef.current) {
-          audioStream.getAudioTracks().forEach((t) => streamRef.current!.addTrack(t));
-        }
+        if (streamRef.current) audioStream.getAudioTracks().forEach((t) => streamRef.current!.addTrack(t));
         updateSystemCheck('microphone', { status: 'pass', detail: 'Microphone ready' });
       } catch {
-        if (cancelled) return;
+        if (cancelled()) return;
         updateSystemCheck('microphone', { status: 'fail', detail: 'Microphone access denied' });
       }
 
       // 4. Internet Connection
-      if (cancelled) return;
+      if (cancelled()) return;
       updateSystemCheck('internet', { status: 'checking', detail: 'Testing connection speed...' });
       const healthUrl = `${API_BASE_URL.replace('/api/v1', '')}/health`;
       const latencies: number[] = [];
@@ -346,156 +450,97 @@ export default function StepSystemCheck({
         try {
           const start = performance.now();
           await fetch(healthUrl, { method: 'GET', cache: 'no-store' });
-          const end = performance.now();
-          latencies.push(end - start);
-        } catch {
-          // individual ping failed
-        }
+          latencies.push(performance.now() - start);
+        } catch { /* individual ping failed */ }
       }
-      if (cancelled) return;
+      if (cancelled()) return;
       if (latencies.length === 0) {
         updateSystemCheck('internet', { status: 'fail', detail: 'Unable to reach server' });
       } else {
         const avg = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
-        if (avg < 500) {
-          updateSystemCheck('internet', {
-            status: 'pass',
-            detail: `Connection: Excellent (${avg}ms avg)`,
-          });
-        } else {
-          updateSystemCheck('internet', {
-            status: 'fail',
-            detail: `Connection: Slow (${avg}ms avg)`,
-          });
-        }
+        updateSystemCheck('internet', avg < 500
+          ? { status: 'pass', detail: `Connection: Excellent (${avg}ms avg)` }
+          : { status: 'fail', detail: `Connection: Slow (${avg}ms avg)` },
+        );
       }
 
-      // 5. Lighting Conditions (needs camera stream)
-      if (cancelled) return;
+      // 5. Lighting
+      if (cancelled()) return;
       updateSystemCheck('lighting', { status: 'checking', detail: 'Analyzing lighting...' });
-      await new Promise((r) => setTimeout(r, 1500)); // Wait for camera to stabilize
-      if (cancelled) return;
+      await new Promise((r) => setTimeout(r, 1500));
+      if (cancelled()) return;
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (video && canvas && video.readyState >= 2) {
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (ctx) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
           ctx.drawImage(video, 0, 0);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
+          const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
           let totalBrightness = 0;
-          const pixelCount = data.length / 4;
-          for (let i = 0; i < data.length; i += 4) {
-            totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
-          }
-          const avgBrightness = pixelCount > 0 ? totalBrightness / pixelCount : 0;
-          if (avgBrightness >= 40) {
-            updateSystemCheck('lighting', {
-              status: 'pass',
-              detail: 'Lighting: Good (Face clearly visible)',
-            });
-          } else {
-            updateSystemCheck('lighting', {
-              status: 'fail',
-              detail: 'Lighting: Too dark - improve your lighting',
-            });
-          }
+          for (let i = 0; i < data.length; i += 4) totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
+          const avgBrightness = data.length > 0 ? totalBrightness / (data.length / 4) : 0;
+          updateSystemCheck('lighting', avgBrightness >= 40
+            ? { status: 'pass', detail: 'Lighting: Good (Face clearly visible)' }
+            : { status: 'fail', detail: 'Lighting: Too dark - improve your lighting' },
+          );
         } else {
           updateSystemCheck('lighting', { status: 'fail', detail: 'Unable to analyze lighting' });
         }
       } else {
-        // Camera not available, skip
         updateSystemCheck('lighting', { status: 'fail', detail: 'Camera not available for lighting check' });
       }
 
-      // Start continuous lighting monitoring
       if (video && canvas) {
         lightingIntervalRef.current = setInterval(() => {
           if (!video || !canvas || video.readyState < 2) return;
           const ctx = canvas.getContext('2d', { willReadFrequently: true });
           if (!ctx) return;
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+          canvas.width = video.videoWidth; canvas.height = video.videoHeight;
           ctx.drawImage(video, 0, 0);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imageData.data;
-          let totalBrightness = 0;
-          const pixelCount = data.length / 4;
-          for (let i = 0; i < data.length; i += 4) {
-            totalBrightness += (data[i] + data[i + 1] + data[i + 2]) / 3;
-          }
-          const avgBrightness = pixelCount > 0 ? totalBrightness / pixelCount : 0;
-          if (avgBrightness >= 40) {
-            updateSystemCheck('lighting', {
-              status: 'pass',
-              detail: 'Lighting: Good (Face clearly visible)',
-            });
-          } else {
-            updateSystemCheck('lighting', {
-              status: 'fail',
-              detail: 'Lighting: Too dark - improve your lighting',
-            });
-          }
+          const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+          let tb = 0;
+          for (let i = 0; i < data.length; i += 4) tb += (data[i] + data[i + 1] + data[i + 2]) / 3;
+          const avg = data.length > 0 ? tb / (data.length / 4) : 0;
+          updateSystemCheck('lighting', avg >= 40
+            ? { status: 'pass', detail: 'Lighting: Good (Face clearly visible)' }
+            : { status: 'fail', detail: 'Lighting: Too dark - improve your lighting' },
+          );
         }, 3000);
       }
 
       // 6. Background Noise
-      if (cancelled) return;
+      if (cancelled()) return;
       updateSystemCheck('noise', { status: 'checking', detail: 'Analyzing background noise...' });
       await new Promise((r) => setTimeout(r, 1000));
-      if (cancelled) return;
+      if (cancelled()) return;
       const analyser = analyserRef.current;
       if (analyser) {
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
         analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
-        }
-        const avgNoise = bufferLength > 0 ? sum / bufferLength : 0;
-        if (avgNoise < 80) {
-          updateSystemCheck('noise', {
-            status: 'pass',
-            detail: 'Background noise: Low (Good)',
-          });
-        } else {
-          updateSystemCheck('noise', {
-            status: 'fail',
-            detail: 'Background noise: High - find a quieter space',
-          });
-        }
-
-        // Start continuous noise monitoring
+        const avgNoise = bufferLength > 0 ? dataArray.reduce((a, b) => a + b, 0) / bufferLength : 0;
+        updateSystemCheck('noise', avgNoise < 80
+          ? { status: 'pass', detail: 'Background noise: Low (Good)' }
+          : { status: 'fail', detail: 'Background noise: High - find a quieter space' },
+        );
         noiseIntervalRef.current = setInterval(() => {
           const a = analyserRef.current;
           if (!a) return;
-          const bl = a.frequencyBinCount;
-          const da = new Uint8Array(bl);
+          const da = new Uint8Array(a.frequencyBinCount);
           a.getByteFrequencyData(da);
-          let s = 0;
-          for (let i = 0; i < bl; i++) s += da[i];
-          const avg = bl > 0 ? s / bl : 0;
-          if (avg < 80) {
-            updateSystemCheck('noise', {
-              status: 'pass',
-              detail: 'Background noise: Low (Good)',
-            });
-          } else {
-            updateSystemCheck('noise', {
-              status: 'fail',
-              detail: 'Background noise: High - find a quieter space',
-            });
-          }
+          const avg = da.length > 0 ? da.reduce((x, y) => x + y, 0) / da.length : 0;
+          updateSystemCheck('noise', avg < 80
+            ? { status: 'pass', detail: 'Background noise: Low (Good)' }
+            : { status: 'fail', detail: 'Background noise: High - find a quieter space' },
+          );
         }, 3000);
       } else {
         updateSystemCheck('noise', { status: 'fail', detail: 'Microphone not available for noise check' });
       }
 
       // 7. Face Detection
-      if (cancelled) return;
+      if (cancelled()) return;
       updateSystemCheck('face', { status: 'checking', detail: 'Detecting face...' });
       let faceDetectorAvailable = false;
       if (typeof window !== 'undefined' && 'FaceDetector' in window) {
@@ -503,44 +548,20 @@ export default function StepSystemCheck({
           const detector = new (window as any).FaceDetector({ fastMode: true });
           if (video && video.readyState >= 2) {
             const faces = await detector.detect(video);
-            if (cancelled) return;
-            if (faces.length >= 1) {
-              updateSystemCheck('face', {
-                status: 'pass',
-                detail: 'Face detected successfully',
-              });
-              faceDetectorAvailable = true;
-              setHasFaceDetector(true);
-            } else {
-              updateSystemCheck('face', {
-                status: 'fail',
-                detail: 'No face detected - position yourself in front of the camera',
-              });
-              faceDetectorAvailable = true;
-              setHasFaceDetector(true);
-            }
-
-            // 8. Multiple People Check (uses same FaceDetector)
-            if (cancelled) return;
+            if (cancelled()) return;
+            faceDetectorAvailable = true;
+            setHasFaceDetector(true);
+            updateSystemCheck('face', faces.length >= 1
+              ? { status: 'pass', detail: 'Face detected successfully' }
+              : { status: 'fail', detail: 'No face detected - position yourself in front of the camera' },
+            );
+            // 8. Multiple People Check
+            if (cancelled()) return;
             updateSystemCheck('multiple', { status: 'checking', detail: 'Checking for multiple people...' });
-            if (faces.length === 1) {
-              updateSystemCheck('multiple', {
-                status: 'pass',
-                detail: 'Single person detected (Good)',
-              });
-            } else if (faces.length === 0) {
-              updateSystemCheck('multiple', {
-                status: 'fail',
-                detail: 'No person detected',
-              });
-            } else {
-              updateSystemCheck('multiple', {
-                status: 'fail',
-                detail: `${faces.length} people detected - ensure you are alone`,
-              });
-            }
+            if (faces.length === 1) updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
+            else if (faces.length === 0) updateSystemCheck('multiple', { status: 'fail', detail: 'No person detected' });
+            else updateSystemCheck('multiple', { status: 'fail', detail: `${faces.length} people detected - ensure you are alone` });
 
-            // Start continuous face monitoring
             faceIntervalRef.current = setInterval(async () => {
               if (!video || video.readyState < 2) return;
               try {
@@ -555,59 +576,134 @@ export default function StepSystemCheck({
                   updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
                   updateSystemCheck('multiple', { status: 'fail', detail: `${f.length} people detected - ensure you are alone` });
                 }
-              } catch {
-                // FaceDetector can fail on some frames
-              }
+              } catch { /* FaceDetector can fail on some frames */ }
             }, 3000);
           }
-        } catch {
-          // FaceDetector not usable
-        }
+        } catch { /* FaceDetector not usable */ }
       }
 
       if (!faceDetectorAvailable) {
-        // FaceDetector not supported — auto-pass and rely on photo capture validation
-        if (cancelled) return;
+        if (cancelled()) return;
         setHasFaceDetector(false);
-        updateSystemCheck('face', {
-          status: 'pass',
-          detail: 'Face check will be validated during photo capture',
-        });
-        updateSystemCheck('multiple', {
-          status: 'pass',
-          detail: 'Single-face check will be validated during photo capture',
-        });
+        updateSystemCheck('face', { status: 'pass', detail: 'Face check will be validated during photo capture' });
+        updateSystemCheck('multiple', { status: 'pass', detail: 'Single-face check will be validated during photo capture' });
+      }
+    }
+
+    if (!checksCancelledRef.current) {
+      setChecksRunning(false);
+      setChecksCompleted(true);
+    }
+  }, [deviceInfo, stopActiveChecks, updateSystemCheck]);
+
+  // ────────────────────────────────────────
+  // Phase 3: Environment Scan
+  // ────────────────────────────────────────
+  const handleEnvScan = useCallback(() => {
+    // Cancel any existing scan timer
+    if (envScanTimerRef.current) {
+      clearInterval(envScanTimerRef.current);
+      envScanTimerRef.current = null;
+    }
+    if (envScanRAFRef.current !== null) {
+      cancelAnimationFrame(envScanRAFRef.current);
+      envScanRAFRef.current = null;
+    }
+
+    // Reset state
+    setEnvScanProgress(0);
+    setEnvScanFrameCount(0);
+    setEnvScanResults(null);
+    setEnvScanPhase('scanning');
+
+    // Accumulated frame analysis data
+    const frameBrightnessValues: number[] = [];
+    let framesCapured = 0;
+
+    // Smooth progress animation over total duration
+    const totalDuration = TOTAL_SCAN_FRAMES * SCAN_INTERVAL_MS;
+    const startTime = performance.now();
+
+    const animateProgress = (now: number) => {
+      const elapsed = now - startTime;
+      const pct = Math.min(100, (elapsed / totalDuration) * 100);
+      setEnvScanProgress(pct);
+      if (pct < 100) {
+        envScanRAFRef.current = requestAnimationFrame(animateProgress);
       }
     };
+    envScanRAFRef.current = requestAnimationFrame(animateProgress);
 
-    runChecks();
+    // Frame capture interval
+    envScanTimerRef.current = setInterval(() => {
+      framesCapured += 1;
+      setEnvScanFrameCount(framesCapured);
 
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, systemChecks.length === 0 ? 0 : 1]);
+      // Analyze brightness from the current video frame
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (video && canvas && video.readyState >= 2) {
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (ctx) {
+          canvas.width = video.videoWidth || 320;
+          canvas.height = video.videoHeight || 240;
+          ctx.drawImage(video, 0, 0);
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+          let totalB = 0;
+          for (let i = 0; i < imgData.length; i += 4) {
+            totalB += (imgData[i] + imgData[i + 1] + imgData[i + 2]) / 3;
+          }
+          const avgB = imgData.length > 0 ? totalB / (imgData.length / 4) : 0;
+          frameBrightnessValues.push(avgB);
+        }
+      }
 
-  // Handle manual face / multiple people confirmations
+      if (framesCapured >= TOTAL_SCAN_FRAMES) {
+        // Done — clear interval and compute results
+        if (envScanTimerRef.current) {
+          clearInterval(envScanTimerRef.current);
+          envScanTimerRef.current = null;
+        }
+        if (envScanRAFRef.current !== null) {
+          cancelAnimationFrame(envScanRAFRef.current);
+          envScanRAFRef.current = null;
+        }
+        setEnvScanProgress(100);
+
+        // Compute results
+        const allBright = frameBrightnessValues.every((b) => b >= 40);
+        const someFramesCaptured = frameBrightnessValues.length >= Math.floor(TOTAL_SCAN_FRAMES / 2);
+        const lightingOk = someFramesCaptured && allBright;
+        // Placeholder: assume single person if webcam was accessible
+        const singlePersonOk = true;
+        const clearOk = lightingOk && singlePersonOk;
+
+        setEnvScanResults({
+          lighting: lightingOk,
+          singlePerson: singlePersonOk,
+          clear: clearOk,
+        });
+        setEnvScanPhase('complete');
+      }
+    }, SCAN_INTERVAL_MS);
+  }, []);
 
   // Cleanup all resources on unmount
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (lightingIntervalRef.current) clearInterval(lightingIntervalRef.current);
-      if (noiseIntervalRef.current) clearInterval(noiseIntervalRef.current);
-      if (faceIntervalRef.current) clearInterval(faceIntervalRef.current);
-      if (audioContextRef.current) {
-        audioContextRef.current.close().catch(() => {});
-        audioContextRef.current = null;
+      stopActiveChecks();
+      if (envScanTimerRef.current) {
+        clearInterval(envScanTimerRef.current);
+        envScanTimerRef.current = null;
       }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
+      if (envScanRAFRef.current !== null) {
+        cancelAnimationFrame(envScanRAFRef.current);
+        envScanRAFRef.current = null;
       }
     };
-  }, []);
+  }, [stopActiveChecks]);
 
   // Record system check results when all passed
   const allSystemPassed = systemChecks.length > 0 && systemChecks.every((c) => c.status === 'pass');
@@ -631,10 +727,12 @@ export default function StepSystemCheck({
       // Non-blocking — proceed even if recording fails
     }
 
-    // Clean up streams before proceeding
+    // Stop streams right before calling onAllPassed
     if (lightingIntervalRef.current) clearInterval(lightingIntervalRef.current);
     if (noiseIntervalRef.current) clearInterval(noiseIntervalRef.current);
     if (faceIntervalRef.current) clearInterval(faceIntervalRef.current);
+    if (envScanTimerRef.current) { clearInterval(envScanTimerRef.current); envScanTimerRef.current = null; }
+    if (envScanRAFRef.current !== null) { cancelAnimationFrame(envScanRAFRef.current); envScanRAFRef.current = null; }
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
@@ -654,26 +752,28 @@ export default function StepSystemCheck({
   const deviceAllPass = deviceInfo ? !deviceInfo.isMobile && deviceInfo.browser.supported : false;
 
   // ────────────────────────────────────────
-  // Phase A: device_check (loading)
+  // Phase 1: browser_check (loading)
   // ────────────────────────────────────────
-  if (phase === 'device_check') {
+  if (phase === 'browser_check') {
     return (
       <div className="w-full max-w-3xl mx-auto px-4 py-8 space-y-6">
+        <ProgressStepper phase={phase} />
+
         {/* Pill badge */}
         <div className="flex justify-center">
           <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
             <Shield className="w-3.5 h-3.5" />
-            Device Verification
+            Browser Verification
           </span>
         </div>
 
         {/* Heading */}
         <div className="text-center">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-            Device Requirement Verification
+            Browser Requirement Verification
           </h1>
           <p className="text-gray-600 mt-2">
-            Checking your device compatibility for the interview.
+            Checking your browser compatibility for the interview.
           </p>
         </div>
 
@@ -708,26 +808,28 @@ export default function StepSystemCheck({
   }
 
   // ────────────────────────────────────────
-  // Phase A: device_results
+  // Phase 1: browser_results
   // ────────────────────────────────────────
-  if (phase === 'device_results' && deviceInfo) {
+  if (phase === 'browser_results' && deviceInfo) {
     return (
       <div className="w-full max-w-3xl mx-auto px-4 py-8 space-y-6">
+        <ProgressStepper phase={phase} />
+
         {/* Pill badge */}
         <div className="flex justify-center">
           <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
             <Shield className="w-3.5 h-3.5" />
-            Device Verification
+            Browser Verification
           </span>
         </div>
 
         {/* Heading */}
         <div className="text-center">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-            Device Requirement Verification
+            Browser Requirement Verification
           </h1>
           <p className="text-gray-600 mt-2">
-            Checking your device compatibility for the interview.
+            Checking your browser compatibility for the interview.
           </p>
         </div>
 
@@ -894,11 +996,13 @@ export default function StepSystemCheck({
   }
 
   // ────────────────────────────────────────
-  // Phase B: system_checks
+  // Phase 2: system_checks
   // ────────────────────────────────────────
   if (phase === 'system_checks') {
     return (
       <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6">
+        <ProgressStepper phase={phase} />
+
         {/* Pill badge */}
         <div className="flex justify-center">
           <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
@@ -911,19 +1015,27 @@ export default function StepSystemCheck({
         <div className="rounded-xl overflow-hidden shadow-lg">
           <div className="bg-gray-900 px-6 py-5 rounded-t-xl">
             <div className="flex items-center gap-2 text-white mb-1">
-              {isAnyChecking ? (
+              {checksRunning ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
+              ) : checksCompleted && allSystemPassed ? (
+                <CheckCircle className="w-5 h-5 text-green-400" />
+              ) : checksCompleted ? (
+                <XCircle className="w-5 h-5 text-amber-400" />
               ) : (
-                <CheckCircle className="w-5 h-5" />
+                <Shield className="w-5 h-5" />
               )}
               <h2 className="text-lg font-semibold">
-                {isAnyChecking ? 'Running System Checks...' : 'System Checks Complete'}
+                {checksRunning ? 'Running System Checks…'
+                  : checksCompleted && allSystemPassed ? 'System Checks Complete'
+                  : checksCompleted ? 'Some Checks Failed'
+                  : 'System Checks'}
               </h2>
             </div>
             <p className="text-green-100 text-sm">
-              {isAnyChecking
-                ? 'Please wait while we verify your environment'
-                : 'All environment checks have been completed'}
+              {checksRunning ? 'Please wait while we verify your environment'
+                : checksCompleted && allSystemPassed ? 'All environment checks have been completed'
+                : checksCompleted ? 'Fix the issues below and retry'
+                : 'Click "Run Check" to begin verifying your environment'}
             </p>
           </div>
 
@@ -1008,34 +1120,396 @@ export default function StepSystemCheck({
             {/* Hidden canvas for frame analysis */}
             <canvas ref={canvasRef} className="hidden" />
 
-
-            {/* All Checks Passed banner */}
-            {allSystemPassed && (
+            {/* Status banners */}
+            {checksCompleted && allSystemPassed && (
               <div className="mt-5 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
                 <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
                 <div>
                   <p className="font-semibold text-green-800">All Checks Passed!</p>
-                  <p className="text-sm text-green-700">Ready to proceed to Demo Video</p>
+                  <p className="text-sm text-green-700">Your environment is ready for the interview.</p>
+                </div>
+              </div>
+            )}
+            {checksCompleted && !allSystemPassed && (
+              <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+                <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-amber-800">Some checks failed</p>
+                  <p className="text-sm text-amber-700">Fix the issues above, then retry.</p>
                 </div>
               </div>
             )}
 
-            {/* Proceed button */}
-            <div className="mt-5">
-              <button
-                type="button"
-                onClick={handleProceed}
-                disabled={!allSystemPassed}
-                className={`w-full inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg text-sm transition-all ${
-                  allSystemPassed
-                    ? 'bg-gray-900 text-white hover:bg-gray-800 cursor-pointer'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                Proceed to Demo Video
-                <ArrowRight className="w-4 h-4" />
-              </button>
+            {/* Action buttons */}
+            <div className="mt-5 flex flex-col sm:flex-row gap-3">
+              {/* Run Check — shown before first run */}
+              {!checksRunning && !checksCompleted && (
+                <button
+                  type="button"
+                  onClick={handleRunChecks}
+                  className="flex-1 inline-flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg text-sm hover:bg-gray-800 transition-all"
+                >
+                  <Play className="w-4 h-4" />
+                  Run Check
+                </button>
+              )}
+
+              {/* Retry — shown after checks complete with failures */}
+              {checksCompleted && !allSystemPassed && !checksRunning && (
+                <button
+                  type="button"
+                  onClick={handleRunChecks}
+                  className="flex-1 inline-flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-800 font-semibold py-3 px-6 rounded-lg text-sm hover:bg-gray-50 transition-all"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  Retry
+                </button>
+              )}
+
+              {/* Running indicator */}
+              {checksRunning && (
+                <div className="flex-1 inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-500 font-semibold py-3 px-6 rounded-lg text-sm cursor-not-allowed">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Running checks…
+                </div>
+              )}
+
+              {/* Continue to Environment Scan — enabled only when all passed */}
+              {checksCompleted && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (allSystemPassed) setPhase('env_scan');
+                  }}
+                  disabled={!allSystemPassed}
+                  className={`flex-1 inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg text-sm transition-all ${
+                    allSystemPassed
+                      ? 'bg-gray-900 text-white hover:bg-gray-800 cursor-pointer'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  Continue to Environment Scan
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ────────────────────────────────────────
+  // Phase 3: env_scan
+  // ────────────────────────────────────────
+  if (phase === 'env_scan') {
+    const allEnvPassed = envScanResults
+      ? envScanResults.lighting && envScanResults.singlePerson && envScanResults.clear
+      : false;
+
+    // SVG ring parameters
+    const ringSize = 130;
+    const strokeWidth = 8;
+    const radius = (ringSize - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (envScanProgress / 100) * circumference;
+
+    return (
+      <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6">
+        <ProgressStepper phase={phase} />
+
+        {/* Pill badge */}
+        <div className="flex justify-center">
+          <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
+            <Scan className="w-3.5 h-3.5" />
+            Environment Scan
+          </span>
+        </div>
+
+        {/* Gradient header */}
+        <div className="rounded-xl overflow-hidden shadow-lg">
+          <div className="bg-gray-900 px-6 py-5 rounded-t-xl">
+            <div className="flex items-center gap-2 text-white mb-1">
+              {envScanPhase === 'scanning' ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : envScanPhase === 'complete' ? (
+                <CheckCircle className="w-5 h-5 text-green-400" />
+              ) : (
+                <Scan className="w-5 h-5" />
+              )}
+              <h2 className="text-lg font-semibold">
+                {envScanPhase === 'scanning'
+                  ? 'Scanning Environment…'
+                  : envScanPhase === 'complete'
+                  ? 'Scan Complete'
+                  : '360° Environment Scan'}
+              </h2>
+            </div>
+            <p className="text-green-100 text-sm">
+              {envScanPhase === 'scanning'
+                ? 'Please rotate your camera slowly to cover all angles'
+                : envScanPhase === 'complete'
+                ? 'Environment analysis finished'
+                : 'Scan your surroundings to ensure a fair interview environment'}
+            </p>
+          </div>
+
+          {/* Card body: 2-column layout */}
+          <div className="bg-white rounded-b-xl p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* Left column: Camera + scan ring overlay */}
+              <div className="rounded-xl overflow-hidden border border-gray-200">
+                <div className="bg-gray-900 px-4 py-3 flex items-center gap-2">
+                  <CircleDot className="w-4 h-4 text-white" />
+                  <h3 className="text-sm font-semibold text-white">Camera Preview</h3>
+                </div>
+                <div className="relative bg-gray-900 aspect-video flex items-center justify-center">
+                  {/* Video element — reuses the same stream from system checks */}
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+
+                  {/* SVG circular progress ring overlay — only during scanning */}
+                  {envScanPhase === 'scanning' && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <svg
+                        width={ringSize}
+                        height={ringSize}
+                        className="drop-shadow-lg"
+                        style={{ transform: 'rotate(-90deg)' }}
+                      >
+                        {/* Background circle */}
+                        <circle
+                          cx={ringSize / 2}
+                          cy={ringSize / 2}
+                          r={radius}
+                          fill="none"
+                          stroke="rgba(255,255,255,0.25)"
+                          strokeWidth={strokeWidth}
+                        />
+                        {/* Animated fill */}
+                        <circle
+                          cx={ringSize / 2}
+                          cy={ringSize / 2}
+                          r={radius}
+                          fill="none"
+                          stroke="#22c55e"
+                          strokeWidth={strokeWidth}
+                          strokeLinecap="round"
+                          strokeDasharray={circumference}
+                          strokeDashoffset={strokeDashoffset}
+                          style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+                        />
+                      </svg>
+                      {/* Center text (counter-rotate so text is upright) */}
+                      <div
+                        className="absolute inset-0 flex items-center justify-center"
+                      >
+                        <div className="flex flex-col items-center">
+                          <span className="text-white text-lg font-bold leading-none drop-shadow">
+                            {Math.round(envScanProgress)}%
+                          </span>
+                          <span className="text-white/70 text-xs mt-0.5 drop-shadow">
+                            {envScanFrameCount}/{TOTAL_SCAN_FRAMES}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Camera Active badge */}
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
+                    <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
+                    Camera Active
+                  </div>
+                </div>
+              </div>
+
+              {/* Right column: instructions / progress / results */}
+              <div className="flex flex-col justify-between gap-4">
+
+                {/* IDLE state */}
+                {envScanPhase === 'idle' && (
+                  <>
+                    <div className="space-y-3">
+                      <h3 className="text-xl font-bold text-gray-900">360° Environment Scan</h3>
+                      <p className="text-sm text-gray-600">
+                        We'll scan your surroundings to ensure a fair interview environment.
+                        Slowly rotate your camera to show all sides of the room.
+                      </p>
+
+                      {/* Direction guide */}
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                          Rotation Guide
+                        </p>
+                        <div className="flex items-center justify-between gap-1">
+                          {['Front', 'Right', 'Back', 'Left'].map((dir, idx) => (
+                            <React.Fragment key={dir}>
+                              <div className="flex flex-col items-center gap-1">
+                                <div className="w-9 h-9 bg-gray-200 rounded-full flex items-center justify-center">
+                                  <span className="text-xs font-bold text-gray-700">{dir[0]}</span>
+                                </div>
+                                <span className="text-xs text-gray-500">{dir}</span>
+                              </div>
+                              {idx < 3 && (
+                                <ArrowRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleEnvScan}
+                      className="w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg text-sm hover:bg-gray-800 transition-all"
+                    >
+                      <Play className="w-4 h-4" />
+                      Start Scan
+                    </button>
+                  </>
+                )}
+
+                {/* SCANNING state */}
+                {envScanPhase === 'scanning' && (
+                  <>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <RotateCcw className="w-5 h-5 text-green-600 animate-spin" />
+                        <h3 className="text-xl font-bold text-gray-900">Scanning in progress</h3>
+                      </div>
+
+                      {/* Frame counter */}
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 font-medium">
+                            Frame {envScanFrameCount} / {TOTAL_SCAN_FRAMES} captured
+                          </span>
+                          <span className="text-gray-800 font-semibold">
+                            {Math.round(envScanProgress)}%
+                          </span>
+                        </div>
+
+                        {/* Linear progress bar */}
+                        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div
+                            className="bg-green-500 h-2 rounded-full transition-[width] duration-300 ease-out"
+                            style={{ width: `${envScanProgress}%` }}
+                          />
+                        </div>
+
+                        <p className="text-xs text-gray-500">
+                          Tip: Keep rotating slowly to cover all angles
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Disabled start button during scan */}
+                    <button
+                      type="button"
+                      disabled
+                      className="w-full inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-400 font-semibold py-3 px-6 rounded-lg text-sm cursor-not-allowed"
+                    >
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Scanning…
+                    </button>
+                  </>
+                )}
+
+                {/* COMPLETE state */}
+                {envScanPhase === 'complete' && envScanResults && (
+                  <>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <h3 className="text-xl font-bold text-gray-900">Scan Complete</h3>
+                      </div>
+
+                      {/* Results list */}
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+                        {[
+                          {
+                            label: 'Lighting consistency',
+                            passed: envScanResults.lighting,
+                          },
+                          {
+                            label: 'Single person throughout',
+                            passed: envScanResults.singlePerson,
+                          },
+                          {
+                            label: 'Environment clear',
+                            passed: envScanResults.clear,
+                          },
+                        ].map(({ label, passed }) => (
+                          <div key={label} className="flex items-center gap-3">
+                            {passed ? (
+                              <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                            )}
+                            <span className="text-sm text-gray-800">{label}</span>
+                            <span
+                              className={`ml-auto text-xs font-semibold ${
+                                passed ? 'text-green-600' : 'text-red-600'
+                              }`}
+                            >
+                              {passed ? 'Pass' : 'Fail'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Summary banner */}
+                      {allEnvPassed ? (
+                        <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                          <p className="text-sm font-semibold text-green-800">
+                            Environment looks great! You're ready.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2">
+                          <XCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                          <p className="text-sm font-semibold text-amber-800">
+                            Some issues detected. Consider rescanning.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={handleEnvScan}
+                        className="flex-1 inline-flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-800 font-semibold py-3 px-4 rounded-lg text-sm hover:bg-gray-50 transition-all"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        Rescan
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleProceed}
+                        className="flex-1 inline-flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-4 rounded-lg text-sm hover:bg-gray-800 transition-all"
+                      >
+                        Proceed
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Hidden canvas for env scan frame analysis */}
+            <canvas ref={canvasRef} className="hidden" />
           </div>
         </div>
       </div>

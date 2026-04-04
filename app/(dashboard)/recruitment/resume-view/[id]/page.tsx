@@ -6,7 +6,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import {
   ArrowLeft, Download, Mail, Phone, MapPin, Briefcase, Calendar, Award,
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
-  ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
+  ChevronRight, ChevronLeft, ExternalLink, Linkedin, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
   AlignLeft, Hash, X, Eye
 } from 'lucide-react';
@@ -215,6 +215,18 @@ export default function ResumeViewPage() {
   const [resume, setResume] = useState<Resume | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Prev/Next navigation from My Resumes list
+  const [navList, setNavList] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('resumeNavList');
+      if (stored) setNavList(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+  const navIndex = navList.indexOf(resumeId);
+  const prevId = navIndex > 0 ? navList[navIndex - 1] : null;
+  const nextId = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
 
   // Apply to Job modal state
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
@@ -771,6 +783,29 @@ Best regards`);
               </div>
             </div>
           </div>
+          {navList.length > 0 && navIndex >= 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => prevId && router.replace(`/recruitment/resume-view/${prevId}`)}
+                disabled={!prevId}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </button>
+              <span className="text-sm text-gray-600 font-medium px-1">
+                {navIndex + 1} / {navList.length}
+              </span>
+              <button
+                onClick={() => nextId && router.replace(`/recruitment/resume-view/${nextId}`)}
+                disabled={!nextId}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

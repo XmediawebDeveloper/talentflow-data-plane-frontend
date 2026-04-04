@@ -77,8 +77,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [questionTimerSeconds, setQuestionTimerSeconds] = useState<number | null>(null);
   const [questionTimerExpired, setQuestionTimerExpired] = useState(false);
   const questionTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Ref that mirrors questionTimerSeconds state — readable synchronously in callbacks.
+  // Required for stopRecording to deduct remaining seconds from the global timer.
+  const questionTimerSecondsRef = useRef<number | null>(null);
   // Pending: timer duration received but interval not started yet (waiting for Linda to stop)
   const questionTimerPendingRef = useRef<number | null>(null);
+  // Timestamp when question_timer_started was received — used to adjust for TTS playback lag
+  const questionTimerReceivedAtRef = useRef<number | null>(null);
   // Question progress counter (sent with question_timer_started)
   const [questionNumber, setQuestionNumber] = useState<number | null>(null);
   const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
@@ -94,6 +99,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     nice_to_have_skills: string[];
     total_questions: number;
     questions_asked: number;
+    hr_topics?: Record<string, string>;
   } | null>(null);
 
   // Figma UI state
@@ -102,6 +108,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const isMutedRef = useRef(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+
+  // Face-not-in-frame blocking
+  const [isFaceBlocked, setIsFaceBlocked] = useState(false);
+  const isFaceBlockedRef = useRef(false);
 
   // WebSocket keepalive / reconnect refs
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -112,7 +122,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Timer modes:
   //   isFlexibleMode      = duration 0 (legacy unlimited) → count UP, pause while Linda speaks
   //   isNewFlexibleMode   = duration > 0, interview_mode='flexible' → count DOWN, runs NON-STOP
-  //   timed / fixed       = duration > 0, interview_mode='fixed'  → count DOWN, pause while Linda speaks
+  //   timed / fixed       = duration > 0, interview_mode='fixed'  → count DOWN, runs NON-STOP
+  //                         Each question = 2-min slot; every second (Linda's speech + candidate
+  //                         answer) counts toward the global budget, so the timer never pauses.
   const isFlexibleMode = interviewInfo.duration_minutes === 0;
   const isNewFlexibleMode = !isFlexibleMode && interviewInfo.interview_mode === 'flexible';
   const [remainingSeconds, setRemainingSeconds] = useState(isFlexibleMode ? 0 : interviewInfo.duration_minutes * 60);
@@ -121,9 +133,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     if (!isConnected || isClosing) return;
     timerIntervalRef.current = setInterval(() => {
-      // Flexible (new 30-min): timer runs non-stop — Linda's speaking time counts toward 30 min.
-      // Fixed/timed and legacy flexible: pause while Linda is speaking or processing.
-      if (!isNewFlexibleMode && (isAiSpeakingRef.current || isProcessingRef.current)) return;
+      // Legacy unlimited flexible (count-up): pause while Linda speaks / processing.
+      // New flexible and timed/fixed: run non-stop — every second counts toward total budget.
+      if (isFlexibleMode && (isAiSpeakingRef.current || isProcessingRef.current)) return;
       setRemainingSeconds(prev => {
         if (isFlexibleMode) return prev + 1; // legacy unlimited: count up
         if (prev <= 1) {
@@ -137,6 +149,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
   }, [isConnected, isClosing, isFlexibleMode, isNewFlexibleMode]);
+
+  // Keep questionTimerSecondsRef in sync with state so stopRecording can read it synchronously.
+  useEffect(() => {
+    questionTimerSecondsRef.current = questionTimerSeconds;
+  }, [questionTimerSeconds]);
 
   // Waveform animation — driven by isAiSpeaking
   useEffect(() => {
@@ -259,7 +276,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Face detection & gaze tracking (Phase 2 & 3)
   const handleFaceMissing = useCallback(() => {
     emitEvent('face_missing', { timestamp: new Date().toISOString() });
+    if (!isFaceBlockedRef.current) {
+      isFaceBlockedRef.current = true;
+      setIsFaceBlocked(true);
+      // Stop mic recording silently so audio isn't sent while face is absent
+      stopRecordingSilentRef.current();
+    }
   }, [emitEvent]);
+
+  const handleFaceRestored = useCallback(() => {
+    if (isFaceBlockedRef.current) {
+      isFaceBlockedRef.current = false;
+      setIsFaceBlocked(false);
+    }
+  }, []);
 
   const handleMultipleFaces = useCallback((count: number) => {
     emitEvent('multiple_faces', { face_count: count });
@@ -286,6 +316,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     enabled: isConnected && webcamReady,
     enableGazeTracking: true,
     onFaceMissing: handleFaceMissing,
+    onFaceRestored: handleFaceRestored,
     onMultipleFaces: handleMultipleFaces,
     onGazeAway: handleGazeAway,
   });
@@ -384,12 +415,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => { isAiSpeakingRef.current = isAiSpeaking; }, [isAiSpeaking]);
   useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
 
-  // Start pending per-question countdown the moment Linda stops speaking
+  // Start pending per-question countdown the moment Linda stops speaking.
+  // Always starts from the full duration so the candidate sees the complete
+  // time available to them from the moment they can actually answer.
+  // The backend's TTS_PLAYBACK_BUFFER already accounts for playback lag on
+  // its auto-skip timer, so no client-side subtraction is needed here.
   useEffect(() => {
     if (isAiSpeaking) return; // still speaking — nothing to do
     const pendingDur = questionTimerPendingRef.current;
     if (pendingDur === null) return; // no pending timer
     questionTimerPendingRef.current = null;
+    questionTimerReceivedAtRef.current = null; // clear receipt timestamp (no longer used)
+
+    // Always start from the full candidate window — never subtract elapsed time.
+    setQuestionTimerSeconds(pendingDur);
+
     if (questionTimerIntervalRef.current) {
       clearInterval(questionTimerIntervalRef.current);
     }
@@ -420,6 +460,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const calibSumRef = useRef(0);            // sum of RMS values during calibration
   const calibDoneRef = useRef(false);       // true once noise floor is established
   const rmsWindowRef = useRef<number[]>([]); // rolling window of recent RMS values (last N frames)
+  // Minimum speech frames required before end_turn is sent.
+  // At ~93ms/frame (4096 samples @ 44.1kHz), 5 frames ≈ 450ms.
+  // Brief noise events (cough, tap, rustle) are typically < 5 frames above threshold
+  // and must NOT trigger end_turn — otherwise Whisper hallucinates and the pipeline
+  // treats noise as a candidate answer, advancing coverage/questions incorrectly.
+  const speechFrameCountRef = useRef(0);
+  const MIN_SPEECH_FRAMES = 5;
 
   // Save AI message
   const saveAiMessage = useCallback(() => {
@@ -730,10 +777,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         noResponseRetryRef.current = 0;
         setStatus("Linda is speaking...");
         startRevealingTokens();
-        // Clear any stale expired timer from the previous question so it
-        // doesn't show "0:00" while Linda is speaking the next question.
-        // The timer will re-appear (fresh) when question_timer_started arrives
-        // after Linda finishes speaking.
+        // Clear stale expired timer when Linda starts speaking the next question
+        // so "TIME UP" doesn't linger while she's asking Q2.
         if (questionTimerExpired) {
           setQuestionTimerSeconds(null);
           setQuestionTimerExpired(false);
@@ -829,11 +874,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           questionTimerIntervalRef.current = null;
         }
         if (isAiSpeakingRef.current) {
-          // Linda is still speaking — store duration and wait until she stops
+          // Linda is still speaking — store duration and wait until she stops.
+          // Countdown starts from the full dur once Linda finishes so the candidate
+          // always sees the complete time available from the moment they can answer.
           questionTimerPendingRef.current = dur;
+          questionTimerReceivedAtRef.current = Date.now();
         } else {
-          // Linda already stopped — start countdown immediately
+          // Linda already stopped — start countdown immediately (no lag to deduct)
           questionTimerPendingRef.current = null;
+          questionTimerReceivedAtRef.current = null;
           questionTimerIntervalRef.current = setInterval(() => {
             setQuestionTimerSeconds(prev => {
               if (prev === null || prev <= 1) {
@@ -869,6 +918,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           nice_to_have_skills: data.nice_to_have_skills ?? [],
           total_questions: data.total_questions ?? 0,
           questions_asked: data.questions_asked ?? 0,
+          hr_topics: data.hr_topics && Object.keys(data.hr_topics).length > 0 ? data.hr_topics : undefined,
         });
         break;
       case "silence_detected":
@@ -1013,6 +1063,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       setStatus("Processing...");
       setIsProcessing(true);
       avatarState.onProcessing();
+      // Timed mode: each question slot = exactly 2 minutes from the global budget.
+      // If the candidate answered early, instantly deduct the remaining per-question
+      // seconds from the global timer so the full 2-min slot is always consumed.
+      const qRemaining = questionTimerSecondsRef.current;
+      if (qRemaining !== null && qRemaining > 0) {
+        setRemainingSeconds(prev => Math.max(0, prev - qRemaining));
+      }
+
+      // Stop the per-question countdown — candidate answered, timer no longer relevant.
+      // A fresh question_timer_started will arrive after Linda asks the next question.
+      if (questionTimerIntervalRef.current) {
+        clearInterval(questionTimerIntervalRef.current);
+        questionTimerIntervalRef.current = null;
+      }
+      setQuestionTimerSeconds(null);
+      setQuestionTimerExpired(false);
+      questionTimerPendingRef.current = null;
+      questionTimerReceivedAtRef.current = null;
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "end_turn" }));
       }
@@ -1059,6 +1127,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // Use refs — NOT state values — because this function is called from stale
     // closures (useCallback, setTimeout) where isAiSpeaking/isProcessing are stale.
     if (isAiSpeakingRef.current || isProcessingRef.current || isRecordingRef.current) return;
+    if (isFaceBlockedRef.current) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -1113,6 +1182,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       calibSumRef.current = 0;
       calibDoneRef.current = false;
       rmsWindowRef.current = [];
+      speechFrameCountRef.current = 0;
 
       // Skip the first CALIB_SKIP frames before calibrating — avoids capturing
       // the candidate's opening words as "ambient noise".
@@ -1168,10 +1238,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           : silenceThresholdRef.current;
 
         if (smoothedRms > effectiveThreshold) {
-          speechDetectedRef.current = true;
+          speechFrameCountRef.current++;
           silenceStartRef.current = null;
-          // Notify backend on first actual speech — resets question timer to full duration
-          if (!speechStartSentRef.current) {
+          // Only treat as real speech after MIN_SPEECH_FRAMES consecutive frames above
+          // threshold (~450ms). Brief noise events (taps, coughs, rustles) stay below
+          // this count and will be discarded silently — no end_turn sent.
+          if (speechFrameCountRef.current >= MIN_SPEECH_FRAMES) {
+            speechDetectedRef.current = true;
+          }
+          // Notify backend on first confirmed speech — resets question timer
+          if (speechDetectedRef.current && !speechStartSentRef.current) {
             speechStartSentRef.current = true;
             if (wsRef.current?.readyState === WebSocket.OPEN) {
               wsRef.current.send(JSON.stringify({ type: "speech_started" }));
@@ -1186,6 +1262,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           } else if (Date.now() - silenceStartRef.current > silenceDurationMsRef.current) {
             stopRecording();
             return;
+          }
+        } else if (speechFrameCountRef.current > 0 && speechFrameCountRef.current < MIN_SPEECH_FRAMES) {
+          // Frames above threshold but not enough to count as real speech (noise event).
+          // Silence has now returned — discard silently without sending end_turn.
+          if (silenceStartRef.current === null) {
+            silenceStartRef.current = Date.now();
+          } else if (Date.now() - silenceStartRef.current > 500) {
+            speechFrameCountRef.current = 0;
+            silenceStartRef.current = null;
           }
         }
 
@@ -1560,6 +1645,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 : "Your microphone has been disabled. Please re-enable it to continue the interview."}
             </p>
             <div className="text-sm text-red-400 font-medium animate-pulse">This event has been recorded</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Proctoring: Face not in frame overlay ── */}
+      {isConnected && isFaceBlocked && (
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
+          <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-md text-center shadow-2xl">
+            <div className="text-amber-500 text-5xl mb-4">👤</div>
+            <h2 className="text-xl font-bold text-white mb-2">Face Not Detected</h2>
+            <p className="text-gray-400 mb-4">
+              Your face is not visible in the camera. Please position yourself in front of the camera to continue the interview.
+            </p>
+            <div className="text-sm text-amber-400 font-medium animate-pulse">Interview paused — please return to frame</div>
           </div>
         </div>
       )}
@@ -2027,6 +2126,34 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       {skillCoverage.uncovered.some(s => nthSet.has(s)) && <span className="text-[#475569]" style={{ fontSize: 8 }}>○ optional</span>}
                     </div>
                   )}
+
+                  {/* HR topic coverage — shown during HR round */}
+                  {skillCoverage.hr_topics && Object.keys(skillCoverage.hr_topics).length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-white/[0.06]">
+                      <span className="text-[#64748B] block mb-1" style={{ fontSize: 10, fontWeight: 500 }}>HR Topics</span>
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(skillCoverage.hr_topics).map(([topic, status]) => {
+                          const isCompleted = status === "completed";
+                          const isPartial = status === "partially_covered";
+                          return (
+                            <span
+                              key={topic}
+                              className={`px-1.5 py-0.5 rounded-full border transition-all duration-500 ${
+                                isCompleted
+                                  ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
+                                  : isPartial
+                                  ? "bg-[#F59E0B]/10 border-[#F59E0B]/30 text-[#F59E0B]"
+                                  : "bg-white/[0.04] border-white/[0.12] text-[#64748B]"
+                              }`}
+                              style={{ fontSize: 9, fontWeight: 600 }}
+                            >
+                              {isCompleted ? "✓ " : isPartial ? "~ " : ""}{topic}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -2111,6 +2238,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                         clearInterval(questionTimerIntervalRef.current);
                         questionTimerIntervalRef.current = null;
                       }
+                      questionTimerPendingRef.current = null;
+                      questionTimerReceivedAtRef.current = null;
                       setQuestionTimerSeconds(null);
                       setQuestionTimerExpired(false);
                     }}

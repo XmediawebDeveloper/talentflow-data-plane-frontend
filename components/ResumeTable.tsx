@@ -28,9 +28,10 @@ interface DraggableResumeRowProps {
   selectedResumes: string[];
   children: React.ReactNode;
   className?: string;
+  onViewDetails?: (resume: Resume) => void;
 }
 
-function DraggableResumeRow({ resume, selectedResumes, children, className }: DraggableResumeRowProps) {
+function DraggableResumeRow({ resume, selectedResumes, children, className, onViewDetails }: DraggableResumeRowProps) {
   const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>({
     type: RESUME_DRAG_TYPE,
     item: () => ({
@@ -46,7 +47,8 @@ function DraggableResumeRow({ resume, selectedResumes, children, className }: Dr
   return (
     <tr
       ref={preview as unknown as React.Ref<HTMLTableRowElement>}
-      className={`${className} ${isDragging ? 'opacity-50' : ''}`}
+      className={`${className} ${isDragging ? 'opacity-50' : ''} ${onViewDetails ? 'cursor-pointer' : ''}`}
+      onClick={onViewDetails ? () => onViewDetails(resume) : undefined}
     >
       {/* Drag handle */}
       <td className="w-8 px-2 py-4">
@@ -368,9 +370,10 @@ export default function ResumeTable({
               className={`hover:bg-gray-50 transition-colors ${
                 selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''
               }`}
+              onViewDetails={onViewDetails}
             >
               {!hideCheckboxes && (
-                <td className="px-4 py-4">
+                <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selectedResumes.includes(resume.id)}
@@ -385,7 +388,7 @@ export default function ResumeTable({
                     <div className="flex items-center gap-2">
                       {onViewDetails ? (
                         <button
-                          onClick={() => onViewDetails(resume)}
+                          onClick={(e) => { e.stopPropagation(); onViewDetails(resume); }}
                           className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
                         >
                           {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
@@ -460,7 +463,7 @@ export default function ResumeTable({
               <td className="px-4 py-4">
                 <span className="text-sm text-gray-700">{resume.uploadedBy}</span>
               </td>
-              <td className="px-4 py-4">
+              <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleShowVersionHistory(resume)}
                   disabled={isLoadingVersions}
@@ -479,7 +482,7 @@ export default function ResumeTable({
                   </span>
                 </button>
               </td>
-              <td className="px-4 py-4">
+              <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2">
                   {selectionMode ? (
                     <button

@@ -1026,16 +1026,23 @@ function CurrentPlanContent() {
       const data = await response.json();
 
       if (response.ok && (data.status === 'success' || data.status === 'partial')) {
+        const appliedPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
+        const isApplyDowngrade = comparePlanTiers(
+          currentPlan?.tier, appliedPlan?.tier,
+          currentPlanBillingPeriod,
+          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+        ) === -1;
+        const applyLabel = isApplyDowngrade ? 'downgrade' : 'upgrade';
+
         // Check if it was a partial success (local update succeeded but admin API failed)
         if (data.status === 'partial') {
-          // Show warning message for partial success
           const adminError = data.data?.admin_error || 'Admin system sync failed';
-          toast.warning('Plan upgraded with warnings', {
+          toast.warning(`Plan ${applyLabel}d with warnings`, {
             description: `${adminError}. You will be redirected to login.`,
             duration: 3000,
           });
         } else {
-          toast.success(`Successfully upgraded to ${selectedQueuedUpgrade.new_plan_name}!`, {
+          toast.success(`Successfully ${applyLabel}d to ${selectedQueuedUpgrade.new_plan_name}!`, {
             description: 'You will be redirected to login to apply your new plan.',
             duration: 3000,
           });
@@ -1048,11 +1055,10 @@ function CurrentPlanContent() {
         // Refresh notifications before logout so bell updates during toast
         window.dispatchEvent(new CustomEvent('notificationTrigger'));
 
-        // Plan upgraded successfully - logout and redirect to login
-        // This ensures user gets fresh session with new plan data
+        // Logout and redirect to login with correct direction param
         setTimeout(() => {
           logout();
-          router.push('/login?upgraded=true');
+          router.push(isApplyDowngrade ? '/login?downgraded=true' : '/login?upgraded=true');
         }, 2000);
         return; // Exit early
       } else {
@@ -1119,7 +1125,13 @@ function CurrentPlanContent() {
       const data = await response.json();
 
       if (response.ok && data.status === 'success') {
-        setSuccessMessage(`Queued upgrade to ${selectedQueuedUpgrade.new_plan_name} has been cancelled.`);
+        const cancelledPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
+        const isCancellingDowngrade = comparePlanTiers(
+          currentPlan?.tier, cancelledPlan?.tier,
+          currentPlanBillingPeriod,
+          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+        ) === -1;
+        setSuccessMessage(`Queued ${isCancellingDowngrade ? 'downgrade' : 'upgrade'} to ${selectedQueuedUpgrade.new_plan_name} has been cancelled.`);
         setShowCancelModal(false);
         setSelectedQueuedUpgrade(null);
         setCancelReason('');
@@ -2223,7 +2235,10 @@ function CurrentPlanContent() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-2 flex-wrap">
                         <Package className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                        <span className="font-semibold text-gray-900">{upgrade.new_plan_name}</span>
+                        <span className="font-semibold text-gray-900">
+                          {upgrade.new_plan_name}
+                          {upgrade.billing_interval && <span className="font-normal text-gray-500"> ({upgrade.billing_interval.charAt(0).toUpperCase() + upgrade.billing_interval.slice(1).toLowerCase()})</span>}
+                        </span>
                         <Badge className="bg-amber-100 text-amber-700 text-xs">
                           {upgrade.status === 'SCHEDULED' ? 'Scheduled' : 'Queued'}
                         </Badge>
@@ -2261,9 +2276,22 @@ function CurrentPlanContent() {
                           </span>
                         </div>
                       </div>
-                      {upgrade.reason && (
-                        <p className="text-xs text-gray-500 mt-2">Reason: {upgrade.reason}</p>
-                      )}
+                      {upgrade.reason && (() => {
+                        const upgradePlan = plans.find(p => p.name === upgrade.new_plan_name);
+                        const isQueuedDowngrade = comparePlanTiers(
+                          currentPlan?.tier, upgradePlan?.tier,
+                          currentPlanBillingPeriod,
+                          upgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+                        ) === -1;
+                        const direction = isQueuedDowngrade ? 'downgrade' : 'upgrade';
+                        const fromPlan = upgrade.current_plan_name || currentPlan?.name || '';
+                        const fromPeriod = currentPlanBillingPeriod ? currentPlanBillingPeriod.charAt(0).toUpperCase() + currentPlanBillingPeriod.slice(1).toLowerCase() : '';
+                        const toPeriod = upgrade.billing_interval ? upgrade.billing_interval.charAt(0).toUpperCase() + upgrade.billing_interval.slice(1).toLowerCase() : '';
+                        const correctedReason = fromPlan
+                          ? `User ${direction} from ${fromPlan}${fromPeriod ? ` (${fromPeriod})` : ''} to ${upgrade.new_plan_name}${toPeriod ? ` (${toPeriod})` : ''}`
+                          : upgrade.reason.replace(/\b(upgrade|downgrade)\b/gi, (m: string) => m[0] === m[0].toUpperCase() ? (isQueuedDowngrade ? 'Downgrade' : 'Upgrade') : direction);
+                        return <p className="text-xs text-gray-500 mt-2">Reason: {correctedReason}</p>;
+                      })()}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -2634,7 +2662,11 @@ function CurrentPlanContent() {
                       ) : queuedUpgrades.length > 0 ? (
                         (() => {
                           const queuedPlan = plans.find(p => p.name === queuedUpgrades[0]?.new_plan_name);
-                          const queuedDirection = comparePlanTiers(currentPlan?.tier, queuedPlan?.tier);
+                          const queuedDirection = comparePlanTiers(
+                            currentPlan?.tier, queuedPlan?.tier,
+                            currentPlanBillingPeriod,
+                            queuedUpgrades[0]?.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+                          );
                           return queuedDirection === -1 ? 'Downgrade Queued' : 'Upgrade Queued';
                         })()
                       ) : (!plan.monthlyPrice && !plan.annualPrice) ? (
@@ -2969,11 +3001,17 @@ function CurrentPlanContent() {
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Current Plan:</span>
-                        <span className="font-medium text-gray-900">{companySettings?.current_plan_name || 'Your current plan'}</span>
+                        <span className="font-medium text-gray-900">
+                          {companySettings?.current_plan_name || 'Your current plan'}
+                          {currentPlanBillingPeriod && <span className="text-gray-500 font-normal"> ({currentPlanBillingPeriod.charAt(0).toUpperCase() + currentPlanBillingPeriod.slice(1).toLowerCase()})</span>}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">New Plan:</span>
-                        <span className="font-medium text-amber-700">{transactionResult.plan_name}</span>
+                        <span className="font-medium text-amber-700">
+                          {transactionResult.plan_name}
+                          {transactionResult.billing_interval && <span className="text-amber-600 font-normal"> ({transactionResult.billing_interval.charAt(0).toUpperCase() + transactionResult.billing_interval.slice(1).toLowerCase()})</span>}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Auto-applies on:</span>
@@ -2996,7 +3034,12 @@ function CurrentPlanContent() {
                     </div>
 
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
-                      <p>{transactionResult.message}</p>
+                      <p>{transactionResult.message
+                        ? transactionResult.message.replace(/\b(upgrade|downgrade)\b/gi, (m: string) =>
+                            isDowngradePayment ? (m.toLowerCase() === 'upgrade' ? 'downgrade' : 'Downgrade') : m
+                          )
+                        : `Your ${isDowngradePayment ? 'downgrade' : 'upgrade'} to ${transactionResult.plan_name} has been queued. It will automatically apply when your current plan expires.`
+                      }</p>
                     </div>
 
                     <button
@@ -3021,7 +3064,7 @@ function CurrentPlanContent() {
                       <h3 className="text-xl font-semibold text-gray-900 mb-2">
                         {companySettings?.status?.toLowerCase() === 'expired' || companySettings?.status?.toLowerCase() === 'suspended'
                           ? 'Account Reactivated!'
-                          : 'Plan Upgrade Successful!'}
+                          : isDowngradePayment ? 'Plan Downgrade Successful!' : 'Plan Upgrade Successful!'}
                       </h3>
                       <p className="text-gray-600">
                         {companySettings?.status?.toLowerCase() === 'expired' || companySettings?.status?.toLowerCase() === 'suspended'
@@ -3158,7 +3201,11 @@ function CurrentPlanContent() {
       {/* Terms & Conditions Modal for Applying Queued Upgrade */}
       {showTCModal && selectedQueuedUpgrade && (() => {
         const queuedNewPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
-        const isQueuedDowngrade = comparePlanTiers(currentPlan?.tier, queuedNewPlan?.tier) === -1;
+        const isQueuedDowngrade = comparePlanTiers(
+          currentPlan?.tier, queuedNewPlan?.tier,
+          currentPlanBillingPeriod,
+          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+        ) === -1;
         return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">

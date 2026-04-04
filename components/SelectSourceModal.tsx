@@ -277,9 +277,14 @@ export default function SelectSourceModal({
       };
       sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
 
-      // Close modal and stay on JD page (Scored Resumes tab)
-      onClose();
-      router.push(`/recruitment/job-details?id=${jobId}&tab=scored-resumes`);
+      // Switch to Scored Resumes tab and refresh data via parent callback.
+      // onScoringComplete closes the modal, fetches fresh scored resumes, and
+      // sets activeTab to 'scored-resumes' — all without a page navigation.
+      if (onScoringComplete) {
+        onScoringComplete();
+      } else {
+        onClose();
+      }
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
       toast.error(error.message || 'Failed to start scoring');

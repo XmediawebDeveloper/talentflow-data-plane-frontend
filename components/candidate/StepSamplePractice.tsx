@@ -4,9 +4,6 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Mic,
   MicOff,
-  Camera,
-  Globe,
-  CheckCircle,
   RefreshCw,
   MessageSquare,
   Volume2,
@@ -15,6 +12,8 @@ import {
   ChevronRight,
   Square,
   Play,
+  Video,
+  VideoOff,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 
@@ -69,7 +68,6 @@ export default function StepSamplePractice({
 }: StepSamplePracticeProps) {
   // ── State ────────────────────────────────────────────────────────────────
 
-  const [cameraReady, setCameraReady] = useState(false);
   const [micReady, setMicReady] = useState(false);
   const [voiceReady, setVoiceReady] = useState(false);
   const [aiSpeaking, setAiSpeaking] = useState(false);
@@ -82,20 +80,26 @@ export default function StepSamplePractice({
   const [audioLevel, setAudioLevel] = useState(0);
   const [ttsSupported, setTtsSupported] = useState(true);
   const [transcribeError, setTranscribeError] = useState('');
+  const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
+  const [showReplay, setShowReplay] = useState(false);
 
   // ── Refs ─────────────────────────────────────────────────────────────────
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const replayVideoRef = useRef<HTMLVideoElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const recognitionRef = useRef<any>(null);
   const webSpeechFinalRef = useRef('');
-  // Ref so speakQuestion can trigger startRecording without a forward-dependency
+  const liveTranscriptRef = useRef('');
+  const hasAutoSpokeRef = useRef(false);
   const startRecordingRef = useRef<() => void>(() => {});
 
   // ── Webcam + mic setup on mount ──────────────────────────────────────────
@@ -114,12 +118,7 @@ export default function StepSamplePractice({
           return;
         }
         mediaStreamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-
-        setCameraReady(true);
+        if (videoRef.current) videoRef.current.srcObject = stream;
         setMicReady(true);
 
         // Audio analyser for level meter
@@ -166,6 +165,10 @@ export default function StepSamplePractice({
         try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
         mediaRecorderRef.current = null;
       }
+      if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
+        try { videoRecorderRef.current.stop(); } catch { /* ignore */ }
+        videoRecorderRef.current = null;
+      }
       if (recognitionRef.current) {
         try { recognitionRef.current.stop(); } catch { /* ignore */ }
         recognitionRef.current = null;
@@ -206,11 +209,7 @@ export default function StepSamplePractice({
       if (voice) utterance.voice = voice;
 
       utterance.onstart = () => setAiSpeaking(true);
-      utterance.onend = () => {
-        setAiSpeaking(false);
-        // Auto-start recording after question finishes — 400ms gap clears TTS echo
-        setTimeout(() => { startRecordingRef.current(); }, 400);
-      };
+      utterance.onend = () => { setAiSpeaking(false); };
       utterance.onerror = (e) => {
         if ((e as SpeechSynthesisErrorEvent).error === 'interrupted') return;
         setAiSpeaking(false);
@@ -243,6 +242,19 @@ export default function StepSamplePractice({
     trySpeak();
   }, []);
 
+  // Keep ref in sync with liveTranscript state (avoids stale-closure issues in callbacks)
+  useEffect(() => { liveTranscriptRef.current = liveTranscript; }, [liveTranscript]);
+
+  // ── Auto-speak question once mic/camera are ready ─────────────────────────
+  useEffect(() => {
+    if (micReady && !hasAutoSpokeRef.current) {
+      hasAutoSpokeRef.current = true;
+      // Small delay so the component fully renders before TTS fires
+      const t = setTimeout(() => speakQuestion(), 600);
+      return () => clearTimeout(t);
+    }
+  }, [micReady, speakQuestion]);
+
   // ── Live transcription (Web Speech API) ──────────────────────────────────
 
   const startLiveTranscription = useCallback(() => {
@@ -259,18 +271,25 @@ export default function StepSamplePractice({
     recognition.lang = 'en-US';
 
     recognition.onresult = (event: any) => {
-      let finalText = '';
+      // Process only NEW results from event.resultIndex onwards — avoids
+      // re-processing old results on each event and survives recognition restarts.
+      let newFinals = '';
       let interimText = '';
-      for (let i = 0; i < event.results.length; i++) {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
         const t = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalText += t + ' ';
+          newFinals += t + ' ';
         } else {
           interimText += t;
         }
       }
-      webSpeechFinalRef.current = finalText.trimEnd();
-      setLiveTranscript((finalText + interimText).trim());
+      // Accumulate finals — never overwrite — so restart-after-silence doesn't
+      // lose what was already finalized.
+      if (newFinals.trim()) {
+        webSpeechFinalRef.current = (webSpeechFinalRef.current + ' ' + newFinals).trim();
+      }
+      const combined = webSpeechFinalRef.current + (interimText ? ' ' + interimText : '');
+      setLiveTranscript(combined.trim());
     };
 
     recognition.onerror = () => { /* ignore — best-effort */ };
@@ -301,19 +320,37 @@ export default function StepSamplePractice({
     setIsRecording(false);
     stopLiveTranscription();
 
-    // Capture browser live transcript before clearing state
-    const browserTranscript = webSpeechFinalRef.current.trim() || liveTranscript.trim();
+    // Capture browser live transcript before clearing state.
+    // Use refs (not state) — both are always current at call time.
+    const browserTranscript = webSpeechFinalRef.current.trim() || liveTranscriptRef.current.trim();
     setLiveTranscript('');
 
+    // Stop audio recorder
     await new Promise<void>((resolve) => {
       const mr = mediaRecorderRef.current!;
       mr.onstop = () => resolve();
       try { mr.stop(); } catch { resolve(); }
     });
-
     const chunks = audioChunksRef.current;
     audioChunksRef.current = [];
     mediaRecorderRef.current = null;
+
+    // Stop video recorder and create replay URL
+    if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
+      await new Promise<void>((resolve) => {
+        const vr = videoRecorderRef.current!;
+        vr.onstop = () => resolve();
+        try { vr.stop(); } catch { resolve(); }
+      });
+    }
+    const videoChunks = videoChunksRef.current;
+    videoChunksRef.current = [];
+    videoRecorderRef.current = null;
+    if (videoChunks.length > 0) {
+      const vMime = videoChunks[0].type || 'video/webm';
+      const videoBlob = new Blob(videoChunks, { type: vMime });
+      setRecordedVideoUrl(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(videoBlob); });
+    }
 
     // If we already have a browser transcript, show it immediately while
     // the backend call runs in the background for a more accurate result.
@@ -335,9 +372,12 @@ export default function StepSamplePractice({
 
     const mimeType = chunks[0].type || 'audio/webm';
     const audioBlob = new Blob(chunks, { type: mimeType });
+    // Firefox records as ogg — derive correct extension so backend (Whisper) processes it correctly
+    const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
+    const namedBlob = new File([audioBlob], `practice.${ext}`, { type: mimeType });
 
     try {
-      const text = await candidateAIInterviewService.transcribePracticeAudio(token, audioBlob);
+      const text = await candidateAIInterviewService.transcribePracticeAudio(token, namedBlob);
       if (text.trim()) {
         setTranscript(text);
         setInputMode('voice');
@@ -354,7 +394,7 @@ export default function StepSamplePractice({
     } finally {
       setIsTranscribing(false);
     }
-  }, [token, liveTranscript, stopLiveTranscription]);
+  }, [token, stopLiveTranscription]);
 
   const startRecording = useCallback(() => {
     // Guard: don't start if already recording or TTS is still speaking
@@ -382,7 +422,26 @@ export default function StepSamplePractice({
       if (e.data.size > 0) audioChunksRef.current.push(e.data);
     };
     mediaRecorderRef.current = mr;
-    mr.start(500); // collect chunks every 500ms
+    mr.start(500);
+
+    // Video+audio recorder for replay
+    if (recordedVideoUrl) { URL.revokeObjectURL(recordedVideoUrl); setRecordedVideoUrl(null); }
+    setShowReplay(false);
+    videoChunksRef.current = [];
+    const videoMimeType = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4',
+    ].find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
+    const vr = new MediaRecorder(
+      mediaStreamRef.current!,
+      videoMimeType ? { mimeType: videoMimeType } : undefined,
+    );
+    vr.ondataavailable = (e) => { if (e.data.size > 0) videoChunksRef.current.push(e.data); };
+    videoRecorderRef.current = vr;
+    vr.start(500);
+
     setIsRecording(true);
     setTranscript('');
     setTypedAnswer('');
@@ -390,7 +449,7 @@ export default function StepSamplePractice({
     setTranscribeError('');
     setLiveTranscript('');
 
-    // Start live transcription via Web Speech API
+    // Start live transcription via Web Speech API (Chromium only — silent fallback on Firefox)
     startLiveTranscription();
   }, [startLiveTranscription]);
 
@@ -410,8 +469,13 @@ export default function StepSamplePractice({
       try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
       mediaRecorderRef.current = null;
     }
+    if (videoRecorderRef.current && videoRecorderRef.current.state !== 'inactive') {
+      try { videoRecorderRef.current.stop(); } catch { /* ignore */ }
+      videoRecorderRef.current = null;
+    }
     stopLiveTranscription();
     audioChunksRef.current = [];
+    videoChunksRef.current = [];
     setIsRecording(false);
     setIsTranscribing(false);
     setTranscript('');
@@ -421,6 +485,8 @@ export default function StepSamplePractice({
     setVoiceReady(false);
     setTranscribeError('');
     setAiSpeaking(false);
+    setRecordedVideoUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+    setShowReplay(false);
     window.speechSynthesis?.cancel();
   }, [stopLiveTranscription]);
 
@@ -434,19 +500,6 @@ export default function StepSamplePractice({
     : typedAnswer;
   const hasAnswer = (isRecording ? false : displayAnswer.trim().length > 0);
 
-  // ── Status items ──────────────────────────────────────────────────────────
-
-  const statusItems = [
-    { icon: Camera, label: 'Camera Access', ready: cameraReady },
-    { icon: Mic, label: 'Microphone', ready: micReady },
-    { icon: Volume2, label: 'Voice Recording', ready: voiceReady },
-  ];
-
-  const checklistItems = [
-    { color: 'bg-green-500', label: 'Microphone', desc: 'Verify audio input is working' },
-    { color: 'bg-orange-400', label: 'Recording', desc: 'Ensure voice is captured properly' },
-    { color: 'bg-gray-500', label: 'Interface', desc: 'You understand how to answer questions' },
-  ];
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -465,19 +518,9 @@ export default function StepSamplePractice({
       <div className="rounded-2xl overflow-hidden border border-gray-800 shadow-2xl bg-[#0A1020]">
 
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.07] bg-[#060D1A]">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-            <span className="text-xs font-semibold text-gray-300 tracking-wide">PRACTICE SESSION</span>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-gray-500">
-            <span className={`flex items-center gap-1 ${cameraReady ? 'text-green-400' : 'text-gray-600'}`}>
-              <Camera className="w-3 h-3" /> {cameraReady ? 'Camera OK' : 'No Camera'}
-            </span>
-            <span className={`flex items-center gap-1 ${micReady ? 'text-green-400' : 'text-gray-600'}`}>
-              <Mic className="w-3 h-3" /> {micReady ? 'Mic OK' : 'No Mic'}
-            </span>
-          </div>
+        <div className="flex items-center px-4 py-2.5 border-b border-white/[0.07] bg-[#060D1A]">
+          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse mr-2" />
+          <span className="text-xs font-semibold text-gray-300 tracking-wide">PRACTICE SESSION</span>
         </div>
 
         {/* 2-Column Grid */}
@@ -540,22 +583,18 @@ export default function StepSamplePractice({
             )}
           </div>
 
-          {/* System status mini row */}
-          <div className="flex items-center gap-3 text-xs">
-            {statusItems.map(item => (
-              <span key={item.label} className={`flex items-center gap-1 ${item.ready ? 'text-[#10B981]' : 'text-[#475569]'}`}>
-                <item.icon className="w-3 h-3" />
-                {item.label}: {item.ready ? 'Ready' : 'Pending'}
-              </span>
-            ))}
-          </div>
         </div>
 
         {/* ── Right: Your Video + Answer ── */}
         <div className="flex flex-col bg-[#060D1A] p-5 gap-4" style={{ minHeight: '360px' }}>
-          {/* Video preview */}
+          {/* Video preview / replay */}
           <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
-            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+            {/* Live camera — hidden during replay */}
+            <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} />
+            {/* Replay video — shown when user clicks Watch Replay */}
+            {showReplay && recordedVideoUrl && (
+              <video ref={replayVideoRef} src={recordedVideoUrl} controls autoPlay playsInline className="w-full h-full object-cover" />
+            )}
 
             {/* Audio level bar */}
             <div className="absolute bottom-0 left-0 right-0 px-3 pb-2.5">
@@ -597,10 +636,18 @@ export default function StepSamplePractice({
                   </span>
                 )}
                 {hasAnswer && !isRecording && !isTranscribing && (
-                  <button type="button" onClick={resetPractice}
-                    className="flex items-center gap-1 text-xs text-[#64748B] hover:text-white transition-colors">
-                    <RefreshCw className="w-3 h-3" /> Retry
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {recordedVideoUrl && (
+                      <button type="button" onClick={() => setShowReplay(v => !v)}
+                        className="flex items-center gap-1 text-xs text-[#60A5FA] hover:text-white transition-colors">
+                        {showReplay ? <><VideoOff className="w-3 h-3" /> Live</> : <><Video className="w-3 h-3" /> Watch Replay</>}
+                      </button>
+                    )}
+                    <button type="button" onClick={resetPractice}
+                      className="flex items-center gap-1 text-xs text-[#64748B] hover:text-white transition-colors">
+                      <RefreshCw className="w-3 h-3" /> Retry
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

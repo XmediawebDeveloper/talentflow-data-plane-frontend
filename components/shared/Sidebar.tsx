@@ -86,6 +86,19 @@ interface NavSection {
 export default function Sidebar({ user, tenant, subscriptionExpired, accountSuspended, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { hasPlanFeature, loading: planFeaturesLoading } = usePlanFeatures();
+
+  // Track which list page the user came from when viewing resume details
+  const [resumeViewSource, setResumeViewSource] = useState<string | null>(null);
+  useEffect(() => {
+    if (pathname.startsWith('/recruitment/resume-view/')) {
+      try {
+        const src = sessionStorage.getItem('resumeNavSource');
+        setResumeViewSource(src);
+      } catch { setResumeViewSource(null); }
+    } else {
+      setResumeViewSource(null);
+    }
+  }, [pathname]);
   const [expandedSections, setExpandedSections] = useState<string[]>([
     'administration', 'recruitment', 'resume-management', 'evaluation',
     'organization', 'user-management-section', 'masters', 'subscription', 'settings', 'reports', 'audits'
@@ -324,7 +337,12 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
   const visibleSections = filterSections(allSections);
 
   const relatedPaths: Record<string, string[]> = {
-    '/recruitment/job-openings': ['/recruitment/job-details'],
+    '/recruitment/job-openings': resumeViewSource === 'job-details'
+      ? ['/recruitment/job-details', '/recruitment/resume-view']
+      : ['/recruitment/job-details'],
+    '/recruitment/my-resumes': resumeViewSource === 'my-resumes' ? ['/recruitment/resume-view'] : [],
+    '/recruitment/resume-database': resumeViewSource === 'resume-database' ? ['/recruitment/resume-view'] : [],
+    '/recruitment/ai-talent-match': resumeViewSource === 'ai-talent-match' ? ['/recruitment/resume-view'] : [],
   };
 
   const isActive = (href?: string): boolean => {

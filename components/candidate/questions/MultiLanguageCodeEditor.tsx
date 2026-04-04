@@ -70,6 +70,44 @@ interface ExecutionOutput {
   compile_error?: string;
 }
 
+const buildSavedExecutionOutput = (
+  previousAnswer: CurrentQuestion['previous_answer']
+): ExecutionOutput | null => {
+  if (!previousAnswer) return null;
+
+  const status = previousAnswer.code_execution_status;
+  const output = previousAnswer.code_execution_output || undefined;
+  const error = previousAnswer.code_execution_error || undefined;
+
+  if (!status && !output && !error) {
+    return null;
+  }
+
+  if (status === 'syntax_error') {
+    return {
+      success: false,
+      compile_error: error || 'Compilation failed',
+    };
+  }
+
+  if (error) {
+    return {
+      success: false,
+      output,
+      error,
+    };
+  }
+
+  if (output) {
+    return {
+      success: status === 'success',
+      output,
+    };
+  }
+
+  return null;
+};
+
 export function MultiLanguageCodeEditor({
   question,
   answer,
@@ -151,9 +189,12 @@ export function MultiLanguageCodeEditor({
       initialCode = '';
     }
 
+    const restoredInput = answer.code_input || '';
+    const restoredExecutionOutput = buildSavedExecutionOutput(question.previous_answer);
+
     setCode(initialCode);
-    setCustomInput(answer.code_input || '');
-    setExecutionOutput(null);
+    setCustomInput(restoredInput);
+    setExecutionOutput(restoredExecutionOutput);
     setSubmissionResult(null);
     setTestResults(null);
     setHasSubmitted(false);
@@ -161,7 +202,7 @@ export function MultiLanguageCodeEditor({
     onAnswerChange({
       ...answer,
       code_submission: initialCode,
-      code_input: answer.code_input || '',
+      code_input: restoredInput,
       language: selectedLanguage,
     });
   // question.question_id ensures this re-runs when navigating between questions,
@@ -907,7 +948,7 @@ export function MultiLanguageCodeEditor({
           <div className="border-t border-gray-700 bg-gray-800 p-3">
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs text-gray-400 uppercase tracking-wide">
-                Input (stdin)
+                Program Input (stdin)
               </label>
               {question.sample_input && customInput !== question.sample_input && (
                 <button
@@ -918,7 +959,7 @@ export function MultiLanguageCodeEditor({
                   }}
                   className="text-xs text-blue-400 hover:text-blue-300"
                 >
-                  Reset to sample input
+                  Use Example Input
                 </button>
               )}
             </div>
@@ -929,9 +970,17 @@ export function MultiLanguageCodeEditor({
                 setCustomInput(nextInput);
                 onAnswerChange({ ...answer, code_submission: code, code_input: nextInput, language: selectedLanguage });
               }}
-              placeholder="Enter input for your program here (e.g., numbers, text that your code will read)..."
+              placeholder="Enter the exact stdin text your program should read. Each new line here is passed to the program as a new line."
               className="w-full h-16 sm:h-20 bg-gray-900 text-green-400 font-mono text-sm p-2 sm:p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            <p className="text-xs text-gray-400 mt-1">
+              Enter raw stdin exactly as described in the problem. If the example shows multiple lines, keep the same line breaks here.
+            </p>
+            {question.sample_input && (
+              <p className="text-xs text-blue-300 mt-1">
+                Tip: `Use Example Input` copies the sample input into this box exactly as shown in the problem.
+              </p>
+            )}
             {!customInput.trim() && (
               <p className="text-xs text-amber-400 mt-1">
                 ⚠ Your code may need input. Enter test values above before running.

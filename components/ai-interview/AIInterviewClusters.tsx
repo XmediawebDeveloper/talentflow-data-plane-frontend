@@ -535,6 +535,9 @@ function CategorySection({
   onAddCluster,
   maxClusters,
   isReadOnly = false,
+  skills = [],
+  onAddSkill,
+  onRemoveSkillFromPool,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -551,7 +554,27 @@ function CategorySection({
   onAddCluster: (category: 'mth' | 'nth') => void;
   maxClusters: number;
   isReadOnly?: boolean;
+  skills?: SkillEntry[];
+  onAddSkill?: (skillName: string) => void;
+  onRemoveSkillFromPool?: (skillName: string) => void;
 }) {
+  const [newSkillInput, setNewSkillInput] = useState('');
+  const [skillInputError, setSkillInputError] = useState('');
+
+  const handleAddSkill = () => {
+    const trimmed = newSkillInput.trim();
+    if (!trimmed) { setSkillInputError('Skill name cannot be empty'); return; }
+    const duplicate = skills.some(s => s.name.toLowerCase() === trimmed.toLowerCase());
+    if (duplicate) { setSkillInputError(`"${trimmed}" already exists`); return; }
+    onAddSkill?.(trimmed);
+    setNewSkillInput('');
+    setSkillInputError('');
+  };
+
+  // Track which skills are assigned to at least one cluster
+  const assignedSkillNames = new Set(
+    clusters.flatMap(c => c.skills.map(s => s.toLowerCase().trim()))
+  );
   const clusterMinuteMap = allocateClusterMinutes(clusters, timeMin);
   const atLimit = maxClusters > 0 && clusters.length >= maxClusters;
 
@@ -593,6 +616,72 @@ function CategorySection({
             <Plus className="w-3.5 h-3.5" />
             Add Cluster
           </button>
+        )}
+      </div>
+
+      {/* ── Skills pool section ── */}
+      <div className="px-4 pt-4 pb-2 border-b border-gray-100">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Skills</span>
+          <span className="text-xs text-gray-400">{skills.length} skill{skills.length !== 1 ? 's' : ''}</span>
+        </div>
+
+        {/* Skill tags */}
+        {skills.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {skills.map(skill => {
+              const isAssigned = assignedSkillNames.has(skill.name.toLowerCase().trim());
+              return (
+                <span
+                  key={skill.name}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                    isAssigned
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}
+                >
+                  {skill.name}
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={() => onRemoveSkillFromPool?.(skill.name)}
+                      className="ml-0.5 hover:text-red-500 transition-colors"
+                      title="Remove skill"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Add skill input */}
+        {!isReadOnly && (
+          <div className="flex items-start gap-2">
+            <div className="flex-1">
+              <input
+                type="text"
+                value={newSkillInput}
+                onChange={e => { setNewSkillInput(e.target.value); if (skillInputError) setSkillInputError(''); }}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddSkill(); } }}
+                placeholder={`Add a ${category === 'mth' ? 'must-have' : 'nice-to-have'} skill`}
+                className={`w-full px-3 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-1 ${
+                  skillInputError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-gray-400'
+                }`}
+              />
+              {skillInputError && <p className="mt-1 text-[11px] text-red-500">{skillInputError}</p>}
+            </div>
+            <button
+              type="button"
+              onClick={handleAddSkill}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add
+            </button>
+          </div>
         )}
       </div>
 
@@ -650,9 +739,12 @@ export default function AIInterviewClusters() {
   const [mthClusters, setMthClusters] = useState<Cluster[]>([]);
   const [nthClusters, setNthClusters] = useState<Cluster[]>([]);
 
-  /* Skills lists (read-only from config) */
+  /* Skills lists (editable — user can add/remove skills on this page) */
   const [mthSkills, setMthSkills] = useState<SkillEntry[]>([]);
   const [nthSkills, setNthSkills] = useState<SkillEntry[]>([]);
+  /* Original JD skill names — used to separate new custom skills on save */
+  const jdMthSkillNamesRef = useRef<Set<string>>(new Set());
+  const jdNthSkillNamesRef = useRef<Set<string>>(new Set());
   const [nthEnabled, setNthEnabled] = useState(true);
 
   /* Time / mode */
@@ -716,8 +808,8 @@ export default function AIInterviewClusters() {
         const timedAllocation = getTimedModeAllocation(nthEnabledForTimed, hrEnabledForTimed);
         setFixedMthMin(fixed ? timedAllocation.mthMinutes : 0);
         setFixedNthMin(fixed ? timedAllocation.nthMinutes : 0);
-        setMthMaxClusters(fixed ? timedAllocation.mthMaxClusters : 0);
-        setNthMaxClusters(fixed ? timedAllocation.nthMaxClusters : 0);
+        setMthMaxClusters(fixed ? timedAllocation.mthMaxClusters : 3);
+        setNthMaxClusters(fixed ? timedAllocation.nthMaxClusters : 2);
         setHrEnabled(hrEnabledForTimed);
         setFixedHrMin(fixed ? timedAllocation.hrMinutes : 0);
 
@@ -749,15 +841,19 @@ export default function AIInterviewClusters() {
         };
 
         if (mthRound) {
-          setMthSkills(toSkillEntries(buildSkillList(mthRound), mthComments, mthTypes));
+          const mthList = buildSkillList(mthRound);
+          setMthSkills(toSkillEntries(mthList, mthComments, mthTypes));
+          jdMthSkillNamesRef.current = new Set((mthRound.jd_skills ?? []).map((s: string) => s.toLowerCase()));
         } else if (draft.jd_must_have_skills?.length) {
           setMthSkills(toSkillEntries(draft.jd_must_have_skills, mthComments, mthTypes));
+          jdMthSkillNamesRef.current = new Set(draft.jd_must_have_skills.map((s: string) => s.toLowerCase()));
         }
 
         if (nthRound) {
           setNthEnabled(nthRound.enabled !== false);
           const skills = buildSkillList(nthRound);
           setNthSkills(nthRound.enabled !== false ? toSkillEntries(skills, nthComments, nthTypes) : []);
+          jdNthSkillNamesRef.current = new Set((nthRound.jd_skills ?? []).map((s: string) => s.toLowerCase()));
         } else {
           setNthEnabled(false);
           setNthSkills([]);
@@ -765,29 +861,25 @@ export default function AIInterviewClusters() {
 
         // Restore clusters from special_instructions — trim to current scenario max.
         // Rules:
-        //   MHS fixed: trim to mthMaxClusters; MHS flexible: no limit (keep all)
-        //   NHS enabled+fixed: trim to nthMaxClusters; NHS enabled+flexible: keep all
+        //   MHS fixed: trim to timedAllocation.mthMaxClusters; MHS flexible: trim to 3
+        //   NHS enabled+fixed: trim to timedAllocation.nthMaxClusters; NHS enabled+flexible: trim to 2
         //   NHS disabled: always clear (regardless of what was saved)
         if (si.mth_clusters?.length) {
-          const mthMax = fixed ? timedAllocation.mthMaxClusters : 0;
+          const mthMax = fixed ? timedAllocation.mthMaxClusters : 3;
           const mthRaw: any[] = si.mth_clusters;
-          const mthTrimmed = mthMax > 0
-            ? [...mthRaw].sort((a, b) => (b.priority ?? 3) - (a.priority ?? 3)).slice(0, mthMax)
-            : mthRaw; // flexible mode (mthMax=0) → no cluster limit
+          const mthTrimmed = [...mthRaw].sort((a, b) => (b.priority ?? 3) - (a.priority ?? 3)).slice(0, mthMax);
           setMthClusters(mthTrimmed.map((c: any) => ({
             ...c,
             priority: c.priority as Cluster['priority'],
           })));
         }
         if (si.nth_clusters?.length) {
-          const nthMax = fixed ? timedAllocation.nthMaxClusters : 0;
+          const nthMax = fixed ? timedAllocation.nthMaxClusters : 2;
           const nthRaw: any[] = si.nth_clusters;
           // nthEnabledForTimed=false means NHS is disabled — always clear saved clusters
           const nthTrimmed = !nthEnabledForTimed
             ? []
-            : nthMax > 0
-            ? [...nthRaw].sort((a, b) => (b.priority ?? 3) - (a.priority ?? 3)).slice(0, nthMax)
-            : nthRaw; // flexible mode (nthMax=0, NHS enabled) → no cluster limit
+            : [...nthRaw].sort((a, b) => (b.priority ?? 3) - (a.priority ?? 3)).slice(0, nthMax);
           setNthClusters(nthTrimmed.map((c: any) => ({
             ...c,
             priority: c.priority as Cluster['priority'],
@@ -894,6 +986,39 @@ export default function AIInterviewClusters() {
     setter(prev => [...prev, newCluster]);
     setExpandedIds(prev => new Set(prev).add(newCluster.id));
   }, [mthMaxClusters, nthMaxClusters, mthClusters, nthClusters]);
+
+  /* ── Skill pool management ── */
+  const addSkillToCategory = useCallback((category: 'mth' | 'nth', skillName: string) => {
+    const trimmed = skillName.trim();
+    if (!trimmed) return;
+    const setter = category === 'mth' ? setMthSkills : setNthSkills;
+    const current = category === 'mth' ? mthSkills : nthSkills;
+    const duplicate = current.some(s => s.name.toLowerCase() === trimmed.toLowerCase());
+    if (duplicate) {
+      toast.error(`"${trimmed}" is already in the ${category === 'mth' ? 'Must-To-Have' : 'Nice-To-Have'} skills list`);
+      return;
+    }
+    setter(prev => [...prev, { name: trimmed, comment: '', type: 'Skill' }]);
+    toast.success(`"${trimmed}" added`);
+  }, [mthSkills, nthSkills]);
+
+  const removeSkillFromPool = useCallback((category: 'mth' | 'nth', skillName: string) => {
+    // Remove from skills list
+    if (category === 'mth') {
+      setMthSkills(prev => prev.filter(s => s.name !== skillName));
+      // Also remove from all MTH clusters
+      setMthClusters(prev => prev.map(c => ({
+        ...c,
+        skills: c.skills.filter(s => s.toLowerCase() !== skillName.toLowerCase()),
+      })));
+    } else {
+      setNthSkills(prev => prev.filter(s => s.name !== skillName));
+      setNthClusters(prev => prev.map(c => ({
+        ...c,
+        skills: c.skills.filter(s => s.toLowerCase() !== skillName.toLowerCase()),
+      })));
+    }
+  }, []);
 
   /* ── AI Generate ── */
   const handleGenerateClusters = async () => {
@@ -1036,28 +1161,41 @@ export default function AIInterviewClusters() {
       return result;
     };
 
-    // Update must-have round with mth cluster topics
+    // Helper: split current skills into jd_skills (original) and custom_skills (added here)
+    const splitSkills = (skills: SkillEntry[], jdSet: Set<string>) => {
+      const jd: string[] = [];
+      const custom: string[] = [];
+      skills.forEach(s => {
+        if (jdSet.has(s.name.toLowerCase())) jd.push(s.name);
+        else custom.push(s.name);
+      });
+      return { jd_skills: jd, custom_skills: custom };
+    };
+
+    // Update must-have round with mth cluster topics + updated skill lists
     const mthIdx = rounds.findIndex(
       (r: any) => r.type === 'must_have_skills' || r.type === 'must_have'
     );
-    if (mthIdx >= 0 && mthClusters.length > 0) {
+    if (mthIdx >= 0) {
+      const { jd_skills, custom_skills } = splitSkills(mthSkills, jdMthSkillNamesRef.current);
       const topics = mthClusters.map((c) => c.name);
       const topic_weights: Record<string, number> = {};
       mthClusters.forEach((c) => { topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40; });
       const topic_time_minutes = buildTopicTimeMap(mthClusters, fixedMthMin);
-      rounds[mthIdx] = { ...rounds[mthIdx], topics, topic_weights, topic_time_minutes };
+      rounds[mthIdx] = { ...rounds[mthIdx], jd_skills, custom_skills, topics, topic_weights, topic_time_minutes };
     }
 
-    // Update nice-to-have round with nth cluster topics (only when NHS enabled)
+    // Update nice-to-have round with nth cluster topics + updated skill lists (only when NHS enabled)
     const nthIdx = rounds.findIndex(
       (r: any) => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have'
     );
-    if (nthIdx >= 0 && nthEnabled && nthClusters.length > 0) {
+    if (nthIdx >= 0 && nthEnabled) {
+      const { jd_skills, custom_skills } = splitSkills(nthSkills, jdNthSkillNamesRef.current);
       const topics = nthClusters.map((c) => c.name);
       const topic_weights: Record<string, number> = {};
       nthClusters.forEach((c) => { topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40; });
       const topic_time_minutes = buildTopicTimeMap(nthClusters, fixedNthMin);
-      rounds[nthIdx] = { ...rounds[nthIdx], topics, topic_weights, topic_time_minutes };
+      rounds[nthIdx] = { ...rounds[nthIdx], jd_skills, custom_skills, topics, topic_weights, topic_time_minutes };
     }
 
     return rounds;
@@ -1097,6 +1235,22 @@ export default function AIInterviewClusters() {
   };
 
   const handleContinue = () => {
+    // Flexible mode: block progression when cluster structure is invalid
+    if (isFlexible && hasIssues) {
+      if (emptyClusters.length > 0) {
+        toast.error(
+          `${emptyClusters.length} cluster${emptyClusters.length > 1 ? 's have' : ' has'} no skills. Each cluster must contain at least one skill.`,
+        );
+        return;
+      }
+      const unassignedCount = unassignedMth.length + unassignedNth.length;
+      if (unassignedCount > 0) {
+        toast.error(
+          `${unassignedCount} skill${unassignedCount > 1 ? 's are' : ' is'} not assigned to any cluster. All skills must belong to a cluster.`,
+        );
+        return;
+      }
+    }
     saveAndNavigate(
       '/recruitment/ai-interviews/jd-selection/ai-interview-config/preview?id=' + id,
       true, // finalize = true → sets flexible_finalized in flexible mode
@@ -1366,10 +1520,13 @@ export default function AIInterviewClusters() {
                 onAddCluster={addCluster}
                 maxClusters={mthMaxClusters}
                 isReadOnly={isFlexible && isFinalized}
+                skills={mthSkills}
+                onAddSkill={name => addSkillToCategory('mth', name)}
+                onRemoveSkillFromPool={name => removeSkillFromPool('mth', name)}
               />
 
               {/* Nice-To-Have Section */}
-              {nthEnabled && nthSkills.length > 0 && (
+              {nthEnabled && (
                 <CategorySection
                   title="Nice-To-Have Skills"
                   icon={<Star className="w-5 h-5 text-amber-500" />}
@@ -1386,6 +1543,9 @@ export default function AIInterviewClusters() {
                   onAddCluster={addCluster}
                   maxClusters={nthMaxClusters}
                   isReadOnly={isFlexible && isFinalized}
+                  skills={nthSkills}
+                  onAddSkill={name => addSkillToCategory('nth', name)}
+                  onRemoveSkillFromPool={name => removeSkillFromPool('nth', name)}
                 />
               )}
             </>

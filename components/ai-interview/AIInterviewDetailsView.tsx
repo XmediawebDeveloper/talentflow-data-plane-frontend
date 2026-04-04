@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import {
-  ArrowLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
+  ArrowLeft, ChevronLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, Brain, Sparkles,
   ExternalLink, Layers, Pencil, Zap, Timer,
@@ -64,9 +64,13 @@ interface AIInterviewDetailsViewProps {
   config: AIInterviewResponse;
   onBack: () => void;
   onRefresh?: () => void;
+  currentIndex?: number;
+  totalCount?: number;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
-export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AIInterviewDetailsViewProps) {
+export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext }: AIInterviewDetailsViewProps) {
   const router = useRouter();
   const { user, isTenantAdmin } = useAuth();
   const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
@@ -282,13 +286,38 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh }: AI
       <div className="w-full">
         {/* Header */}
         <div className="mb-6">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-4 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to AI Interviews
-          </button>
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to AI Interviews
+            </button>
+            {totalCount != null && totalCount > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onPrev}
+                  disabled={!onPrev || currentIndex === 0}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                <span className="text-sm text-gray-600 font-medium px-1">
+                  {(currentIndex ?? 0) + 1} / {totalCount}
+                </span>
+                <button
+                  onClick={onNext}
+                  disabled={!onNext || currentIndex === totalCount - 1}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-start justify-between">
             <div>

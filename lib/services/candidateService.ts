@@ -247,6 +247,9 @@ export interface CurrentQuestion {
     code_submission: string | null;
     language: string | null;  // Coding language used (python, java, etc.)
     code_input: string | null;
+    code_execution_status: string | null;
+    code_execution_output: string | null;
+    code_execution_error: string | null;
     is_locked: boolean;  // True = submitted (not editable), False = draft (editable)
   } | null;
   // All question statuses for progress tracking
