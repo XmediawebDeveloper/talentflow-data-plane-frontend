@@ -267,24 +267,64 @@ export default function SelectSourceModal({
         };
       });
 
-      // Store batch info for the resume-scoring page to poll
-      const scoringData = {
-        batchId: response.batch_id,
-        jobId: response.jd_id,
-        jobTitle: response.jd_title,
-        totalResumes: response.total_resumes,
-        resumeItems,
-      };
-      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
+      // Initialize progress items and show modal
+      const initialItems: ProgressItem[] = resumeItems.map(item => ({
+        resumeId: item.resumeId,
+        candidateName: item.candidateName,
+        status: 'queued' as const,
+      }));
+      setProgressItems(initialItems);
+      setScoringStats({ queued: initialItems.length, processing: 0, completed: 0, failed: 0 });
+      setShowProgressModal(true);
 
-      // Switch to Scored Resumes tab and refresh data via parent callback.
-      // onScoringComplete closes the modal, fetches fresh scored resumes, and
-      // sets activeTab to 'scored-resumes' — all without a page navigation.
-      if (onScoringComplete) {
-        onScoringComplete();
-      } else {
-        onClose();
-      }
+      // Poll batch status until all items are done
+      const batchId = response.batch_id;
+      const completedJobIds = new Set<string>();
+      const poll = async () => {
+        try {
+          const batchStatus = await scoringService.getBatchStatus(batchId);
+
+          // Update progress items from batch status
+          setProgressItems(prev => prev.map(item => {
+            const batchItem = batchStatus.items.find((b: any) => b.resume_id === item.resumeId);
+            if (!batchItem) return item;
+            let status: ProgressItem['status'] = item.status;
+            if (batchItem.status === 'completed') status = 'completed';
+            else if (batchItem.status === 'failed') status = 'failed';
+            else if (batchItem.status === 'processing') status = 'processing';
+            else status = 'queued';
+            return { ...item, status, score: batchItem.overall_score, matchStatus: batchItem.match_status };
+          }));
+          setScoringStats({
+            queued: batchStatus.queued,
+            processing: batchStatus.processing,
+            completed: batchStatus.completed,
+            failed: batchStatus.failed,
+          });
+
+          const allDone = batchStatus.status === 'completed' || batchStatus.status === 'failed' ||
+            (batchStatus.queued === 0 && batchStatus.processing === 0);
+
+          if (allDone) {
+            setSubmitting(false);
+            // Redirect to Scored Resumes tab after a short delay so user sees final state
+            setTimeout(() => {
+              setShowProgressModal(false);
+              if (onScoringComplete) {
+                onScoringComplete();
+              } else {
+                onClose();
+              }
+            }, 1500);
+          } else {
+            setTimeout(poll, 3000);
+          }
+        } catch {
+          setTimeout(poll, 5000);
+        }
+      };
+      setTimeout(poll, 3000);
+
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
       toast.error(error.message || 'Failed to start scoring');

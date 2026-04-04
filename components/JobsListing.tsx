@@ -1151,8 +1151,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
                       {/* Actions */}
                       <div className="flex flex-wrap gap-2 items-center">
-                        {/* Edit Button - icon only */}
-                        {onEditJob && (
+                        {/* Edit Button - icon only (hidden for Disabled JDs) */}
+                        {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
                             className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
@@ -1414,8 +1414,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
                       {/* Actions */}
                       <div className="flex flex-wrap gap-2 flex-shrink-0 items-center">
-                        {/* Edit Button - icon only */}
-                        {onEditJob && (
+                        {/* Edit Button - icon only (hidden for Disabled JDs) */}
+                        {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
                             className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"

@@ -133,9 +133,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     if (!isConnected || isClosing) return;
     timerIntervalRef.current = setInterval(() => {
-      // Legacy unlimited flexible (count-up): pause while Linda speaks / processing.
-      // New flexible and timed/fixed: run non-stop — every second counts toward total budget.
-      if (isFlexibleMode && (isAiSpeakingRef.current || isProcessingRef.current)) return;
+      // Pause ALL modes when Linda is speaking — candidate time only runs when user can answer.
+      if (isAiSpeakingRef.current) return;
+      // Legacy unlimited flexible (count-up): also pause while processing.
+      if (isFlexibleMode && isProcessingRef.current) return;
       setRemainingSeconds(prev => {
         if (isFlexibleMode) return prev + 1; // legacy unlimited: count up
         if (prev <= 1) {
@@ -434,6 +435,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       clearInterval(questionTimerIntervalRef.current);
     }
     questionTimerIntervalRef.current = setInterval(() => {
+      if (isAiSpeakingRef.current) return; // pause when Linda speaks
       setQuestionTimerSeconds(prev => {
         if (prev === null || prev <= 1) {
           if (questionTimerIntervalRef.current) {
@@ -884,6 +886,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           questionTimerPendingRef.current = null;
           questionTimerReceivedAtRef.current = null;
           questionTimerIntervalRef.current = setInterval(() => {
+            if (isAiSpeakingRef.current) return; // pause when Linda speaks
             setQuestionTimerSeconds(prev => {
               if (prev === null || prev <= 1) {
                 if (questionTimerIntervalRef.current) {
@@ -905,6 +908,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
         }
+        stopRecordingSilentRef.current(); // stop mic — backend handles advancing to next question
         setStatus("Time's up — moving to the next question...");
         break;
       case "skill_coverage_update":
@@ -2105,10 +2109,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                         <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#10B981]/15 border border-[#10B981]/25 text-[#10B981] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }}>✓ {skill}</span>
                       );
                       if (mediumSet.has(skill)) return (
-                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/12 border border-[#F59E0B]/35 text-[#D97706] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Adequately covered — moving on">~ {skill}</span>
+                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/12 border border-[#F59E0B]/35 text-[#D97706] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Medium coverage — adequately covered">~ {skill}</span>
                       );
                       if (lowSet.has(skill)) return (
-                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F97316]/10 border border-[#F97316]/30 text-[#C2410C] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Briefly touched — needs more depth">≈ {skill}</span>
+                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F97316]/10 border border-[#F97316]/30 text-[#C2410C] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Low coverage — needs more depth">≈ {skill}</span>
                       );
                       if (nthSet.has(skill)) return (
                         <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/10 border border-dashed border-[#F59E0B]/30 text-[#92400E] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Nice-to-have — skippable">{skill} ○</span>
@@ -2119,13 +2123,38 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     })}
                   </div>
                   {/* Legend */}
-                  {(skillCoverage.medium_covered.length > 0 || skillCoverage.low_covered.length > 0 || skillCoverage.uncovered.some(s => nthSet.has(s))) && (
-                    <div className="flex items-center gap-2 mt-1.5">
-                      {skillCoverage.medium_covered.length > 0 && <span className="text-[#475569]" style={{ fontSize: 8 }}>~ partial</span>}
-                      {skillCoverage.low_covered.length > 0 && <span className="text-[#475569]" style={{ fontSize: 8 }}>≈ weak</span>}
-                      {skillCoverage.uncovered.some(s => nthSet.has(s)) && <span className="text-[#475569]" style={{ fontSize: 8 }}>○ optional</span>}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                    {skillCoverage.covered.length > 0 && (
+                      <span className="flex items-center gap-1" style={{ fontSize: 9 }}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] inline-block" />
+                        <span className="text-[#10B981] font-semibold">High</span>
+                      </span>
+                    )}
+                    {skillCoverage.medium_covered.length > 0 && (
+                      <span className="flex items-center gap-1" style={{ fontSize: 9 }}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] inline-block" />
+                        <span className="text-[#D97706] font-semibold">Medium</span>
+                      </span>
+                    )}
+                    {skillCoverage.low_covered.length > 0 && (
+                      <span className="flex items-center gap-1" style={{ fontSize: 9 }}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#F97316] inline-block" />
+                        <span className="text-[#C2410C] font-semibold">Low</span>
+                      </span>
+                    )}
+                    {skillCoverage.uncovered.length > 0 && (
+                      <span className="flex items-center gap-1" style={{ fontSize: 9 }}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#475569]/40 inline-block" />
+                        <span className="text-[#475569] font-semibold">Not covered</span>
+                      </span>
+                    )}
+                    {skillCoverage.uncovered.some(s => nthSet.has(s)) && (
+                      <span className="flex items-center gap-1" style={{ fontSize: 9 }}>
+                        <span className="w-1.5 h-1.5 rounded-full border border-[#F59E0B]/50 inline-block" />
+                        <span className="text-[#92400E] font-semibold">Optional</span>
+                      </span>
+                    )}
+                  </div>
 
                   {/* HR topic coverage — shown during HR round */}
                   {skillCoverage.hr_topics && Object.keys(skillCoverage.hr_topics).length > 0 && (
