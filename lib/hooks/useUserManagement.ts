@@ -314,7 +314,21 @@ export function useUserManagement() {
         return { success: false };
       }
 
-      if (!response.ok) throw new Error('Failed to invite user');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const detail = errData?.detail;
+        let message = 'Failed to invite user';
+        if (typeof detail === 'string') {
+          message = detail;
+        } else if (detail?.message) {
+          message = detail.message;
+        } else if (detail?.error) {
+          message = detail.error;
+        } else if (Array.isArray(detail) && detail[0]?.msg) {
+          message = detail[0].msg;
+        }
+        throw new Error(message);
+      }
 
       await fetchUsers();
       return { success: true };

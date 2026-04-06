@@ -126,20 +126,31 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     };
   } | null>(null);
 
+  const [tabSwitchWarning, setTabSwitchWarning] = useState<{ message: string; targetTab: 'single' | 'bulk' } | null>(null);
+
   // Handler to switch tabs with validation
   const handleTabSwitch = (newTab: 'single' | 'bulk') => {
-    // If switching to single tab and have multiple files selected, clear them
-    if (newTab === 'single' && selectedFiles.length > 1) {
-      setSelectedFiles([]);
-      setValidationErrors([{
-        fileName: '',
-        error: 'Files cleared. Single upload accepts only 1 file at a time.',
-        type: 'limit'
-      }]);
-    } else {
-      setValidationErrors([]);
+    if (newTab === activeTab) return;
+    // Block tab switch if files are already selected — user must clear first
+    if (selectedFiles.length > 0) {
+      setTabSwitchWarning({
+        message: `You have ${selectedFiles.length} ${selectedFiles.length > 1 ? 'files' : 'file'} selected. Clear ${selectedFiles.length > 1 ? 'them' : 'it'} before switching to ${newTab === 'single' ? 'Single' : 'Bulk'} Upload.`,
+        targetTab: newTab
+      });
+      return;
     }
+    setTabSwitchWarning(null);
+    setValidationErrors([]);
     setActiveTab(newTab);
+  };
+
+  const handleClearAndSwitch = () => {
+    if (!tabSwitchWarning) return;
+    setSelectedFiles([]);
+    setValidationErrors([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    setActiveTab(tabSwitchWarning.targetTab);
+    setTabSwitchWarning(null);
   };
 
   // Check quota status on mount
@@ -673,10 +684,14 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           <div className="flex gap-2 sm:gap-4 mb-4 sm:mb-6">
             <button
               onClick={() => handleTabSwitch('single')}
+              disabled={activeTab !== 'single' && selectedFiles.length > 0}
+              title={activeTab !== 'single' && selectedFiles.length > 0 ? 'Clear selected files before switching to Single Upload' : undefined}
               className={`flex-1 p-2.5 sm:p-4 rounded-lg border-2 transition-all ${
                 activeTab === 'single'
                   ? 'border-blue-600 bg-blue-50 shadow-sm'
-                  : 'border-gray-200 hover:border-gray-300'
+                  : selectedFiles.length > 0
+                    ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                    : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="text-center">
@@ -689,10 +704,14 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
             </button>
             <button
               onClick={() => handleTabSwitch('bulk')}
+              disabled={activeTab !== 'bulk' && selectedFiles.length > 0}
+              title={activeTab !== 'bulk' && selectedFiles.length > 0 ? 'Clear selected files before switching to Bulk Upload' : undefined}
               className={`flex-1 p-2.5 sm:p-4 rounded-lg border-2 transition-all ${
                 activeTab === 'bulk'
                   ? 'border-blue-600 bg-blue-50 shadow-sm'
-                  : 'border-gray-200 hover:border-gray-300'
+                  : selectedFiles.length > 0
+                    ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                    : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="text-center">
@@ -704,6 +723,21 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               </div>
             </button>
           </div>
+
+          {tabSwitchWarning && (
+            <div className="flex items-start sm:items-center justify-between gap-3 mb-4 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-300">
+              <div className="flex items-start gap-2 text-amber-800 text-xs sm:text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5 sm:mt-0" />
+                <span>{tabSwitchWarning.message}</span>
+              </div>
+              <button
+                onClick={handleClearAndSwitch}
+                className="flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-md bg-amber-600 hover:bg-amber-700 text-white transition-colors whitespace-nowrap"
+              >
+                Clear &amp; Switch
+              </button>
+            </div>
+          )}
 
           <div
             onDragOver={handleDragOver}
@@ -765,6 +799,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                     onClick={() => {
                       setSelectedFiles([]);
                       setValidationErrors([]);
+                      setTabSwitchWarning(null);
                     }}
                     className="text-xs sm:text-sm text-red-600 hover:text-red-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-red-50 transition-colors"
                   >

@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useQuota } from '@/contexts/QuotaContext';
 
 interface Job {
@@ -688,7 +688,7 @@ export default function AITalentMatchPage({
         for (const candidate of candidates) {
           if (candidate.email) {
             try {
-              await assessmentService.sendInvitation(assessment.id, {
+              await assessmentService.invite(assessment.id, {
                 candidate_email: candidate.email,
                 candidate_name: candidate.name,
                 resume_id: candidate.resumeId || candidate.candidateId,
@@ -1499,11 +1499,7 @@ export default function AITalentMatchPage({
                                 )}
                                 {assessment.created_at && (
                                   <span>
-                                    {(() => {
-                                      const dateWithZ = assessment.created_at + (assessment.created_at.includes('Z') ? '' : 'Z');
-                                      const date = new Date(dateWithZ);
-                                      return `${date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}`;
-                                    })()}
+                                    {formatIST(assessment.created_at)}
                                   </span>
                                 )}
                               </div>
@@ -1571,7 +1567,7 @@ export default function AITalentMatchPage({
             jd_title: selectedAssessments[0].jd_title,
             jd_version: selectedAssessments[0].jd_version,
           }}
-          assessments={selectedAssessments.map(a => ({
+          additionalAssessments={selectedAssessments.map(a => ({
             id: a.id,
             title: a.title,
             duration: `${a.duration_minutes || 0} min`,
@@ -2618,11 +2614,7 @@ export default function AITalentMatchPage({
                                 )}
                                 {assessment.created_at && (
                                   <span>
-                                    {(() => {
-                                      const dateWithZ = assessment.created_at + (assessment.created_at.includes('Z') ? '' : 'Z');
-                                      const date = new Date(dateWithZ);
-                                      return `${date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}`;
-                                    })()}
+                                    {formatIST(assessment.created_at)}
                                   </span>
                                 )}
                               </div>
@@ -2690,7 +2682,7 @@ export default function AITalentMatchPage({
             jd_title: selectedAssessments[0].jd_title,
             jd_version: selectedAssessments[0].jd_version,
           }}
-          assessments={selectedAssessments.map(a => ({
+          additionalAssessments={selectedAssessments.map(a => ({
             id: a.id,
             title: a.title,
             duration: `${a.duration_minutes || 0} min`,

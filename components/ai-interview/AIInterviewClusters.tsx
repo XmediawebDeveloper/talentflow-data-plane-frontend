@@ -22,9 +22,16 @@ type SkillType = 'Skill' | 'Command' | 'Certification';
 interface Cluster {
   id: string;
   name: string;
-  priority: 2 | 3 | 4 | 5;
+  priority: 1 | 2 | 3;
   skills: string[];
   reason?: string;
+}
+
+/** Map any legacy/AI priority value (1-5) to the new 3-level scale. */
+function normalizePriority(p: number): 1 | 2 | 3 {
+  if (p >= 4) return 3; // Critical/High → High (P3)
+  if (p === 3) return 2; // Medium → Medium (P2)
+  return 1;             // Low/anything else → Low (P1)
 }
 
 interface SkillEntry {
@@ -75,10 +82,9 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
 }
 
 const PRIORITY_LABELS: Record<number, { label: string; short: string; color: string; dot: string }> = {
-  5: { label: 'P1 \u2013 Critical',   short: 'Critical',  color: 'bg-red-100 text-red-700 border-red-200',       dot: 'bg-red-500' },
-  4: { label: 'P2 \u2013 High',       short: 'High',      color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
-  3: { label: 'P3 \u2013 Medium',     short: 'Medium',    color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
-  2: { label: 'P4 \u2013 Low',        short: 'Low',       color: 'bg-blue-100 text-blue-700 border-blue-200',     dot: 'bg-blue-500' },
+  3: { label: 'P3 \u2013 High',   short: 'High',   color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+  2: { label: 'P2 \u2013 Medium', short: 'Medium', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
+  1: { label: 'P1 \u2013 Low',    short: 'Low',    color: 'bg-blue-100 text-blue-700 border-blue-200',       dot: 'bg-blue-500'   },
 };
 
 const STEPS = ['Select JD', 'Configure', 'Clusters', 'Preview & Publish'];
@@ -267,7 +273,7 @@ function TimeAllocationSummary({
             <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gray-600 rounded-full"
-                style={{ width: `${Math.min(100, (r.priority / 5) * 100)}%` }}
+                style={{ width: `${Math.min(100, (r.priority / 3) * 100)}%` }}
               />
             </div>
           </div>
@@ -457,7 +463,7 @@ function ClusterRow({
               disabled={isReadOnly}
               className={`mt-1 w-full px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-300 bg-white ${isReadOnly ? 'text-gray-500 cursor-not-allowed' : ''}`}
             >
-              {[5, 4, 3, 2].map(p => (
+              {[3, 2, 1].map(p => (
                 <option key={p} value={p}>{PRIORITY_LABELS[p].label}</option>
               ))}
             </select>
@@ -867,10 +873,12 @@ export default function AIInterviewClusters() {
         if (si.mth_clusters?.length) {
           const mthMax = fixed ? timedAllocation.mthMaxClusters : 3;
           const mthRaw: any[] = si.mth_clusters;
-          const mthTrimmed = [...mthRaw].sort((a, b) => (b.priority ?? 3) - (a.priority ?? 3)).slice(0, mthMax);
+          const mthTrimmed = [...mthRaw]
+            .sort((a, b) => (b.priority ?? 2) - (a.priority ?? 2) || (a.name ?? '').localeCompare(b.name ?? ''))
+            .slice(0, mthMax);
           setMthClusters(mthTrimmed.map((c: any) => ({
             ...c,
-            priority: c.priority as Cluster['priority'],
+            priority: normalizePriority(c.priority),
           })));
         }
         if (si.nth_clusters?.length) {
@@ -879,10 +887,12 @@ export default function AIInterviewClusters() {
           // nthEnabledForTimed=false means NHS is disabled — always clear saved clusters
           const nthTrimmed = !nthEnabledForTimed
             ? []
-            : [...nthRaw].sort((a, b) => (b.priority ?? 3) - (a.priority ?? 3)).slice(0, nthMax);
+            : [...nthRaw]
+                .sort((a, b) => (b.priority ?? 2) - (a.priority ?? 2) || (a.name ?? '').localeCompare(b.name ?? ''))
+                .slice(0, nthMax);
           setNthClusters(nthTrimmed.map((c: any) => ({
             ...c,
-            priority: c.priority as Cluster['priority'],
+            priority: normalizePriority(c.priority),
           })));
         }
         // Restore skill weights
@@ -978,7 +988,7 @@ export default function AIInterviewClusters() {
     const newCluster: Cluster = {
       id: uid(),
       name: '',
-      priority: 3,
+      priority: 2,
       skills: [],
       reason: '',
     };
@@ -1056,7 +1066,7 @@ export default function AIInterviewClusters() {
             const mthFinal = mthMaxClusters > 0 ? mthRaw.slice(0, mthMaxClusters) : mthRaw;
             return mthFinal.map(c => ({
               ...c,
-              priority: c.priority as Cluster['priority'],
+              priority: normalizePriority(c.priority),
               reason: c.reason || '',
             }));
           })()
@@ -1068,7 +1078,7 @@ export default function AIInterviewClusters() {
             const nthFinal = nthMaxClusters > 0 ? nthRaw.slice(0, nthMaxClusters) : nthRaw;
             return nthFinal.map(c => ({
               ...c,
-              priority: c.priority as Cluster['priority'],
+              priority: normalizePriority(c.priority),
               reason: c.reason || '',
             }));
           })()
@@ -1086,14 +1096,14 @@ export default function AIInterviewClusters() {
           si.nth_clusters = nthEnabled ? newNthClusters : [];
 
           // Also update rounds_config topics/weights using the new cluster data
-          const PRIORITY_WEIGHT: Record<number, number> = { 5: 60, 4: 50, 3: 40, 2: 30, 1: 20 };
+          const PRIORITY_WEIGHT: Record<number, number> = { 3: 60, 2: 40, 1: 20 };
           const buildTopicTimeMap = (clusters: Cluster[], totalMin: number): Record<string, number> => {
             if (clusters.length === 0 || totalMin <= 0) return {};
             const totalWeight = clusters.reduce((s, c) => s + c.priority, 0);
             if (totalWeight <= 0) return {};
             const res: Record<string, number> = {};
             let remaining = totalMin;
-            const sorted = [...clusters].sort((a, b) => b.priority - a.priority);
+            const sorted = [...clusters].sort((a, b) => b.priority - a.priority || a.name.localeCompare(b.name));
             sorted.forEach((c, i) => {
               const mins = i === sorted.length - 1
                 ? remaining

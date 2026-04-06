@@ -4026,37 +4026,71 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 ) : (
                   manualJD ? (
                     <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 rounded-md bg-white markdown-content">
-                      <ReactMarkdown>{
-                        // Auto-format common JD section headers to bold/headers
-                        manualJD
-                          // Convert ALL CAPS headers to markdown headers (like JOB DESCRIPTION, REQUIREMENTS, etc.)
-                          .replace(/^([A-Z][A-Z\s\/&-]{2,})$/gm, (match) => `## ${match.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')}`)
-                          // Dynamically detect section headers: Title Case text on its own line
-                          .replace(/^([A-Z][a-zA-Z]*(?:[\s&\/\-]+[A-Za-z()]+){0,6})\s*$/gm, (match, p1) => {
-                            const trimmed = p1.trim();
-                            const words = trimmed.split(/\s+/);
-                            const wordCount = words.length;
+                      <ReactMarkdown>{(() => {
+                        const connectors = new Set(['&', 'and', 'or', 'of', 'to', 'for', 'the', 'a', 'an', 'in', 'on', 'with', 'at', 'by', 'its', 'their']);
+                        const actionVerbRe = /^(Design|Develop|Write|Build|Create|Implement|Maintain|Manage|Lead|Work|Collaborate|Participate|Fix|Optimize|Test|Review|Ensure|Prepare|Provide|Support|Assist|Handle|Conduct|Perform|Execute|Analyze|Monitor|Collect|Recommend|Identify|Report|Coordinate|Communicate|Drive|Define|Evaluate|Assess|Deliver|Plan|Track|Update|Resolve|Document|Oversee|Establish|Improve|Facilitate|Negotiate|Allocate|Forecast|Validate|Maintain|Respond|Develop)/i;
 
-                            // Skip if too long (likely a sentence)
-                            if (wordCount > 6 || trimmed.length > 50) return match;
+                        const isHeader = (line: string): boolean => {
+                          const trimmed = line.trim();
+                          if (!trimmed) return false;
+                          // Already markdown header
+                          if (trimmed.startsWith('#')) return true;
+                          // Must start with uppercase
+                          if (!/^[A-Z]/.test(trimmed)) return false;
+                          const words = trimmed.split(/\s+/);
+                          // Too long to be a header
+                          if (words.length > 7 || trimmed.length > 55) return false;
+                          // Starts with action verb → bullet, not header
+                          if (actionVerbRe.test(trimmed)) return false;
+                          // If most non-connector words start with uppercase → header
+                          const contentWords = words.filter(w => !connectors.has(w.toLowerCase().replace(/[^a-z]/g, '')));
+                          const uppercaseCount = contentWords.filter(w => /^[A-Z]/.test(w)).length;
+                          return uppercaseCount >= Math.ceil(contentWords.length * 0.7);
+                        };
 
-                            // Skip if starts with action verbs (likely a bullet point)
-                            const actionVerbs = /^(Design|Develop|Write|Build|Create|Implement|Maintain|Manage|Lead|Work|Collaborate|Participate|Fix|Optimize|Test|Review|Ensure|Prepare|Provide|Support|Assist|Handle|Conduct|Perform|Execute|Analyze|Monitor|Strong|Good|Basic|Experience|Familiarity|Knowledge|Understanding|Ability|Hands-on|Exposure|Proficiency|Excellent|Proven|Demonstrated)/i;
-                            if (actionVerbs.test(trimmed)) return match;
+                        const isBullet = (line: string): boolean => {
+                          const trimmed = line.trim();
+                          if (!trimmed) return false;
+                          if (trimmed.startsWith('#') || trimmed.startsWith('-') || trimmed.startsWith('*')) return false;
+                          // Long lines starting with uppercase action verbs → bullet
+                          return actionVerbRe.test(trimmed) || trimmed.length > 30;
+                        };
 
-                            // Skip if contains lowercase words that aren't connectors (likely a sentence)
-                            const connectors = ['&', 'and', 'or', 'of', 'to', 'for', 'the', 'a', 'an', 'in', 'on', 'with'];
-                            const hasContentWords = words.some((w, i) => {
-                              if (i === 0) return false; // Skip first word
-                              const cleanWord = w.replace(/[()\/&-]/g, '').toLowerCase();
-                              return cleanWord.length > 2 && /^[a-z]/.test(w) && !connectors.includes(cleanWord);
-                            });
-                            if (hasContentWords) return match;
+                        const lines = manualJD.split('\n');
+                        const out: string[] = [];
+                        let prevWasHeader = false;
 
-                            // Looks like a header
-                            return `## ${trimmed}`;
-                          })
-                      }</ReactMarkdown>
+                        for (let i = 0; i < lines.length; i++) {
+                          const raw = lines[i];
+                          const trimmed = raw.trim();
+
+                          if (!trimmed) {
+                            // Keep one blank line max
+                            if (out.length > 0 && out[out.length - 1] !== '') out.push('');
+                            prevWasHeader = false;
+                            continue;
+                          }
+
+                          if (isHeader(trimmed)) {
+                            // Ensure blank line before header (except at start)
+                            if (out.length > 0 && out[out.length - 1] !== '') out.push('');
+                            out.push(`## ${trimmed.replace(/^#+\s*/, '')}`);
+                            out.push('');
+                            prevWasHeader = true;
+                          } else if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
+                            out.push(raw);
+                            prevWasHeader = false;
+                          } else if (isBullet(trimmed) || prevWasHeader) {
+                            out.push(`- ${trimmed}`);
+                            prevWasHeader = false;
+                          } else {
+                            out.push(raw);
+                            prevWasHeader = false;
+                          }
+                        }
+
+                        return out.join('\n');
+                      })()}</ReactMarkdown>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-[300px] sm:h-[400px] lg:h-[600px] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">

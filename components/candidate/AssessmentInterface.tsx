@@ -67,7 +67,11 @@ interface AssessmentInterfaceProps {
       video_response_url?: string;
       selected_options?: string[];
       code_submission?: string;
+      code_input?: string;
       language?: string;
+      code_execution_status?: string;
+      code_execution_output?: string;
+      code_execution_error?: string;
       is_draft?: boolean;  // True = draft (auto-save, editable), False = submitted (locked)
     }
   ) => Promise<SubmitAnswerResponse>;
@@ -106,6 +110,9 @@ export function AssessmentInterface({
     code_submission?: string;
     code_input?: string;
     language?: string;
+    code_execution_status?: string;
+    code_execution_output?: string;
+    code_execution_error?: string;
   };
 
   const buildAnswerFromPrevious = (q: typeof currentQuestion): AnswerState => {
@@ -116,7 +123,31 @@ export function AssessmentInterface({
         code_submission: q.previous_answer.code_submission || undefined,
         code_input: q.previous_answer.code_input || undefined,
         language: q.previous_answer.language || undefined,
+        code_execution_status: q.previous_answer.code_execution_status || undefined,
+        code_execution_output: q.previous_answer.code_execution_output || undefined,
+        code_execution_error: q.previous_answer.code_execution_error || undefined,
       };
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const key = `assessment_draft_${token}_${q.question_id}`;
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return {
+            text_response: parsed.text_response || undefined,
+            selected_options: parsed.selected_options || undefined,
+            code_submission: parsed.code_submission || undefined,
+            code_input: parsed.code_input || undefined,
+            language: parsed.language || undefined,
+            code_execution_status: parsed.code_execution_status || undefined,
+            code_execution_output: parsed.code_execution_output || undefined,
+            code_execution_error: parsed.code_execution_error || undefined,
+          };
+        }
+      } catch (error) {
+        console.warn('[LOCAL-BACKUP] Failed to restore draft from localStorage:', error);
+      }
     }
     return {};
   };
@@ -124,15 +155,9 @@ export function AssessmentInterface({
   // Initialize answer from previous_answer immediately so child components (e.g.
   // MultiLanguageCodeEditor) see the saved code on their very first render.
   const [answer, setAnswer] = useState<AnswerState>(() => buildAnswerFromPrevious(currentQuestion));
-
-  // Synchronously update answer when the question changes (derived-state-from-props pattern).
-  // useEffect fires AFTER render, which is too late — the editor's init effect would run
-  // with a stale empty answer and show the template instead of the saved code.
-  const [prevQuestionId, setPrevQuestionId] = useState(currentQuestion.question_id);
-  if (prevQuestionId !== currentQuestion.question_id) {
-    setPrevQuestionId(currentQuestion.question_id);
+  useEffect(() => {
     setAnswer(buildAnswerFromPrevious(currentQuestion));
-  }
+  }, [currentQuestion.question_id]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [questionStartTime] = useState(Date.now());
@@ -166,6 +191,13 @@ export function AssessmentInterface({
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'offline' | 'retrying'>('idle');
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const cancelPendingAutoSave = () => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+  };
 
   // Network status and retry queue
   const { isOnline, isSlowConnection, connectionType } = useNetworkStatus();
@@ -267,7 +299,7 @@ export function AssessmentInterface({
 
     // Debounce: Wait 3 seconds after user stops typing before saving
     console.log('[AUTO-SAVE] Answer changed, waiting 3 seconds before saving...');
-    const saveTimeout = setTimeout(async () => {
+    autoSaveTimerRef.current = setTimeout(async () => {
       console.log('[AUTO-SAVE] User stopped typing, saving draft now...');
       setIsAutoSaving(true);
       setAutoSaveStatus('saving');
@@ -278,7 +310,11 @@ export function AssessmentInterface({
           text_response: answer.text_response,
           selected_options: answer.selected_options,
           code_submission: answer.code_submission,
+          code_input: answer.code_input,
           language: answer.language,
+          code_execution_status: answer.code_execution_status,
+          code_execution_output: answer.code_execution_output,
+          code_execution_error: answer.code_execution_error,
           time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
         });
 
@@ -335,7 +371,11 @@ export function AssessmentInterface({
                 text_response: currentAnswer.text_response,
                 selected_options: currentAnswer.selected_options,
                 code_submission: currentAnswer.code_submission,
+                code_input: currentAnswer.code_input,
                 language: currentAnswer.language,
+                code_execution_status: currentAnswer.code_execution_status,
+                code_execution_output: currentAnswer.code_execution_output,
+                code_execution_error: currentAnswer.code_execution_error,
                 time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
               });
             },
@@ -365,13 +405,14 @@ export function AssessmentInterface({
         }
       } finally {
         setIsAutoSaving(false);
+        autoSaveTimerRef.current = null;
       }
     }, 3000); // Save 3 seconds after user stops typing
 
     // Cleanup: Cancel save if user starts typing again or navigates
     return () => {
       console.log('[AUTO-SAVE] Debounce timer cleared (user still typing or navigated)');
-      clearTimeout(saveTimeout);
+      cancelPendingAutoSave();
     };
   }, [
     answer,
@@ -415,7 +456,11 @@ export function AssessmentInterface({
         text_response: answer.text_response,
         selected_options: answer.selected_options,
         code_submission: answer.code_submission,
+        code_input: answer.code_input,
         language: answer.language,
+        code_execution_status: answer.code_execution_status,
+        code_execution_output: answer.code_execution_output,
+        code_execution_error: answer.code_execution_error,
         is_draft: true,
         time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
       });
@@ -901,6 +946,7 @@ export function AssessmentInterface({
   // Save answer as draft (auto-save) - editable
   const handleSaveDraft = async () => {
     if (isSubmitting || isCurrentAnswerLocked) return;
+    cancelPendingAutoSave();
 
     // Only save if there's something to save
     const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
@@ -926,6 +972,7 @@ export function AssessmentInterface({
   // Submit and lock answer - not editable anymore
   const handleSubmitAndLock = async () => {
     if (isSubmitting || isCurrentAnswerLocked) return;
+    cancelPendingAutoSave();
     setIsSubmitting(true);
     setLastSaveError(null);
 
@@ -965,6 +1012,7 @@ export function AssessmentInterface({
   // Navigate to previous question (save as draft, editable)
   const handlePrevious = async () => {
     if (isNavigating || currentQuestion.question_number <= 1) return;
+    cancelPendingAutoSave();
     setIsNavigating(true);
 
     try {
@@ -992,6 +1040,7 @@ export function AssessmentInterface({
   // Navigate to next question (save as draft, editable)
   const handleNext = async () => {
     if (isNavigating || isLastQuestion) return;
+    cancelPendingAutoSave();
     setIsNavigating(true);
 
     try {
@@ -1019,6 +1068,7 @@ export function AssessmentInterface({
   // Handle final submit - save current answer first, THEN check for unanswered
   const handleFinalSubmit = async () => {
     if (isSubmitting) return;
+    cancelPendingAutoSave();
 
     // ── STEP 1: Submit & lock the current answer if it has meaningful content ─
     // This is critical for the last question — the candidate may not have
@@ -1686,6 +1736,7 @@ export function AssessmentInterface({
             <div className="p-3 sm:p-6">
               {currentQuestion.round_type === 'technical' && (
                 <TechnicalQuestionView
+                  key={currentQuestion.question_id}
                   question={currentQuestion}
                   answer={answer}
                   onAnswerChange={setAnswer}
@@ -1695,6 +1746,7 @@ export function AssessmentInterface({
 
               {currentQuestion.round_type === 'coding' && (
                 <CodingQuestionView
+                  key={currentQuestion.question_id}
                   question={currentQuestion}
                   answer={answer}
                   onAnswerChange={setAnswer}

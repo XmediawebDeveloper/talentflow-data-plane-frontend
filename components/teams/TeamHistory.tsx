@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Users, UserPlus, UserMinus, Pencil, Trash2, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import teamService, { TeamHistoryEntry } from '@/lib/services/teamService';
+import { formatIST } from '@/lib/utils/dateUtils';
 
 const PAGE_SIZE = 20;
 
@@ -15,10 +16,7 @@ const EVENT_CONFIG: Record<string, { label: string; icon: React.ElementType; col
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('en-IN', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true,
-  });
+  return formatIST(iso);
 }
 
 function getInitials(name?: string) {

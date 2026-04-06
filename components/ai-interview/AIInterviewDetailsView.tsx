@@ -92,9 +92,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const [candidateDetail, setCandidateDetail] = useState<AIInterviewResponse | null>(null);
   const [candidateLoading, setCandidateLoading] = useState(false);
 
-  // View Results popup
-  const [showResultsPopup, setShowResultsPopup] = useState(false);
-
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{ type: string; title: string; message: string; onConfirm: () => void } | null>(null);
 
@@ -799,7 +796,7 @@ ${nthClusters.length > 0 ? `<h2>Nice-to-Have Skills (${nthClusters.length} clust
                   )}
                   {config.status === 'published' && recentActivity.length > 0 && (
                     <button
-                      onClick={() => setShowResultsPopup(true)}
+                      onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
                       className="flex flex-col items-center gap-2 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       <Eye className="w-5 h-5 text-gray-600" />
@@ -936,49 +933,6 @@ ${nthClusters.length > 0 ? `<h2>Nice-to-Have Skills (${nthClusters.length} clust
           )}
         </div>
       </div>
-
-      {/* View Results Popup */}
-      {showResultsPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowResultsPopup(false)}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Candidate Results</h3>
-              <button onClick={() => setShowResultsPopup(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
-            </div>
-            <div className="overflow-y-auto p-4 space-y-2">
-              {recentActivity.length === 0 ? (
-                <div className="text-center py-8">
-                  <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                  <p className="text-sm text-gray-500">No candidates yet</p>
-                </div>
-              ) : (
-                recentActivity.map(activity => (
-                  <div
-                    key={activity.id}
-                    onClick={() => {
-                      setShowResultsPopup(false);
-                      handleCandidateClick(activity.id);
-                    }}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold text-sm flex-shrink-0">
-                      {(activity.candidate_name || 'U')[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-gray-900 text-sm truncate">{activity.candidate_name || 'Unknown'}</div>
-                      <div className="text-xs text-gray-500 truncate">{activity.candidate_email}</div>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStatusBadge(activity.status)}`}>
-                      {getStatusLabel(activity.status)}
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Confirmation Dialog */}
       {confirmAction && (

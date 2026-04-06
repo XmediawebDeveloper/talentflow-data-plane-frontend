@@ -149,6 +149,18 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  async uploadScreenRecording(token: string, blob: Blob): Promise<{ message: string; path: string }> {
+    const formData = new FormData();
+    formData.append('file', blob, 'screen.webm');
+    const uploadUrl = `${API_BASE_URL}/candidate/ai-interview/${token}/upload-screen-recording`;
+    const response = await fetch(uploadUrl, { method: 'POST', body: formData });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Screen recording upload failed (${response.status}): ${errorText}`);
+    }
+    return response.json();
+  },
+
   async uploadRecording(token: string, blob: Blob): Promise<{ message: string; path: string }> {
     const formData = new FormData();
     formData.append('file', blob, 'recording.webm');

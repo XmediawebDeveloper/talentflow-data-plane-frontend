@@ -929,6 +929,24 @@ export const assessmentService = {
       throw new Error(handleApiError(error));
     }
   },
+
+  /**
+   * Get tenant-level invitation quota stats
+   * Returns how many invitations are pending (held) vs consumed vs available
+   */
+  async getInvitationStats(): Promise<{
+    total_quota: number;
+    consumed: number;
+    pending: number;
+    available: number;
+  } | null> {
+    try {
+      const response = await api.get('/assessments/invitation-stats');
+      return response.data;
+    } catch {
+      return null; // Gracefully degrade if endpoint not available
+    }
+  },
 };
 
 // Candidate-facing services (public)

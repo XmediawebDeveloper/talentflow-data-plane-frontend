@@ -1270,7 +1270,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     try {
       // Calculate question count from percentages (total 30 questions)
       const totalQuestions = 30;
-      const enabledSections = sections.filter(s => s.enabled);
+      const enabledSections = sections.filter(s => s.enabled && s.name !== 'HR');
 
       const questionDistribution = enabledSections.map(section => ({
         section: section.name.toLowerCase(),
@@ -1368,7 +1368,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         version: resultAssessment.version || 1,
         job: selectedJob,
         duration: resultAssessment.duration_minutes,
-        sections: sections.filter(s => s.enabled).map(section => ({
+        sections: sections.filter(section => section.name === 'HR' ? selectedHRQuestions.length > 0 : section.enabled).map(section => ({
           name: section.name,
           percentage: section.percentage,
           topics: section.topics,
@@ -1799,7 +1799,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Step 2: Configure Assessment
   if (step === 'configure') {
-    const enabledSectionsCount = sections.filter(s => s.enabled).length;
+    const enabledSectionsCount = sections.filter(section => section.name === 'HR' ? selectedHRQuestions.length > 0 : section.enabled).length;
 
     return (
       <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50 relative">

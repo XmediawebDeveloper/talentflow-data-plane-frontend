@@ -293,6 +293,9 @@ export interface AnswerSubmission {
   code_submission?: string;
   code_input?: string;
   language?: string;
+  code_execution_status?: string;
+  code_execution_output?: string;
+  code_execution_error?: string;
   time_taken_seconds?: number;  // Time spent on question
   is_draft?: boolean;  // True = draft (auto-save, editable), False = submitted (locked)
 }

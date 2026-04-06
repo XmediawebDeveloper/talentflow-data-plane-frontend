@@ -678,8 +678,27 @@ export function useInterviewProctoringMonitor({
     isMonitoringRef.current = true;
     setState(prev => ({ ...prev, isMonitoring: true }));
 
+    // Subscribe to face/voice identity events emitted by the verification hooks.
+    // These bypass emitEvent (go directly to the bus), so we listen here and
+    // queue them for backend logging without re-emitting to the bus.
+    const IDENTITY_EVENTS: ProctoringEventType[] = [
+      'face_mismatch', 'face_identity_changed',
+      'voice_mismatch', 'voice_identity_changed',
+    ];
+    const unsubIdentity = InterviewEventBus.subscribe((event) => {
+      if (IDENTITY_EVENTS.includes(event.type)) {
+        backendQueueRef.current.push({
+          event_type: event.type,
+          timestamp: event.timestamp.toISOString(),
+          severity: event.severity,
+          details: event.details || {},
+        });
+      }
+    });
+
     // Event-driven detections (lightweight, main thread)
     const cleanups = [
+      unsubIdentity,
       setupTabSwitchDetection(),
       setupCopyPasteDetection(),
       setupScreenshotDetection(),

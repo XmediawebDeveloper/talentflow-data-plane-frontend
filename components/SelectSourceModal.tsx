@@ -375,7 +375,6 @@ export default function SelectSourceModal({
   // Handle resume upload
   const handleUpload = async (files: File[], folderId?: string) => {
     try {
-      // Upload the first file (UploadModal handles single file uploads)
       if (files.length === 0) {
         return {
           success: false,
@@ -383,10 +382,21 @@ export default function SelectSourceModal({
         };
       }
 
-      const file = files[0];
-      const response = await resumeService.upload(file, folderId);
+      // For bulk upload, upload all files sequentially
+      if (files.length > 1) {
+        const results = await Promise.allSettled(
+          files.map(file => resumeService.upload(file, folderId))
+        );
+        await fetchData();
+        const firstSuccess = results.find(r => r.status === 'fulfilled') as PromiseFulfilledResult<any> | undefined;
+        return {
+          success: true,
+          resumeId: firstSuccess?.value?.id,
+          candidateName: firstSuccess?.value?.candidate_name
+        };
+      }
 
-      // Refresh resumes list
+      const response = await resumeService.upload(files[0], folderId);
       await fetchData();
 
       return {
@@ -407,6 +417,28 @@ export default function SelectSourceModal({
   const handleUploadComplete = () => {
     setShowUploadModal(false);
     fetchData(); // Refresh the list
+  };
+
+  const handleCreateFolder = async (name: string, parentId?: string) => {
+    try {
+      if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
+        toast.error('Folder name must not contain HTML or script content');
+        return;
+      }
+      const allFolders = (function flatten(list: FolderType[]): FolderType[] {
+        return list.flatMap(f => [f, ...flatten(f.children || [])]);
+      })(folders);
+      if (allFolders.find(f => f.name.toLowerCase() === name.toLowerCase() && f.id !== 'all')) {
+        toast.error(`Folder "${name}" already exists`);
+        return;
+      }
+      await folderService.create(name, parentId);
+      const folderData = await folderService.list();
+      setFolders(folderData || []);
+      toast.success('Folder created');
+    } catch (error: any) {
+      toast.error(`Failed to create folder: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+    }
   };
 
   // Handle auto-select after upload
@@ -1049,6 +1081,7 @@ export default function SelectSourceModal({
           onClose={() => setShowUploadModal(false)}
           onUpload={handleUpload}
           onUploadComplete={handleUploadComplete}
+          onCreateFolder={handleCreateFolder}
           onScoreResume={handleAutoSelectAfterUpload}
         />
       )}

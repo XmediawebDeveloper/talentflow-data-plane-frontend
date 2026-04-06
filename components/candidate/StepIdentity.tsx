@@ -355,18 +355,16 @@ export default function StepIdentity({
                     otpVerified ? 'border-green-400 bg-green-50' : 'border-gray-200'
                   }`}
                 />
-                {!otpVerified && (
+                {!otpVerified && !otpSent && (
                   <button
                     type="button"
                     onClick={handleSendOtp}
-                    disabled={!isEmailValid || otpSending || resendCooldown > 0}
+                    disabled={!isEmailValid || otpSending}
                     className="flex-shrink-0 flex items-center gap-1.5 bg-gray-800 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     {otpSending
                       ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
-                      : otpSent && resendCooldown > 0
-                        ? `Resend (${resendCooldown}s)`
-                        : otpSent ? 'Resend OTP' : 'Get OTP'
+                      : 'Get OTP'
                     }
                   </button>
                 )}
@@ -379,7 +377,7 @@ export default function StepIdentity({
 
               {/* OTP input — shown after OTP sent, hidden once verified */}
               {otpSent && !otpVerified && (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <label className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
                     <KeyRound className="w-4 h-4 text-gray-500" /> Enter OTP <span className="text-red-500">*</span>
                   </label>
@@ -403,7 +401,52 @@ export default function StepIdentity({
                       {otpVerifying ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying…</> : 'Verify OTP'}
                     </button>
                   </div>
-                  <p className="text-xs text-gray-500">OTP sent to <span className="font-medium">{email}</span>. Check your inbox.</p>
+
+                  {/* Resend timer */}
+                  <div className="flex items-center gap-3 py-2 px-3 bg-gray-50 rounded-lg border border-gray-100">
+                    {resendCooldown > 0 ? (
+                      <>
+                        {/* Circular countdown */}
+                        <div className="relative flex-shrink-0 w-9 h-9">
+                          <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+                            <circle
+                              cx="18" cy="18" r="15" fill="none"
+                              stroke="#374151" strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeDasharray={2 * Math.PI * 15}
+                              strokeDashoffset={2 * Math.PI * 15 * (1 - resendCooldown / 60)}
+                              style={{ transition: 'stroke-dashoffset 0.9s linear' }}
+                            />
+                          </svg>
+                          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-700">
+                            {resendCooldown}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-700">OTP sent to <span className="font-semibold">{email}</span></p>
+                          <p className="text-xs text-gray-500">Resend available in {resendCooldown}s</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                          <RefreshCw className="w-4 h-4 text-amber-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-600">Didn't receive the OTP?</p>
+                          <button
+                            type="button"
+                            onClick={handleSendOtp}
+                            disabled={otpSending}
+                            className="text-sm font-semibold text-gray-900 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {otpSending ? 'Sending…' : 'Resend OTP'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
 

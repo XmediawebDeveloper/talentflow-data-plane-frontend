@@ -9,6 +9,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { Resume, Folder } from '@/lib/types/types';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { parseIST } from '@/lib/utils/dateUtils';
 import FeatureGate from '@/components/shared/FeatureGate';
 
 interface ScoredResumeData {
@@ -448,7 +449,7 @@ export default function ResumeScoringRoute() {
             id: jdId,
             jobId: jdId,
             jobTitle: data.jdTitle,
-            scoredAt: new Date(data.scores[0]?.scoredDate || new Date()),
+            scoredAt: parseIST(data.scores[0]?.scoredDate || new Date().toISOString()),
             source: 'database' as const,
             jdStatus: data.jdStatus,
             jdJobId: data.jdJobId,
@@ -572,7 +573,7 @@ export default function ResumeScoringRoute() {
           id: jdId,
           jobId: jdId,
           jobTitle: title,
-          scoredAt: scores[0]?.scoredDate ? new Date(scores[0].scoredDate) : (existing?.scoredAt || new Date()),
+          scoredAt: parseIST(scores[0]?.scoredDate || existing?.scoredAt?.toISOString() || new Date().toISOString()),
           source: 'database' as const,
           totalScored: firstPage.total || scores.length,
           scoredResumes: scores,

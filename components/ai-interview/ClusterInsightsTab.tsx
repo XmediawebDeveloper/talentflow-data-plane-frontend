@@ -7,6 +7,7 @@ interface SkillScore {
   skill: string;
   score: number | null;   // 0-100
   band: string;
+  note?: string;          // evaluator reasoning — flexible mode only (AC10)
 }
 
 interface ClusterEntry {
@@ -21,6 +22,7 @@ interface ClusterEntry {
   skill_scores: SkillScore[];
   evaluated: number;
   total: number;
+  cluster_note?: string;  // cluster-level reasoning — flexible mode only (AC10)
 }
 
 interface SectionScore {
@@ -34,6 +36,7 @@ interface ClusterInsightsTabProps {
   clusterInsights: ClusterEntry[];
   capabilityScore?: number | null;
   sectionScores?: Record<string, SectionScore> | null;
+  capabilityScoreReasoning?: string | null;  // formula explainability — flexible mode only (AC8)
 }
 
 const BAND_STYLES: Record<string, { badge: string; bar: string; text: string }> = {
@@ -77,7 +80,7 @@ function ScoreBar({ score, band, width = 'w-32' }: { score: number | null; band:
   );
 }
 
-export default function ClusterInsightsTab({ clusterInsights, capabilityScore, sectionScores }: ClusterInsightsTabProps) {
+export default function ClusterInsightsTab({ clusterInsights, capabilityScore, sectionScores, capabilityScoreReasoning }: ClusterInsightsTabProps) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   if (!clusterInsights || clusterInsights.length === 0) {
@@ -109,17 +112,25 @@ export default function ClusterInsightsTab({ clusterInsights, capabilityScore, s
 
       {/* ── Capability Score headline ── */}
       {capabilityScore != null && capabilityScore > 0 && (
-        <div className="flex items-center justify-between bg-gray-900 text-white rounded-xl px-6 py-5">
-          <div>
-            <div className="text-sm font-medium text-gray-300">Overall Capability Score</div>
-            <div className="text-xs text-gray-500 mt-0.5">
-              Weighted across all sections by recruiter-configured percentages
+        <div className="bg-gray-900 text-white rounded-xl px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-gray-300">Overall Capability Score</div>
+              <div className="text-xs text-gray-500 mt-0.5">
+                Weighted across all sections by recruiter-configured percentages
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-4xl font-bold">{capabilityScore}</div>
+              <div className="text-xs text-gray-400">out of 100</div>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-4xl font-bold">{capabilityScore}</div>
-            <div className="text-xs text-gray-400">out of 100</div>
-          </div>
+          {/* Score formula reasoning — flexible mode only (AC8 Explainability) */}
+          {capabilityScoreReasoning && (
+            <div className="mt-3 pt-3 border-t border-gray-700">
+              <div className="text-[11px] text-gray-400 leading-relaxed">{capabilityScoreReasoning}</div>
+            </div>
+          )}
         </div>
       )}
 
@@ -211,6 +222,12 @@ export default function ClusterInsightsTab({ clusterInsights, capabilityScore, s
                               <span className="text-xs text-gray-500">{cluster.band_score}%</span>
                             </div>
                           )}
+                          {/* Cluster reasoning note — flexible mode only (AC10) */}
+                          {cluster.cluster_note && (
+                            <div className="text-[11px] text-gray-400 mt-0.5 leading-tight">
+                              {cluster.cluster_note}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 ml-3 flex-shrink-0">
@@ -233,21 +250,29 @@ export default function ClusterInsightsTab({ clusterInsights, capabilityScore, s
                         {cluster.skill_scores.map((s, si) => {
                           const ss = BAND_STYLES[s.band] ?? BAND_STYLES['Weak'];
                           return (
-                            <div key={si} className="flex items-center gap-3 px-6 py-2.5">
-                              <SkillIndicator band={s.band} />
-                              <span className="text-sm text-gray-700 flex-1">{s.skill}</span>
-                              {s.score != null ? (
-                                <>
-                                  <ScoreBar score={s.score} band={s.band} width="w-24" />
-                                  <span className="text-xs font-medium text-gray-600 w-10 text-right">
-                                    {s.score}%
-                                  </span>
-                                  <span className={`px-2 py-0.5 rounded-full text-xs border ${ss.badge}`}>
-                                    {s.band}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="text-xs text-gray-400 italic">Not evaluated</span>
+                            <div key={si} className="flex flex-col px-6 py-2.5 gap-0.5">
+                              <div className="flex items-center gap-3">
+                                <SkillIndicator band={s.band} />
+                                <span className="text-sm text-gray-700 flex-1">{s.skill}</span>
+                                {s.score != null ? (
+                                  <>
+                                    <ScoreBar score={s.score} band={s.band} width="w-24" />
+                                    <span className="text-xs font-medium text-gray-600 w-10 text-right">
+                                      {s.score > 0 ? `${s.score}%` : '—'}
+                                    </span>
+                                    <span className={`px-2 py-0.5 rounded-full text-xs border ${ss.badge}`}>
+                                      {s.band}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-xs text-gray-400 italic">Not evaluated</span>
+                                )}
+                              </div>
+                              {/* Skill evaluator note — flexible mode only (AC10) */}
+                              {s.note && (
+                                <div className="text-[11px] text-gray-400 pl-[22px] leading-tight">
+                                  {s.note}
+                                </div>
                               )}
                             </div>
                           );

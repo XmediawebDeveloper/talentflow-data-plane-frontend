@@ -1,7 +1,7 @@
 'use client';
 
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, Target } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Clock, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, Target } from 'lucide-react';
 import { useState, useEffect, ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDVersion, JDAssessmentResultsResponse, AssessmentResultItem } from '@/lib/services/jdService';
@@ -1029,22 +1029,6 @@ export default function JDDetailsPage() {
                         {typeof jd.education_requirements === 'object'
                           ? jd.education_requirements.degree || 'Any'
                           : jd.education_requirements}
-                      </span>
-                    </div>
-                  )}
-                  {(jd.salary_min || jd.salary_max) && (
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-gray-600">
-                        <DollarSign className="w-4 h-4" />
-                        Compensation
-                      </span>
-                      <span className="text-gray-900">
-                        ${jd.salary_min?.toLocaleString() || 0} - ${jd.salary_max?.toLocaleString() || '∞'}
-                        {jd.compensation_type && (
-                          <span className="text-gray-500 text-xs ml-1">
-                            ({jd.compensation_type})
-                          </span>
-                        )}
                       </span>
                     </div>
                   )}

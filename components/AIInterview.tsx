@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -727,15 +727,14 @@ export default function AIInterview() {
                         </div>
 
                         <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap" onClick={(e) => e.stopPropagation()}>
-                          {/* Share Link button for published configs */}
+                          {/* Share button for published configs */}
                           {config.status === 'published' && canShareAIInterviews && (
                             <button
                               onClick={() => setShareConfig(config)}
-                              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs whitespace-nowrap bg-gray-700 text-white hover:bg-gray-800"
                             >
-                              <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                              <span className="hidden sm:inline">Send via Email</span>
-                              <span className="sm:hidden">Email</span>
+                              <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                              Share
                             </button>
                           )}
 
@@ -746,7 +745,7 @@ export default function AIInterview() {
                               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
                             >
                               <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                              {config.status === 'draft' ? 'Edit' : 'Edit'}
+                              Edit
                             </button>
                           )}
 
@@ -765,14 +764,45 @@ export default function AIInterview() {
                           {config.status === 'published' && canInviteAIInterviews && (
                             <button
                               onClick={() => handleViewInvitations(config)}
-                              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs whitespace-nowrap bg-gray-700 text-white hover:bg-gray-800"
                               title="Track invitation status"
                             >
-                              <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                              <span className="hidden xl:inline">Track Invites</span>
-                              <span className="xl:hidden">Track</span>
+                              <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+                              <span className="hidden xl:inline">
+                                Track Invites{config.invitations_count ? ` (${config.invitations_count})` : ''}
+                              </span>
+                              <span className="xl:hidden">
+                                Track{config.invitations_count ? ` (${config.invitations_count})` : ''}
+                              </span>
                             </button>
                           )}
+
+                          {/* Results for published configs */}
+                          {config.status === 'published' && (
+                            <button
+                              onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-xs whitespace-nowrap"
+                              title="View interview results"
+                            >
+                              <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
+                              Results
+                            </button>
+                          )}
+
+                          {/* Status badge */}
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs whitespace-nowrap ${
+                              config.status === 'published'
+                                ? 'bg-gray-700 text-white'
+                                : config.status === 'draft'
+                                ? 'bg-gray-200 text-gray-600'
+                                : config.status === 'archived'
+                                ? 'bg-gray-400 text-white'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {getStatusLabel(config.status)}
+                          </span>
 
                           {/* 3-dot menu */}
                           <div className="relative" ref={openMenuId === config.id ? menuRef : undefined}>

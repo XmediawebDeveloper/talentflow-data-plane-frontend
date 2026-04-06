@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
-import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 
 // Utility function to format employment type for display
@@ -35,10 +35,7 @@ const formatIndustryType = (type: string | undefined): string => {
 const formatLastUpdated = (dateString: string | undefined): string => {
   if (!dateString) return '-';
 
-  // Server returns UTC, convert to IST by adding 5:30 hours
-  const utcDate = new Date(dateString);
-  const istOffsetMs = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes
-  const istDate = new Date(utcDate.getTime() + istOffsetMs);
+  const istDate = parseIST(dateString);
 
   const now = new Date();
 
@@ -56,11 +53,7 @@ const formatLastUpdated = (dateString: string | undefined): string => {
   }
 
   // More than 24 hours - show actual date
-  return istDate.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
+  return formatISTDate(dateString);
 };
 
 interface JobsListingProps {

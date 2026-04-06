@@ -40,6 +40,9 @@ interface MultiLanguageCodeEditorProps {
     code_submission?: string;
     code_input?: string;
     language?: string;
+    code_execution_status?: string;
+    code_execution_output?: string;
+    code_execution_error?: string;
   };
   onAnswerChange: (answer: {
     text_response?: string;
@@ -48,6 +51,9 @@ interface MultiLanguageCodeEditorProps {
     code_submission?: string;
     code_input?: string;
     language?: string;
+    code_execution_status?: string;
+    code_execution_output?: string;
+    code_execution_error?: string;
   }) => void;
   allowLanguageChange?: boolean; // If false, language is locked to what's assigned
   isLocked?: boolean; // True if answer is submitted and cannot be edited
@@ -108,6 +114,41 @@ const buildSavedExecutionOutput = (
   return null;
 };
 
+const buildInitialEditorState = (
+  question: CurrentQuestion,
+  answer: MultiLanguageCodeEditorProps['answer'],
+  selectedLanguage: string
+) => {
+  const previousAnswer = question.previous_answer;
+  const restoredCode =
+    previousAnswer?.code_submission ||
+    (answer.language === selectedLanguage ? answer.code_submission : undefined) ||
+    '';
+  const restoredInput =
+    previousAnswer?.code_input ||
+    (answer.language === selectedLanguage ? answer.code_input : undefined) ||
+    '';
+  const restoredExecutionOutput =
+    buildSavedExecutionOutput(previousAnswer) ||
+    buildSavedExecutionOutput({
+      text_response: null,
+      selected_options: null,
+      code_submission: restoredCode || null,
+      language: answer.language || null,
+      code_input: restoredInput || null,
+      code_execution_status: answer.code_execution_status || null,
+      code_execution_output: answer.code_execution_output || null,
+      code_execution_error: answer.code_execution_error || null,
+      is_locked: false,
+    });
+
+  return {
+    code: restoredCode,
+    input: restoredInput,
+    executionOutput: restoredExecutionOutput,
+  };
+};
+
 export function MultiLanguageCodeEditor({
   question,
   answer,
@@ -119,11 +160,23 @@ export function MultiLanguageCodeEditor({
 }: MultiLanguageCodeEditorProps) {
   const dialog = useGlobalDialog();
 
+  const configuredLanguages = Array.isArray(question.coding_languages)
+    ? question.coding_languages
+        .map((lang) => resolveLanguageAlias(String(lang).toLowerCase()))
+        .map((lang) => getLanguageConfig(lang))
+        .filter(Boolean) as LanguageConfig[]
+    : [];
+
   // Determine initial language from question or answer
   const getInitialLanguage = (): string => {
     // If answer has a language, use it
     if (answer.language) {
       return resolveLanguageAlias(answer.language);
+    }
+
+    // Prefer the assessment-configured coding languages over any starter-code keys.
+    if (configuredLanguages.length > 0) {
+      return configuredLanguages[0].id;
     }
 
     // If question has starter_code, use its first language
@@ -139,11 +192,12 @@ export function MultiLanguageCodeEditor({
   };
 
   const [selectedLanguage, setSelectedLanguage] = useState<string>(getInitialLanguage());
-  const [code, setCode] = useState<string>('');
-  const [customInput, setCustomInput] = useState<string>(answer.code_input || '');
+  const initialEditorState = buildInitialEditorState(question, answer, getInitialLanguage());
+  const [code, setCode] = useState<string>(initialEditorState.code);
+  const [customInput, setCustomInput] = useState<string>(initialEditorState.input);
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
-  const [executionOutput, setExecutionOutput] = useState<ExecutionOutput | null>(null);
+  const [executionOutput, setExecutionOutput] = useState<ExecutionOutput | null>(initialEditorState.executionOutput);
   const [copied, setCopied] = useState(false);
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   // Always show input panel so users can see and edit the input
@@ -165,45 +219,47 @@ export function MultiLanguageCodeEditor({
   const [unavailableLanguages, setUnavailableLanguages] = useState<string[]>([]);
   const [isLoadingLanguages, setIsLoadingLanguages] = useState(true);
 
-  // Get available languages for this question (before filtering)
-  const assignedLanguages = question.starter_code
-    ? Object.keys(question.starter_code).map((lang) => {
-        const resolved = resolveLanguageAlias(lang);
-        return getLanguageConfig(resolved);
-      }).filter(Boolean) as LanguageConfig[]
-    : AVAILABLE_LANGUAGES;
+  // Source of truth for which compiler languages the candidate is allowed to use:
+  // assessment-configured coding_languages first, then starter_code keys as fallback.
+  const assignedLanguages = configuredLanguages.length > 0
+    ? configuredLanguages
+    : (
+        question.starter_code
+          ? Object.keys(question.starter_code).map((lang) => {
+              const resolved = resolveLanguageAlias(lang);
+              return getLanguageConfig(resolved);
+            }).filter(Boolean) as LanguageConfig[]
+          : AVAILABLE_LANGUAGES
+      );
 
   // Use filtered languages if available, otherwise use assigned languages
   const availableLanguages = filteredLanguages.length > 0 ? filteredLanguages : assignedLanguages;
 
   // Initialize code on mount or language change
   useEffect(() => {
-    // Get starter code or template
-    let initialCode = '';
+    const nextEditorState = buildInitialEditorState(question, answer, selectedLanguage);
 
-    if (answer.code_submission && (!answer.language || answer.language === selectedLanguage)) {
-      // Use existing answer if language matches OR if no language info is available (e.g., page refresh)
-      initialCode = answer.code_submission;
-    } else {
-      // Fresh coding questions should start blank unless the candidate already has saved code.
-      initialCode = '';
-    }
-
-    const restoredInput = answer.code_input || '';
-    const restoredExecutionOutput = buildSavedExecutionOutput(question.previous_answer);
-
-    setCode(initialCode);
-    setCustomInput(restoredInput);
-    setExecutionOutput(restoredExecutionOutput);
+    setCode(nextEditorState.code);
+    setCustomInput(nextEditorState.input);
+    setExecutionOutput(nextEditorState.executionOutput);
     setSubmissionResult(null);
     setTestResults(null);
     setHasSubmitted(false);
     // Notify parent of the restored/initialized code so auto-save can track it
     onAnswerChange({
       ...answer,
-      code_submission: initialCode,
-      code_input: restoredInput,
+      code_submission: nextEditorState.code,
+      code_input: nextEditorState.input,
       language: selectedLanguage,
+      code_execution_status: nextEditorState.executionOutput
+        ? (nextEditorState.executionOutput.compile_error
+            ? 'syntax_error'
+            : nextEditorState.executionOutput.error
+              ? 'runtime_error'
+              : 'success')
+        : answer.code_execution_status,
+      code_execution_output: nextEditorState.executionOutput?.output,
+      code_execution_error: nextEditorState.executionOutput?.compile_error || nextEditorState.executionOutput?.error,
     });
   // question.question_id ensures this re-runs when navigating between questions,
   // so the editor shows the correct saved code for each question.
@@ -322,8 +378,16 @@ export function MultiLanguageCodeEditor({
     if (isLocked) return; // Cannot change if locked
     const newCode = value || '';
     setCode(newCode);
+    setExecutionOutput(null);
     // Notify parent directly so auto-save triggers on every keystroke (with 3s debounce in parent)
-    onAnswerChange({ ...answer, code_submission: newCode, language: selectedLanguage });
+    onAnswerChange({
+      ...answer,
+      code_submission: newCode,
+      language: selectedLanguage,
+      code_execution_status: undefined,
+      code_execution_output: undefined,
+      code_execution_error: undefined,
+    });
   };
 
   const handleLanguageChange = async (langId: string) => {
@@ -347,6 +411,13 @@ export function MultiLanguageCodeEditor({
     setShowLanguageDropdown(false);
     setTestResults(null);
     setExecutionOutput(null);
+    onAnswerChange({
+      ...answer,
+      language: langId,
+      code_execution_status: undefined,
+      code_execution_output: undefined,
+      code_execution_error: undefined,
+    });
   };
 
   const handleResetCode = async () => {
@@ -362,6 +433,14 @@ export function MultiLanguageCodeEditor({
         setCode(template);
         setTestResults(null);
         setExecutionOutput(null);
+        onAnswerChange({
+          ...answer,
+          code_submission: template,
+          language: selectedLanguage,
+          code_execution_status: undefined,
+          code_execution_output: undefined,
+          code_execution_error: undefined,
+        });
       }
     }
   };
@@ -383,12 +462,21 @@ export function MultiLanguageCodeEditor({
       if (codeExpectsInput && !inputToUse.trim()) {
         // Show warning - code expects input but none provided
         console.warn('[CODE_EXEC] Warning: Code appears to expect input but none provided');
-        setExecutionOutput({
-          success: false,
-          error: 'Your code expects input (e.g., Scanner, input(), cin, etc.) but no input was provided.\n\nPlease enter test input in the "Custom Input" panel below and click Run again.',
-        });
-        setIsRunning(false);
-        return;
+      setExecutionOutput({
+        success: false,
+        error: 'Your code expects input (e.g., Scanner, input(), cin, etc.) but no input was provided.\n\nPlease enter test input in the "Custom Input" panel below and click Run again.',
+      });
+      onAnswerChange({
+        ...answer,
+        code_submission: code,
+        code_input: inputToUse,
+        language: selectedLanguage,
+        code_execution_status: 'runtime_error',
+        code_execution_output: undefined,
+        code_execution_error: 'Your code expects input (e.g., Scanner, input(), cin, etc.) but no input was provided.\n\nPlease enter test input in the "Custom Input" panel below and click Run again.',
+      });
+      setIsRunning(false);
+      return;
       }
 
       // Log input for debugging
@@ -402,17 +490,43 @@ export function MultiLanguageCodeEditor({
         question.question_id
       );
 
-      setExecutionOutput({
+      const nextExecutionOutput = {
         success: result.success,
         output: result.output,
         error: result.error,
         compile_error: result.compile_error,
+      };
+      setExecutionOutput(nextExecutionOutput);
+      onAnswerChange({
+        ...answer,
+        code_submission: code,
+        code_input: inputToUse,
+        language: selectedLanguage,
+        code_execution_status: result.compile_error
+          ? 'syntax_error'
+          : result.error
+            ? 'runtime_error'
+            : result.success
+              ? 'success'
+              : 'failed',
+        code_execution_output: result.output,
+        code_execution_error: result.compile_error || result.error,
       });
     } catch (error) {
       console.error('Code execution error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to execute code';
       setExecutionOutput({
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to execute code',
+        error: errorMessage,
+      });
+      onAnswerChange({
+        ...answer,
+        code_submission: code,
+        code_input: customInput,
+        language: selectedLanguage,
+        code_execution_status: 'failed',
+        code_execution_output: undefined,
+        code_execution_error: errorMessage,
       });
     } finally {
       setIsRunning(false);
@@ -955,7 +1069,16 @@ export function MultiLanguageCodeEditor({
                   onClick={() => {
                     const nextInput = question.sample_input || '';
                     setCustomInput(nextInput);
-                    onAnswerChange({ ...answer, code_submission: code, code_input: nextInput, language: selectedLanguage });
+                    setExecutionOutput(null);
+                    onAnswerChange({
+                      ...answer,
+                      code_submission: code,
+                      code_input: nextInput,
+                      language: selectedLanguage,
+                      code_execution_status: undefined,
+                      code_execution_output: undefined,
+                      code_execution_error: undefined,
+                    });
                   }}
                   className="text-xs text-blue-400 hover:text-blue-300"
                 >
@@ -968,24 +1091,23 @@ export function MultiLanguageCodeEditor({
               onChange={(e) => {
                 const nextInput = e.target.value;
                 setCustomInput(nextInput);
-                onAnswerChange({ ...answer, code_submission: code, code_input: nextInput, language: selectedLanguage });
+                setExecutionOutput(null);
+                onAnswerChange({
+                  ...answer,
+                  code_submission: code,
+                  code_input: nextInput,
+                  language: selectedLanguage,
+                  code_execution_status: undefined,
+                  code_execution_output: undefined,
+                  code_execution_error: undefined,
+                });
               }}
-              placeholder="Enter the exact stdin text your program should read. Each new line here is passed to the program as a new line."
+              placeholder="Enter the program input here, then click Run."
               className="w-full h-16 sm:h-20 bg-gray-900 text-green-400 font-mono text-sm p-2 sm:p-3 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <p className="text-xs text-gray-400 mt-1">
-              Enter raw stdin exactly as described in the problem. If the example shows multiple lines, keep the same line breaks here.
+              Provide the input your program should read, then run it to check the output.
             </p>
-            {question.sample_input && (
-              <p className="text-xs text-blue-300 mt-1">
-                Tip: `Use Example Input` copies the sample input into this box exactly as shown in the problem.
-              </p>
-            )}
-            {!customInput.trim() && (
-              <p className="text-xs text-amber-400 mt-1">
-                ⚠ Your code may need input. Enter test values above before running.
-              </p>
-            )}
           </div>
         )}
 

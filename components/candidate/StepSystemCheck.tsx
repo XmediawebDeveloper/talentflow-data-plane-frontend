@@ -31,12 +31,44 @@ interface StepSystemCheckProps {
   token: string;
   position?: string;
   onAllPassed: () => void;
+  /** Called just before proceeding — registers the candidate's face as a baseline for identity verification during the interview */
+  onRegisterFace?: (videoElement: HTMLVideoElement) => Promise<boolean>;
 }
 
 type Phase = 'browser_check' | 'browser_results' | 'system_checks' | 'env_scan';
 type CheckStatus = 'pending' | 'checking' | 'pass' | 'fail';
 
-const MOBILE_REGEX = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+const MOBILE_UA_REGEX = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+
+/**
+ * Reliably detect mobile devices even when the browser is in "Desktop Mode".
+ * Desktop Mode only changes the User-Agent string; the physical device doesn't change.
+ * We combine three independent signals:
+ *   1. navigator.userAgentData.mobile  — Chrome 90+ explicitly reports true on mobile, even in Desktop Mode
+ *   2. User-Agent regex                — catches non-desktop-mode cases on older browsers
+ *   3. Physical screen width < 768px   — window.screen.width reflects actual hardware pixels (CSS px),
+ *                                        unchanged by Desktop Mode. Real laptops are ≥ 768px wide.
+ *   4. Touch + orientation API         — orientation is only defined on mobile browsers
+ */
+function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
+
+  // Signal 1: Chrome's explicit mobile flag (survives Desktop Mode)
+  if ((navigator as any).userAgentData?.mobile === true) return true;
+
+  const ua = navigator.userAgent;
+
+  // Signal 2: UA string (fails when Desktop Mode rewrites UA, but still useful for Firefox/Safari)
+  if (MOBILE_UA_REGEX.test(ua)) return true;
+
+  // Signal 3: Physical screen width — mobile phones are < 768px even in desktop mode
+  if (window.screen.width < 768) return true;
+
+  // Signal 4: Touch + window.orientation (orientation API only exists on mobile)
+  if (navigator.maxTouchPoints > 1 && typeof (window as any).orientation !== 'undefined') return true;
+
+  return false;
+}
 
 // Environment scan constants
 const TOTAL_SCAN_FRAMES = 6;
@@ -111,15 +143,15 @@ function detectOS(): string {
 
 function detectDevice(): DeviceInfo {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-  const isMobile = MOBILE_REGEX.test(ua);
+  const mobile = isMobileDevice();
   const browser = detectBrowser(ua);
   const os = detectOS();
   const screenWidth = typeof window !== 'undefined' ? window.screen.width : 0;
   const screenHeight = typeof window !== 'undefined' ? window.screen.height : 0;
 
   return {
-    isMobile,
-    deviceType: isMobile ? 'Mobile Device' : 'Desktop/Laptop',
+    isMobile: mobile,
+    deviceType: mobile ? 'Mobile Device' : 'Desktop/Laptop',
     os,
     screenWidth,
     screenHeight,
@@ -226,6 +258,7 @@ export default function StepSystemCheck({
   token,
   position = 'this position',
   onAllPassed,
+  onRegisterFace,
 }: StepSystemCheckProps) {
   const [phase, setPhase] = useState<Phase>('browser_check');
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
@@ -244,6 +277,8 @@ export default function StepSystemCheck({
     lighting: boolean;
     singlePerson: boolean;
     clear: boolean;
+    lightingDetail?: string;
+    singlePersonDetail?: string;
   } | null>(null);
 
   // Refs for cleanup
@@ -404,7 +439,7 @@ export default function StepSystemCheck({
       if (!info.isMobile) {
         updateSystemCheck('device', { status: 'pass', detail: 'Desktop/Laptop detected' });
       } else {
-        updateSystemCheck('device', { status: 'fail', detail: 'Mobile device detected' });
+        updateSystemCheck('device', { status: 'fail', detail: 'Mobile device detected — use a desktop or laptop' });
       }
 
       // 2. Webcam
@@ -539,54 +574,82 @@ export default function StepSystemCheck({
         updateSystemCheck('noise', { status: 'fail', detail: 'Microphone not available for noise check' });
       }
 
-      // 7. Face Detection
+      // 7. Face Detection — Path A: native FaceDetector, Path B: face-api.js
       if (cancelled()) return;
       updateSystemCheck('face', { status: 'checking', detail: 'Detecting face...' });
-      let faceDetectorAvailable = false;
-      if (typeof window !== 'undefined' && 'FaceDetector' in window) {
-        try {
-          const detector = new (window as any).FaceDetector({ fastMode: true });
-          if (video && video.readyState >= 2) {
-            const faces = await detector.detect(video);
-            if (cancelled()) return;
-            faceDetectorAvailable = true;
-            setHasFaceDetector(true);
-            updateSystemCheck('face', faces.length >= 1
-              ? { status: 'pass', detail: 'Face detected successfully' }
-              : { status: 'fail', detail: 'No face detected - position yourself in front of the camera' },
-            );
-            // 8. Multiple People Check
-            if (cancelled()) return;
-            updateSystemCheck('multiple', { status: 'checking', detail: 'Checking for multiple people...' });
-            if (faces.length === 1) updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
-            else if (faces.length === 0) updateSystemCheck('multiple', { status: 'fail', detail: 'No person detected' });
-            else updateSystemCheck('multiple', { status: 'fail', detail: `${faces.length} people detected - ensure you are alone` });
+      updateSystemCheck('multiple', { status: 'checking', detail: 'Checking for multiple people...' });
 
+      const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights/';
+
+      const applyFaceCount = (count: number) => {
+        if (count === 1) {
+          updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
+          updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
+        } else if (count === 0) {
+          updateSystemCheck('face', { status: 'fail', detail: 'No face detected — position yourself in front of the camera' });
+          updateSystemCheck('multiple', { status: 'fail', detail: 'No person detected' });
+        } else {
+          updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
+          updateSystemCheck('multiple', { status: 'fail', detail: `${count} people detected — ensure you are alone` });
+        }
+      };
+
+      const runNativeDetector = async (vid: HTMLVideoElement) => {
+        const detector = new (window as any).FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
+        const faces = await detector.detect(vid);
+        applyFaceCount(faces.length);
+        return detector; // return so polling can reuse it
+      };
+
+      const runFaceApi = async (vid: HTMLVideoElement) => {
+        const faceapi = await import('face-api.js');
+        if (!faceapi.nets.tinyFaceDetector.isLoaded) {
+          await faceapi.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
+        }
+        const options = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
+        const detections = await faceapi.detectAllFaces(vid, options);
+        applyFaceCount(detections.length);
+        return faceapi; // return so polling can reuse it
+      };
+
+      if (video && video.readyState >= 2) {
+        const hasNative = typeof window !== 'undefined' && 'FaceDetector' in window;
+        let useFaceApi = !hasNative;
+
+        if (hasNative) {
+          try {
+            const detector = await runNativeDetector(video);
+            if (cancelled()) return;
+            setHasFaceDetector(true);
+            // Polling with native detector
             faceIntervalRef.current = setInterval(async () => {
               if (!video || video.readyState < 2) return;
-              try {
-                const f = await detector.detect(video);
-                if (f.length === 1) {
-                  updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
-                  updateSystemCheck('multiple', { status: 'pass', detail: 'Single person detected (Good)' });
-                } else if (f.length === 0) {
-                  updateSystemCheck('face', { status: 'fail', detail: 'No face detected' });
-                  updateSystemCheck('multiple', { status: 'fail', detail: 'No person detected' });
-                } else {
-                  updateSystemCheck('face', { status: 'pass', detail: 'Face detected successfully' });
-                  updateSystemCheck('multiple', { status: 'fail', detail: `${f.length} people detected - ensure you are alone` });
-                }
-              } catch { /* FaceDetector can fail on some frames */ }
-            }, 3000);
+              try { applyFaceCount((await detector.detect(video)).length); } catch { /* skip frame */ }
+            }, 2500);
+          } catch {
+            useFaceApi = true; // native threw — fall through to face-api.js
           }
-        } catch { /* FaceDetector not usable */ }
-      }
+        }
 
-      if (!faceDetectorAvailable) {
-        if (cancelled()) return;
-        setHasFaceDetector(false);
-        updateSystemCheck('face', { status: 'pass', detail: 'Face check will be validated during photo capture' });
-        updateSystemCheck('multiple', { status: 'pass', detail: 'Single-face check will be validated during photo capture' });
+        if (useFaceApi) {
+          if (cancelled()) return;
+          try {
+            const faceapi = await runFaceApi(video);
+            if (cancelled()) return;
+            setHasFaceDetector(true);
+            const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
+            // Polling with face-api.js
+            faceIntervalRef.current = setInterval(async () => {
+              if (!video || video.readyState < 2) return;
+              try { applyFaceCount((await faceapi.detectAllFaces(video, opts)).length); } catch { /* skip frame */ }
+            }, 2500);
+          } catch {
+            // Model load failed — can't verify face; treat as soft warning only
+            setHasFaceDetector(false);
+            updateSystemCheck('face', { status: 'pass', detail: 'Camera working (face check unavailable on this browser)' });
+            updateSystemCheck('multiple', { status: 'pass', detail: 'Single-face check unavailable on this browser' });
+          }
+        }
       }
     }
 
@@ -618,7 +681,14 @@ export default function StepSystemCheck({
 
     // Accumulated frame analysis data
     const frameBrightnessValues: number[] = [];
+    const frameMultiPersonFlags: boolean[] = []; // true = multiple people in this frame
     let framesCapured = 0;
+
+    // Face detector (if available) for multi-person check during scan
+    let faceDetector: any = null;
+    if (typeof window !== 'undefined' && 'FaceDetector' in window) {
+      try { faceDetector = new (window as any).FaceDetector({ fastMode: true }); } catch { /* not available */ }
+    }
 
     // Smooth progress animation over total duration
     const totalDuration = TOTAL_SCAN_FRAMES * SCAN_INTERVAL_MS;
@@ -635,11 +705,11 @@ export default function StepSystemCheck({
     envScanRAFRef.current = requestAnimationFrame(animateProgress);
 
     // Frame capture interval
-    envScanTimerRef.current = setInterval(() => {
+    envScanTimerRef.current = setInterval(async () => {
       framesCapured += 1;
       setEnvScanFrameCount(framesCapured);
 
-      // Analyze brightness from the current video frame
+      // Analyze brightness and multi-person from the current video frame
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (video && canvas && video.readyState >= 2) {
@@ -655,6 +725,14 @@ export default function StepSystemCheck({
           }
           const avgB = imgData.length > 0 ? totalB / (imgData.length / 4) : 0;
           frameBrightnessValues.push(avgB);
+
+          // Multi-person check via FaceDetector
+          if (faceDetector) {
+            try {
+              const faces = await faceDetector.detect(video);
+              frameMultiPersonFlags.push(faces.length > 1);
+            } catch { /* ignore detection errors */ }
+          }
         }
       }
 
@@ -670,18 +748,32 @@ export default function StepSystemCheck({
         }
         setEnvScanProgress(100);
 
-        // Compute results
-        const allBright = frameBrightnessValues.every((b) => b >= 40);
+        // Compute lighting result
         const someFramesCaptured = frameBrightnessValues.length >= Math.floor(TOTAL_SCAN_FRAMES / 2);
-        const lightingOk = someFramesCaptured && allBright;
-        // Placeholder: assume single person if webcam was accessible
-        const singlePersonOk = true;
+        const darkFrames = frameBrightnessValues.filter((b) => b < 40).length;
+        const lightingOk = someFramesCaptured && darkFrames === 0;
+        const lightingDetail = !lightingOk
+          ? darkFrames > 0
+            ? `Insufficient lighting detected in ${darkFrames} of ${frameBrightnessValues.length} frames — move to a brighter area`
+            : 'Unable to analyze lighting — check camera access'
+          : undefined;
+
+        // Compute single-person result
+        const multiPersonFrames = frameMultiPersonFlags.filter(Boolean).length;
+        const singlePersonChecked = frameMultiPersonFlags.length > 0;
+        const singlePersonOk = !singlePersonChecked || multiPersonFrames === 0;
+        const singlePersonDetail = !singlePersonOk
+          ? `Multiple people detected in ${multiPersonFrames} frame(s) — ensure you are alone in the room`
+          : undefined;
+
         const clearOk = lightingOk && singlePersonOk;
 
         setEnvScanResults({
           lighting: lightingOk,
           singlePerson: singlePersonOk,
           clear: clearOk,
+          lightingDetail,
+          singlePersonDetail,
         });
         setEnvScanPhase('complete');
       }
@@ -725,6 +817,16 @@ export default function StepSystemCheck({
       });
     } catch {
       // Non-blocking — proceed even if recording fails
+    }
+
+    // Register candidate's face baseline for identity verification during the interview.
+    // Must happen before stopping the stream (video element still has live frames).
+    if (onRegisterFace && videoRef.current) {
+      try {
+        await onRegisterFace(videoRef.current);
+      } catch {
+        // Non-blocking — proceed even if registration fails
+      }
     }
 
     // Stop streams right before calling onAllPassed
@@ -889,6 +991,14 @@ export default function StepSystemCheck({
                   <span className="text-gray-500">Screen Resolution:</span>{' '}
                   <span className="font-medium">{deviceInfo.screenWidth} x {deviceInfo.screenHeight}</span>
                 </p>
+                {deviceInfo.isMobile && (
+                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-sm text-red-700 font-medium">Mobile devices are not supported</p>
+                    <p className="text-xs text-red-600 mt-0.5">
+                      AI interviews must be completed on a desktop or laptop computer. Switching to "Desktop Mode" in your mobile browser does not bypass this restriction.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1131,11 +1241,15 @@ export default function StepSystemCheck({
               </div>
             )}
             {checksCompleted && !allSystemPassed && (
-              <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
-                <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+              <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold text-amber-800">Some checks failed</p>
-                  <p className="text-sm text-amber-700">Fix the issues above, then retry.</p>
+                  <p className="text-sm text-amber-700 mt-0.5">
+                    {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
+                      ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry.'
+                      : 'Fix the issues above and click Retry to continue.'}
+                  </p>
                 </div>
               </div>
             )}
@@ -1438,25 +1552,35 @@ export default function StepSystemCheck({
                           {
                             label: 'Lighting consistency',
                             passed: envScanResults.lighting,
+                            detail: envScanResults.lightingDetail,
                           },
                           {
                             label: 'Single person throughout',
                             passed: envScanResults.singlePerson,
+                            detail: envScanResults.singlePersonDetail,
                           },
                           {
                             label: 'Environment clear',
                             passed: envScanResults.clear,
+                            detail: !envScanResults.clear && envScanResults.lighting && envScanResults.singlePerson
+                              ? 'Environment did not meet all requirements'
+                              : undefined,
                           },
-                        ].map(({ label, passed }) => (
-                          <div key={label} className="flex items-center gap-3">
+                        ].map(({ label, passed, detail }) => (
+                          <div key={label} className="flex items-start gap-3">
                             {passed ? (
-                              <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                              <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
                             ) : (
-                              <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                              <XCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                             )}
-                            <span className="text-sm text-gray-800">{label}</span>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm text-gray-800">{label}</span>
+                              {!passed && detail && (
+                                <p className="text-xs text-red-600 mt-0.5">{detail}</p>
+                              )}
+                            </div>
                             <span
-                              className={`ml-auto text-xs font-semibold ${
+                              className={`ml-auto text-xs font-semibold flex-shrink-0 ${
                                 passed ? 'text-green-600' : 'text-red-600'
                               }`}
                             >
@@ -1475,11 +1599,17 @@ export default function StepSystemCheck({
                           </p>
                         </div>
                       ) : (
-                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2">
-                          <XCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                          <p className="text-sm font-semibold text-amber-800">
-                            Some issues detected. Consider rescanning.
-                          </p>
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-2">
+                          <XCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-semibold text-amber-800">Issues detected — please fix and rescan</p>
+                            {!envScanResults.lighting && (
+                              <p className="text-xs text-amber-700 mt-0.5">• Improve your lighting before rescanning</p>
+                            )}
+                            {!envScanResults.singlePerson && (
+                              <p className="text-xs text-amber-700 mt-0.5">• Ensure you are the only person in the frame</p>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>

@@ -79,6 +79,10 @@ interface QuestionResult {
 export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle, canDownloadPDF = false, canBatchDownload = false }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const stickyScrollbarRef = useRef<HTMLDivElement | null>(null);
+  const stickyScrollbarInnerRef = useRef<HTMLDivElement | null>(null);
+  const isSyncingScrollRef = useRef(false);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -117,6 +121,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Date range filter (submitted/completed date)
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [showStickyScrollbar, setShowStickyScrollbar] = useState(false);
 
   // AS-24: Column customization
   const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
@@ -694,6 +699,39 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     setCurrentPage(1);
   }, [searchQuery, statusFilter, passFailFilter, roundFilters, dateFrom, dateTo]);
 
+  useEffect(() => {
+    const updateStickyScrollbar = () => {
+      const tableEl = tableScrollRef.current;
+      const innerEl = stickyScrollbarInnerRef.current;
+      if (!tableEl || !innerEl) return;
+
+      const hasHorizontalOverflow = tableEl.scrollWidth > tableEl.clientWidth;
+      setShowStickyScrollbar(hasHorizontalOverflow);
+      innerEl.style.width = `${tableEl.scrollWidth}px`;
+    };
+
+    updateStickyScrollbar();
+
+    const tableEl = tableScrollRef.current;
+    if (!tableEl || typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateStickyScrollbar);
+      return () => window.removeEventListener('resize', updateStickyScrollbar);
+    }
+
+    const resizeObserver = new ResizeObserver(updateStickyScrollbar);
+    resizeObserver.observe(tableEl);
+    const tableChild = tableEl.firstElementChild;
+    if (tableChild) {
+      resizeObserver.observe(tableChild);
+    }
+    window.addEventListener('resize', updateStickyScrollbar);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateStickyScrollbar);
+    };
+  }, [columns, candidateResults.length, assessmentDetails, isFetching]);
+
   // Use API results only (no mock data)
   const displayResults = candidateResults;
 
@@ -800,6 +838,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const completedCount = candidateResults.length > 0 ? apiStats.completed_count : filteredCandidates.filter(c => c.status === 'Completed').length;
   const inProgressCount = candidateResults.length > 0 ? apiStats.in_progress_count : filteredCandidates.filter(c => c.status === 'In Progress').length;
   const pendingCount = candidateResults.length > 0 ? apiStats.pending_count : filteredCandidates.filter(c => c.status === 'Pending').length;
+
+  const syncHorizontalScroll = (source: 'table' | 'sticky') => {
+    const tableEl = tableScrollRef.current;
+    const stickyEl = stickyScrollbarRef.current;
+    if (!tableEl || !stickyEl || isSyncingScrollRef.current) return;
+
+    isSyncingScrollRef.current = true;
+    if (source === 'table') {
+      stickyEl.scrollLeft = tableEl.scrollLeft;
+    } else {
+      tableEl.scrollLeft = stickyEl.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false;
+    });
+  };
 
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -1104,7 +1158,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               {selectedRows.length > 0 && `${selectedRows.length} selected`}
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div
+            ref={tableScrollRef}
+            className="overflow-x-auto"
+            onScroll={() => syncHorizontalScroll('table')}
+          >
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -1440,6 +1498,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </tbody>
             </table>
           </div>
+
+          {showStickyScrollbar && (
+            <div className="sticky bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+              <div
+                ref={stickyScrollbarRef}
+                className="overflow-x-auto overflow-y-hidden"
+                onScroll={() => syncHorizontalScroll('sticky')}
+              >
+                <div ref={stickyScrollbarInnerRef} className="h-4" />
+              </div>
+            </div>
+          )}
 
           {/* AS-23: Pagination Controls */}
           {totalPages > 1 && (

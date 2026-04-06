@@ -1,7 +1,7 @@
 'use client';
 
-import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database, AlertTriangle, Loader2, FileSpreadsheet } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database, AlertTriangle, Loader2, FileSpreadsheet, MapPin, ShieldAlert, Info, FolderOpen, Folder, ChevronRight, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
@@ -9,6 +9,7 @@ import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import * as XLSX from 'xlsx';
+import { useQuota } from '@/contexts/QuotaContext';
 
 // Email validation regex
 const isValidEmail = (email: string): boolean => {
@@ -56,6 +57,16 @@ const ROUND_LABELS: Record<string, string> = {
 
 export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent }: ShareAIInterviewModalProps) {
   const { user } = useAuth();
+  const { quotaData } = useQuota();
+
+  // Quota stats state
+  const [quotaStats, setQuotaStats] = useState<{
+    total_quota: number;
+    consumed: number;
+    pending: number;
+    available: number;
+  } | null>(null);
+  const [quotaStatsLoading, setQuotaStatsLoading] = useState(false);
 
   const [inputMode, setInputMode] = useState<'manual' | 'database' | 'excel'>('manual');
   const [candidates, setCandidates] = useState<CandidateEmail[]>([
@@ -66,9 +77,23 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const excelInputRef = useRef<HTMLInputElement>(null);
   const [excelFileName, setExcelFileName] = useState<string>('');
 
-  // Resume database from API
-  const [resumeDatabase, setResumeDatabase] = useState<Resume[]>([]);
+  // Database tab state
+  const [dbTab, setDbTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
+  const [myResumesData, setMyResumesData] = useState<Resume[]>([]);
+  const [internalDbData, setInternalDbData] = useState<Resume[]>([]);
+  const [myFolders, setMyFolders] = useState<{ id: string; name: string; parentId?: string | null }[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  const [myResumesLoaded, setMyResumesLoaded] = useState(false);
+  const [internalDbLoaded, setInternalDbLoaded] = useState(false);
   const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+
+  // RBAC checks
+  const hasMyResumesAccess = !!(user?.permissions?.canUploadResumes || user?.permissions?.canViewResumes);
+  const hasInternalDBAccess = !!(user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB);
+
+  // Legacy alias for Send logic
+  const resumeDatabase = dbTab === 'my-resumes' ? myResumesData : internalDbData;
 
   // Email message — populated dynamically with config/user context
   const [customMessage, setCustomMessage] = useState('');
@@ -95,65 +120,111 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   const [showDuplicateError, setShowDuplicateError] = useState(false);
   const [duplicateEmail, setDuplicateEmail] = useState('');
 
-  // Load resumes from API when database mode is selected
+  // Fetch quota stats when modal opens
   useEffect(() => {
-    if (inputMode === 'database' && resumeDatabase.length === 0) {
-      loadResumes();
+    if (!isOpen) return;
+    setQuotaStatsLoading(true);
+    aiInterviewService.getInvitationStats().then((stats) => {
+      setQuotaStats(stats);
+    }).finally(() => setQuotaStatsLoading(false));
+  }, [isOpen]);
+
+  // Load resumes when database mode is selected
+  useEffect(() => {
+    if (inputMode === 'database') {
+      const tab = hasMyResumesAccess ? 'my-resumes' : 'internal-db';
+      setDbTab(tab);
+      if (tab === 'my-resumes') loadMyResumes();
+      else loadInternalDb();
     }
   }, [inputMode]);
 
-  const loadResumes = async () => {
+  useEffect(() => {
+    if (inputMode !== 'database') return;
+    if (dbTab === 'my-resumes' && !myResumesLoaded) loadMyResumes();
+    if (dbTab === 'internal-db' && !internalDbLoaded) loadInternalDb();
+    setSelectedFolder('all');
+    setSelectedResumes([]);
+    setSearchQuery('');
+  }, [dbTab]);
+
+  const mapResume = (r: any): Resume => ({
+    id: r.id,
+    name: r.candidate_name || 'Unknown',
+    email: r.email || r.candidate_email || '',
+    phone: r.phone || '',
+    position: r.current_title || 'Not specified',
+    experience: r.experience_years ? `${r.experience_years} years` : 'Not specified',
+    skills: r.skills || [],
+  });
+
+  const loadMyResumes = async () => {
+    if (myResumesLoaded) return;
     setIsLoadingResumes(true);
     try {
-      const sources = [];
-
-      if (user?.permissions?.canAccessInternalDb) {
-        sources.push('internal-db');
-      }
-      if (user?.permissions?.canUploadResumes || user?.permissions?.canViewMyResumes) {
-        sources.push('my-resumes');
-      }
-      // Fallback for admin
-      if (sources.length === 0) {
-        sources.push('internal-db', 'my-resumes');
-      }
-
-      const allResumes: any[] = [];
-      for (const source of sources) {
-        try {
-          const response = await api.get('/resumes', {
-            params: { source, page_size: 100 },
-          });
-          if (response.data?.items) {
-            allResumes.push(...response.data.items);
-          }
-        } catch (err) {
-          console.warn(`Failed to load resumes from ${source}:`, err);
-        }
-      }
-
-      const mapped = allResumes.map((r: any) => ({
-        id: r.id,
-        name: r.candidate_name || 'Unknown',
-        email: r.email || r.candidate_email || '',
-        phone: r.phone || '',
-        position: r.current_title || 'Not specified',
-        experience: r.experience_years ? `${r.experience_years} years` : 'Not specified',
-        skills: r.skills || [],
-      }));
-
-      // Remove duplicates by email
-      const uniqueResumes = mapped.filter(
-        (resume, index, self) => index === self.findIndex((r) => r.email === resume.email && resume.email !== '')
-      );
-
-      setResumeDatabase(uniqueResumes);
-    } catch (error) {
-      console.error('Failed to load resumes:', error);
-      toast.error('Failed to load resumes from database');
+      const [resumeRes, folderRes] = await Promise.all([
+        api.get('/resumes', { params: { source: 'my-resumes', page_size: 200 } }),
+        api.get('/folders'),
+      ]);
+      setMyResumesData((resumeRes.data?.items ?? []).map(mapResume));
+      setMyFolders((folderRes.data ?? []).map((f: any) => ({ id: f.id, name: f.name, parentId: f.parent_id ?? null })));
+      setMyResumesLoaded(true);
+    } catch {
+      toast.error('Failed to load My Resumes');
     } finally {
       setIsLoadingResumes(false);
     }
+  };
+
+  const loadInternalDb = async () => {
+    if (internalDbLoaded) return;
+    setIsLoadingResumes(true);
+    try {
+      const res = await api.get('/resumes', { params: { source: 'internal-db', page_size: 200 } });
+      setInternalDbData((res.data?.items ?? []).map(mapResume));
+      setInternalDbLoaded(true);
+    } catch {
+      toast.error('Failed to load Internal Database');
+    } finally {
+      setIsLoadingResumes(false);
+    }
+  };
+
+  const toggleExpandFolder = (id: string) => {
+    setExpandedFolders(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+  };
+
+  const renderFolderTree = (parentId?: string | null, level = 0): React.ReactNode => {
+    const children = myFolders.filter(f => {
+      const isTop = !parentId && (f.parentId === null || f.parentId === undefined);
+      const isChild = parentId && f.parentId === parentId;
+      return isTop || isChild;
+    });
+    return children.map(folder => {
+      const isExpanded = expandedFolders.includes(folder.id);
+      const isSelected = selectedFolder === folder.id;
+      const hasChildren = myFolders.some(f => f.parentId === folder.id);
+      const count = myResumesData.filter(r => (r as any).folderId === folder.id).length;
+      return (
+        <div key={folder.id}>
+          <button
+            onClick={() => setSelectedFolder(folder.id)}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${isSelected ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+            style={{ paddingLeft: `${level * 16 + 12}px` }}
+          >
+            {hasChildren ? (
+              <button onClick={e => { e.stopPropagation(); toggleExpandFolder(folder.id); }} className="p-0.5 hover:bg-gray-200 rounded">
+                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+            ) : <div className="w-5" />}
+            {isExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
+            <span className="flex-1 text-left truncate">{folder.name}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">{count}</span>
+          </button>
+          {isExpanded && hasChildren && <div>{renderFolderTree(folder.id, level + 1)}</div>}
+        </div>
+      );
+    });
   };
 
   if (!isOpen) return null;
@@ -186,15 +257,17 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     );
   };
 
-  // Add selected resumes to candidates list
+  const selectAllResumes = () => {
+    setSelectedResumes(filteredResumes.map((r) => r.id));
+  };
+
+  const clearSelection = () => setSelectedResumes([]);
+
+  // Add selected resumes to candidates list and switch to manual view
   const handleAddFromDatabase = () => {
     const selectedResumeData = resumeDatabase.filter((r) => selectedResumes.includes(r.id));
-
-    // Keep valid manual/excel candidates
     const validExisting = candidates.filter((c) => c.name.trim() && c.email.trim());
     const existingEmails = new Set(validExisting.map((c) => c.email.toLowerCase().trim()));
-
-    // Only add database entries whose email is not already in the list
     const newCandidates: CandidateEmail[] = selectedResumeData
       .filter((resume) => resume.email && !existingEmails.has(resume.email.toLowerCase().trim()))
       .map((resume) => ({
@@ -204,15 +277,82 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         source: 'database' as const,
         resumeId: resume.id,
       }));
-
     const duplicateCount = selectedResumeData.length - newCandidates.length;
     if (duplicateCount > 0) {
       toast.warning(`${duplicateCount} candidate${duplicateCount > 1 ? 's' : ''} skipped — already in the list`);
     }
-
     setCandidates(validExisting.length > 0 ? [...validExisting, ...newCandidates] : newCandidates.length > 0 ? newCandidates : [{ id: '1', name: '', email: '', source: 'manual' }]);
     setSelectedResumes([]);
     setInputMode('manual');
+  };
+
+  // Send invitations directly to selected database candidates (no manual step)
+  const handleSendFromDatabase = async () => {
+    const selectedResumeData = resumeDatabase.filter((r) => selectedResumes.includes(r.id) && r.email);
+    if (selectedResumeData.length === 0) {
+      toast.warning('Please select at least one candidate with a valid email');
+      return;
+    }
+
+    // Quota check
+    if (quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < selectedResumeData.length) {
+      toast.error(`Insufficient quota. ${quotaStats.available} unit${quotaStats.available !== 1 ? 's' : ''} available, need ${selectedResumeData.length}.`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    const resolvedMessage = customMessage
+      ? customMessage.replace('[deadline date]', expiryDays > 0
+          ? formatISTDate(new Date(Date.now() + expiryDays * 86400000).toISOString())
+          : 'no specific deadline')
+      : undefined;
+
+    let successCount = 0;
+    const alreadyInvited: string[] = [];
+    const tenantUserEmails: string[] = [];
+    const failed: { email: string; reason: string }[] = [];
+
+    for (const resume of selectedResumeData) {
+      try {
+        await aiInterviewService.inviteCandidate(config.id, {
+          candidate_name: resume.name,
+          candidate_email: resume.email,
+          resume_id: resume.id,
+          custom_message: resolvedMessage,
+          expiry_days: expiryDays,
+          base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+        });
+        successCount++;
+      } catch (err: any) {
+        const errData = err?.response?.data || {};
+        const errCode = errData?.error || errData?.detail?.error || '';
+        if (err?.response?.status === 409 || errCode === 'DUPLICATE_INVITATION') {
+          alreadyInvited.push(resume.email);
+        } else if (err?.response?.status === 400 && errCode === 'TENANT_USER_EMAIL') {
+          tenantUserEmails.push(resume.email);
+        } else {
+          failed.push({ email: resume.email, reason: errData?.detail?.message || errData?.message || err?.message || 'Unknown error' });
+        }
+      }
+    }
+
+    setIsSubmitting(false);
+
+    if (successCount > 0) {
+      setSentCount(successCount);
+      if (alreadyInvited.length > 0) toast.warning(`${alreadyInvited.length} already invited: ${alreadyInvited.join(', ')}`);
+      if (tenantUserEmails.length > 0) toast.error(`Team member emails skipped: ${tenantUserEmails.join(', ')}`);
+      if (failed.length > 0) toast.error(`${failed.length} failed: ${failed.map(f => f.email).join(', ')}`);
+      setShowSuccess(true);
+      setTimeout(() => { setShowSuccess(false); onInviteSent(); onClose(); }, 2000);
+    } else if (alreadyInvited.length > 0 && failed.length === 0) {
+      setDuplicateEmail(alreadyInvited.join(', '));
+      setShowDuplicateError(true);
+    } else if (tenantUserEmails.length > 0) {
+      toast.error(`Cannot invite team member email${tenantUserEmails.length > 1 ? 's' : ''}: ${tenantUserEmails.join(', ')}`);
+    } else {
+      toast.error('Failed to send invitations. Please try again.');
+    }
   };
 
   // Handle Excel/CSV file upload
@@ -295,12 +435,15 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     if (excelInputRef.current) excelInputRef.current.value = '';
   };
 
-  // Filter resumes based on search query
-  const filteredResumes = resumeDatabase.filter(
-    (resume) =>
-      resume.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      resume.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      resume.position.toLowerCase().includes(searchQuery.toLowerCase())
+  // Filter resumes based on active tab, folder (My Resumes only), and search
+  const activeResumes = dbTab === 'my-resumes' ? myResumesData : internalDbData;
+  const folderFiltered = dbTab === 'my-resumes' && selectedFolder !== 'all'
+    ? activeResumes.filter(r => (r as any).folderId === selectedFolder)
+    : activeResumes;
+  const filteredResumes = folderFiltered.filter(r =>
+    r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.position.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleCopyLink = () => {
@@ -338,6 +481,29 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         return true;
       });
 
+      // Quota check — block if not enough available slots
+      if (quotaStats !== null && quotaStats.total_quota < 999999) {
+        if (quotaStats.available < deduped.length) {
+          const pendingMsg = quotaStats.pending > 0
+            ? ` ${quotaStats.pending} unit${quotaStats.pending > 1 ? 's' : ''} are held by pending invitations and will be released when their links expire.`
+            : '';
+          toast.error(
+            `Insufficient quota. You have ${quotaStats.available} unit${quotaStats.available !== 1 ? 's' : ''} available but need ${deduped.length} to send these invitations.${pendingMsg}`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      } else {
+        // Fallback: check via QuotaContext
+        const aiuQuota = quotaData?.quotas?.AIU;
+        const totalRemaining = typeof aiuQuota?.total_remaining === 'number' ? aiuQuota.total_remaining : null;
+        if (totalRemaining !== null && totalRemaining < deduped.length) {
+          toast.error(`Insufficient quota. You have ${totalRemaining} AI Interview unit${totalRemaining !== 1 ? 's' : ''} remaining but need ${deduped.length}.`);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const resolvedMessage = customMessage
         ? customMessage.replace('[deadline date]', expiryDays > 0
             ? formatISTDate(new Date(Date.now() + expiryDays * 86400000).toISOString())
@@ -348,7 +514,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       let successCount = 0;
       const alreadyInvited: string[] = [];
       const tenantUserEmails: string[] = [];
-      const failed: string[] = [];
+      const failed: { email: string; reason: string }[] = [];
 
       for (const candidate of deduped) {
         try {
@@ -362,7 +528,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           });
           successCount++;
         } catch (err: any) {
-          const errCode = err?.response?.data?.error || err?.response?.data?.detail?.error || '';
+          const errData = err?.response?.data || {};
+          const errCode = errData?.error || errData?.detail?.error || '';
           const is409 =
             err?.response?.status === 409 ||
             err?.message?.includes('status code 409') ||
@@ -370,12 +537,21 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             errCode === 'DUPLICATE_INVITATION';
           const isTenantUser =
             err?.response?.status === 400 && errCode === 'TENANT_USER_EMAIL';
+
+          // Extract the actual error reason from backend response
+          const reason: string =
+            (typeof errData?.detail === 'string' ? errData.detail : null) ||
+            errData?.detail?.message ||
+            errData?.message ||
+            err?.message ||
+            'Unknown error';
+
           if (is409) {
             alreadyInvited.push(candidate.email.trim());
           } else if (isTenantUser) {
             tenantUserEmails.push(candidate.email.trim());
           } else {
-            failed.push(candidate.email.trim());
+            failed.push({ email: candidate.email.trim(), reason });
             console.error(`Failed to invite ${candidate.email}:`, err);
           }
         }
@@ -392,7 +568,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           toast.error(`Team member emails cannot be invited: ${tenantUserEmails.join(', ')}`);
         }
         if (failed.length > 0) {
-          toast.error(`${failed.length} failed to send: ${failed.join(', ')}`);
+          // Show actual error reason alongside failed emails
+          const uniqueReasons = [...new Set(failed.map(f => f.reason))];
+          const emails = failed.map(f => f.email).join(', ');
+          toast.error(`${failed.length} failed: ${emails} — ${uniqueReasons.join('; ')}`);
         }
         setShowSuccess(true);
         setTimeout(() => {
@@ -401,12 +580,17 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           onClose();
         }, 2000);
       } else if (tenantUserEmails.length > 0 && successCount === 0) {
-        // All blocked as team member emails
         toast.error(`Cannot invite team member email${tenantUserEmails.length > 1 ? 's' : ''}: ${tenantUserEmails.join(', ')}. AI Interview invitations are for external candidates only.`);
       } else if (alreadyInvited.length > 0 && failed.length === 0 && tenantUserEmails.length === 0) {
-        // All were duplicates
         setDuplicateEmail(alreadyInvited.join(', '));
         setShowDuplicateError(true);
+      } else if (failed.length > 0) {
+        // All failed — show the actual error reason
+        const uniqueReasons = [...new Set(failed.map(f => f.reason))];
+        toast.error(uniqueReasons.length === 1
+          ? uniqueReasons[0]
+          : `Invitations failed: ${uniqueReasons.join('; ')}`
+        );
       } else {
         toast.error('Failed to send invitations. Please try again.');
       }
@@ -546,6 +730,108 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             </div>
           </div>
 
+          {/* Quota Banner */}
+          {(() => {
+            const aiuQuota = quotaData?.quotas?.AIU;
+            const subscriptionLimit = typeof aiuQuota?.subscription?.limit === 'number' ? aiuQuota.subscription.limit : null;
+            const subscriptionUsed = aiuQuota?.subscription?.used ?? 0;
+
+            if (quotaStatsLoading) {
+              return (
+                <div className="mb-4 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-2 text-sm text-gray-500">
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  Checking AI interview quota...
+                </div>
+              );
+            }
+
+            if (quotaStats) {
+              const { total_quota, consumed, pending, available } = quotaStats;
+              const isUnlimited = total_quota >= 999999;
+              const isInsufficient = !isUnlimited && available === 0;
+              const isLow = !isUnlimited && !isInsufficient && available <= 3;
+
+              if (isUnlimited) {
+                return (
+                  <div className="mb-4 px-4 py-3 rounded-lg border text-sm bg-blue-50 border-blue-200 text-blue-800">
+                    <div className="flex items-center gap-2">
+                      <Info className="w-4 h-4 flex-shrink-0" />
+                      <span className="font-medium">Unlimited AI interview units</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
+                  isInsufficient
+                    ? 'bg-red-50 border-red-200 text-red-800'
+                    : isLow
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-blue-50 border-blue-200 text-blue-800'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    {isInsufficient
+                      ? <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      : <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    }
+                    <div className="flex-1">
+                      <div className="font-medium mb-1">
+                        {isInsufficient
+                          ? 'No AI interview units available'
+                          : isLow
+                          ? `Only ${available} unit${available !== 1 ? 's' : ''} available`
+                          : `${available} AI interview unit${available !== 1 ? 's' : ''} available`
+                        }
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs opacity-80">
+                        <span>Total: {total_quota}</span>
+                        <span>Attended (consumed): {consumed}</span>
+                        {pending > 0 && (
+                          <span>Pending invitations (held): {pending}</span>
+                        )}
+                      </div>
+                      {pending > 0 && (
+                        <p className="text-xs mt-1 opacity-80">
+                          {pending} unit{pending > 1 ? 's' : ''} held by active invitations — released automatically when links expire.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Fallback to QuotaContext data
+            if (subscriptionLimit !== null) {
+              const remaining = subscriptionLimit - subscriptionUsed;
+              const isInsufficient = remaining <= 0;
+              const isLow = !isInsufficient && remaining <= 3;
+              return (
+                <div className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
+                  isInsufficient
+                    ? 'bg-red-50 border-red-200 text-red-800'
+                    : isLow
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-blue-50 border-blue-200 text-blue-800'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {isInsufficient
+                      ? <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+                      : <Info className="w-4 h-4 flex-shrink-0" />
+                    }
+                    <span>
+                      <span className="font-medium">{Math.max(0, remaining)} AI interview unit{remaining !== 1 ? 's' : ''} remaining</span>
+                      <span className="opacity-80 ml-1">({subscriptionUsed} used of {subscriptionLimit})</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            return null;
+          })()}
+
           {/* Candidate Emails Section */}
           <div className="mb-6">
             {/* Mode Switcher */}
@@ -584,7 +870,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   }`}
                 >
                   <Database className="w-4 h-4" />
-                  Database
+                  Select From
                 </button>
               </div>
             </div>
@@ -692,100 +978,144 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
             {/* Database Selection Mode */}
             {inputMode === 'database' && (
-              <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4">
-                {/* Search */}
-                <div className="mb-4">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by name, email, or position..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  />
+              <div className="border-2 border-gray-200 rounded-lg overflow-hidden">
+                {/* Tabs */}
+                <div className="flex border-b border-gray-200 bg-gray-50">
+                  {hasMyResumesAccess && (
+                    <button
+                      onClick={() => setDbTab('my-resumes')}
+                      className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                        dbTab === 'my-resumes'
+                          ? 'border-gray-800 text-gray-900 bg-white'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      My Resumes
+                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700">{myResumesData.length}</span>
+                    </button>
+                  )}
+                  {(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess)) && (
+                    <button
+                      onClick={() => setDbTab('internal-db')}
+                      className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                        dbTab === 'internal-db'
+                          ? 'border-gray-800 text-gray-900 bg-white'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <Database className="w-4 h-4" />
+                      Internal Database
+                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700">{internalDbData.length}</span>
+                    </button>
+                  )}
                 </div>
 
-                {/* Resume List */}
-                {isLoadingResumes ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                    <span className="ml-2 text-sm text-gray-500">Loading resumes...</span>
-                  </div>
-                ) : filteredResumes.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Database className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm text-gray-500">
-                      {searchQuery ? 'No resumes match your search' : 'No resumes found in database'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="max-h-96 overflow-y-auto space-y-2 mb-4">
-                    {filteredResumes.map((resume) => (
-                      <div
-                        key={resume.id}
-                        onClick={() => toggleResumeSelection(resume.id)}
-                        className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                          selectedResumes.includes(resume.id)
-                            ? 'bg-gray-100 border-gray-800'
-                            : 'bg-white border-gray-200 hover:border-gray-300'
-                        }`}
+                {/* Content: folder sidebar + resume list */}
+                <div className="flex" style={{ minHeight: '300px', maxHeight: '380px' }}>
+                  {/* Folder Sidebar (My Resumes only) */}
+                  {dbTab === 'my-resumes' && myFolders.length > 0 && (
+                    <div className="w-48 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0 p-3">
+                      <p className="text-xs font-medium text-gray-500 uppercase mb-2 px-1">Folders</p>
+                      <button
+                        onClick={() => setSelectedFolder('all')}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm mb-1 ${selectedFolder === 'all' ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
                       >
-                        <div className="flex items-start gap-3">
-                          <div className="flex-shrink-0 mt-1">
-                            <div
-                              className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                                selectedResumes.includes(resume.id)
-                                  ? 'bg-gray-800 border-gray-800'
-                                  : 'bg-white border-gray-300'
-                              }`}
-                            >
-                              {selectedResumes.includes(resume.id) && (
-                                <CheckCircle className="w-4 h-4 text-white" />
-                              )}
-                            </div>
+                        <FolderOpen className="w-4 h-4" />
+                        <span className="flex-1 text-left">All Resumes</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">{myResumesData.length}</span>
+                      </button>
+                      <div className="space-y-0.5">{renderFolderTree(undefined, 0)}</div>
+                    </div>
+                  )}
+
+                  {/* Resume List */}
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {/* Search + Select All */}
+                    <div className="flex items-center gap-2 p-3 border-b border-gray-100">
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Search by name, email, or position..."
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      />
+                      <button
+                        onClick={() => {
+                          if (selectedResumes.length === filteredResumes.length && filteredResumes.length > 0) {
+                            setSelectedResumes([]);
+                          } else {
+                            setSelectedResumes(filteredResumes.map(r => r.id));
+                          }
+                        }}
+                        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 whitespace-nowrap text-gray-700"
+                      >
+                        {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? 'Deselect All' : 'Select All'}
+                      </button>
+                      <span className="text-sm text-gray-500 whitespace-nowrap">{selectedResumes.length} selected</span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                      {isLoadingResumes ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                        </div>
+                      ) : filteredResumes.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                          <Database className="w-8 h-8 mb-2" />
+                          <p className="text-sm">{searchQuery ? 'No resumes match your search' : 'No resumes found'}</p>
+                        </div>
+                      ) : filteredResumes.map(resume => (
+                        <div
+                          key={resume.id}
+                          onClick={() => toggleResumeSelection(resume.id)}
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                            selectedResumes.includes(resume.id) ? 'bg-gray-50 border-gray-800' : 'bg-white border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${
+                            selectedResumes.includes(resume.id) ? 'bg-gray-800 border-gray-800' : 'border-gray-300'
+                          }`}>
+                            {selectedResumes.includes(resume.id) && <CheckCircle className="w-3 h-3 text-white" />}
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-1">
-                              <div className="text-gray-900 font-medium">{resume.name}</div>
-                              <div className="text-xs text-gray-500">{resume.experience}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium text-gray-900 truncate">{resume.name}</span>
+                              <span className="text-xs text-gray-400 flex-shrink-0">{resume.experience}</span>
                             </div>
-                            <div className="text-sm text-gray-600 mb-2">{resume.email}</div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <span className="text-xs text-gray-500">{resume.position}</span>
-                              <span className="text-xs text-gray-400">•</span>
-                              <span className="text-xs text-gray-500">{resume.phone}</span>
-                            </div>
-                            <div className="flex flex-wrap gap-1">
-                              {resume.skills.slice(0, 3).map((skill, idx) => (
-                                <span key={idx} className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
-                                  {skill}
-                                </span>
-                              ))}
-                              {resume.skills.length > 3 && (
-                                <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                                  +{resume.skills.length - 3} more
-                                </span>
-                              )}
-                            </div>
+                            <div className="text-xs text-gray-500 truncate">{resume.email}</div>
+                            <div className="text-xs text-gray-400 truncate">{resume.position}</div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-300">
-                  <div className="text-sm text-gray-800">
-                    {selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected
+                    {/* Action footer */}
+                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200 bg-gray-50 flex-wrap gap-2">
+                      <span className="text-xs text-gray-500">{selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleAddFromDatabase}
+                          disabled={selectedResumes.length === 0}
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Users className="w-4 h-4" />
+                          Add to List
+                        </button>
+                        <button
+                          onClick={handleSendFromDatabase}
+                          disabled={selectedResumes.length === 0 || isSubmitting}
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                        >
+                          {isSubmitting ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" />Sending...</>
+                          ) : (
+                            <><Send className="w-4 h-4" />Send ({selectedResumes.length})</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <button
-                    onClick={handleAddFromDatabase}
-                    disabled={selectedResumes.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                  >
-                    <Users className="w-4 h-4" />
-                    Add Selected Candidates
-                  </button>
                 </div>
               </div>
             )}
@@ -957,6 +1287,15 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   <div className="text-xl font-bold text-emerald-900">
                     {config.jd_title || config.position}
                   </div>
+                  <div className="text-sm text-emerald-700 mt-1 font-medium">
+                    {(user as any)?.tenantName || 'Our Company'}
+                  </div>
+                  {((config as any).jd_location) && (
+                    <div className="flex items-center justify-center gap-1.5 mt-1.5 text-emerald-600 text-sm">
+                      <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>{(config as any).jd_location}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* CTA Button */}
@@ -987,9 +1326,20 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
           <div className="text-sm text-gray-600">
-            {candidates.filter((c) => c.name.trim() && c.email.trim()).length} candidate
-            {candidates.filter((c) => c.name.trim() && c.email.trim()).length !== 1 ? 's' : ''} will receive this AI
-            interview
+            {(() => {
+              const validCount = candidates.filter((c) => c.name.trim() && c.email.trim()).length;
+              const available = quotaStats?.available ?? null;
+              const isUnlimited = available !== null && available >= 999999;
+              const insufficientQuota = !isUnlimited && available !== null && available < validCount;
+              return (
+                <span className={insufficientQuota ? 'text-red-600' : ''}>
+                  {validCount} candidate{validCount !== 1 ? 's' : ''} will receive this AI interview
+                  {insufficientQuota && (
+                    <span className="ml-2 font-medium">— only {available} unit{available !== 1 ? 's' : ''} available</span>
+                  )}
+                </span>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -1000,7 +1350,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             </button>
             <button
               onClick={handleSend}
-              disabled={!isValid || isSubmitting}
+              disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
               className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting ? (

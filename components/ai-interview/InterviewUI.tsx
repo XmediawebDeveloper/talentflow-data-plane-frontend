@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
 import { Webcam, WebcamRef } from "./Webcam";
 import { useAvatarState } from "@/hooks/useAvatarState";
@@ -12,7 +12,7 @@ import {
 } from './proctoring';
 import { CandidateInterviewInfo, candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Maximize2, Clock, Timer, LogOut, Bot, Send, Mic, MessageSquare, ShieldCheck, Video, VideoOff, MicOff, Monitor, Wifi, BrainCircuit, TrendingUp } from "lucide-react";
+import { Clock, Timer, LogOut, Send, Mic, MessageSquare, ShieldCheck, Video, VideoOff, MicOff } from "lucide-react";
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
@@ -87,6 +87,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Question progress counter (sent with question_timer_started)
   const [questionNumber, setQuestionNumber] = useState<number | null>(null);
   const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
+  const questionNumberRef = useRef<number | null>(null); // sync ref for stale-closure reads
 
   // Skill coverage (real-time, timed mode only)
   const [skillCoverage, setSkillCoverage] = useState<{
@@ -133,18 +134,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     if (!isConnected || isClosing) return;
     timerIntervalRef.current = setInterval(() => {
-      // Pause ALL modes when Linda is speaking — candidate time only runs when user can answer.
-      if (isAiSpeakingRef.current) return;
-      // Legacy unlimited flexible (count-up): also pause while processing.
-      if (isFlexibleMode && isProcessingRef.current) return;
-      setRemainingSeconds(prev => {
-        if (isFlexibleMode) return prev + 1; // legacy unlimited: count up
-        if (prev <= 1) {
-          if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-          return 0;
-        }
-        return prev - 1;
-      });
+      if (!isFlexibleMode && !isNewFlexibleMode) return; // timed: synced inside question timer interval
+      // Legacy unlimited flexible: count up, pause while Linda speaks or processing.
+      if (isAiSpeakingRef.current || isProcessingRef.current) return;
+      setRemainingSeconds(prev => isFlexibleMode ? prev + 1 : Math.max(0, prev - 1));
     }, 1000);
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -155,6 +148,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     questionTimerSecondsRef.current = questionTimerSeconds;
   }, [questionTimerSeconds]);
+  useEffect(() => { questionNumberRef.current = questionNumber; }, [questionNumber]);
 
   // Waveform animation — driven by isAiSpeaking
   useEffect(() => {
@@ -435,7 +429,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       clearInterval(questionTimerIntervalRef.current);
     }
     questionTimerIntervalRef.current = setInterval(() => {
-      if (isAiSpeakingRef.current) return; // pause when Linda speaks
+      if (isAiSpeakingRef.current) return; // pause when Linda speaks — both timers pause
+      // Global timer ticks in sync with question timer (timed mode only)
+      if (!isFlexibleMode && !isNewFlexibleMode) {
+        setRemainingSeconds(prev => Math.max(0, prev - 1));
+      }
       setQuestionTimerSeconds(prev => {
         if (prev === null || prev <= 1) {
           if (questionTimerIntervalRef.current) {
@@ -447,14 +445,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         return prev - 1;
       });
     }, 1000);
-  }, [isAiSpeaking]);
+  }, [isAiSpeaking, isFlexibleMode, isNewFlexibleMode]);
 
   // VAD settings
   const silenceStartRef = useRef<number | null>(null);
   const speechDetectedRef = useRef(false);
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.008);
-  const silenceDurationMsRef = useRef(5000);
+  const silenceDurationMsRef = useRef(2500); // default 2.5s; backend overrides via vad_config
 
   // VAD: adaptive noise floor calibration + rolling RMS window
   const noiseFloorRef = useRef(0);          // calibrated ambient noise floor
@@ -667,6 +665,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     if (speakTextCallbackRef.current) {
       const cb = speakTextCallbackRef.current;
       speakTextCallbackRef.current = null;
+      isAiSpeakingRef.current = false;
       setIsAiSpeaking(false);
       avatarState.onAiStopSpeaking();
       cb();
@@ -674,10 +673,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }
 
     if (audioEndReceivedRef.current) {
+      isAiSpeakingRef.current = false;
       setIsAiSpeaking(false);
       avatarState.onAiStopSpeaking();
       saveAiMessage();
-      if (shouldDisconnectAfterAudioRef.current) {
+      if (shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
         setStatus("Interview completed. Thank you!");
         setTimeout(() => { disconnect(); }, 1500);
         return;
@@ -687,7 +687,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           startRecordingInternal();
         }
-      }, 400);
+      }, 800);
     }
   }, [saveAiMessage, avatarState, stopVisemeLoop]);
 
@@ -696,6 +696,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // Just track that we're playing and update UI state on first chunk.
     if (!isPlayingRef.current) {
       isPlayingRef.current = true;
+      isAiSpeakingRef.current = true;
       setIsAiSpeaking(true);
       avatarState.onAiStartSpeaking();
       if (!revealTimerRef.current && tokenBufferRef.current.length > 0) {
@@ -721,6 +722,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       case "greeting":
         tokenBufferRef.current = data.text;
         revealedCharsRef.current = 0;
+        isAiSpeakingRef.current = true;
         setIsAiSpeaking(true);
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
@@ -771,6 +773,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
         break;
       case "speaking_started":
+        isAiSpeakingRef.current = true;
         setIsAiSpeaking(true);
         avatarState.onAiStartSpeaking();
         audioEndReceivedRef.current = false;
@@ -801,20 +804,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             audioEndFallbackRef.current = null;
           }
           isPlayingRef.current = false;
+          isAiSpeakingRef.current = false;
           setIsAiSpeaking(false);
           avatarState.onAiStopSpeaking();
           saveAiMessage();
-          if (shouldDisconnectAfterAudioRef.current) {
+          // Disconnect if interview is closing (Q15 done) or server sent interview_ended
+          if (shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
             setStatus("Interview completed. Thank you!");
             setTimeout(() => { disconnect(); }, 1500);
             return;
           }
           setStatus("Your turn - speak now...");
+          // 800ms delay before opening mic — lets room echo of Linda's TTS fully decay
+          // so Whisper doesn't transcribe Linda's audio as the candidate's speech.
           setTimeout(() => {
             if (wsRef.current?.readyState === WebSocket.OPEN) {
               startRecordingInternal();
             }
-          }, 150);
+          }, 800);
         });
         break;
       case "audio_end": {
@@ -832,15 +839,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (audioEndFallbackRef.current) clearTimeout(audioEndFallbackRef.current);
         audioEndFallbackRef.current = setTimeout(() => {
           audioEndFallbackRef.current = null;
-          if (!isRecordingRef.current && !shouldDisconnectAfterAudioRef.current
-              && wsRef.current?.readyState === WebSocket.OPEN) {
-            console.warn("[Safety-net] TalkingHead onAudioEnd never fired — starting mic manually");
+          if (!isRecordingRef.current && wsRef.current?.readyState === WebSocket.OPEN) {
             isPlayingRef.current = false;
+            isAiSpeakingRef.current = false;
             setIsAiSpeaking(false);
             avatarState.onAiStopSpeaking();
             saveAiMessage();
+            if (shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
+              setStatus("Interview completed. Thank you!");
+              setTimeout(() => { disconnect(); }, 1500);
+              return;
+            }
+            console.warn("[Safety-net] TalkingHead onAudioEnd never fired — starting mic manually");
             setStatus("Your turn - speak now...");
-            startRecordingInternal();
+            setTimeout(() => { startRecordingInternal(); }, 800);
           }
         }, 3000);
         break;
@@ -866,10 +878,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setQuestionTimerSeconds(null);
         break;
       case "question_timer_started": {
-        const dur = data.seconds ?? data.duration_seconds ?? 120;
-        setQuestionTimerSeconds(dur);
+        // Always use total_seconds (full 2-min window) — not data.seconds which is
+        // pre-subtracted for Linda's speaking time. Timer only starts after Linda stops,
+        // so the candidate always sees the full window.
+        const dur = data.total_seconds ?? data.seconds ?? data.duration_seconds ?? 120;
+        // DON'T show the timer yet if Linda is still speaking — it will be shown
+        // once Linda stops (via the pending timer useEffect below).
         setQuestionTimerExpired(false);
-        if (data.question_number != null) setQuestionNumber(data.question_number);
+        // Follow-up detection: if question_number hasn't changed, this is a follow-up
+        // question within the same slot — keep the existing timer running, don't reset.
+        const incomingQNum = data.question_number ?? null;
+        const isFollowUp = incomingQNum !== null && incomingQNum === questionNumberRef.current;
+        if (isFollowUp) {
+          // Follow-up: timer continues from wherever it is — just update total if provided
+          if (data.total_questions != null) setTotalQuestions(data.total_questions);
+          break;
+        }
+
+        // New question — deduct any remaining time from the previous question slot so
+        // the global timer always steps by exactly the full question duration.
+        if (!isFlexibleMode && !isNewFlexibleMode && questionNumberRef.current !== null) {
+          const remaining = questionTimerSecondsRef.current ?? 0;
+          if (remaining > 0) setRemainingSeconds(prev => Math.max(0, prev - remaining));
+        }
+        if (incomingQNum != null) setQuestionNumber(incomingQNum);
         if (data.total_questions != null) setTotalQuestions(data.total_questions);
         if (questionTimerIntervalRef.current) {
           clearInterval(questionTimerIntervalRef.current);
@@ -877,16 +909,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
         if (isAiSpeakingRef.current) {
           // Linda is still speaking — store duration and wait until she stops.
-          // Countdown starts from the full dur once Linda finishes so the candidate
-          // always sees the complete time available from the moment they can answer.
+          // Countdown AND display start from the full dur once Linda finishes so the
+          // candidate always sees the complete time available from the moment they can answer.
           questionTimerPendingRef.current = dur;
           questionTimerReceivedAtRef.current = Date.now();
+          // Do NOT call setQuestionTimerSeconds here — keep timer hidden while Linda speaks
         } else {
-          // Linda already stopped — start countdown immediately (no lag to deduct)
+          // Linda already stopped — show timer and start countdown immediately
           questionTimerPendingRef.current = null;
           questionTimerReceivedAtRef.current = null;
+          setQuestionTimerSeconds(dur); // show timer now
           questionTimerIntervalRef.current = setInterval(() => {
             if (isAiSpeakingRef.current) return; // pause when Linda speaks
+            // Global timer ticks in sync with question timer (timed mode only)
+            if (!isFlexibleMode && !isNewFlexibleMode) {
+              setRemainingSeconds(prev => Math.max(0, prev - 1));
+            }
             setQuestionTimerSeconds(prev => {
               if (prev === null || prev <= 1) {
                 if (questionTimerIntervalRef.current) {
@@ -1197,6 +1235,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
       processor.onaudioprocess = (e) => {
         if (!isRecordingRef.current) return;
+        // When muted, the track produces all-zero audio which would immediately
+        // trigger the silence detector and send an unwanted end_turn to the backend.
+        // Skip VAD and audio sending entirely while muted — just keep the processor alive.
+        if (isMutedRef.current) return;
         const input = e.inputBuffer.getChannelData(0);
 
         // Collect raw audio at native sample rate for voice verification
@@ -1509,20 +1551,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           onInterviewComplete?.();
         });
       } else if (event.code !== 3001 && !isUnmountedRef.current && !isClosingRef.current) {
-        // Unexpected disconnection — attempt auto-reconnect (max 3 times)
-        const attempt = ++reconnectAttemptsRef.current;
-        if (attempt <= 3) {
-          setStatus(`Connection lost. Reconnecting... (${attempt}/3)`);
-          setTimeout(() => {
-            if (!isUnmountedRef.current) connectRef.current();
-          }, 2000 * attempt);
-        } else {
-          // All reconnect attempts exhausted — still upload whatever was recorded
-          setStatus("Connection failed. Saving recording...");
-          uploadRecording().then(() => {
-            setStatus("Connection failed. Please refresh the page.");
-          });
-        }
+        // Unexpected disconnection — do NOT auto-reconnect because the backend would
+        // restart the interview from Q1 (new session). Show a "Connection lost" overlay
+        // so the candidate can refresh and resume manually via the same interview link.
+        setStatus("Connection lost. Please refresh the page to continue.");
+        stopRecordingSilentRef.current();
+        uploadRecording().catch(() => {});
       }
       stopRecording();
     };
@@ -1627,8 +1661,46 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     };
   }, [isConnected]);
 
+  // Memoize skill coverage derived sets/arrays — recomputes only when skillCoverage changes
+  const skillCoverageDerived = useMemo(() => {
+    if (!skillCoverage) return null;
+    const coveredSet = new Set(skillCoverage.covered);
+    const mediumSet = new Set(skillCoverage.medium_covered);
+    const lowSet = new Set(skillCoverage.low_covered);
+    const nthSet = new Set(skillCoverage.nice_to_have_skills);
+    const total = skillCoverage.covered.length + skillCoverage.medium_covered.length
+      + skillCoverage.low_covered.length + skillCoverage.uncovered.length;
+    const allSkills = Array.from(new Set([
+      ...skillCoverage.covered,
+      ...skillCoverage.medium_covered,
+      ...skillCoverage.low_covered,
+      ...skillCoverage.uncovered,
+    ])).sort((a, b) => a.localeCompare(b));
+    return { coveredSet, mediumSet, lowSet, nthSet, total, allSkills };
+  }, [skillCoverage]);
+
   return (
     <>
+      {/* ── Connection lost overlay ── */}
+      {!isConnected && !isClosing && status.startsWith('Connection lost') && (
+        <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center backdrop-blur-sm">
+          <div className="bg-gray-900 border border-red-500 rounded-2xl p-8 max-w-sm text-center shadow-2xl">
+            <div className="text-red-400 text-5xl mb-4">⚠️</div>
+            <h2 className="text-xl font-bold text-white mb-2">Connection Lost</h2>
+            <p className="text-gray-400 mb-6 text-sm leading-relaxed">
+              Your connection to the interview server was interrupted.<br />
+              Please refresh the page to reconnect and continue from where you left off.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-colors"
+            >
+              Refresh &amp; Reconnect
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Proctoring: Camera/Mic disabled overlay ── */}
       {isConnected && (!proctoringState.isCameraActive || !proctoringState.isMicrophoneActive) && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center backdrop-blur-sm">
@@ -1726,540 +1798,342 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         </div>
       )}
 
-      {/* ── Main interview UI (Figma design) ── */}
-      <div className="flex flex-col h-screen overflow-hidden transition-colors duration-500 bg-[#080D18]">
+      {/* ── Main interview UI ── */}
+      <div className="flex h-screen overflow-hidden bg-[#0F1117]">
 
-        {/* ── Top Nav ── */}
-        <div className="relative backdrop-blur-xl border-b border-white/[0.08] bg-[#0A1020]/95 flex-shrink-0">
-          <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3">
+        {/* ════ LEFT PANEL: Video feeds (dark) — equal halves ════ */}
+        <div className="w-[420px] flex-shrink-0 flex flex-col bg-[#0F1117] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
 
-            {/* Left: Logo */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#1D4ED8] flex items-center justify-center shadow-lg shadow-blue-900/40 shrink-0">
-                <span className="text-white" style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.5 }}>AI</span>
-                <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#10B981] border-2 border-[#0B1120]" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-white hidden sm:block" style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3 }}>AI Interview Suite</span>
-                <span className="text-white sm:hidden" style={{ fontSize: 14, fontWeight: 700 }}>AI Interview</span>
-                <span className="text-[#475569] hidden md:block truncate max-w-[220px]" style={{ fontSize: 11 }}>{interviewInfo.position}</span>
-              </div>
+          {/* ── Top half: LINDA AI Avatar ── */}
+          <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+            {/* Label */}
+            <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse shrink-0" />
+              <span className="text-gray-400 text-[11px] font-medium tracking-wide uppercase">Linda · AI Interviewer</span>
             </div>
 
-            {/* Center: Timer + status */}
-            <div className="hidden md:flex items-center gap-4 lg:gap-6">
-              <div className={`flex items-center gap-2 px-3 lg:px-4 py-1.5 rounded-full border ${
-                isFlexibleMode
-                  ? 'bg-white/[0.04] border-white/[0.06]'
-                  : isInBuffer
-                  ? 'bg-amber-500/10 border-amber-500/20'
-                  : remainingSeconds <= 60
-                  ? 'bg-[#EF4444]/10 border-[#EF4444]/20'
-                  : 'bg-white/[0.04] border-white/[0.06]'
+            {/* TalkingHead fills this half */}
+            <div className="absolute inset-0 overflow-hidden">
+              <TalkingHeadAvatar
+                ref={talkingHeadRef}
+                avatarUrl="/models/rpm-recruiter.glb"
+                onReady={() => setAvatarReady(true)}
+                className="w-full h-full rounded-none"
+              />
+            </div>
+
+            {/* Speaking glow */}
+            {isAiSpeaking && (
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{ background: 'radial-gradient(ellipse at center, rgba(147,51,234,0.10) 0%, transparent 70%)' }}
+              />
+            )}
+
+            {/* Status pill — bottom centre */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10">
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full backdrop-blur-md border transition-colors duration-300 ${
+                isAiSpeaking ? 'bg-purple-500/20 border-purple-500/30' :
+                isRecording  ? 'bg-red-500/20 border-red-500/30' :
+                               'bg-amber-500/20 border-amber-500/30'
               }`}>
-                <Timer className={`w-3.5 h-3.5 ${isFlexibleMode ? 'text-[#94A3B8]' : isInBuffer ? 'text-amber-400' : 'text-[#94A3B8]'}`} />
-                <div className={`w-2 h-2 rounded-full animate-pulse ${isFlexibleMode ? 'bg-[#10B981]' : isInBuffer ? 'bg-amber-400' : remainingSeconds <= 60 ? 'bg-[#EF4444]' : 'bg-[#10B981]'}`} />
-                <span className={`tabular-nums ${isFlexibleMode ? 'text-white' : isInBuffer ? 'text-amber-400' : remainingSeconds <= 60 ? 'text-[#EF4444]' : 'text-white'}`} style={{ fontSize: 14, fontWeight: 600, letterSpacing: 0.5 }}>
-                  {formatTime(remainingSeconds)}
+                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                  isAiSpeaking ? 'bg-purple-400' : isRecording ? 'bg-red-400' : 'bg-amber-400'
+                }`} />
+                <span className={`text-[11px] font-semibold ${
+                  isAiSpeaking ? 'text-purple-300' : isRecording ? 'text-red-300' : 'text-amber-300'
+                }`}>
+                  {isAiSpeaking ? 'Speaking...' : isRecording ? (isMuted ? 'Muted' : 'Your turn') : isProcessing ? 'Processing...' : isConnected ? 'Ready' : 'Connecting...'}
                 </span>
-                {isFlexibleMode && (
-                  <span className="text-[#94A3B8] ml-0.5" style={{ fontSize: 10, fontWeight: 600 }}>ELAPSED</span>
-                )}
-                {isInBuffer && !isFlexibleMode && (
-                  <span className="text-amber-400 ml-0.5" style={{ fontSize: 10, fontWeight: 600 }}>BUFFER</span>
-                )}
               </div>
-              {isClosing && (
-                <div className="px-3 py-1.5 bg-orange-500/20 text-orange-400 rounded-lg text-sm font-medium animate-pulse">Ending...</div>
-              )}
-              {!isClosing && (
-                <div className={`text-xs px-2.5 py-1 rounded-full ${isConnected ? 'bg-[#10B981]/15 text-[#10B981]' : 'bg-gray-500/20 text-gray-500'}`}>
-                  {isConnected ? '● Live' : '○ Connecting'}
-                </div>
-              )}
-            </div>
-
-            {/* Mobile: compact timer */}
-            <div className="flex md:hidden items-center gap-2">
-              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border ${isInBuffer && !isFlexibleMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-white/[0.04] border-white/[0.06]'}`}>
-                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${isFlexibleMode ? 'bg-[#10B981]' : isInBuffer ? 'bg-amber-400' : remainingSeconds <= 60 ? 'bg-[#EF4444]' : 'bg-[#10B981]'}`} />
-                <span className={`tabular-nums ${isInBuffer && !isFlexibleMode ? 'text-amber-400' : 'text-white'}`} style={{ fontSize: 12, fontWeight: 600 }}>{formatTime(remainingSeconds)}</span>
-              </div>
-            </div>
-
-            {/* Right: Identity badge + End interview */}
-            <div className="flex items-center gap-1.5 lg:gap-2">
-              {/* Identity Verification badge */}
-              {(faceVerification || voiceVerification) && (
-                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#10B981]/10 border border-[#10B981]/15">
-                  <ShieldCheck className="w-3 h-3 text-[#10B981]" />
-                  <span className="text-[#10B981]" style={{ fontSize: 10, fontWeight: 600 }}>ID VERIFIED</span>
-                </div>
-              )}
-              <button
-                onClick={() => setShowEndConfirm(true)}
-                disabled={!isConnected}
-                className="flex items-center gap-1.5 lg:gap-2 px-3 lg:px-4 py-2 bg-[#DC2626] hover:bg-[#B91C1C] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl transition-all duration-300 shadow-lg shadow-red-500/20"
-                style={{ fontSize: 13, fontWeight: 600 }}
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden lg:inline">End Interview</span>
-                <span className="lg:hidden">End</span>
-              </button>
             </div>
           </div>
-        </div>
 
-        {/* ── Main content: Avatar (left) | Candidate (right) ── */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-2 sm:gap-3 p-2 sm:p-3 min-h-0 overflow-auto lg:overflow-hidden">
-
-          {/* ════ AI Avatar Panel ════ */}
-          <div className="w-full lg:flex-[3] flex flex-col min-h-0">
-            <div className="relative rounded-2xl overflow-hidden flex flex-col items-center justify-center bg-gradient-to-br from-[#0A1020] via-[#0D1626] to-[#0F1A2E] border border-white/[0.07] min-h-[280px] sm:min-h-[320px] lg:min-h-0 lg:flex-1">
-
-              {/* Ambient glow */}
-              <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                <div
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 sm:w-64 lg:w-80 h-48 sm:h-64 lg:h-80 rounded-full blur-[80px] lg:blur-[100px] bg-[#2563EB] transition-opacity duration-500"
-                  style={{ opacity: isAiSpeaking ? 0.10 : 0.05 }}
-                />
-                <div
-                  className="absolute top-[30%] left-[25%] w-32 sm:w-44 lg:w-56 h-32 sm:h-44 lg:h-56 rounded-full blur-[60px] lg:blur-[80px] bg-[#1D4ED8]"
-                  style={{ opacity: 0.04 }}
-                />
+          {/* ── Bottom half: Candidate webcam ── */}
+          <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+            {/* Label row */}
+            <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-2.5 pb-1 flex items-center justify-between">
+              <span className="text-gray-400 text-[11px] font-medium uppercase tracking-wide">You</span>
+              <div className="flex items-center gap-2">
+                {isRecording && (
+                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/20 border border-red-500/25">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                    <span className="text-red-400 text-[9px] font-bold tracking-widest">REC</span>
+                  </div>
+                )}
+                {handDetection.isHandRaised && (
+                  <div className="px-2 py-0.5 bg-orange-500/25 rounded-full">
+                    <span className="text-orange-400 text-[9px] font-bold">HAND RAISED</span>
+                  </div>
+                )}
               </div>
+            </div>
 
-              {/* Dot grid */}
-              <div
-                className="absolute inset-0 pointer-events-none opacity-[0.03]"
-                style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '32px 32px' }}
+            {/* Webcam feed fills this half */}
+            <div className="absolute inset-0 mt-8 mx-3 mb-3 rounded-xl overflow-hidden bg-[#1a1f2e]">
+              <Webcam
+                ref={webcamRef}
+                className="w-full h-full object-cover"
+                onVideoReady={handleVideoReady}
+                onStream={handleStream}
+                showHandIndicator={false}
+                isHandRaised={handDetection.isHandRaised}
               />
 
-              {/* TalkingHead avatar — fills the panel */}
-              <div className="absolute inset-0 overflow-hidden">
-                <TalkingHeadAvatar
-                  ref={talkingHeadRef}
-                  avatarUrl="/models/rpm-recruiter.glb"
-                  onReady={() => setAvatarReady(true)}
-                  className="w-full h-full rounded-none"
-                />
-              </div>
+              {/* Face detection ellipse */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%] w-16 h-24 border border-dashed border-purple-500/25 rounded-[50%] animate-pulse pointer-events-none" />
 
-              {/* Speaking glow overlay */}
-              {isAiSpeaking && (
+              {/* Question timer overlay — top right (hidden while Linda speaks) */}
+              {questionTimerSeconds !== null && !isAiSpeaking && (
                 <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{ background: 'radial-gradient(ellipse at center, rgba(37,99,235,0.10) 0%, transparent 65%)', animation: 'pulse 2s infinite' }}
-                />
-              )}
-
-              {/* Status pill */}
-              <div className="absolute bottom-20 sm:bottom-24 left-1/2 -translate-x-1/2 z-10">
-                <div className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-full transition-colors duration-300 ${
-                  isAiSpeaking
-                    ? 'bg-[#10B981]/10 border border-[#10B981]/20'
-                    : isRecording
-                    ? 'bg-[#EF4444]/10 border border-[#EF4444]/20'
-                    : 'bg-[#F59E0B]/10 border border-[#F59E0B]/20'
-                }`}>
-                  <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full animate-pulse ${
-                    isAiSpeaking ? 'bg-[#10B981]' : isRecording ? 'bg-[#EF4444]' : 'bg-[#F59E0B]'
-                  }`} />
-                  <span
-                    className={`${isAiSpeaking ? 'text-[#10B981]' : isRecording ? 'text-[#EF4444]' : 'text-[#F59E0B]'}`}
-                    style={{ fontSize: 11, fontWeight: 600 }}
-                  >
-                    {isAiSpeaking ? 'Speaking...' : isRecording ? isMuted ? 'Muted' : 'Your turn' : isProcessing ? 'Processing...' : isConnected ? 'Ready' : 'Connecting...'}
+                  className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded-full backdrop-blur-md border"
+                  style={{
+                    backgroundColor: questionTimerExpired ? 'rgba(239,68,68,0.30)' : questionTimerSeconds <= 30 ? 'rgba(239,68,68,0.20)' : questionTimerSeconds <= 60 ? 'rgba(245,158,11,0.20)' : 'rgba(147,51,234,0.20)',
+                    borderColor:     questionTimerExpired ? 'rgba(239,68,68,0.50)' : questionTimerSeconds <= 30 ? 'rgba(239,68,68,0.35)' : questionTimerSeconds <= 60 ? 'rgba(245,158,11,0.35)' : 'rgba(147,51,234,0.40)',
+                  }}
+                >
+                  <Clock className={`w-3 h-3 ${questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-400' : questionTimerSeconds <= 60 ? 'text-amber-400' : 'text-purple-400'}`} />
+                  <span className={`text-[10px] font-bold tabular-nums ${
+                    questionTimerExpired || questionTimerSeconds <= 30 ? 'text-red-400' : questionTimerSeconds <= 60 ? 'text-amber-400' : 'text-purple-400'
+                  } ${questionTimerExpired ? 'animate-pulse' : ''}`}>
+                    {questionTimerExpired ? 'Time Up' : formatTime(questionTimerSeconds)}
                   </span>
                 </div>
-              </div>
-
-              {/* Waveform visualizer */}
-              <div className="absolute bottom-10 sm:bottom-12 left-1/2 -translate-x-1/2 z-10 flex items-center gap-[2px] h-8 sm:h-10 px-4">
-                {waveHeights.slice(0, 30).map((h, i) => (
-                  <div
-                    key={i}
-                    className="w-[2px] sm:w-[2.5px] rounded-full transition-all duration-[120ms] ease-out"
-                    style={{
-                      height: isAiSpeaking ? h * 0.85 : 3,
-                      background: isAiSpeaking ? 'linear-gradient(to top, #1D4ED8, #3B82F6)' : '#1E293B',
-                      opacity: isAiSpeaking ? 0.7 : 0.3,
-                    }}
-                  />
-                ))}
-              </div>
-
-              {/* Linda name badge */}
-              <div className="absolute bottom-2 sm:bottom-3 left-2 sm:left-3 z-10">
-                <div className="px-2.5 py-1 bg-black/50 backdrop-blur-md rounded-full flex items-center gap-1.5 border border-white/10">
-                  <Bot className="w-3.5 h-3.5 text-[#3B82F6]" />
-                  <span className="text-white" style={{ fontSize: 12, fontWeight: 700 }}>Linda</span>
-                  <span className="text-[#64748B] hidden sm:inline" style={{ fontSize: 10 }}>AI Interviewer</span>
-                </div>
-              </div>
-
-              {/* Current AI text overlay at bottom — only when Linda is speaking */}
-              {currentAiText && (
-                <div className="absolute bottom-0 left-0 right-0 px-4 sm:px-6 lg:px-8 py-3 sm:py-4 lg:py-5 bg-gradient-to-t from-[#0C1426] via-[#0C1426]/95 to-transparent">
-                  <p className="text-center text-[#94A3B8]" style={{ fontSize: 12, lineHeight: 1.6 }}>
-                    <span className="text-[#334155]">"</span>
-                    {currentAiText}
-                    <span className="text-[#334155]">"</span>
-                  </p>
-                </div>
               )}
-            </div>
-          </div>
 
-          {/* ════ Candidate Panel ════ */}
-          <div className="w-full lg:flex-[2] flex flex-col gap-2 sm:gap-3 min-h-0">
-
-            {/* Camera feed */}
-            <div className="relative rounded-2xl overflow-hidden flex flex-col bg-[#0A1020] border border-white/[0.07] min-h-[200px] sm:min-h-[240px] lg:min-h-0 lg:flex-1">
-              <div className="flex-1 relative overflow-hidden">
-                <Webcam
-                  ref={webcamRef}
-                  className="w-full h-full object-cover"
-                  onVideoReady={handleVideoReady}
-                  onStream={handleStream}
-                  showHandIndicator={false}
-                  isHandRaised={handDetection.isHandRaised}
-                />
-
-                {/* Face detection ellipse */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%] w-20 h-28 sm:w-28 sm:h-36 border-2 border-dashed border-[#3B82F6]/30 rounded-[50%] animate-pulse pointer-events-none" />
-
-                {/* Corner brackets */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%] w-24 h-32 sm:w-32 sm:h-40 pointer-events-none">
-                  <div className="absolute top-0 left-0 w-3 h-3 sm:w-4 sm:h-4 border-t-2 border-l-2 border-[#3B82F6]/40 rounded-tl" />
-                  <div className="absolute top-0 right-0 w-3 h-3 sm:w-4 sm:h-4 border-t-2 border-r-2 border-[#3B82F6]/40 rounded-tr" />
-                  <div className="absolute bottom-0 left-0 w-3 h-3 sm:w-4 sm:h-4 border-b-2 border-l-2 border-[#3B82F6]/40 rounded-bl" />
-                  <div className="absolute bottom-0 right-0 w-3 h-3 sm:w-4 sm:h-4 border-b-2 border-r-2 border-[#3B82F6]/40 rounded-br" />
-                </div>
-
-                {/* Top-left: candidate label + REC */}
-                <div className="absolute top-2 sm:top-3 left-2 sm:left-3 flex items-center gap-1.5 sm:gap-2">
-                  <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10">
-                    <span className="text-white" style={{ fontSize: 11, fontWeight: 600 }}>
-                      <span className="sm:hidden">You</span>
-                      <span className="hidden sm:inline">{interviewInfo.candidate_name || 'You'}</span>
-                    </span>
-                  </div>
-                  {isRecording && (
-                    <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full bg-[#EF4444]/20 backdrop-blur-md border border-[#EF4444]/20">
-                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#EF4444] animate-pulse" />
-                      <span className="text-[#EF4444]" style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1 }}>REC</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Top-right: hand raised / connection */}
-                {handDetection.isHandRaised ? (
-                  <div className="absolute top-2 sm:top-3 right-2 sm:right-3 px-2 py-1 bg-orange-500/30 backdrop-blur-md rounded-full">
-                    <span className="text-orange-400 font-bold" style={{ fontSize: 9, letterSpacing: 1 }}>HAND RAISED</span>
-                  </div>
-                ) : (
-                  <div className="absolute top-2 sm:top-3 right-2 sm:right-3 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10">
-                    <Wifi className={`w-3 h-3 ${isConnected ? 'text-[#10B981]' : 'text-[#EF4444]'}`} />
-                    <span className={`hidden sm:inline ${isConnected ? 'text-[#10B981]' : 'text-[#EF4444]'}`} style={{ fontSize: 10, fontWeight: 600 }}>
-                      {isConnected ? 'Connected' : 'Offline'}
-                    </span>
-                  </div>
-                )}
-
-                {/* Question timer overlay — compact corner badge */}
-                {questionTimerSeconds !== null && (
-                  <div
-                    className="absolute bottom-2 sm:bottom-3 right-2 sm:right-3 flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-full backdrop-blur-md border"
-                    style={{
-                      backgroundColor: questionTimerExpired
-                        ? 'rgba(239,68,68,0.30)'
-                        : questionTimerSeconds <= 30
-                        ? 'rgba(239,68,68,0.20)'
-                        : questionTimerSeconds <= 60
-                        ? 'rgba(245,158,11,0.20)'
-                        : 'rgba(16,185,129,0.15)',
-                      borderColor: questionTimerExpired
-                        ? 'rgba(239,68,68,0.50)'
-                        : questionTimerSeconds <= 30
-                        ? 'rgba(239,68,68,0.35)'
-                        : questionTimerSeconds <= 60
-                        ? 'rgba(245,158,11,0.35)'
-                        : 'rgba(16,185,129,0.30)',
-                    }}
-                  >
-                    <Clock
-                      className={`w-3 h-3 ${
-                        questionTimerExpired || questionTimerSeconds <= 30
-                          ? 'text-[#EF4444]'
-                          : questionTimerSeconds <= 60
-                          ? 'text-[#F59E0B]'
-                          : 'text-[#10B981]'
-                      }`}
-                    />
-                    <span
-                      className={`tabular-nums ${
-                        questionTimerExpired || questionTimerSeconds <= 30
-                          ? 'text-[#EF4444]'
-                          : questionTimerSeconds <= 60
-                          ? 'text-[#F59E0B]'
-                          : 'text-[#10B981]'
-                      } ${questionTimerExpired ? 'animate-pulse' : ''}`}
-                      style={{ fontSize: 11, fontWeight: 700 }}
-                    >
-                      {questionTimerExpired ? 'Time Up' : formatTime(questionTimerSeconds)}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Controls toolbar */}
-              <div className="flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-3 border-t border-white/[0.05] bg-[#0C1426]/80">
-                {/* Mic mute toggle */}
+              {/* Mic + Camera controls at bottom */}
+              <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-3 py-2.5 bg-gradient-to-t from-black/70 to-transparent">
                 <button
                   onClick={toggleMute}
-                  title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
-                  className={`p-2 sm:p-2.5 rounded-xl transition-all duration-300 ${
-                    isMuted
-                      ? 'bg-[#EF4444] hover:bg-[#DC2626] text-white shadow-lg shadow-red-500/20'
-                      : 'bg-white/[0.06] hover:bg-white/[0.1] text-white'
+                  title={isMuted ? 'Unmute' : 'Mute'}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
+                    isMuted ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' : 'bg-white/20 backdrop-blur-sm text-white hover:bg-white/30'
                   }`}
                 >
                   {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                 </button>
-                {/* Video toggle */}
                 <button
                   onClick={toggleVideo}
-                  title={isVideoOff ? 'Turn camera on' : 'Turn camera off'}
-                  className={`p-2 sm:p-2.5 rounded-xl transition-all duration-300 ${
-                    isVideoOff
-                      ? 'bg-[#EF4444] hover:bg-[#DC2626] text-white shadow-lg shadow-red-500/20'
-                      : 'bg-white/[0.06] hover:bg-white/[0.1] text-white'
+                  title={isVideoOff ? 'Camera on' : 'Camera off'}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
+                    isVideoOff ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' : 'bg-white/20 backdrop-blur-sm text-white hover:bg-white/30'
                   }`}
                 >
                   {isVideoOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
                 </button>
-                <div className="w-px h-4 sm:h-5 bg-white/10" />
-                <button className="p-2 sm:p-2.5 rounded-xl transition-all duration-300 bg-white/[0.06] hover:bg-white/[0.1] text-[#94A3B8]" title="Screen share">
-                  <Monitor className="w-4 h-4" />
-                </button>
               </div>
             </div>
-
-            {/* Stats cards */}
-            <div className="flex gap-2">
-              <div className="flex-1 flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] flex items-center justify-center shrink-0">
-                  <BrainCircuit className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[#64748B]" style={{ fontSize: 10, fontWeight: 500 }}>Mic Status</span>
-                  <span className={`${isRecording ? 'text-[#EF4444]' : isConnected ? 'text-[#10B981]' : 'text-[#64748B]'}`} style={{ fontSize: 13, fontWeight: 700 }}>
-                    {isRecording ? 'Recording' : isConnected ? 'Ready' : '--'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex-1 flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-[#10B981] to-[#06B6D4] flex items-center justify-center shrink-0">
-                  <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[#64748B]" style={{ fontSize: 10, fontWeight: 500 }}>Status</span>
-                  <span className={`${isAiSpeaking ? 'text-[#7C3AED]' : isProcessing ? 'text-[#F59E0B]' : 'text-[#3B82F6]'}`} style={{ fontSize: 13, fontWeight: 700 }}>
-                    {isAiSpeaking ? 'AI Speaking' : isProcessing ? 'Processing' : 'Listening'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Skill coverage panel (timed + flexible modes) */}
-            {skillCoverage && (() => {
-              const coveredSet = new Set(skillCoverage.covered);
-              const mediumSet = new Set(skillCoverage.medium_covered);
-              const lowSet = new Set(skillCoverage.low_covered);
-              const nthSet = new Set(skillCoverage.nice_to_have_skills);
-              const total = skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.low_covered.length + skillCoverage.uncovered.length;
-              // Stable alphabetical order — skill stays in same DOM position as it transitions categories
-              const allSkills = Array.from(new Set([
-                ...skillCoverage.covered,
-                ...skillCoverage.medium_covered,
-                ...skillCoverage.low_covered,
-                ...skillCoverage.uncovered,
-              ])).sort((a, b) => a.localeCompare(b));
-              return (
-                <div key={skillCoverage.round} className="px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] animate-fadeIn">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[#64748B] truncate mr-2" style={{ fontSize: 10, fontWeight: 500 }}>
-                      Skills — {skillCoverage.round_name || skillCoverage.round}
-                    </span>
-                    <span className="text-[#94A3B8] shrink-0" style={{ fontSize: 10, fontWeight: 600 }}>
-                      {skillCoverage.covered.length + skillCoverage.medium_covered.length + skillCoverage.low_covered.length}/{total} covered
-                    </span>
-                  </div>
-                  {/* Progress bar — green (thorough), amber (adequate), orange (weak) */}
-                  <div className="w-full h-1 bg-white/[0.06] rounded-full mb-1.5 overflow-hidden flex">
-                    <div className="h-full bg-[#10B981] transition-[width] duration-700 ease-out" style={{ width: total > 0 ? `${(skillCoverage.covered.length / total) * 100}%` : '0%' }} />
-                    <div className="h-full bg-[#F59E0B]/60 transition-[width] duration-700 ease-out" style={{ width: total > 0 ? `${(skillCoverage.medium_covered.length / total) * 100}%` : '0%' }} />
-                    <div className="h-full bg-[#F97316]/50 transition-[width] duration-700 ease-out" style={{ width: total > 0 ? `${(skillCoverage.low_covered.length / total) * 100}%` : '0%' }} />
-                  </div>
-                  {/* Unified skill tags — stable keys so color/style transitions smoothly */}
-                  <div className="flex flex-wrap gap-1">
-                    {allSkills.map(skill => {
-                      if (coveredSet.has(skill)) return (
-                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#10B981]/15 border border-[#10B981]/25 text-[#10B981] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }}>✓ {skill}</span>
-                      );
-                      if (mediumSet.has(skill)) return (
-                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/12 border border-[#F59E0B]/35 text-[#D97706] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Medium coverage — adequately covered">~ {skill}</span>
-                      );
-                      if (lowSet.has(skill)) return (
-                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F97316]/10 border border-[#F97316]/30 text-[#C2410C] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Low coverage — needs more depth">≈ {skill}</span>
-                      );
-                      if (nthSet.has(skill)) return (
-                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-[#F59E0B]/10 border border-dashed border-[#F59E0B]/30 text-[#92400E] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Nice-to-have — skippable">{skill} ○</span>
-                      );
-                      return (
-                        <span key={skill} className="px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.12] text-[#64748B] transition-all duration-500" style={{ fontSize: 9, fontWeight: 600 }} title="Must-have skill">{skill}</span>
-                      );
-                    })}
-                  </div>
-                  {/* Legend */}
-                  <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                    {skillCoverage.covered.length > 0 && (
-                      <span className="flex items-center gap-1" style={{ fontSize: 9 }}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] inline-block" />
-                        <span className="text-[#10B981] font-semibold">High</span>
-                      </span>
-                    )}
-                    {skillCoverage.medium_covered.length > 0 && (
-                      <span className="flex items-center gap-1" style={{ fontSize: 9 }}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] inline-block" />
-                        <span className="text-[#D97706] font-semibold">Medium</span>
-                      </span>
-                    )}
-                    {skillCoverage.low_covered.length > 0 && (
-                      <span className="flex items-center gap-1" style={{ fontSize: 9 }}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#F97316] inline-block" />
-                        <span className="text-[#C2410C] font-semibold">Low</span>
-                      </span>
-                    )}
-                    {skillCoverage.uncovered.length > 0 && (
-                      <span className="flex items-center gap-1" style={{ fontSize: 9 }}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#475569]/40 inline-block" />
-                        <span className="text-[#475569] font-semibold">Not covered</span>
-                      </span>
-                    )}
-                    {skillCoverage.uncovered.some(s => nthSet.has(s)) && (
-                      <span className="flex items-center gap-1" style={{ fontSize: 9 }}>
-                        <span className="w-1.5 h-1.5 rounded-full border border-[#F59E0B]/50 inline-block" />
-                        <span className="text-[#92400E] font-semibold">Optional</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* HR topic coverage — shown during HR round */}
-                  {skillCoverage.hr_topics && Object.keys(skillCoverage.hr_topics).length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-white/[0.06]">
-                      <span className="text-[#64748B] block mb-1" style={{ fontSize: 10, fontWeight: 500 }}>HR Topics</span>
-                      <div className="flex flex-wrap gap-1">
-                        {Object.entries(skillCoverage.hr_topics).map(([topic, status]) => {
-                          const isCompleted = status === "completed";
-                          const isPartial = status === "partially_covered";
-                          return (
-                            <span
-                              key={topic}
-                              className={`px-1.5 py-0.5 rounded-full border transition-all duration-500 ${
-                                isCompleted
-                                  ? "bg-[#10B981]/10 border-[#10B981]/30 text-[#10B981]"
-                                  : isPartial
-                                  ? "bg-[#F59E0B]/10 border-[#F59E0B]/30 text-[#F59E0B]"
-                                  : "bg-white/[0.04] border-white/[0.12] text-[#64748B]"
-                              }`}
-                              style={{ fontSize: 9, fontWeight: 600 }}
-                            >
-                              {isCompleted ? "✓ " : isPartial ? "~ " : ""}{topic}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
           </div>
+
         </div>
 
-        {/* ── Chat Panel (bottom) ── */}
-        <div className="px-2 pb-2 sm:px-3 sm:pb-3 flex-shrink-0">
+        {/* ════ RIGHT PANEL: Chat (fills remaining width) ════ */}
+        <div className="flex-1 flex flex-col min-w-0 bg-white">
+
+          {/* Gradient header */}
           <div
-            className="flex flex-col rounded-2xl overflow-hidden bg-[#0A1020]/95 border border-white/[0.07] backdrop-blur-xl"
-            style={{ height: 'clamp(180px, 26vh, 300px)' }}
+            className="flex-shrink-0 flex items-center justify-between px-4 py-3"
+            style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)' }}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-2.5 sm:px-4 py-1.5 sm:py-2 border-b border-white/[0.06]">
-              <div className="flex items-center gap-1.5">
-                <MessageSquare className="w-3.5 h-3.5 text-[#3B82F6]" />
-                <span className="text-[#94A3B8]" style={{ fontSize: 11, fontWeight: 600 }}>Live Transcript</span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                <MessageSquare className="w-4 h-4 text-white" />
               </div>
-              <div className="flex items-center gap-2">
-                {/* Question progress counter */}
-                {questionNumber !== null && totalQuestions !== null && (
-                  <span className="text-[#64748B] tabular-nums" style={{ fontSize: 10, fontWeight: 600 }}>
-                    Q {questionNumber}/{totalQuestions}
-                  </span>
-                )}
-                {/* Prominent per-question timer — shown when it's user's turn */}
-                {questionTimerSeconds !== null && (
-                  <div
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all duration-300 ${
-                      questionTimerExpired
-                        ? 'bg-[#EF4444]/20 border-[#EF4444]/40 animate-pulse'
-                        : questionTimerSeconds <= 30
-                        ? 'bg-[#EF4444]/15 border-[#EF4444]/30'
-                        : questionTimerSeconds <= 60
-                        ? 'bg-[#F59E0B]/15 border-[#F59E0B]/30'
-                        : 'bg-[#10B981]/10 border-[#10B981]/25'
-                    }`}
-                  >
-                    <Clock
-                      className={`w-3.5 h-3.5 ${
-                        questionTimerExpired || questionTimerSeconds <= 30
-                          ? 'text-[#EF4444]'
-                          : questionTimerSeconds <= 60
-                          ? 'text-[#F59E0B]'
-                          : 'text-[#10B981]'
-                      }`}
-                    />
-                    <span
-                      className={`tabular-nums font-bold ${
-                        questionTimerExpired || questionTimerSeconds <= 30
-                          ? 'text-[#EF4444]'
-                          : questionTimerSeconds <= 60
-                          ? 'text-[#F59E0B]'
-                          : 'text-[#10B981]'
-                      }`}
-                      style={{ fontSize: 13, letterSpacing: 0.5 }}
-                    >
-                      {questionTimerExpired ? 'TIME UP' : formatTime(questionTimerSeconds)}
-                    </span>
-                    <span
-                      className={`hidden sm:inline ${
-                        questionTimerExpired || questionTimerSeconds <= 30
-                          ? 'text-[#EF4444]/70'
-                          : questionTimerSeconds <= 60
-                          ? 'text-[#F59E0B]/70'
-                          : 'text-[#10B981]/70'
-                      }`}
-                      style={{ fontSize: 9, fontWeight: 600 }}
-                    >
-                      {questionTimerExpired ? '' : 'TO ANSWER'}
-                    </span>
+              <div>
+                <h2 className="text-white font-bold leading-tight" style={{ fontSize: 15 }}>Chat with LINDA</h2>
+                <p className="text-white/65 text-[11px] leading-tight">Live AI-powered interview</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Identity verified */}
+              {(faceVerification || voiceVerification) && (
+                <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-white/15 border border-white/25">
+                  <ShieldCheck className="w-3 h-3 text-white" />
+                  <span className="text-white text-[10px] font-semibold">ID VERIFIED</span>
+                </div>
+              )}
+              {/* Q counter — animates on each change */}
+              {questionNumber !== null && totalQuestions !== null && (
+                <div
+                  key={questionNumber}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/20 border border-white/30"
+                  style={{ animation: 'qNumPop 0.35s cubic-bezier(0.34,1.56,0.64,1) both' }}
+                >
+                  <span className="text-white text-xs font-bold tabular-nums">Q {questionNumber}</span>
+                  <span className="text-white/50 text-xs">/</span>
+                  <span className="text-white/70 text-xs font-semibold tabular-nums">{totalQuestions}</span>
+                </div>
+              )}
+              <style>{`@keyframes qNumPop{0%{opacity:0;transform:scale(0.7) translateY(-4px)}60%{transform:scale(1.12) translateY(0)}100%{opacity:1;transform:scale(1) translateY(0)}}`}</style>
+              {/* Per-question timer — hidden while Linda speaks */}
+              {questionTimerSeconds !== null && !isAiSpeaking && (
+                <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-bold tabular-nums transition-all duration-300 ${
+                  questionTimerExpired        ? 'bg-red-500/30 border-red-400/50 text-white animate-pulse' :
+                  questionTimerSeconds <= 30  ? 'bg-red-500/25 border-red-400/40 text-white' :
+                  questionTimerSeconds <= 60  ? 'bg-amber-500/25 border-amber-400/40 text-white' :
+                                               'bg-white/20 border-white/30 text-white'
+                }`}>
+                  <Clock className="w-3 h-3" />
+                  <span>{questionTimerExpired ? 'TIME UP' : formatTime(questionTimerSeconds)}</span>
+                </div>
+              )}
+              {/* Global timer */}
+              <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/15 border border-white/25">
+                <Timer className="w-3 h-3 text-white/80" />
+                <span className={`font-mono font-bold text-xs tabular-nums ${
+                  !isFlexibleMode && !isInBuffer && remainingSeconds <= 60 ? 'text-red-200' :
+                  isInBuffer ? 'text-amber-200' : 'text-white'
+                }`}>{formatTime(remainingSeconds)}</span>
+                {isFlexibleMode && <span className="text-white/55 text-[9px] font-semibold ml-0.5">EL</span>}
+                {isInBuffer && !isFlexibleMode && <span className="text-amber-200 text-[9px] font-semibold ml-0.5">BUF</span>}
+              </div>
+              {/* LIVE badge */}
+              <div className="flex items-center gap-1 px-2 py-1 bg-white/20 rounded-full border border-white/30">
+                <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                <span className="text-white text-[10px] font-bold">LIVE</span>
+              </div>
+              {/* Closing indicator */}
+              {isClosing && (
+                <div className="px-2 py-1 bg-orange-500/30 border border-orange-400/40 text-orange-100 rounded-lg text-[10px] font-medium animate-pulse">Ending...</div>
+              )}
+              {/* End Interview button */}
+              <button
+                onClick={() => setShowEndConfirm(true)}
+                disabled={!isConnected}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-white/20 hover:bg-white/30 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg border border-white/30 transition-all duration-200 font-semibold text-xs"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">End</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Chat messages */}
+          <div
+            className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50"
+            style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}
+          >
+            {messages.length === 0 && !currentAiText && !currentTranscript && !isProcessing && (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-400 text-sm text-center">Conversation will appear here...</p>
+              </div>
+            )}
+
+            {messages.map(msg => (
+              <div key={msg.id}>
+                {msg.role === 'system' ? (
+                  <div className="flex justify-center">
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      <p className="text-amber-700 text-xs">{msg.content}</p>
+                    </div>
+                  </div>
+                ) : msg.role === 'user' ? (
+                  <div className="flex gap-2 flex-row-reverse">
+                    <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-gray-600 text-[8px] font-bold">You</span>
+                    </div>
+                    <div className="max-w-[80%] px-3.5 py-2 bg-white text-gray-700 rounded-2xl rounded-tr-sm border border-gray-100 shadow-sm">
+                      <p className="text-sm leading-relaxed">{msg.content}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
+                      <span className="text-white text-[8px] font-bold">L</span>
+                    </div>
+                    <div className="max-w-[80%]">
+                      <span className="text-[10px] font-semibold text-purple-600 mb-0.5 block">LINDA</span>
+                      <div className="px-3.5 py-2 bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100 shadow-sm">
+                        <p className="text-sm leading-relaxed">{msg.content}</p>
+                      </div>
+                    </div>
                   </div>
                 )}
-                {/* Next Question button — visible when timer is running and Linda isn't speaking */}
+              </div>
+            ))}
+
+            {/* Live speech transcript */}
+            {currentTranscript && (
+              <div className="flex gap-2 flex-row-reverse">
+                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="text-gray-600 text-[8px] font-bold">You</span>
+                </div>
+                <div className="max-w-[80%] px-3.5 py-2 bg-red-50 text-gray-700 rounded-2xl rounded-tr-sm border border-red-100 shadow-sm">
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                    <span className="text-red-400 text-[10px] font-medium">speaking...</span>
+                  </div>
+                  <p className="text-sm leading-relaxed italic">{currentTranscript}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Live AI text (streaming) */}
+            {currentAiText && (
+              <div className="flex gap-2">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
+                  <span className="text-white text-[8px] font-bold">L</span>
+                </div>
+                <div className="max-w-[80%]">
+                  <span className="text-[10px] font-semibold text-purple-600 mb-0.5 block">LINDA</span>
+                  <div className="px-3.5 py-2 bg-white text-gray-800 rounded-2xl rounded-tl-sm border border-gray-100 shadow-sm">
+                    <div className="flex items-center gap-1 mb-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <p className="text-sm leading-relaxed">{currentAiText}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Thinking dots */}
+            {isProcessing && !currentAiText && (
+              <div className="flex gap-2">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-0.5" style={{ background: 'linear-gradient(135deg, #7c3aed, #ec4899)' }}>
+                  <span className="text-white text-[8px] font-bold">L</span>
+                </div>
+                <div className="px-3.5 py-2.5 bg-white rounded-2xl rounded-tl-sm border border-gray-100 shadow-sm">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 rounded-full bg-gray-300 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input area */}
+          <div className="flex-shrink-0 border-t border-gray-100 bg-white px-4 pt-3 pb-3">
+            {/* Action row */}
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-400 text-xs font-medium">Type or speak your answer</span>
+              <div className="flex items-center gap-2">
+                {/* Next Question button — increments number immediately */}
                 {questionTimerSeconds !== null && !questionTimerExpired && !isAiSpeaking && !isClosing && (
                   <button
                     onClick={() => {
+                      // Stop mic WITHOUT sending end_turn — otherwise silence detection
+                      // fires end_turn after we skip, causing "Processing..." stuck state
+                      // and the Web Speech API transcript from ambient audio appearing as
+                      // the candidate's answer.
+                      stopRecordingSilentRef.current();
+
+                      // Deduct remaining per-question time from global budget
+                      const remaining = questionTimerSecondsRef.current ?? 0;
+                      if (remaining > 0 && !isFlexibleMode && !isNewFlexibleMode) {
+                        setRemainingSeconds(prev => Math.max(0, prev - remaining));
+                      }
+                      // Send skip to backend — it will generate the next question and
+                      // respond with question_timer_started carrying the new question_number.
+                      // Do NOT optimistically increment questionNumber here because that
+                      // would cause the follow-up detection to fire a false positive.
                       if (wsRef.current?.readyState === WebSocket.OPEN) {
                         wsRef.current.send(JSON.stringify({ type: 'skip_question', source: 'candidate' }));
                       }
@@ -2269,167 +2143,73 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       }
                       questionTimerPendingRef.current = null;
                       questionTimerReceivedAtRef.current = null;
+                      questionTimerSecondsRef.current = null;
                       setQuestionTimerSeconds(null);
                       setQuestionTimerExpired(false);
                     }}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-[#1D4ED8]/20 hover:bg-[#1D4ED8]/35 border border-[#1D4ED8]/30 transition-all duration-200"
-                    style={{ fontSize: 10, fontWeight: 600 }}
-                    title="Move to next question"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all duration-200 hover:opacity-80"
+                    style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.08), rgba(236,72,153,0.08))', borderColor: 'rgba(124,58,237,0.25)', color: '#7c3aed' }}
                   >
-                    <span className="text-[#93C5FD]">Next</span>
-                    <span className="text-[#93C5FD]">→</span>
+                    Next Q →
                   </button>
                 )}
-                <div className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full bg-[#EF4444]/10 border border-[#EF4444]/15">
-                  <ShieldCheck className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-[#EF4444]" />
-                  <span className="text-[#EF4444] hidden sm:inline" style={{ fontSize: 10, fontWeight: 600 }}>Recording</span>
-                  <span className="text-[#EF4444] sm:hidden" style={{ fontSize: 9, fontWeight: 600 }}>REC</span>
+                {/* Recording badge */}
+                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-red-50 border border-red-100">
+                  <ShieldCheck className="w-3 h-3 text-red-400" />
+                  <span className="text-red-400 text-[10px] font-semibold">Recording</span>
                 </div>
               </div>
             </div>
 
-            {/* Transcript content */}
-            <div
-              className="flex-1 overflow-y-auto px-2.5 sm:px-4 py-2 sm:py-3 space-y-2 sm:space-y-3"
-              style={{ scrollbarWidth: 'thin', scrollbarColor: '#1E293B transparent' }}
-            >
-              <>
-
-                  {messages.length === 0 && !currentAiText && !currentTranscript && !isProcessing && (
-                    <div className="flex items-center justify-center h-full">
-                      <p className="text-[#475569] text-xs text-center">Conversation will appear here...</p>
-                    </div>
-                  )}
-
-                  {messages.map((msg) => (
-                    <div key={msg.id}>
-                      {msg.role === 'system' ? (
-                        <div className="flex justify-center">
-                          <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/25 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                            <p className="text-[#F59E0B]" style={{ fontSize: 11 }}>{msg.content}</p>
-                          </div>
-                        </div>
-                      ) : msg.role === 'user' ? (
-                        <div className="flex gap-1.5 sm:gap-2.5 flex-row-reverse">
-                          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-white/[0.08] flex items-center justify-center shrink-0">
-                            <span className="text-[#94A3B8]" style={{ fontSize: 8, fontWeight: 800 }}>You</span>
-                          </div>
-                          <div className="max-w-[85%] sm:max-w-[72%] px-3 sm:px-4 py-2 sm:py-2.5 bg-white/[0.06] text-[#CBD5E1] rounded-2xl rounded-tr-md border border-white/[0.06]">
-                            <p style={{ fontSize: 12, lineHeight: 1.6 }}>{msg.content}</p>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-1.5 sm:gap-2.5">
-                          <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#1D4ED8] flex items-center justify-center shrink-0 shadow-sm shadow-blue-900/30">
-                            <span className="text-white" style={{ fontSize: 8, fontWeight: 800 }}>AI</span>
-                          </div>
-                          <div className="max-w-[85%] sm:max-w-[72%] px-3 sm:px-4 py-2 sm:py-2.5 bg-[#1E3A5F]/60 text-[#E2E8F0] rounded-2xl rounded-tl-md border border-blue-500/10">
-                            <p style={{ fontSize: 12, lineHeight: 1.6 }}>{msg.content}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-
-                  {/* Live speech transcript */}
-                  {currentTranscript && (
-                    <div className="flex gap-1.5 sm:gap-2.5 flex-row-reverse">
-                      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-white/[0.08] flex items-center justify-center shrink-0">
-                        <span className="text-[#94A3B8]" style={{ fontSize: 8, fontWeight: 800 }}>You</span>
-                      </div>
-                      <div className="max-w-[85%] sm:max-w-[72%] px-3 sm:px-4 py-2 sm:py-2.5 bg-[#EF4444]/10 text-[#CBD5E1] rounded-2xl rounded-tr-md border border-[#EF4444]/20">
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444] animate-pulse" />
-                          <span className="text-[#EF4444]" style={{ fontSize: 9 }}>speaking...</span>
-                        </div>
-                        <p className="italic" style={{ fontSize: 12, lineHeight: 1.6 }}>{currentTranscript}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Live AI text (streaming) */}
-                  {currentAiText && (
-                    <div className="flex gap-1.5 sm:gap-2.5">
-                      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] flex items-center justify-center shrink-0">
-                        <span className="text-white" style={{ fontSize: 8, fontWeight: 800 }}>AI</span>
-                      </div>
-                      <div className="max-w-[85%] sm:max-w-[72%] px-3 sm:px-4 py-2 sm:py-2.5 bg-[#1E3A5F]/60 text-[#E2E8F0] rounded-2xl rounded-tl-md border border-blue-500/10">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="w-1 h-1 rounded-full bg-[#3B82F6] animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-1 h-1 rounded-full bg-[#3B82F6] animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-1 h-1 rounded-full bg-[#3B82F6] animate-bounce" style={{ animationDelay: '300ms' }} />
-                        </div>
-                        <p style={{ fontSize: 12, lineHeight: 1.6 }}>{currentAiText}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Thinking dots */}
-                  {isProcessing && !currentAiText && (
-                    <div className="flex gap-1.5 sm:gap-2.5">
-                      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-[#3B82F6] to-[#7C3AED] flex items-center justify-center shrink-0">
-                        <span className="text-white" style={{ fontSize: 8, fontWeight: 800 }}>AI</span>
-                      </div>
-                      <div className="px-3 sm:px-4 py-2 sm:py-3 bg-[#1E293B]/60 rounded-2xl rounded-tl-md border border-white/5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-[#475569] animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-2 h-2 rounded-full bg-[#475569] animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-2 h-2 rounded-full bg-[#475569] animate-bounce" style={{ animationDelay: '300ms' }} />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div ref={messagesEndRef} />
-                </>
-            </div>
-
-            {/* Input bar */}
-            <div className="px-2.5 sm:px-4 py-2 sm:py-3 border-t border-white/[0.06]">
-              <div className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] focus-within:border-[#3B82F6]/30 focus-within:bg-white/[0.06] transition-all duration-300">
-                <input
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && textInput.trim()) {
-                      sendTextInput(textInput);
-                      setTextInput('');
-                    }
-                  }}
-                  placeholder={
-                    isAiSpeaking ? 'Wait for Linda to finish...' :
-                    isProcessing ? 'Processing...' :
-                    'Type your answer...'
+            {/* Input row */}
+            <div className="flex gap-2">
+              <textarea
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && textInput.trim()) {
+                    e.preventDefault();
+                    sendTextInput(textInput);
+                    setTextInput('');
                   }
-                  disabled={isAiSpeaking || isProcessing || !isConnected}
-                  className="flex-1 bg-transparent outline-none text-white placeholder-[#334155] disabled:opacity-40 disabled:cursor-not-allowed min-w-0"
-                  style={{ fontSize: 13 }}
-                />
+                }}
+                placeholder={
+                  isAiSpeaking ? 'Wait for LINDA to finish...' :
+                  isProcessing  ? 'Processing...' :
+                  'Type your answer or use speech...'
+                }
+                disabled={isAiSpeaking || isProcessing || !isConnected}
+                rows={2}
+                className="flex-1 resize-none rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-300 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 text-sm"
+              />
+              <div className="flex flex-col gap-1.5">
                 <button
-                  className="p-1.5 sm:p-2 rounded-lg hover:bg-white/[0.06] transition-all duration-300 shrink-0"
-                  title="Voice input"
-                  type="button"
+                  onClick={toggleMute}
+                  disabled={!isConnected}
+                  title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-white font-semibold text-sm transition-all duration-200 disabled:opacity-40 shadow-sm"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)' }}
                 >
-                  <Mic className="w-4 h-4 text-[#3B82F6]" />
+                  <Mic className="w-4 h-4" />
+                  {isMuted ? 'Muted' : 'Speak'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (textInput.trim()) {
-                      sendTextInput(textInput);
-                      setTextInput('');
-                    }
-                  }}
+                  onClick={() => { if (textInput.trim()) { sendTextInput(textInput); setTextInput(''); } }}
                   disabled={!textInput.trim() || isAiSpeaking || isProcessing || !isConnected}
-                  className="p-1.5 sm:p-2 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-300 shadow-sm shadow-blue-900/30 shrink-0"
+                  className="p-2 rounded-xl text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 shadow-sm flex items-center justify-center"
+                  style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #ec4899 100%)' }}
                 >
-                  <Send className="w-4 h-4 text-white" />
+                  <Send className="w-4 h-4" />
                 </button>
               </div>
             </div>
+
+            <p className="text-gray-400 text-[11px] mt-1.5">⊙ Press Enter to submit</p>
           </div>
         </div>
+
+
       </div>
 
       {/* End Interview Confirmation Modal */}

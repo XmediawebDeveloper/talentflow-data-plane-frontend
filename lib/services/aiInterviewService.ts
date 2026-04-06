@@ -155,7 +155,13 @@ export interface AIInterviewResponse {
   copy_paste_count?: number;
   recording_url?: string;
   introduction_video_url?: string;
+  identity_name?: string;
+  identity_verified?: boolean;
+  identity_photo_path?: string;
+  screen_recording_file_path?: string;
+  screen_recording_url?: string;
   invitation_sent: boolean;
+  invitations_count?: number;
   created_by: string;
   created_by_name?: string;
   scheduled_at?: string;
@@ -163,6 +169,22 @@ export interface AIInterviewResponse {
   completed_at?: string;
   created_at: string;
   updated_at: string;
+  // Global candidate identity
+  candidate_id?: string;
+  candidate_cid?: string;  // e.g. "CID-0001"
+  // Live skill coverage (updated during interview via WebSocket, persisted to session)
+  skill_coverage?: {
+    round?: string;
+    round_name?: string;
+    covered: string[];
+    medium_covered: string[];
+    low_covered: string[];
+    uncovered: string[];
+    nice_to_have_skills: string[];
+    total_questions: number;
+    questions_asked: number;
+    hr_topics?: Record<string, string>;
+  };
 }
 
 export interface AIInterviewListResponse {
@@ -674,5 +696,23 @@ export const aiInterviewService = {
   getRecordingUrl(interviewId: string): string {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
     return `${baseUrl}/ai-interview/${interviewId}/recording`;
+  },
+
+  /**
+   * Get tenant-level invitation quota stats
+   * Returns how many invitations are pending (held) vs consumed vs available
+   */
+  async getInvitationStats(): Promise<{
+    total_quota: number;
+    consumed: number;
+    pending: number;
+    available: number;
+  } | null> {
+    try {
+      const response = await api.get('/ai-interview/invitation-stats');
+      return response.data;
+    } catch {
+      return null; // Gracefully degrade if endpoint not available
+    }
   },
 };

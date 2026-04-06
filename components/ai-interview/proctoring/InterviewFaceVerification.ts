@@ -27,7 +27,7 @@ interface FaceVerificationCallbacks {
   onFaceIdentityChanged?: (distance: number) => void;
 }
 
-const MODELS_URL = '/models';
+const MODELS_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
 const VERIFICATION_INTERVAL_MS = 10000; // 10 seconds
 const MISMATCH_THRESHOLD = 0.6;
 const IDENTITY_CHANGED_THRESHOLD = 0.8;

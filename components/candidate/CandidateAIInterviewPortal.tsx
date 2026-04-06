@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, CheckCircle } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, CheckCircle, Maximize2, Monitor } from 'lucide-react';
+import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 import { toast } from 'sonner';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
@@ -27,6 +28,7 @@ type Step =
   | 'intro_video'
   | 'language_select'
   | 'sample_practice'
+  | 'fullscreen_prompt'
   | 'interview'
   | 'completed'
   | 'error';
@@ -78,6 +80,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   // Language state
   const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
   const [selectedLanguage, setSelectedLanguage] = useState<string>('English');
+
+  // Fullscreen state — tracked during interview for exit-detection overlay
+  const [isFullscreenActive, setIsFullscreenActive] = useState(false);
+
+  // Screen recording
+  const screenRecorderRef = useRef<MediaRecorder | null>(null);
+  const screenChunksRef = useRef<Blob[]>([]);
+  const screenStreamRef = useRef<MediaStream | null>(null);
 
   // Face & voice verification — callbacks emit events via InterviewEventBus
   const faceVerification = useInterviewFaceVerification({
@@ -157,6 +167,36 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       fetch('/models/rpm-recruiter.glb').catch(() => {});
     }
   }, [step]);
+
+  // Stop screen recording and upload (fire-and-forget)
+  // Must be declared here (before any early returns) to satisfy Rules of Hooks
+  const stopAndUploadScreenRecording = useCallback(() => {
+    const recorder = screenRecorderRef.current;
+    if (!recorder) return;
+
+    const doUpload = async () => {
+      const chunks = screenChunksRef.current;
+      if (chunks.length === 0) return;
+      const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
+      const blob = new Blob(chunks, { type: mimeType });
+      try {
+        await candidateAIInterviewService.uploadScreenRecording(token, blob);
+      } catch (e) {
+        console.warn('[ScreenRecording] Upload failed:', e);
+      } finally {
+        screenStreamRef.current?.getTracks().forEach(t => t.stop());
+        screenStreamRef.current = null;
+        screenRecorderRef.current = null;
+      }
+    };
+
+    if (recorder.state === 'inactive') {
+      doUpload();
+    } else {
+      recorder.onstop = () => doUpload();
+      try { recorder.stop(); } catch { doUpload(); }
+    }
+  }, [token]);
 
   // ========== HANDLERS ==========
 
@@ -246,11 +286,17 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     }
   };
 
-  const handleStartInterview = async () => {
+  // Called from StepSamplePractice "Start Interview" button — goes to fullscreen prompt first
+  const handleStartInterview = () => {
+    setStep('fullscreen_prompt');
+  };
+
+  // Called from fullscreen prompt after entering fullscreen — actually starts the interview
+  const handleFullscreenReady = useCallback(async () => {
     if (startSubmitting) return;
     setStartSubmitting(true);
 
-    // CRITICAL: Create AudioContext in user gesture context before any awaits
+    // CRITICAL: Create AudioContext in user gesture context
     try {
       const ctx = new AudioContext({ sampleRate: 24000 });
       (window as any).__interviewAudioContext = ctx;
@@ -258,28 +304,39 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       console.warn('[Portal] Failed to pre-create AudioContext:', e);
     }
 
-    // Request fullscreen — must be called in user gesture context
+    // Start screen recording (best-effort — requires user to grant screen share permission)
     try {
-      const el = document.documentElement;
-      if (el.requestFullscreen) {
-        await el.requestFullscreen();
-      } else if ((el as any).webkitRequestFullscreen) {
-        await (el as any).webkitRequestFullscreen();
-      } else if ((el as any).mozRequestFullScreen) {
-        await (el as any).mozRequestFullScreen();
-      } else if ((el as any).msRequestFullscreen) {
-        await (el as any).msRequestFullscreen();
-      }
-    } catch {
-      // Fullscreen denied or not supported — continue without it
+      const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
+        video: { frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      screenStreamRef.current = screenStream;
+      const screenMime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+        .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
+      const sr = new MediaRecorder(screenStream, {
+        ...(screenMime ? { mimeType: screenMime } : {}),
+        videoBitsPerSecond: 300_000, // 300 Kbps — sufficient for screen capture
+      });
+      screenChunksRef.current = [];
+      sr.ondataavailable = (e) => { if (e.data.size > 0) screenChunksRef.current.push(e.data); };
+      sr.start(5000);
+      screenRecorderRef.current = sr;
+      // If candidate stops sharing manually, stop the recorder gracefully
+      screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
+        if (screenRecorderRef.current?.state !== 'inactive') {
+          try { screenRecorderRef.current?.stop(); } catch { /* ignore */ }
+        }
+      });
+    } catch (e) {
+      // User cancelled screen share or browser doesn't support — interview still starts
+      console.warn('[ScreenRecording] Screen capture not started:', e);
     }
 
     try {
-      // AIU26: log that candidate completed the practice step before starting
       await candidateAIInterviewService.recordPracticeComplete(token);
-
       const result = await candidateAIInterviewService.startInterview(token);
       setInterview(result);
+      setIsFullscreenActive(isFullscreen());
       setStep('interview');
     } catch (err: any) {
       const detail = err?.response?.data?.detail || 'Failed to start interview';
@@ -291,7 +348,20 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     } finally {
       setStartSubmitting(false);
     }
-  };
+  }, [startSubmitting, token]);
+
+  // Fullscreen enforcement during interview
+  useEffect(() => {
+    if (step !== 'interview') return;
+    const eventName = getFullscreenChangeEvent();
+    const handleFsChange = () => setIsFullscreenActive(isFullscreen());
+    setIsFullscreenActive(isFullscreen());
+    document.addEventListener(eventName, handleFsChange);
+    return () => {
+      document.removeEventListener(eventName, handleFsChange);
+      if (isFullscreen()) exitFullscreen().catch(() => {});
+    };
+  }, [step]);
 
   // ========== LOADING ==========
   if (step === 'loading') {
@@ -331,16 +401,84 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     );
   }
 
+  // ========== FULLSCREEN PROMPT ==========
+  if (step === 'fullscreen_prompt') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 md:p-10">
+          <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Monitor className="w-10 h-10 text-indigo-600" />
+          </div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+            Enter Fullscreen Mode
+          </h1>
+          <p className="text-gray-600 mb-6 text-center text-sm">
+            The AI interview requires fullscreen mode to ensure a focused and fair environment.
+          </p>
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6">
+            <p className="font-semibold text-indigo-900 mb-3 text-sm">Interview Rules:</p>
+            <ul className="space-y-2 text-sm text-indigo-800">
+              <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Browser navigation will be hidden</span></li>
+              <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Exiting fullscreen will be flagged as a violation</span></li>
+              <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Keep the window focused throughout the interview</span></li>
+            </ul>
+          </div>
+          <button
+            onClick={async () => {
+              try { await requestFullscreen(); } catch { /* proceed anyway */ }
+              handleFullscreenReady();
+            }}
+            disabled={startSubmitting}
+            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+          >
+            {startSubmitting ? (
+              <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
+            ) : (
+              <><Maximize2 className="w-5 h-5" />Enter Fullscreen &amp; Start Interview</>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ========== INTERVIEW (live AI interview) ==========
   if (step === 'interview' && interview) {
     return (
-      <InterviewUI
-        token={token}
-        interviewInfo={interview}
-        onInterviewComplete={() => setStep('completed')}
-        faceVerification={faceVerification.hasBaseline() ? faceVerification : undefined}
-        voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
-      />
+      <>
+        <InterviewUI
+          token={token}
+          interviewInfo={interview}
+          onInterviewComplete={() => {
+            stopAndUploadScreenRecording();
+            if (isFullscreen()) exitFullscreen().catch(() => {});
+            setStep('completed');
+          }}
+          faceVerification={faceVerification.hasBaseline() ? faceVerification : undefined}
+          voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
+        />
+        {/* Fullscreen exit overlay */}
+        {!isFullscreenActive && (
+          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-white border-2 border-yellow-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
+              <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
+              <p className="text-gray-600 mb-6 text-sm">
+                Please return to fullscreen mode to continue your AI interview.
+              </p>
+              <button
+                onClick={() => requestFullscreen().catch(() => {})}
+                className="w-full px-6 py-3 bg-yellow-500 hover:bg-yellow-600 rounded-xl font-bold text-white transition-colors"
+              >
+                Return to Fullscreen
+              </button>
+              <p className="text-xs text-red-500 font-medium animate-pulse mt-4">
+                This event has been recorded
+              </p>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -459,6 +597,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           token={token}
           position={interview.position}
           onAllPassed={handleSystemCheckPassed}
+          onRegisterFace={faceVerification.registerFace}
         />
       </PreInterviewLayout>
     );

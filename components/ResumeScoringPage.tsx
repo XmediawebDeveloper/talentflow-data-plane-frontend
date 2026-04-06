@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { formatIST } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -1917,7 +1917,7 @@ export default function ResumeScoringPage({
                           )}
                           <span className="flex items-center gap-1.5 sm:gap-2">
                             <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                            {new Date(item.scoredAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                            {formatIST(item.scoredAt)}
                           </span>
                           <span className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-gray-50 rounded-lg">
                             <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
@@ -2088,7 +2088,7 @@ export default function ResumeScoringPage({
                           {item.jdPublishedAt && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
                               <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-                              <span>Posted {new Date(item.jdPublishedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                              <span>Posted {formatISTDate(item.jdPublishedAt)}</span>
                             </div>
                           )}
                           {item.jdCreatedByName && (
@@ -2320,8 +2320,8 @@ export default function ResumeScoringPage({
         (historyModalItem.scoredResumes || []).forEach((r: any) => {
           const scorer = r.scoredBy || 'System';
           const rawDate = r.scoredDate || r.created_at || historyModalItem.scoredAt;
-          const day = new Date(rawDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-          const time = new Date(rawDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+          const day = formatISTDate(rawDate);
+          const time = formatISTTime(rawDate);
           const src = r.source === 'my-resumes' ? 'My Resumes' : 'Resume Database';
           const key = `${scorer}||${day}||${src}`;
           if (seen.has(key)) {
@@ -2599,7 +2599,7 @@ export default function ResumeScoringPage({
                       <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /><span className="capitalize">{selectedJobData.remote_type}</span></span>
                     )}
                     {selectedJobData.published_at && (
-                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Posted {new Date(selectedJobData.published_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Posted {formatISTDate(selectedJobData.published_at)}</span>
                     )}
                     {selectedJobData.created_by_name && (
                       <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" />By {selectedJobData.created_by_name}</span>

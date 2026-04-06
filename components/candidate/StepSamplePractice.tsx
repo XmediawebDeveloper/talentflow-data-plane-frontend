@@ -12,8 +12,6 @@ import {
   ChevronRight,
   Square,
   Play,
-  Video,
-  VideoOff,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 
@@ -350,6 +348,7 @@ export default function StepSamplePractice({
       const vMime = videoChunks[0].type || 'video/webm';
       const videoBlob = new Blob(videoChunks, { type: vMime });
       setRecordedVideoUrl(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(videoBlob); });
+      setShowReplay(true); // auto-show playback after recording stops
     }
 
     // If we already have a browser transcript, show it immediately while
@@ -591,23 +590,25 @@ export default function StepSamplePractice({
           <div className="relative bg-black rounded-xl overflow-hidden" style={{ aspectRatio: '16/9' }}>
             {/* Live camera — hidden during replay */}
             <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} />
-            {/* Replay video — shown when user clicks Watch Replay */}
+            {/* Replay video */}
             {showReplay && recordedVideoUrl && (
-              <video ref={replayVideoRef} src={recordedVideoUrl} controls autoPlay playsInline className="w-full h-full object-cover" />
+              <video ref={replayVideoRef} src={recordedVideoUrl} controls playsInline className="w-full h-full object-cover" />
             )}
 
-            {/* Audio level bar */}
-            <div className="absolute bottom-0 left-0 right-0 px-3 pb-2.5">
-              <div className="h-1 bg-gray-800/60 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-75 ${audioLevel > 0.3 ? 'bg-green-400' : audioLevel > 0.05 ? 'bg-yellow-400' : 'bg-gray-600'}`}
-                  style={{ width: `${Math.max(audioLevel * 100, 2)}%` }}
-                />
+            {/* Audio level bar — only when live */}
+            {!showReplay && (
+              <div className="absolute bottom-0 left-0 right-0 px-3 pb-2.5">
+                <div className="h-1 bg-gray-800/60 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-75 ${audioLevel > 0.3 ? 'bg-green-400' : audioLevel > 0.05 ? 'bg-yellow-400' : 'bg-gray-600'}`}
+                    style={{ width: `${Math.max(audioLevel * 100, 2)}%` }}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Status badge */}
-            {(isRecording || isTranscribing) && (
+            {/* Status badges */}
+            {!showReplay && (isRecording || isTranscribing) && (
               <div className={`absolute top-2 left-2 flex items-center gap-1.5 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm ${isRecording ? 'bg-red-500/90' : 'bg-blue-600/90'}`}>
                 {isRecording ? (
                   <><span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" /> Recording</>
@@ -617,7 +618,34 @@ export default function StepSamplePractice({
               </div>
             )}
 
-            <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">You</div>
+            {/* Replay badge */}
+            {showReplay && (
+              <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-blue-600/90 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm">
+                <Play className="w-3 h-3" /> Playback
+              </div>
+            )}
+
+            {/* Live / Replay toggle pill */}
+            {recordedVideoUrl && !isRecording && !isTranscribing && (
+              <div className="absolute top-2 right-2 flex items-center bg-black/70 backdrop-blur-sm rounded-full p-0.5 gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowReplay(false)}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors ${!showReplay ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}
+                >
+                  Live
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowReplay(true)}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-semibold transition-colors ${showReplay ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'}`}
+                >
+                  Replay
+                </button>
+              </div>
+            )}
+
+            {!showReplay && <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full">You</div>}
           </div>
 
           {/* Your Answer + transcript */}
@@ -636,18 +664,10 @@ export default function StepSamplePractice({
                   </span>
                 )}
                 {hasAnswer && !isRecording && !isTranscribing && (
-                  <div className="flex items-center gap-2">
-                    {recordedVideoUrl && (
-                      <button type="button" onClick={() => setShowReplay(v => !v)}
-                        className="flex items-center gap-1 text-xs text-[#60A5FA] hover:text-white transition-colors">
-                        {showReplay ? <><VideoOff className="w-3 h-3" /> Live</> : <><Video className="w-3 h-3" /> Watch Replay</>}
-                      </button>
-                    )}
-                    <button type="button" onClick={resetPractice}
-                      className="flex items-center gap-1 text-xs text-[#64748B] hover:text-white transition-colors">
-                      <RefreshCw className="w-3 h-3" /> Retry
-                    </button>
-                  </div>
+                  <button type="button" onClick={resetPractice}
+                    className="flex items-center gap-1 text-xs text-[#64748B] hover:text-white transition-colors">
+                    <RefreshCw className="w-3 h-3" /> Retry
+                  </button>
                 )}
               </div>
             </div>

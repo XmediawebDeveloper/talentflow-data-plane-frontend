@@ -1015,6 +1015,7 @@ export default function AIInterviewConfig() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const isNavigatingRef = useRef(false);
+  const [generatingClusters, setGeneratingClusters] = useState(false);
 
   /* ── Load JD + restore draft if one exists ── */
   useEffect(() => {
@@ -1261,7 +1262,7 @@ export default function AIInterviewConfig() {
         const payload = {
           position: selectedJd.title,
           jd_id: selectedJd.id,
-          duration_minutes: totalFixed,
+          duration_minutes: mode === 'flexible' ? 0 : totalFixed,
           rounds_config: rounds,
           recording_enabled: recordingEnabled,
           available_languages: availableLanguages,
@@ -1590,7 +1591,7 @@ export default function AIInterviewConfig() {
       const payload = {
         position: selectedJd.title,
         jd_id: selectedJd.id,
-        duration_minutes: totalFixed,
+        duration_minutes: mode === 'flexible' ? 0 : totalFixed,
         rounds_config: buildRounds(true),
         recording_enabled: recordingEnabled,
         available_languages: availableLanguages,
@@ -1620,11 +1621,21 @@ export default function AIInterviewConfig() {
     if (ok) router.push('/recruitment/ai-interviews');
   };
 
-  const [generatingClusters, setGeneratingClusters] = useState(false);
-
   const handleContinueToClusters = async () => {
     if (!selectedJd) return;
     if (mode === 'flexible' && !pctValid) return;
+
+    // Validate HR round: if HR is enabled, at least one question must be selected
+    if (hrEnabled && hrSelectedIds.length === 0) {
+      toast.error('HR round is enabled but no questions are selected. Please select at least one HR question or disable the HR round.');
+      return;
+    }
+
+    // Validate Nice-to-Have: if NTH is enabled, at least one skill must be present
+    if (nth.enabled && nth.skills.length === 0) {
+      toast.error('Nice-to-Have Skills is enabled but has no skills. Please add at least one skill or disable the Nice-to-Have round.');
+      return;
+    }
 
     // Flexible mode only: validate skill counts before proceeding
     if (mode === 'flexible') {

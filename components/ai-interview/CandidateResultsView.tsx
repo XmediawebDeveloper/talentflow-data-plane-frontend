@@ -7,6 +7,7 @@ import {
   BarChart3, Brain, FileText, Layers, Bot,
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
+  Shield, CheckCircle2, XCircle, Activity, RefreshCw,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -23,7 +24,7 @@ interface CandidateResultsViewProps {
   onBack: () => void;
 }
 
-type TabKey = 'overview' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'clusters' | 'violations';
+type TabKey = 'overview' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'clusters' | 'violations' | 'skill_coverage';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -68,13 +69,139 @@ function formatTs(ts?: string) {
   catch { return '—'; }
 }
 
+/* ─── Recording sub-tab component ───────────────────────────────────────── */
+function VideoPane({
+  label,
+  hasFile,
+  blobUrl,
+  loading,
+  error,
+  onError,
+}: {
+  label: string;
+  hasFile: boolean;
+  blobUrl: string | null;
+  loading: boolean;
+  error: boolean;
+  onError: () => void;
+}) {
+  if (!hasFile) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+          <VideoOff className="w-6 h-6 text-gray-400" />
+        </div>
+        <p className="text-gray-500 text-sm">{label} not available</p>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
+          <VideoOff className="w-6 h-6 text-red-400" />
+        </div>
+        <p className="text-gray-500 text-sm">Could not load {label.toLowerCase()}</p>
+        <p className="text-xs text-gray-400 mt-1">The file may have been moved or deleted</p>
+      </div>
+    );
+  }
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-8 h-8 border-4 border-gray-300 border-t-gray-600 rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-sm text-gray-500">Loading {label.toLowerCase()}…</p>
+      </div>
+    );
+  }
+  if (blobUrl) {
+    return (
+      <video controls className="w-full max-h-[500px] rounded-lg bg-black" src={blobUrl} onError={onError}>
+        Your browser does not support video playback.
+      </video>
+    );
+  }
+  return null;
+}
+
+function RecordingTabContent({
+  interview,
+  videoBlobUrl, videoLoading, videoError, setVideoError,
+  screenBlobUrl, screenLoading, screenError,
+}: {
+  interview: AIInterviewResponse;
+  videoBlobUrl: string | null;
+  videoLoading: boolean;
+  videoError: boolean;
+  setVideoError: (v: boolean) => void;
+  screenBlobUrl: string | null;
+  screenLoading: boolean;
+  screenError: boolean;
+}) {
+  const [recView, setRecView] = useState<'candidate' | 'screen'>('candidate');
+
+  return (
+    <div className="space-y-4">
+      {/* Sub-tab pills */}
+      <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        <button
+          onClick={() => setRecView('candidate')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            recView === 'candidate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Camera className="w-3.5 h-3.5" /> Candidate View
+        </button>
+        <button
+          onClick={() => setRecView('screen')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            recView === 'screen' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Monitor className="w-3.5 h-3.5" /> Interview View
+        </button>
+      </div>
+
+      {recView === 'candidate' ? (
+        <VideoPane
+          label="Candidate recording"
+          hasFile={!!interview.recording_file_path}
+          blobUrl={videoBlobUrl}
+          loading={videoLoading}
+          error={videoError}
+          onError={() => setVideoError(true)}
+        />
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-500">
+            Screen recording captured during the interview session.
+          </p>
+          <VideoPane
+            label="Screen recording"
+            hasFile={!!interview.screen_recording_file_path}
+            blobUrl={screenBlobUrl}
+            loading={screenLoading}
+            error={screenError}
+            onError={() => {}}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CandidateResultsView({ interview, onBack }: CandidateResultsViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [videoError, setVideoError] = useState(false);
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
+  const [screenBlobUrl, setScreenBlobUrl] = useState<string | null>(null);
+  const [screenLoading, setScreenLoading] = useState(false);
+  const [screenError, setScreenError] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
   const [violationPage, setViolationPage] = useState(1);
+  const [identityPhotoUrl, setIdentityPhotoUrl] = useState<string | null>(null);
+  const [identityPhotoError, setIdentityPhotoError] = useState(false);
 
   // Fetch recording with auth headers and create blob URL
   useEffect(() => {
@@ -96,11 +223,97 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     return () => { cancelled = true; };
   }, [activeTab, interview.recording_file_path, interview.id, videoBlobUrl]);
 
-  const eval_ = interview.ai_evaluation || {};
-  const isCompleted = interview.status === 'completed';
-  const isInProgress = interview.status === 'in_progress';
+  // Fetch screen recording when recording tab is active
+  useEffect(() => {
+    if (activeTab !== 'recording' || !interview.screen_recording_file_path || screenBlobUrl || screenError) return;
+    let cancelled = false;
+    setScreenLoading(true);
+    api.get(`/ai-interview/${interview.id}/screen-recording`, { responseType: 'blob' })
+      .then((res) => {
+        if (cancelled) return;
+        setScreenBlobUrl(URL.createObjectURL(res.data));
+      })
+      .catch(() => { if (!cancelled) setScreenError(true); })
+      .finally(() => { if (!cancelled) setScreenLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, interview.screen_recording_file_path, interview.id, screenBlobUrl, screenError]);
+
+  // Fetch identity photo if available
+  useEffect(() => {
+    if (!interview.identity_photo_path || identityPhotoUrl || identityPhotoError) return;
+    let cancelled = false;
+    api.get(`/ai-interview/${interview.id}/identity-photo`, { responseType: 'blob' })
+      .then((res) => {
+        if (cancelled) return;
+        setIdentityPhotoUrl(URL.createObjectURL(res.data));
+      })
+      .catch(() => { if (!cancelled) setIdentityPhotoError(true); });
+    return () => { cancelled = true; };
+  }, [interview.identity_photo_path, interview.id, identityPhotoUrl, identityPhotoError]);
+
+  // Live skill coverage — WebSocket monitor + REST fallback for in_progress sessions
+  const [liveSession, setLiveSession] = useState(interview);
+  const [liveWsConnected, setLiveWsConnected] = useState(false);
+  useEffect(() => { setLiveSession(interview); }, [interview]);
+
+  useEffect(() => {
+    if (liveSession.status !== 'in_progress') return;
+
+    // Try a monitor WebSocket for push-based updates
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '') || 'localhost:8000';
+    const wsUrl = `${protocol}//${apiBase}/api/v1/ws/ai-interview/${liveSession.id}/monitor`;
+
+    let ws: WebSocket | null = null;
+    let pollId: ReturnType<typeof setInterval> | null = null;
+
+    const startPolling = () => {
+      if (pollId) return;
+      pollId = setInterval(() => {
+        aiInterviewService.get(liveSession.id)
+          .then((updated) => setLiveSession(updated))
+          .catch(() => {});
+      }, 3000);
+    };
+
+    try {
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => { setLiveWsConnected(true); };
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          // Backend pushes full session updates or skill_coverage patches
+          if (msg.type === 'session_update' && msg.data) {
+            setLiveSession((prev) => ({ ...prev, ...msg.data }));
+          } else if (msg.type === 'skill_coverage' && msg.data) {
+            setLiveSession((prev) => ({ ...prev, skill_coverage: msg.data }));
+          } else if (msg.type === 'status_update' && msg.data?.status) {
+            setLiveSession((prev) => ({ ...prev, ...msg.data }));
+          }
+        } catch { /* non-JSON frame, ignore */ }
+      };
+      ws.onerror = () => { setLiveWsConnected(false); startPolling(); };
+      ws.onclose = () => { setLiveWsConnected(false); startPolling(); };
+    } catch {
+      startPolling();
+    }
+
+    return () => {
+      if (ws) { ws.onopen = null; ws.onmessage = null; ws.onerror = null; ws.onclose = null; ws.close(); }
+      if (pollId) clearInterval(pollId);
+      setLiveWsConnected(false);
+    };
+  }, [liveSession.status, liveSession.id]);
+
+  const eval_ = liveSession.ai_evaluation || {};
+  const isCompleted = liveSession.status === 'completed';
+  const isInProgress = liveSession.status === 'in_progress';
   const isPartial = eval_.partial === true;
   const hasData = isCompleted || isPartial;
+
+  // Flexible/conversational mode is identified by the presence of capability_score_reasoning,
+  // which is generated only for flexible mode interviews (AC — Mode Indicator).
+  const isFlexibleMode = !!eval_.capability_score_reasoning;
 
   // Convert raw 1-5 evaluator score → 0-100 performance percentage for display
   const roundScores: { name: string; score: number; percentage: number; weight: number }[] = useMemo(() => {
@@ -211,14 +424,15 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const totalPages = Math.max(1, Math.ceil(groupedViolations.length / ROWS_PER_PAGE));
   const pagedViolations = groupedViolations.slice((violationPage - 1) * ROWS_PER_PAGE, violationPage * ROWS_PER_PAGE);
 
-  const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { key: 'overview',   label: 'Overview',        icon: <BarChart3 className="w-4 h-4" /> },
-    { key: 'clusters',   label: 'Cluster Insights', icon: <Layers className="w-4 h-4" /> },
-    { key: 'sentiment',  label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
-    { key: 'qa',         label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
-    { key: 'recording',  label: 'Recording',        icon: <Video className="w-4 h-4" /> },
-    { key: 'transcript', label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
-    { key: 'violations', label: 'Violations',       icon: <ShieldAlert className="w-4 h-4" />, badge: totalViolations },
+  const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
+    { key: 'overview',       label: 'Overview',        icon: <BarChart3 className="w-4 h-4" /> },
+    { key: 'skill_coverage', label: 'Skill Coverage',  icon: <Activity className="w-4 h-4" />, live: isInProgress },
+    { key: 'clusters',       label: 'Cluster Insights', icon: <Layers className="w-4 h-4" /> },
+    { key: 'sentiment',      label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
+    { key: 'qa',             label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
+    { key: 'recording',      label: 'Recording',        icon: <Video className="w-4 h-4" /> },
+    { key: 'transcript',     label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
+    { key: 'violations',     label: 'Violations',       icon: <ShieldAlert className="w-4 h-4" />, badge: totalViolations },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -258,13 +472,24 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   {(interview.candidate_name || 'U')[0].toUpperCase()}
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h1 className="text-xl font-semibold text-gray-900">
                       {interview.candidate_name || 'Unknown Candidate'}
                     </h1>
+                    {interview.candidate_cid && (
+                      <span className="inline-flex items-center px-2 py-0.5 bg-purple-50 text-purple-700 rounded text-xs font-mono font-medium">
+                        {interview.candidate_cid}
+                      </span>
+                    )}
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(interview.status)}`}>
                       {getStatusLabel(interview.status)}
                     </span>
+                    {/* Interview mode badge — only shown for flexible/conversational mode */}
+                    {isFlexibleMode && (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        Conversational Mode
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
                     {interview.candidate_email && <span>{interview.candidate_email}</span>}
@@ -318,6 +543,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 >
                   {tab.icon}
                   {tab.label}
+                  {tab.live && (
+                    <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full ml-0.5">
+                      <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
+                      LIVE
+                    </span>
+                  )}
                   {tab.badge !== undefined && (
                     <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
                       tab.badge > 0
@@ -335,10 +566,209 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
           </div>
 
           <div className="p-6">
+            {/* Skill Coverage Tab */}
+            {activeTab === 'skill_coverage' && (() => {
+              // Prefer live skill_coverage; fall back to ai_evaluation.skill_coverage_map
+              // for completed sessions where the live field was never persisted.
+              const rawMap = eval_.skill_coverage_map as Record<string, string> | undefined;
+              const sc = liveSession.skill_coverage || (rawMap && Object.keys(rawMap).length > 0 ? (() => {
+                const allSkills = Object.keys(rawMap);
+                return {
+                  covered:          allSkills.filter(s => rawMap[s] === 'covered'),
+                  medium_covered:   allSkills.filter(s => rawMap[s] === 'medium'),
+                  low_covered:      allSkills.filter(s => rawMap[s] === 'low'),
+                  uncovered:        allSkills.filter(s => !rawMap[s] || rawMap[s] === 'not_started'),
+                  nice_to_have_skills: (eval_.nice_to_have_skills as string[] | undefined) || [],
+                  total_questions:  (eval_.total_questions as number | undefined) || liveSession.total_questions || 0,
+                  questions_asked:  (eval_.questions_asked as number | undefined) || 0,
+                  hr_topics:        (eval_.hr_topics as Record<string, string> | undefined) || undefined,
+                };
+              })() : null);
+              const allSkills = [
+                ...(sc?.covered || []),
+                ...(sc?.medium_covered || []),
+                ...(sc?.low_covered || []),
+                ...(sc?.uncovered || []),
+              ];
+              const total = allSkills.length;
+              const coveredCount = (sc?.covered.length || 0) + (sc?.medium_covered.length || 0);
+              const coveragePct = total > 0 ? Math.round((coveredCount / total) * 100) : 0;
+
+              if (!sc && !isInProgress) {
+                return renderPlaceholder('Skill coverage data not available for this session');
+              }
+
+              return (
+                <div className="space-y-5">
+                  {/* Header with live indicator */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Skill Coverage</h3>
+                      {sc?.round_name && (
+                        <p className="text-sm text-gray-500 mt-0.5">{sc.round_name}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {isInProgress && (
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          {liveWsConnected ? 'LIVE — WebSocket' : 'LIVE — polling 3s'}
+                        </span>
+                      )}
+                      {sc && (
+                        <span className="text-sm text-gray-500">
+                          <span className="font-semibold text-gray-800">{sc.questions_asked}</span> / {sc.total_questions} questions asked
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* No data yet (in_progress but coverage not received) */}
+                  {!sc && isInProgress && (
+                    <div className="border border-dashed border-gray-300 rounded-xl p-8 text-center">
+                      <RefreshCw className="w-8 h-8 text-gray-400 mx-auto mb-3 animate-spin" />
+                      <p className="text-gray-500 font-medium">Interview in progress</p>
+                      <p className="text-sm text-gray-400 mt-1">Skill coverage will appear here as questions are asked</p>
+                    </div>
+                  )}
+
+                  {sc && (
+                    <>
+                      {/* Overall coverage ring */}
+                      <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-center gap-6">
+                        {/* Circle */}
+                        <div className="relative flex-shrink-0">
+                          <svg width="88" height="88" viewBox="0 0 88 88">
+                            <circle cx="44" cy="44" r="36" fill="none" stroke="#e5e7eb" strokeWidth="8" />
+                            <circle
+                              cx="44" cy="44" r="36" fill="none"
+                              stroke={coveragePct >= 70 ? '#22c55e' : coveragePct >= 40 ? '#f59e0b' : '#ef4444'}
+                              strokeWidth="8" strokeLinecap="round"
+                              strokeDasharray={`${2 * Math.PI * 36}`}
+                              strokeDashoffset={`${2 * Math.PI * 36 * (1 - coveragePct / 100)}`}
+                              style={{ transform: 'rotate(-90deg)', transformOrigin: '44px 44px', transition: 'stroke-dashoffset 0.6s ease' }}
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-xl font-bold text-gray-900">{coveragePct}%</span>
+                          </div>
+                        </div>
+                        {/* Legend */}
+                        <div className="flex-1 grid grid-cols-2 gap-2">
+                          {[
+                            { label: 'Strongly Covered', count: sc.covered.length, color: 'bg-green-500' },
+                            { label: 'Partially Covered', count: sc.medium_covered.length, color: 'bg-yellow-400' },
+                            { label: 'Low Coverage', count: sc.low_covered.length, color: 'bg-orange-400' },
+                            { label: 'Not Covered', count: sc.uncovered.length, color: 'bg-red-400' },
+                          ].map(({ label, count, color }) => (
+                            <div key={label} className="flex items-center gap-2">
+                              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${color}`} />
+                              <span className="text-sm text-gray-600">{label}</span>
+                              <span className="ml-auto text-sm font-semibold text-gray-800">{count}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Progress bar */}
+                        <div className="flex-shrink-0 w-48">
+                          <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
+                            <div className="bg-green-500 transition-all duration-500" style={{ width: `${(sc.covered.length / (total || 1)) * 100}%` }} />
+                            <div className="bg-yellow-400 transition-all duration-500" style={{ width: `${(sc.medium_covered.length / (total || 1)) * 100}%` }} />
+                            <div className="bg-orange-400 transition-all duration-500" style={{ width: `${(sc.low_covered.length / (total || 1)) * 100}%` }} />
+                            <div className="bg-red-400 transition-all duration-500" style={{ width: `${(sc.uncovered.length / (total || 1)) * 100}%` }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Skill chips grid */}
+                      {[
+                        { title: 'Strongly Covered', skills: sc.covered, bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800', dot: 'bg-green-500' },
+                        { title: 'Partially Covered', skills: sc.medium_covered, bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800', dot: 'bg-yellow-400' },
+                        { title: 'Low Coverage', skills: sc.low_covered, bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-400' },
+                        { title: 'Not Yet Covered', skills: sc.uncovered, bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', dot: 'bg-red-400' },
+                      ].filter(g => g.skills.length > 0).map(({ title, skills, bg, border, text, dot }) => (
+                        <div key={title} className={`border ${border} rounded-xl p-4`}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className={`w-2 h-2 rounded-full ${dot}`} />
+                            <h4 className={`text-sm font-semibold ${text}`}>{title}</h4>
+                            <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${bg} ${text}`}>{skills.length}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {skills.map((skill) => (
+                              <span key={skill} className={`px-2.5 py-1 rounded-full text-xs font-medium border ${bg} ${border} ${text}`}>
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      {/* Nice-to-have skills */}
+                      {sc.nice_to_have_skills.length > 0 && (
+                        <div className="border border-blue-200 rounded-xl p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="w-2 h-2 rounded-full bg-blue-400" />
+                            <h4 className="text-sm font-semibold text-blue-800">Nice-to-Have Skills</h4>
+                            <span className="ml-auto text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{sc.nice_to_have_skills.length}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {sc.nice_to_have_skills.map((skill) => (
+                              <span key={skill} className="px-2.5 py-1 rounded-full text-xs font-medium border bg-blue-50 border-blue-200 text-blue-700">
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* HR Topics */}
+                      {sc.hr_topics && Object.keys(sc.hr_topics).length > 0 && (
+                        <div className="border border-purple-200 rounded-xl p-4">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="w-2 h-2 rounded-full bg-purple-400" />
+                            <h4 className="text-sm font-semibold text-purple-800">HR Topics Covered</h4>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {Object.entries(sc.hr_topics).map(([topic, status]) => (
+                              <div key={topic} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-50 border border-purple-100">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
+                                <span className="text-xs font-medium text-purple-800 truncate">{topic}</span>
+                                <span className="ml-auto text-[10px] text-purple-500 font-medium">{status}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Overview Tab */}
             {activeTab === 'overview' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (
                 <div className="space-y-6">
+                  {/* Final Capability Score — flexible mode only (Report Section 5) */}
+                  {isFlexibleMode && eval_.capability_score != null && eval_.capability_score > 0 && (
+                    <div className="border border-indigo-200 rounded-xl overflow-hidden">
+                      <div className="flex items-center justify-between bg-indigo-600 text-white px-5 py-4">
+                        <div>
+                          <div className="text-sm font-semibold">Overall Capability Score</div>
+                          <div className="text-xs text-indigo-200 mt-0.5">Final weighted score across all sections</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-4xl font-bold">{eval_.capability_score}</div>
+                          <div className="text-xs text-indigo-300">out of 100</div>
+                        </div>
+                      </div>
+                      {eval_.capability_score_reasoning && (
+                        <div className="px-5 py-3 bg-indigo-50 border-t border-indigo-100">
+                          <p className="text-[11px] text-indigo-700 leading-relaxed">{eval_.capability_score_reasoning}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Stat Cards */}
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <div className="bg-gray-50 rounded-lg p-4 text-center">
@@ -366,8 +796,85 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           : 'N/A'}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">Hiring Recommendation</div>
+                      {/* AI confidence in recommendation — flexible mode only (AC8 Explainability) */}
+                      {isFlexibleMode && summary.confidence != null && (
+                        <div className="mt-1.5 flex items-center justify-center gap-1">
+                          {Array.from({ length: 5 }, (_, i) => (
+                            <span
+                              key={i}
+                              className={`w-2 h-2 rounded-full ${i < summary.confidence ? 'bg-indigo-500' : 'bg-gray-200'}`}
+                            />
+                          ))}
+                          <span className="text-[10px] text-gray-400 ml-1">confidence</span>
+                        </div>
+                      )}
                     </div>
                   </div>
+
+                  {/* Identity Verification Card */}
+                  {(interview.identity_name || interview.identity_verified != null) && (
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                        <Shield className="w-4 h-4 text-gray-600" />
+                        <h3 className="text-sm font-semibold text-gray-900">Candidate Identity Verification</h3>
+                        <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          interview.identity_verified
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-red-50 text-red-600'
+                        }`}>
+                          {interview.identity_verified
+                            ? <><CheckCircle2 className="w-3 h-3" /> Verified</>
+                            : <><XCircle className="w-3 h-3" /> Not Verified</>
+                          }
+                        </span>
+                      </div>
+                      <div className="p-4 flex items-start gap-4">
+                        {/* Photo */}
+                        <div className="flex-shrink-0">
+                          {identityPhotoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={identityPhotoUrl}
+                              alt="Candidate identity photo"
+                              className="w-20 h-20 rounded-lg object-cover border border-gray-200 shadow-sm"
+                            />
+                          ) : interview.identity_photo_path && !identityPhotoError ? (
+                            <div className="w-20 h-20 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center">
+                              <Camera className="w-6 h-6 text-gray-400" />
+                            </div>
+                          ) : interview.identity_photo_path && identityPhotoError ? (
+                            <div className="w-20 h-20 rounded-lg bg-red-50 border border-red-100 flex flex-col items-center justify-center gap-1">
+                              <Camera className="w-5 h-5 text-red-300" />
+                              <span className="text-[10px] text-red-400">Load failed</span>
+                            </div>
+                          ) : (
+                            <div className="w-20 h-20 rounded-lg bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center">
+                              <User className="w-6 h-6 text-gray-300" />
+                            </div>
+                          )}
+                        </div>
+                        {/* Details */}
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div>
+                            <p className="text-xs text-gray-500">Submitted Name</p>
+                            <p className="text-sm font-semibold text-gray-900">
+                              {interview.identity_name || <span className="text-gray-400 font-normal">Not provided</span>}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Email</p>
+                            <p className="text-sm text-gray-700">{interview.candidate_email || '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Photo Captured</p>
+                            <p className="text-sm text-gray-700">
+                              {interview.identity_photo_path ? 'Yes — liveness verified' : 'No photo captured'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Round Performance Bar Chart */}
                   {roundScores.length > 0 && (
@@ -400,6 +907,80 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       </div>
                     </div>
                   )}
+
+                  {/* Skill Coverage */}
+                  {eval_.skill_coverage_map && Object.keys(eval_.skill_coverage_map).length > 0 && (() => {
+                    const coverageMap: Record<string, string> = eval_.skill_coverage_map;
+                    const priorityMap: Record<string, string> = eval_.skill_priority_map || {};
+                    const allSkills = Object.keys(coverageMap).sort((a, b) => a.localeCompare(b));
+                    const covered   = allSkills.filter(s => coverageMap[s] === 'covered');
+                    const medium    = allSkills.filter(s => coverageMap[s] === 'medium');
+                    const low       = allSkills.filter(s => coverageMap[s] === 'low');
+                    const notStarted = allSkills.filter(s => coverageMap[s] === 'not_started' || !coverageMap[s]);
+                    const total = allSkills.length;
+                    const coveredCount = covered.length + medium.length + low.length;
+
+                    const TAG_STYLE: Record<string, string> = {
+                      covered:     'bg-green-50 border-green-200 text-green-700',
+                      medium:      'bg-amber-50 border-amber-200 text-amber-700',
+                      low:         'bg-orange-50 border-orange-200 text-orange-700',
+                      not_started: 'bg-gray-50 border-gray-200 text-gray-500',
+                    };
+                    const TAG_LABEL: Record<string, string> = {
+                      covered: '✓', medium: '~', low: '≈', not_started: '·',
+                    };
+
+                    return (
+                      <div className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <Bot className="w-4 h-4 text-gray-600" />
+                            <h3 className="text-sm font-semibold text-gray-900">Skill Coverage</h3>
+                          </div>
+                          <span className="text-xs text-gray-500 font-medium">
+                            {coveredCount}/{total} skills covered
+                          </span>
+                        </div>
+                        <div className="p-4 space-y-4">
+                          {/* Progress bar */}
+                          <div>
+                            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden flex">
+                              <div className="h-full bg-green-500 transition-[width] duration-700" style={{ width: total > 0 ? `${(covered.length / total) * 100}%` : '0%' }} />
+                              <div className="h-full bg-amber-400 transition-[width] duration-700" style={{ width: total > 0 ? `${(medium.length / total) * 100}%` : '0%' }} />
+                              <div className="h-full bg-orange-400 transition-[width] duration-700" style={{ width: total > 0 ? `${(low.length / total) * 100}%` : '0%' }} />
+                            </div>
+                            <div className="flex items-center gap-4 mt-1.5 flex-wrap">
+                              {covered.length > 0 && <span className="flex items-center gap-1 text-xs text-green-700"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />High ({covered.length})</span>}
+                              {medium.length > 0 && <span className="flex items-center gap-1 text-xs text-amber-700"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Medium ({medium.length})</span>}
+                              {low.length > 0 && <span className="flex items-center gap-1 text-xs text-orange-700"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />Low ({low.length})</span>}
+                              {notStarted.length > 0 && <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Not covered ({notStarted.length})</span>}
+                            </div>
+                          </div>
+
+                          {/* Skill tags */}
+                          <div className="flex flex-wrap gap-1.5">
+                            {allSkills.map(skill => {
+                              const level = coverageMap[skill] || 'not_started';
+                              const isPriority = priorityMap[skill] === 'must_have';
+                              return (
+                                <span
+                                  key={skill}
+                                  title={`${isPriority ? 'Must-have · ' : 'Nice-to-have · '}${level.replace(/_/g, ' ')}`}
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-medium ${TAG_STYLE[level] || TAG_STYLE.not_started}`}
+                                >
+                                  <span className="font-bold">{TAG_LABEL[level] || '·'}</span>
+                                  {skill}
+                                  {isPriority && <span className="ml-0.5 text-[9px] opacity-60">★</span>}
+                                </span>
+                              );
+                            })}
+                          </div>
+
+                          <p className="text-[11px] text-gray-400">★ = must-have skill &nbsp;·&nbsp; ✓ high &nbsp;·&nbsp; ~ medium &nbsp;·&nbsp; ≈ low &nbsp;·&nbsp; · not covered</p>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Sentiment Overview */}
                   {sentimentSummary.avg_confidence != null && (
@@ -471,6 +1052,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     <div>
                       <h3 className="text-sm font-medium text-gray-900 mb-2">AI Summary</h3>
                       <p className="text-sm text-gray-600 leading-relaxed">{summary.summary}</p>
+                      {/* Interview quality note — flexible mode only (AC8 Explainability) */}
+                      {isFlexibleMode && summary.interview_quality_note && (
+                        <p className="text-xs text-gray-400 mt-2 italic border-t border-gray-100 pt-2">
+                          {summary.interview_quality_note}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -513,6 +1100,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   clusterInsights={eval_.cluster_insights || []}
                   capabilityScore={eval_.capability_score ?? null}
                   sectionScores={eval_.section_scores ?? null}
+                  capabilityScoreReasoning={eval_.capability_score_reasoning ?? null}
                 />
               )
             )}
@@ -677,41 +1265,16 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             {/* Recording Tab */}
             {activeTab === 'recording' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (
-                <div className="flex flex-col items-center">
-                  {interview.recording_file_path ? (
-                    videoError ? (
-                      <div className="text-center py-16">
-                        <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
-                          <VideoOff className="w-6 h-6 text-red-400" />
-                        </div>
-                        <p className="text-gray-500">Recording could not be loaded</p>
-                        <p className="text-xs text-gray-400 mt-1">The file may have been moved or deleted</p>
-                      </div>
-                    ) : videoLoading ? (
-                      <div className="text-center py-16">
-                        <div className="w-8 h-8 border-4 border-gray-300 border-t-gray-600 rounded-full animate-spin mx-auto mb-3" />
-                        <p className="text-sm text-gray-500">Loading recording...</p>
-                      </div>
-                    ) : videoBlobUrl ? (
-                      <video
-                        controls
-                        className="w-full max-h-[500px] rounded-lg bg-black"
-                        src={videoBlobUrl}
-                        onError={() => setVideoError(true)}
-                      >
-                        Your browser does not support video playback.
-                      </video>
-                    ) : null
-                  ) : (
-                    <div className="text-center py-16">
-                      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-                        <VideoOff className="w-6 h-6 text-gray-400" />
-                      </div>
-                      <p className="text-gray-500">No recording available</p>
-                      <p className="text-xs text-gray-400 mt-1">Recording was not enabled for this interview</p>
-                    </div>
-                  )}
-                </div>
+                <RecordingTabContent
+                  interview={interview}
+                  videoBlobUrl={videoBlobUrl}
+                  videoLoading={videoLoading}
+                  videoError={videoError}
+                  setVideoError={setVideoError}
+                  screenBlobUrl={screenBlobUrl}
+                  screenLoading={screenLoading}
+                  screenError={screenError}
+                />
               )
             )}
 

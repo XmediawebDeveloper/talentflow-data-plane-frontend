@@ -1,5 +1,5 @@
-import { X, Mail, Plus, Trash2, Send, CheckCircle, Clock, FileText, Users, Upload, Database, AlertTriangle } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { X, Mail, Plus, Trash2, Send, CheckCircle, Clock, FileText, Users, Upload, Database, AlertTriangle, ShieldAlert, Info, FolderOpen, Folder, ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { assessmentService } from '@/lib/services';
@@ -8,6 +8,7 @@ import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import VersionBadge from './VersionBadge';
 import { toast } from 'sonner';
+import { useQuota } from '@/contexts/QuotaContext';
 
 // Email validation regex - requires valid format with domain containing a period
 const isValidEmail = (email: string): boolean => {
@@ -66,6 +67,16 @@ interface Resume {
 export default function ShareAssessmentModal({ isOpen, onClose, assessment, prefilledCandidates, inviteSource, additionalAssessments }: ShareAssessmentModalProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const { quotaData } = useQuota();
+
+  // Quota stats state
+  const [quotaStats, setQuotaStats] = useState<{
+    total_quota: number;
+    consumed: number;
+    pending: number;
+    available: number;
+  } | null>(null);
+  const [quotaStatsLoading, setQuotaStatsLoading] = useState(false);
 
   // Remove "- Version X" from title for email display
   const assessmentTitleForEmail = stripVersionFromTitle(assessment.title);
@@ -82,9 +93,24 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Resume database from API
-  const [resumeDatabase, setResumeDatabase] = useState<Resume[]>([]);
+  // Database tab state
+  const [dbTab, setDbTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
+  const [myResumesData, setMyResumesData] = useState<Resume[]>([]);
+  const [internalDbData, setInternalDbData] = useState<Resume[]>([]);
+  const [myFolders, setMyFolders] = useState<{ id: string; name: string; parentId?: string | null }[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  const [myResumesLoaded, setMyResumesLoaded] = useState(false);
+  const [internalDbLoaded, setInternalDbLoaded] = useState(false);
   const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+
+  // RBAC checks
+  const hasMyResumesAccess = !!(user?.permissions?.canUploadResumes || user?.permissions?.canViewResumes);
+  const hasInternalDBAccess = !!(user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB);
+  const defaultDbTab: 'my-resumes' | 'internal-db' = hasMyResumesAccess ? 'my-resumes' : 'internal-db';
+
+  // Legacy — kept for filteredResumes used in Send logic
+  const resumeDatabase = dbTab === 'my-resumes' ? myResumesData : internalDbData;
 
   // Update candidates when pre-filled candidates change
   useEffect(() => {
@@ -93,72 +119,114 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
     }
   }, [prefilledCandidates]);
 
-  // Load resumes from API when database mode is selected
+  // Fetch quota stats when modal opens
   useEffect(() => {
-    if (inputMode === 'database' && resumeDatabase.length === 0) {
-      loadResumes();
+    if (!isOpen) return;
+    setQuotaStatsLoading(true);
+    assessmentService.getInvitationStats().then((stats) => {
+      setQuotaStats(stats);
+    }).finally(() => setQuotaStatsLoading(false));
+  }, [isOpen]);
+
+  // Load resumes when database mode is selected
+  useEffect(() => {
+    if (inputMode === 'database') {
+      const tab = hasMyResumesAccess ? 'my-resumes' : 'internal-db';
+      setDbTab(tab);
+      if (tab === 'my-resumes') loadMyResumes();
+      else loadInternalDb();
     }
   }, [inputMode]);
 
-  const loadResumes = async () => {
+  // Load the selected tab's data when tab changes
+  useEffect(() => {
+    if (inputMode !== 'database') return;
+    if (dbTab === 'my-resumes' && !myResumesLoaded) loadMyResumes();
+    if (dbTab === 'internal-db' && !internalDbLoaded) loadInternalDb();
+    setSelectedFolder('all');
+    setSelectedResumes([]);
+    setSearchQuery('');
+  }, [dbTab]);
+
+  const mapResume = (r: any): Resume => ({
+    id: r.id,
+    name: r.candidate_name || 'Unknown',
+    email: r.email || r.candidate_email || '',
+    phone: r.phone || '',
+    position: r.current_title || 'Not specified',
+    experience: r.experience_years ? `${r.experience_years} years` : 'Not specified',
+    skills: r.skills || [],
+  });
+
+  const loadMyResumes = async () => {
+    if (myResumesLoaded) return;
     setIsLoadingResumes(true);
     try {
-      // Load resumes from both Internal DB and My Resumes based on user permissions
-      const sources = [];
-
-      // Check if user has Internal Database access
-      if (user?.permissions?.canAccessInternalDb) {
-        sources.push('internal-db');
-      }
-
-      // Check if user has My Resumes access
-      if (user?.permissions?.canUploadResumes || user?.permissions?.canViewMyResumes) {
-        sources.push('my-resumes');
-      }
-
-      // If no specific permissions, try both (fallback for admin)
-      if (sources.length === 0) {
-        sources.push('internal-db', 'my-resumes');
-      }
-
-      // Fetch resumes from all available sources
-      const allResumes: any[] = [];
-      for (const source of sources) {
-        try {
-          const response = await api.get('/resumes', {
-            params: { source, page_size: 100 }
-          });
-          if (response.data?.items) {
-            allResumes.push(...response.data.items);
-          }
-        } catch (err) {
-          console.warn(`Failed to load resumes from ${source}:`, err);
-        }
-      }
-
-      // Map and deduplicate resumes
-      const mapped = allResumes.map((r: any) => ({
-        id: r.id,
-        name: r.candidate_name || 'Unknown',
-        email: r.email || r.candidate_email || '',
-        phone: r.phone || '',
-        position: r.current_title || 'Not specified',
-        experience: r.experience_years ? `${r.experience_years} years` : 'Not specified',
-        skills: r.skills || []
-      }));
-
-      // Remove duplicates by email
-      const uniqueResumes = mapped.filter((resume, index, self) =>
-        index === self.findIndex((r) => r.email === resume.email && resume.email !== '')
-      );
-
-      setResumeDatabase(uniqueResumes);
-    } catch (error) {
-      console.error('Failed to load resumes:', error);
-      toast.error('Failed to load resumes from database');
+      const [resumeRes, folderRes] = await Promise.all([
+        api.get('/resumes', { params: { source: 'my-resumes', page_size: 200 } }),
+        api.get('/folders'),
+      ]);
+      const items = resumeRes.data?.items ?? [];
+      setMyResumesData(items.map(mapResume));
+      setMyFolders((folderRes.data ?? []).map((f: any) => ({ id: f.id, name: f.name, parentId: f.parent_id ?? null })));
+      setMyResumesLoaded(true);
+    } catch {
+      toast.error('Failed to load My Resumes');
     } finally {
       setIsLoadingResumes(false);
     }
+  };
+
+  const loadInternalDb = async () => {
+    if (internalDbLoaded) return;
+    setIsLoadingResumes(true);
+    try {
+      const res = await api.get('/resumes', { params: { source: 'internal-db', page_size: 200 } });
+      const items = res.data?.items ?? [];
+      setInternalDbData(items.map(mapResume));
+      setInternalDbLoaded(true);
+    } catch {
+      toast.error('Failed to load Internal Database');
+    } finally {
+      setIsLoadingResumes(false);
+    }
+  };
+
+  const toggleExpandFolder = (id: string) => {
+    setExpandedFolders(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+  };
+
+  const renderFolderTree = (parentId?: string | null, level = 0): React.ReactNode => {
+    const children = myFolders.filter(f => {
+      const isTop = !parentId && (f.parentId === null || f.parentId === undefined);
+      const isChild = parentId && f.parentId === parentId;
+      return isTop || isChild;
+    });
+    return children.map(folder => {
+      const isExpanded = expandedFolders.includes(folder.id);
+      const isSelected = selectedFolder === folder.id;
+      const hasChildren = myFolders.some(f => f.parentId === folder.id);
+      const count = myResumesData.filter(r => (r as any).folderId === folder.id).length;
+      return (
+        <div key={folder.id}>
+          <button
+            onClick={() => setSelectedFolder(folder.id)}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm ${isSelected ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+            style={{ paddingLeft: `${level * 16 + 12}px` }}
+          >
+            {hasChildren ? (
+              <button onClick={e => { e.stopPropagation(); toggleExpandFolder(folder.id); }} className="p-0.5 hover:bg-gray-200 rounded">
+                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+            ) : <div className="w-5" />}
+            {isExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
+            <span className="flex-1 text-left truncate">{folder.name}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">{count}</span>
+          </button>
+          {isExpanded && hasChildren && <div>{renderFolderTree(folder.id, level + 1)}</div>}
+        </div>
+      );
+    });
   };
 
   const [customMessage, setCustomMessage] = useState(
@@ -222,11 +290,15 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
     setInputMode('manual');
   };
   
-  // Filter resumes based on search query
-  const filteredResumes = resumeDatabase.filter(resume =>
-    resume.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    resume.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    resume.position.toLowerCase().includes(searchQuery.toLowerCase())
+  // Filter resumes based on active tab, folder (My Resumes only), and search
+  const activeResumes = dbTab === 'my-resumes' ? myResumesData : internalDbData;
+  const folderFiltered = dbTab === 'my-resumes' && selectedFolder !== 'all'
+    ? activeResumes.filter(r => (r as any).folderId === selectedFolder)
+    : activeResumes;
+  const filteredResumes = folderFiltered.filter(r =>
+    r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.position.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleSend = async () => {
@@ -251,6 +323,30 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       }
 
       const validCandidates = candidatesWithData;
+
+      // Quota check — block if not enough available slots
+      const needed = validCandidates.length * allAssessments.length;
+      if (quotaStats !== null && quotaStats.total_quota < 999999) {
+        if (quotaStats.available < needed) {
+          const pendingMsg = quotaStats.pending > 0
+            ? ` ${quotaStats.pending} unit${quotaStats.pending > 1 ? 's' : ''} are held by pending invitations and will be released when their links expire.`
+            : '';
+          toast.error(
+            `Insufficient quota. You have ${quotaStats.available} unit${quotaStats.available !== 1 ? 's' : ''} available but need ${needed} to send these invitations.${pendingMsg}`
+          );
+          setIsSubmitting(false);
+          return;
+        }
+      } else {
+        // Fallback: check via QuotaContext
+        const asQuota = quotaData?.quotas?.AS;
+        const totalRemaining = typeof asQuota?.total_remaining === 'number' ? asQuota.total_remaining : null;
+        if (totalRemaining !== null && totalRemaining < needed) {
+          toast.error(`Insufficient quota. You have ${totalRemaining} assessment unit${totalRemaining !== 1 ? 's' : ''} remaining but need ${needed}.`);
+          setIsSubmitting(false);
+          return;
+        }
+      }
 
       // Check if we're sending to multiple assessments
       if (allAssessments.length > 1) {
@@ -447,7 +543,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               <h2 className="text-white">Share Assessment via Email</h2>
               <div className="flex items-center gap-2">
                 <p className="text-gray-100 text-sm">{assessmentTitleForEmail}</p>
-                <VersionBadge version={assessment.version} size="sm" variant="success" />
+                <VersionBadge version={assessment.jd_version} size="sm" variant="success" />
               </div>
             </div>
           </div>
@@ -475,7 +571,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     </span>
                   )}
                   <span className="text-gray-900">{assessmentTitleForEmail}</span>
-                  <VersionBadge version={assessment.version} size="sm" variant="secondary" />
+                  <VersionBadge version={assessment.jd_version} size="sm" variant="secondary" />
                   {allAssessments.length > 1 && (
                     <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-medium">
                       +{allAssessments.length - 1} more
@@ -532,6 +628,108 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             </div>
           </div>
 
+          {/* Quota Banner */}
+          {(() => {
+            const asQuota = quotaData?.quotas?.AS;
+            const subscriptionLimit = typeof asQuota?.subscription?.limit === 'number' ? asQuota.subscription.limit : null;
+            const subscriptionUsed = asQuota?.subscription?.used ?? 0;
+
+            if (quotaStatsLoading) {
+              return (
+                <div className="mb-4 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-2 text-sm text-gray-500">
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  Checking assessment quota...
+                </div>
+              );
+            }
+
+            if (quotaStats) {
+              const { total_quota, consumed, pending, available } = quotaStats;
+              const isUnlimited = total_quota >= 999999;
+              const isInsufficient = !isUnlimited && available === 0;
+              const isLow = !isUnlimited && !isInsufficient && available <= 3;
+
+              if (isUnlimited) {
+                return (
+                  <div className="mb-4 px-4 py-3 rounded-lg border text-sm bg-blue-50 border-blue-200 text-blue-800">
+                    <div className="flex items-center gap-2">
+                      <Info className="w-4 h-4 flex-shrink-0" />
+                      <span className="font-medium">Unlimited assessment units</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
+                  isInsufficient
+                    ? 'bg-red-50 border-red-200 text-red-800'
+                    : isLow
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-blue-50 border-blue-200 text-blue-800'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    {isInsufficient
+                      ? <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      : <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    }
+                    <div className="flex-1">
+                      <div className="font-medium mb-1">
+                        {isInsufficient
+                          ? 'No assessment units available'
+                          : isLow
+                          ? `Only ${available} unit${available !== 1 ? 's' : ''} available`
+                          : `${available} assessment unit${available !== 1 ? 's' : ''} available`
+                        }
+                      </div>
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs opacity-80">
+                        <span>Total: {total_quota}</span>
+                        <span>Attended (consumed): {consumed}</span>
+                        {pending > 0 && (
+                          <span>Pending invitations (held): {pending}</span>
+                        )}
+                      </div>
+                      {pending > 0 && (
+                        <p className="text-xs mt-1 opacity-80">
+                          {pending} unit{pending > 1 ? 's' : ''} held by active invitations — released automatically when links expire.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // Fallback to QuotaContext data
+            if (subscriptionLimit !== null) {
+              const remaining = subscriptionLimit - subscriptionUsed;
+              const isInsufficient = remaining <= 0;
+              const isLow = !isInsufficient && remaining <= 3;
+              return (
+                <div className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
+                  isInsufficient
+                    ? 'bg-red-50 border-red-200 text-red-800'
+                    : isLow
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-blue-50 border-blue-200 text-blue-800'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {isInsufficient
+                      ? <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+                      : <Info className="w-4 h-4 flex-shrink-0" />
+                    }
+                    <span>
+                      <span className="font-medium">{Math.max(0, remaining)} assessment unit{remaining !== 1 ? 's' : ''} remaining</span>
+                      <span className="opacity-80 ml-1">({subscriptionUsed} used of {subscriptionLimit})</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            return null;
+          })()}
+
           {/* Candidate Emails Section */}
           <div className="mb-6">
             {/* Mode Switcher */}
@@ -558,7 +756,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   }`}
                 >
                   <Database className="w-4 h-4" />
-                  Select from Database
+                  Select From
                 </button>
               </div>
             </div>
@@ -642,84 +840,131 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
             {/* Database Selection Mode */}
             {inputMode === 'database' && (
-              <div className="bg-gray-50 border-2 border-gray-300 rounded-lg p-4">
-                {/* Search */}
-                <div className="mb-4">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by name, email, or position..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
-                  />
-                </div>
-
-                {/* Resume List */}
-                <div className="max-h-96 overflow-y-auto space-y-2 mb-4">
-                  {filteredResumes.map((resume) => (
-                    <div
-                      key={resume.id}
-                      onClick={() => toggleResumeSelection(resume.id)}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedResumes.includes(resume.id)
-                          ? 'bg-gray-100 border-gray-800'
-                          : 'bg-white border-gray-200 hover:border-gray-300'
+              <div className="border-2 border-gray-200 rounded-lg overflow-hidden">
+                {/* Tabs */}
+                <div className="flex border-b border-gray-200 bg-gray-50">
+                  {hasMyResumesAccess && (
+                    <button
+                      onClick={() => setDbTab('my-resumes')}
+                      className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                        dbTab === 'my-resumes'
+                          ? 'border-gray-800 text-gray-900 bg-white'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 mt-1">
-                          <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                            selectedResumes.includes(resume.id)
-                              ? 'bg-gray-800 border-gray-800'
-                              : 'bg-white border-gray-300'
-                          }`}>
-                            {selectedResumes.includes(resume.id) && (
-                              <CheckCircle className="w-4 h-4 text-white" />
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-1">
-                            <div className="text-gray-900 font-medium">{resume.name}</div>
-                            <div className="text-xs text-gray-500">{resume.experience}</div>
-                          </div>
-                          <div className="text-sm text-gray-600 mb-2">{resume.email}</div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs text-gray-500">{resume.position}</span>
-                            <span className="text-xs text-gray-400">•</span>
-                            <span className="text-xs text-gray-500">{resume.phone}</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {resume.skills.slice(0, 3).map((skill, idx) => (
-                              <span key={idx} className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
-                                {skill}
-                              </span>
-                            ))}
-                            {resume.skills.length > 3 && (
-                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
-                                +{resume.skills.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                      <FolderOpen className="w-4 h-4" />
+                      My Resumes
+                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700">{myResumesData.length}</span>
+                    </button>
+                  )}
+                  {(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess)) && (
+                    <button
+                      onClick={() => setDbTab('internal-db')}
+                      className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                        dbTab === 'internal-db'
+                          ? 'border-gray-800 text-gray-900 bg-white'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <Database className="w-4 h-4" />
+                      Internal Database
+                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700">{internalDbData.length}</span>
+                    </button>
+                  )}
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center justify-between pt-4 border-t border-gray-300">
-                  <div className="text-sm text-gray-800">
-                    {selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected
+                {/* Content: folder sidebar + resume list */}
+                <div className="flex" style={{ minHeight: '320px', maxHeight: '400px' }}>
+                  {/* Folder Sidebar (My Resumes only) */}
+                  {dbTab === 'my-resumes' && myFolders.length > 0 && (
+                    <div className="w-48 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0 p-3">
+                      <p className="text-xs font-medium text-gray-500 uppercase mb-2 px-1">Folders</p>
+                      <button
+                        onClick={() => setSelectedFolder('all')}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm mb-1 ${selectedFolder === 'all' ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+                      >
+                        <FolderOpen className="w-4 h-4" />
+                        <span className="flex-1 text-left">All Resumes</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600">{myResumesData.length}</span>
+                      </button>
+                      <div className="space-y-0.5">{renderFolderTree(undefined, 0)}</div>
+                    </div>
+                  )}
+
+                  {/* Resume List */}
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {/* Search + Select All */}
+                    <div className="flex items-center gap-2 p-3 border-b border-gray-100">
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        placeholder="Search by name, email, or position..."
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      />
+                      <button
+                        onClick={() => {
+                          if (selectedResumes.length === filteredResumes.length && filteredResumes.length > 0) {
+                            setSelectedResumes([]);
+                          } else {
+                            setSelectedResumes(filteredResumes.map(r => r.id));
+                          }
+                        }}
+                        className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 whitespace-nowrap text-gray-700"
+                      >
+                        {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? 'Deselect All' : 'Select All'}
+                      </button>
+                      <span className="text-sm text-gray-500 whitespace-nowrap">{selectedResumes.length} selected</span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                      {isLoadingResumes ? (
+                        <div className="flex items-center justify-center py-12">
+                          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                        </div>
+                      ) : filteredResumes.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                          <Database className="w-8 h-8 mb-2" />
+                          <p className="text-sm">{searchQuery ? 'No resumes match your search' : 'No resumes found'}</p>
+                        </div>
+                      ) : filteredResumes.map(resume => (
+                        <div
+                          key={resume.id}
+                          onClick={() => toggleResumeSelection(resume.id)}
+                          className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                            selectedResumes.includes(resume.id) ? 'bg-gray-50 border-gray-800' : 'bg-white border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${
+                            selectedResumes.includes(resume.id) ? 'bg-gray-800 border-gray-800' : 'border-gray-300'
+                          }`}>
+                            {selectedResumes.includes(resume.id) && <CheckCircle className="w-3 h-3 text-white" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium text-gray-900 truncate">{resume.name}</span>
+                              <span className="text-xs text-gray-400 flex-shrink-0">{resume.experience}</span>
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">{resume.email}</div>
+                            <div className="text-xs text-gray-400 truncate">{resume.position}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Action footer */}
+                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200 bg-gray-50">
+                      <span className="text-xs text-gray-500">{selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected</span>
+                      <button
+                        onClick={handleAddFromDatabase}
+                        disabled={selectedResumes.length === 0}
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      >
+                        <Users className="w-4 h-4" />
+                        Add Selected
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={handleAddFromDatabase}
-                    disabled={selectedResumes.length === 0}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
-                  >
-                    <Users className="w-4 h-4" />
-                    Add Selected Candidates
-                  </button>
                 </div>
               </div>
             )}
@@ -851,7 +1096,21 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
           <div className="text-sm text-gray-600">
-            {candidates.length} candidate{candidates.length > 1 ? 's' : ''} will receive {allAssessments.length > 1 ? `${allAssessments.length} assessments` : 'this assessment'}
+            {(() => {
+              const validCount = candidates.filter(c => c.name.trim() && c.email.trim()).length;
+              const needed = validCount * allAssessments.length;
+              const available = quotaStats?.available ?? null;
+              const isUnlimited = available !== null && available >= 999999;
+              const insufficientQuota = !isUnlimited && available !== null && available < needed;
+              return (
+                <span className={insufficientQuota ? 'text-red-600' : ''}>
+                  {validCount} candidate{validCount !== 1 ? 's' : ''} will receive {allAssessments.length > 1 ? `${allAssessments.length} assessments` : 'this assessment'}
+                  {insufficientQuota && (
+                    <span className="ml-2 font-medium">— only {available} unit{available !== 1 ? 's' : ''} available</span>
+                  )}
+                </span>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -862,7 +1121,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             </button>
             <button
               onClick={handleSend}
-              disabled={!isValid || isSubmitting}
+              disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
               className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting ? (

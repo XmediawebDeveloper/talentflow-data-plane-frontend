@@ -4073,11 +4073,7 @@ export default function MyResumesPage() {
                                     )}
                                     {assessment.created_at && (
                                       <span>
-                                        {(() => {
-                                          const dateWithZ = assessment.created_at + (assessment.created_at.includes('Z') ? '' : 'Z');
-                                          const date = new Date(dateWithZ);
-                                          return `${date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}`;
-                                        })()}
+                                        {formatIST(assessment.created_at)}
                                       </span>
                                     )}
                                   </div>

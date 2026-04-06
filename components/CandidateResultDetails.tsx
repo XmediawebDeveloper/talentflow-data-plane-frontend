@@ -343,10 +343,10 @@ export default function CandidateResultDetails({
         </div>
       </div>
 
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-[72px] sm:top-[88px] z-10">
-        <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
+      {/* Sticky navigation strip */}
+      <div className="sticky top-[72px] sm:top-[88px] z-20 border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+        <div className="px-4 sm:px-6 md:px-8 py-3">
+          <div className="flex items-center justify-between gap-3">
             <button
               onClick={onBack}
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
@@ -378,6 +378,12 @@ export default function CandidateResultDetails({
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
               <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0">
@@ -1184,7 +1190,23 @@ export default function CandidateResultDetails({
                                           : 'bg-gray-900 text-gray-100'
                                       }`}>
                                         <pre className="whitespace-pre-wrap">
-                                          {q.candidate_code_execution_error || q.candidate_code_execution_output || 'No execution logs available'}
+                                          {q.candidate_code_execution_error || (q.candidate_code_execution_status === 'success'
+                                            ? 'Executed successfully without error.'
+                                            : 'No execution logs available')}
+                                        </pre>
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                          <FileText className="w-4 h-4 text-sky-700" />
+                                        </div>
+                                        <div className="text-sm font-medium text-sky-900">CANDIDATE OUTPUT</div>
+                                      </div>
+                                      <div className="rounded-lg p-4 font-mono text-sm overflow-x-auto bg-sky-950 text-sky-100">
+                                        <pre className="whitespace-pre-wrap">
+                                          {q.candidate_code_execution_output || 'No output captured'}
                                         </pre>
                                       </div>
                                     </div>
