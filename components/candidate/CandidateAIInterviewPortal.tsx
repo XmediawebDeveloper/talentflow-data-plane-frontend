@@ -819,6 +819,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           }}
           faceVerification={faceVerification.hasBaseline() ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
+          copyPasteBlocking={interview?.copy_paste_blocking ?? true}
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (

@@ -34,6 +34,7 @@ interface InterviewUIProps {
   onInterviewComplete?: () => void;
   faceVerification?: FaceVerificationHandle;
   voiceVerification?: VoiceVerificationHandle;
+  copyPasteBlocking?: boolean;
 }
 
 interface Message {
@@ -42,7 +43,7 @@ interface Message {
   content: string;
 }
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVerification, voiceVerification }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVerification, voiceVerification, copyPasteBlocking = true }: InterviewUIProps) {
   // State
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -486,7 +487,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const speechDetectedRef = useRef(false);
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.008);
-  const silenceDurationMsRef = useRef(2000); // default 2s; backend overrides via vad_config
+  const silenceDurationMsRef = useRef(3500); // default 3.5s; backend overrides via vad_config
 
   // VAD: adaptive noise floor calibration + rolling RMS window
   const noiseFloorRef = useRef(0);          // calibrated ambient noise floor
@@ -1580,14 +1581,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
       startWebSpeechRecognition();
 
-      // No-response detection — fire after 5s of total silence with no speech.
-      // If candidate hasn't spoken, ask "Are you there?" then skip after another 5s.
+      // No-response detection — fire after 15s of total silence with no speech.
+      // If candidate hasn't spoken, ask "Are you there?" then skip after another 15s.
       clearNoResponseTimer();
       noResponseTimerRef.current = setTimeout(() => {
         if (!speechDetectedRef.current && isRecordingRef.current) {
           handleNoResponseRef.current();
         }
-      }, 5000);
+      }, 15000);
     } catch (err: any) {
       const errName = err?.name ?? '';
       if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
@@ -1881,6 +1882,36 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
+
+  // Copy-paste blocking during active interview (if enabled in proctoring settings)
+  useEffect(() => {
+    if (!copyPasteBlocking) return;
+
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      console.warn('[PROCTORING] Copy blocked');
+    };
+
+    const handlePaste = (e: ClipboardEvent) => {
+      e.preventDefault();
+      console.warn('[PROCTORING] Paste blocked');
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      console.warn('[PROCTORING] Right-click blocked');
+    };
+
+    document.addEventListener('copy', handleCopy);
+    document.addEventListener('paste', handlePaste);
+    document.addEventListener('contextmenu', handleContextMenu);
+
+    return () => {
+      document.removeEventListener('copy', handleCopy);
+      document.removeEventListener('paste', handlePaste);
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [copyPasteBlocking]);
 
   // DevTools / keyboard blocking during active interview
   useEffect(() => {

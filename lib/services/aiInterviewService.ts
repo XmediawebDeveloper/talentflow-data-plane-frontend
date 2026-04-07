@@ -172,6 +172,14 @@ export interface AIInterviewResponse {
   // Global candidate identity
   candidate_id?: string;
   candidate_cid?: string;  // e.g. "CID-0001"
+  // Persisted live activity feed — stored via /coverage-events endpoint
+  coverage_events?: Array<{
+    kind: 'question' | 'covered' | 'medium' | 'low';
+    skill?: string;
+    qNum?: number;
+    isFollowUp?: boolean;
+    ts: number;
+  }>;
   // Live skill coverage (updated during interview via WebSocket, persisted to session)
   skill_coverage?: {
     round?: string;
@@ -563,6 +571,17 @@ export const aiInterviewService = {
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Append live coverage activity events to a session (persisted in DB)
+   */
+  async appendCoverageEvents(sessionId: string, events: object[]): Promise<void> {
+    try {
+      await api.post(`/ai-interview/${sessionId}/coverage-events`, { events });
+    } catch {
+      // Non-critical — silently ignore failures so the UI isn't disrupted
     }
   },
 

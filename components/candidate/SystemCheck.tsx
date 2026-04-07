@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateService, SystemCheckResult } from '@/lib/services/candidateService';
-import { getUserMedia, getErrorMessage, detectBrowser, checkBrowserCompatibility } from '@/lib/utils/browserCompat';
+import { getUserMedia, getErrorMessage, detectBrowser, checkBrowserCompatibility, playVideo, shouldUseAdaptiveAssessmentMode } from '@/lib/utils/browserCompat';
 
 interface SystemCheckProps {
   token: string;
@@ -42,6 +42,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [browserType, setBrowserType] = useState<string>('');
   const [isIOS, setIsIOS] = useState(false);
+  const [browserWarning, setBrowserWarning] = useState<string | null>(null);
   const [cameraInUseError, setCameraInUseError] = useState<string>('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -180,15 +181,23 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       // Check for compatibility issues
       if (!compat.isCompatible) {
         setBrowserCheck({ status: 'error', message: compat.issues.join(' ') });
+        setBrowserWarning(compat.warnings[0] || null);
+      } else if (shouldUseAdaptiveAssessmentMode(browser)) {
+        setBrowserCheck({ status: 'success', message: `${browser.name} supported (adaptive mode)` });
+        setBrowserWarning(compat.warnings[0] || 'Adaptive assessment mode will be used for this browser/device.');
       } else if (browser.name === 'Safari' || browser.name === 'iOS Safari') {
-        setBrowserCheck({ status: 'success', message: 'Safari detected (limited features)' });
+        setBrowserCheck({ status: 'success', message: 'Safari supported' });
+        setBrowserWarning(compat.warnings[0] || null);
       } else if (browser.name === 'Chrome' || browser.name === 'Edge' || browser.name === 'Firefox' || browser.name === 'Arc' || browser.name === 'Brave') {
         setBrowserCheck({ status: 'success', message: 'Browser supported' });
+        setBrowserWarning(compat.warnings[0] || null);
       } else {
         setBrowserCheck({ status: 'success', message: `${browser.name} detected` });
+        setBrowserWarning(compat.warnings[0] || null);
       }
     } catch {
       setBrowserCheck({ status: 'error', message: 'Could not detect browser' });
+      setBrowserWarning(null);
     }
   };
 
@@ -281,6 +290,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        void playVideo(videoRef.current);
       }
 
       // Check if we got both video and audio tracks
@@ -379,6 +389,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        void playVideo(videoRef.current);
       }
       // Run face detection on the fallback stream too
       setCameraCheck({ status: 'checking', message: 'Detecting face...' });
@@ -451,6 +462,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
             // Update video preview with fresh stream
             if (videoRef.current) {
               videoRef.current.srcObject = freshStream;
+              void playVideo(videoRef.current);
             }
 
             console.log('[SYSTEM CHECK] Fresh stream acquired successfully');
@@ -683,6 +695,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                 <div className="mt-6 p-5 bg-amber-50 rounded-xl flex items-center gap-4">
                   <AlertCircle className="w-6 h-6 text-amber-600" />
                   <p className="text-amber-700 font-medium">Some checks failed. Please resolve the issues above.</p>
+                </div>
+              )}
+
+              {browserWarning && browserCheck.status === 'success' && (
+                <div className="mt-6 p-5 bg-blue-50 rounded-xl flex items-start gap-4">
+                  <AlertTriangle className="w-6 h-6 text-blue-600 mt-0.5" />
+                  <p className="text-blue-800 font-medium">{browserWarning}</p>
                 </div>
               )}
 

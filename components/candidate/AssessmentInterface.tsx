@@ -40,6 +40,7 @@ import { TechnicalQuestionView } from './questions/TechnicalQuestionView';
 import { CodingQuestionView } from './questions/CodingQuestionView';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useRetryQueue } from '@/hooks/useRetryQueue';
+import { getFullscreenChangeEvent, isFullscreen as getIsFullscreen, exitFullscreen as compatExitFullscreen, playVideo } from '@/lib/utils/browserCompat';
 
 interface Round {
   round_type: string;
@@ -85,6 +86,7 @@ interface AssessmentInterfaceProps {
   isCameraActive?: boolean;
   isMicrophoneActive?: boolean;
   copyPasteBlocking?: boolean;
+  enforceFullscreen?: boolean;
 }
 
 export function AssessmentInterface({
@@ -105,6 +107,7 @@ export function AssessmentInterface({
   isCameraActive = true,
   isMicrophoneActive = true,
   copyPasteBlocking = true,
+  enforceFullscreen = true,
 }: AssessmentInterfaceProps) {
   type AnswerState = {
     question_id?: string;
@@ -536,10 +539,10 @@ export function AssessmentInterface({
   }, [assessmentInfo.is_paused, assessmentInfo.time_remaining_seconds, isOnline, onTimeUpdate]);
 
   // 🛡️ PROCTORING: Exit Fullscreen on Complete
-  const exitFullscreen = async () => {
+  const exitAssessmentFullscreen = async () => {
     try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
+      if (getIsFullscreen()) {
+        await compatExitFullscreen();
         console.log('[PROCTORING] ✅ Exited fullscreen mode');
       }
     } catch (error) {
@@ -549,8 +552,13 @@ export function AssessmentInterface({
 
   // Monitor fullscreen changes - IMMEDIATE FINISH ON EXIT (unless completing normally)
   useEffect(() => {
+    if (!enforceFullscreen) {
+      setIsFullscreen(true);
+      return;
+    }
+
     const handleFullscreenChange = async () => {
-      const isCurrentlyFullscreen = !!document.fullscreenElement;
+      const isCurrentlyFullscreen = getIsFullscreen();
       console.log(`[LOCKDOWN] Fullscreen: ${isCurrentlyFullscreen ? 'ACTIVE' : 'INACTIVE'}`);
       setIsFullscreen(isCurrentlyFullscreen);
 
@@ -575,21 +583,23 @@ export function AssessmentInterface({
       }
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    const eventName = getFullscreenChangeEvent();
+    document.addEventListener(eventName, handleFullscreenChange);
+    handleFullscreenChange();
 
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener(eventName, handleFullscreenChange);
     };
-  }, [token, isDisqualified, showCompleteConfirm]);
+  }, [token, isDisqualified, showCompleteConfirm, enforceFullscreen]);
 
   // Exit fullscreen only on unmount (separate effect so it doesn't run on every re-render)
   useEffect(() => {
     return () => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
+      if (enforceFullscreen && getIsFullscreen()) {
+        compatExitFullscreen().catch(() => {});
       }
     };
-  }, []);
+  }, [enforceFullscreen]);
 
   // SECURITY: Block developer tools shortcuts (F12, Ctrl+Shift+I)
   // NOTE: ESC and Alt+Tab are NO LONGER blocked here to prevent false positives
@@ -726,7 +736,7 @@ export function AssessmentInterface({
             clearInterval(countdownInterval);
             console.error('[PROCTORING] 💀 AUTO-SUBMIT TRIGGERED');
             setIsDisqualified(true);
-            exitFullscreen();
+            exitAssessmentFullscreen();
             onComplete();
             return 0;
           }
@@ -811,7 +821,7 @@ export function AssessmentInterface({
         console.log('[TIMER] Time expired! Triggering auto-complete');
         setIsGlobalTimeExpired(true);
         try { sessionStorage.removeItem(`assessment_timer_${token}`); } catch {}
-        exitFullscreen();
+        exitAssessmentFullscreen();
         onComplete();
       }
       return;
@@ -842,7 +852,7 @@ export function AssessmentInterface({
         console.log('[TIMER] Timer reached zero during countdown');
         setIsGlobalTimeExpired(true);
         try { sessionStorage.removeItem(`assessment_timer_${token}`); } catch {}
-        exitFullscreen();
+        exitAssessmentFullscreen();
         onComplete();
       }
     }, 1000);
@@ -870,7 +880,7 @@ export function AssessmentInterface({
         setGlobalTimeRemaining(remaining);
         if (remaining <= 0) {
           setIsGlobalTimeExpired(true);
-          exitFullscreen();
+          exitAssessmentFullscreen();
           onComplete();
         }
       }
@@ -898,6 +908,7 @@ export function AssessmentInterface({
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      void playVideo(videoRef.current);
       console.log('[PROCTORING] Video stream attached to video element');
     }
   }, [stream, videoRef]);
@@ -1182,7 +1193,7 @@ export function AssessmentInterface({
     setIsCompleting(true);
     setShowCompleteConfirm(false);
     // Exit fullscreen when assessment completes
-    await exitFullscreen();
+    await exitAssessmentFullscreen();
     onComplete();
   };
 
@@ -1201,12 +1212,12 @@ export function AssessmentInterface({
 
       // Complete the assessment and exit fullscreen
       console.log('[DISQUALIFICATION] Completing assessment due to disqualification...');
-      await exitFullscreen();
+      await exitAssessmentFullscreen();
       onComplete();
     } catch (error) {
       console.error('[DISQUALIFICATION] Error during submission:', error);
       // Still complete even if submission fails
-      await exitFullscreen();
+      await exitAssessmentFullscreen();
       onComplete();
     }
   };

@@ -49,13 +49,15 @@ export const setTokens = (access: string, refresh: string) => {
       if (typeof navigator === 'undefined') return { name: 'unknown', isIOS: false };
 
       const ua = navigator.userAgent.toLowerCase();
+      const isIOS = /iphone|ipad|ipod/.test(ua);
       return {
         name: ua.includes('firefox') ? 'firefox'
+            : isIOS && ua.includes('safari') ? 'ios-safari'
             : ua.includes('safari') && !ua.includes('chrome') ? 'safari'
             : ua.includes('arc') ? 'arc'
             : ua.includes('chrome') ? 'chrome'
             : 'other',
-        isIOS: /iphone|ipad|ipod/.test(ua),
+        isIOS,
         platform: navigator.platform
       };
     };
@@ -93,7 +95,7 @@ export const setTokens = (access: string, refresh: string) => {
     }
 
     // iOS Safari has unique cookie limitations in web views
-    if (browser.isIOS && browser.name === 'safari') {
+    if (browser.isIOS && (browser.name === 'safari' || browser.name === 'ios-safari')) {
       // iOS Safari in standalone/web view mode may not persist cookies
       // Ensure localStorage is the source of truth
       console.log('[AUTH] iOS Safari detected - localStorage will be primary storage');

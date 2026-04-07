@@ -180,7 +180,7 @@ const SUPPORTED_BROWSERS = [
   { name: 'Safari', minVersion: 'v14+' },
 ];
 
-const MIN_INTERNET_MBPS = 5;
+const MIN_INTERNET_MBPS = 1.5;
 
 const SYSTEM_REQUIREMENTS = [
   {

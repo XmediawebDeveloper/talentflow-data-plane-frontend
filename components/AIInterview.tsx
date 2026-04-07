@@ -611,7 +611,7 @@ export default function AIInterview() {
                 // { key: 'processing', label: 'Processing' },
                 { key: 'audit', label: 'Activity Logs' },
                 { key: 'consent', label: 'Consent Logs' },
-                // { key: 'settings', label: 'Settings' },
+                { key: 'settings', label: 'Settings' },
               ].map(tab => (
                 <button
                   key={tab.key}

@@ -47,6 +47,8 @@ export interface CandidateInterviewInfo {
   identity_name?: string | null;
   // Interview mode: 'fixed' (per-question 2-min timer) | 'flexible' (global timer only)
   interview_mode?: string | null;
+  // Proctoring
+  copy_paste_blocking?: boolean | null;
 }
 
 export interface AvailableLanguagesResponse {

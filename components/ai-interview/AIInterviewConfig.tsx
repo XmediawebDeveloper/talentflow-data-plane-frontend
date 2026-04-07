@@ -643,12 +643,13 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
   const [savingQ, setSavingQ] = useState(false);
   const [questionError, setQuestionError] = useState('');
 
-  const isOverLimit = mode === 'fixed' && questionCount > 0 && selectedIds.length > questionCount;
+  const atLimit = mode === 'fixed' && questionCount > 0 && selectedIds.length >= questionCount;
 
   const toggleQuestion = (id: string) => {
     if (selectedIds.includes(id)) {
       onSelectedChange(selectedIds.filter(x => x !== id));
     } else {
+      if (atLimit) return; // hard cap — cannot select more than allowed
       onSelectedChange([...selectedIds, id]);
     }
   };
@@ -757,17 +758,17 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
               <span className="text-xs font-medium text-gray-600">
                 {`Select exactly ${questionCount} question${questionCount !== 1 ? 's' : ''} for Linda to ask`}
               </span>
-              <span className={`text-xs font-semibold ${isOverLimit ? 'text-red-500' : 'text-gray-500'}`}>
+              <span className={`text-xs font-semibold ${selectedIds.length === questionCount ? 'text-green-600' : 'text-gray-500'}`}>
                 {selectedIds.length} / {questionCount} selected
               </span>
             </div>
 
-            {/* Over-limit error */}
-            {isOverLimit && (
-              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200">
-                <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[11px] text-red-600">
-                  {selectedIds.length} selected but only {questionCount} allowed. Please deselect {selectedIds.length - questionCount} question{selectedIds.length - questionCount !== 1 ? 's' : ''}.
+            {/* Limit reached banner */}
+            {atLimit && (
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
+                <AlertCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[11px] text-green-700">
+                  {questionCount} question{questionCount !== 1 ? 's' : ''} selected — limit reached. Deselect a question to choose a different one.
                 </p>
               </div>
             )}
@@ -777,26 +778,32 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
               {bankQuestions.length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-6">No questions in the bank yet. Add your first question below.</p>
               ) : (
-                bankQuestions.map(q => (
+                bankQuestions.map(q => {
+                  const isSelected = selectedIds.includes(q.id);
+                  const isDisabled = atLimit && !isSelected;
+                  return (
                   <label
                     key={q.id}
-                    className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                      selectedIds.includes(q.id)
-                        ? 'border-blue-200 bg-blue-50'
-                        : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+                    className={`flex items-start gap-2.5 p-2.5 rounded-lg border transition-colors ${
+                      isSelected
+                        ? 'border-blue-200 bg-blue-50 cursor-pointer'
+                        : isDisabled
+                          ? 'border-gray-100 bg-gray-50 opacity-40 cursor-not-allowed'
+                          : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50 cursor-pointer'
                     }`}
                   >
                     <input
                       type="checkbox"
-                      checked={selectedIds.includes(q.id)}
+                      checked={isSelected}
+                      disabled={isDisabled}
                       onChange={() => toggleQuestion(q.id)}
-                      className="mt-0.5 w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                      className="mt-0.5 w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0 disabled:cursor-not-allowed"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-800 leading-relaxed">{q.question_text}</p>
                     </div>
                   </label>
-                ))
+                );})
               )}
             </div>
 
@@ -1634,9 +1641,14 @@ export default function AIInterviewConfig() {
     if (!selectedJd) return;
     if (mode === 'flexible' && !pctValid) return;
 
-    // Validate HR round: if HR is enabled, at least one question must be selected
+    // Validate HR round: must select exactly the required number of questions
     if (hrEnabled && hrSelectedIds.length === 0) {
-      toast.error('HR round is enabled but no questions are selected. Please select at least one HR question or disable the HR round.');
+      toast.error('HR round is enabled but no questions are selected. Please select the required HR questions or disable the HR round.');
+      return;
+    }
+    const hrRequiredCount = mode === 'fixed' ? (timedAllocation.hrQuestions ?? 0) : 0;
+    if (mode === 'fixed' && hrEnabled && hrRequiredCount > 0 && hrSelectedIds.length !== hrRequiredCount) {
+      toast.error(`Please select exactly ${hrRequiredCount} HR question${hrRequiredCount !== 1 ? 's' : ''} (${hrSelectedIds.length} selected).`);
       return;
     }
 

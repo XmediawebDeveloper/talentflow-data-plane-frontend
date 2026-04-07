@@ -718,6 +718,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return 'text-red-600';
   };
 
+  const getMobileOverallScore = (candidate: CandidateResult) => {
+    if (candidate.status !== 'Completed' || candidate.scoring_status !== 'completed') return null;
+    return candidate.percentage;
+  };
+
+  const getMobilePassFail = (candidate: CandidateResult) => {
+    const overallScore = getMobileOverallScore(candidate);
+    if (overallScore === null) return null;
+    return overallScore >= 50 ? 'Pass' : 'Fail';
+  };
+
   // Reset to page 1 when filters change (MUST be before any early returns)
   useEffect(() => {
     setCurrentPage(1);
@@ -995,8 +1006,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           <div className="flex flex-col md:flex-row gap-3 sm:gap-4 items-stretch md:items-center">
             {/* Search Input */}
             <div className="flex-1 relative">
+              <label htmlFor="assessment-results-search" className="sr-only">
+                Search candidate results
+              </label>
               <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
+                id="assessment-results-search"
                 type="text"
                 placeholder="Search by name, email, phone, or JD title..."
                 value={searchQuery}
@@ -1012,8 +1027,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Status Filter */}
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Status:</label>
+                <label htmlFor="assessment-results-status-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Status:</label>
                 <select
+                  id="assessment-results-status-filter"
                   value={statusFilter}
                   onChange={(e) => {
                     setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
@@ -1030,8 +1046,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
               {/* Pass/Fail Filter */}
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Result:</label>
+                <label htmlFor="assessment-results-pass-fail-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Result:</label>
                 <select
+                  id="assessment-results-pass-fail-filter"
                   value={passFailFilter}
                   onChange={(e) => {
                     setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
@@ -1048,8 +1065,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               {/* Round-based Filters */}
               {assessmentDetails?.technical_enabled && (
                 <div className="flex items-center gap-1.5 sm:gap-2">
-                  <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Tech:</label>
+                  <label htmlFor="assessment-results-tech-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Tech:</label>
                   <select
+                    id="assessment-results-tech-filter"
                     value={roundFilters.technical || 'all'}
                     onChange={(e) => {
                       const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
@@ -1068,8 +1086,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
               {assessmentDetails?.coding_enabled && (
                 <div className="flex items-center gap-1.5 sm:gap-2">
-                  <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Coding:</label>
+                  <label htmlFor="assessment-results-coding-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Coding:</label>
                   <select
+                    id="assessment-results-coding-filter"
                     value={roundFilters.coding || 'all'}
                     onChange={(e) => {
                       const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
@@ -1089,22 +1108,28 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               {/* Date Range Filter */}
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
+                <label htmlFor="assessment-results-date-from" className="sr-only">Filter from date</label>
                 <input
+                  id="assessment-results-date-from"
                   type="date"
                   value={dateFrom}
                   max={dateTo || undefined}
                   onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
                   className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   title="From date"
+                  aria-label="Filter from date"
                 />
                 <span className="text-xs text-gray-400">–</span>
+                <label htmlFor="assessment-results-date-to" className="sr-only">Filter to date</label>
                 <input
+                  id="assessment-results-date-to"
                   type="date"
                   value={dateTo}
                   min={dateFrom || undefined}
                   onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
                   className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   title="To date"
+                  aria-label="Filter to date"
                 />
               </div>
 
@@ -1131,6 +1156,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <div className="relative">
                 <button
                   onClick={() => setShowColumnSelector(!showColumnSelector)}
+                  aria-expanded={showColumnSelector}
+                  aria-haspopup="dialog"
+                  aria-controls="assessment-results-column-selector"
                   className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm text-gray-700"
                 >
                   <Columns3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -1144,7 +1172,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       className="fixed inset-0 z-10"
                       onClick={() => setShowColumnSelector(false)}
                     ></div>
-                    <div className="absolute right-0 top-full mt-2 w-56 sm:w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto">
+                    <div
+                      id="assessment-results-column-selector"
+                      role="dialog"
+                      aria-label="Select visible result columns"
+                      className="absolute right-0 top-full mt-2 w-56 sm:w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
+                    >
                       <div className="px-3 sm:px-4 py-2 border-b border-gray-200">
                         <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
                         <div className="text-xs text-gray-500 mt-0.5">
@@ -1207,8 +1240,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             ) : (
               paginatedCandidates.map((candidate) => {
                 const inviteMeta = getInviteSourceMeta(candidate.inviteSource);
+                const overallScore = getMobileOverallScore(candidate);
+                const passFail = getMobilePassFail(candidate);
                 return (
-                  <div key={candidate.id} className="p-4 space-y-3">
+                  <div key={candidate.id} className="p-4 space-y-3" role="article" aria-label={`Candidate result for ${candidate.name || 'Unknown'}`}>
                     <div className="flex items-start gap-3">
                       <input
                         type="checkbox"
@@ -1235,6 +1270,30 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         </div>
 
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div className="rounded-lg bg-gray-50 p-2 col-span-2">
+                            <div className="text-gray-500">JD</div>
+                            <div className="text-gray-800 truncate">{jdTitle || 'N/A'}</div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Score</div>
+                            <div className={overallScore !== null ? `font-semibold ${getScoreColor(overallScore)}` : 'text-gray-400'}>
+                              {overallScore !== null ? `${overallScore}%` : '-'}
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Pass / Fail</div>
+                            {passFail ? (
+                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-1 ${passFail === 'Pass' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {passFail}
+                              </span>
+                            ) : (
+                              <div className="text-gray-400">-</div>
+                            )}
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Date</div>
+                            <div className="text-gray-700">{candidate.completedDate}</div>
+                          </div>
                           <div className="rounded-lg bg-gray-50 p-2">
                             <div className="text-gray-500">CID</div>
                             <div className="font-mono text-purple-700">{candidate.candidateDisplayId || '-'}</div>
@@ -1244,10 +1303,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-1 ${inviteMeta.cls}`}>
                               {inviteMeta.label}
                             </span>
-                          </div>
-                          <div className="rounded-lg bg-gray-50 p-2">
-                            <div className="text-gray-500">Completed</div>
-                            <div className="text-gray-700">{candidate.completedDate}</div>
                           </div>
                           <div className="rounded-lg bg-gray-50 p-2">
                             <div className="text-gray-500">Duration</div>
@@ -1281,6 +1336,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
                               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                               title="View Details"
+                              aria-label={`View details for ${candidate.name || 'candidate'}`}
                             >
                               <Eye className="w-3.5 h-3.5 shrink-0" />
                               View Details
@@ -1292,6 +1348,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               disabled={downloadingPDF === candidate.id}
                               className="inline-flex items-center gap-1 px-3 py-2 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
+                              aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                             >
                               {downloadingPDF === candidate.id ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -1306,6 +1363,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             disabled={isDeleting === candidate.id}
                             className="inline-flex items-center gap-1 px-3 py-2 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
                             title="Delete"
+                            aria-label={`Delete result for ${candidate.name || 'candidate'}`}
                           >
                             {isDeleting === candidate.id ? (
                               <Loader2 className="w-3 h-3 animate-spin" />

@@ -25,7 +25,7 @@ import { useProctoringMonitor } from '@/hooks/useProctoringMonitor';
 import { ProctoringWarningModal } from './ProctoringWarningModal';
 import { Monitor, Loader2, AlertCircle, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
+import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen, playVideo, shouldUseAdaptiveAssessmentMode } from '@/lib/utils/browserCompat';
 
 // ============================================
 // FULLSCREEN PROMPT SCREEN COMPONENT
@@ -237,6 +237,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
   // Fullscreen enforcement — tracks whether assessment is running in fullscreen
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
+  const [useAdaptiveAssessmentMode, setUseAdaptiveAssessmentMode] = useState(false);
 
   // Tracks remaining time reported by AssessmentInterface — shown in fullscreen overlay
   const [overlayTimeRemaining, setOverlayTimeRemaining] = useState<number | null>(null);
@@ -335,6 +336,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // Fullscreen enforcement — listen on ALL steps so entering fullscreen
   // during 'fullscreen_prompt' is captured before assessment step starts.
   useEffect(() => {
+    const browser = detectBrowser();
+    const adaptiveMode = shouldUseAdaptiveAssessmentMode(browser);
+    setUseAdaptiveAssessmentMode(adaptiveMode);
+
+    if (adaptiveMode) {
+      setIsFullscreenActive(true);
+      return;
+    }
+
     const eventName = getFullscreenChangeEvent();
     const handleFullscreenChange = () => {
       setIsFullscreenActive(isFullscreen());
@@ -499,6 +509,11 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         // Check if candidate was mid-flow before refresh (system_check, hr_questions, fullscreen_prompt)
         const savedStep = sessionStorage.getItem(ASSESS_SESSION_KEY) as AssessmentStep | null;
         if (savedStep && ASSESS_PERSIST_STEPS.includes(savedStep)) {
+          if (savedStep === 'fullscreen_prompt' && shouldUseAdaptiveAssessmentMode(detectBrowser())) {
+            isFlowActiveRef.current = true;
+            await continueToAssessmentStart();
+            return;
+          }
           // Mark flow as active so background polling doesn't interfere
           isFlowActiveRef.current = true;
           setStepSafe(savedStep);
@@ -632,7 +647,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       );
 
       markHRCompleted(token);
-      setStepSafe('fullscreen_prompt');
+      await continueToAssessmentStart();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to save HR answers';
       setError(errorMessage);
@@ -670,6 +685,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
         if (videoRef.current) {
           videoRef.current.srcObject = existingStream;
+          void playVideo(videoRef.current);
         }
       } else {
         console.warn('[PORTAL] Stream appears stale (video track not live) - assessment will re-request camera if needed');
@@ -687,10 +703,25 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       console.log('[PORTAL] System check complete, showing HR questions...');
       setStepSafe('hr_questions');
     } else {
-      console.log('[PORTAL] System check complete, no HR questions - going to fullscreen...');
-      setStepSafe('fullscreen_prompt');
+      console.log('[PORTAL] System check complete - continuing to assessment start gate...');
+      await continueToAssessmentStart();
     }
   };
+
+  async function continueToAssessmentStart() {
+    const browser = detectBrowser();
+    const adaptiveMode = shouldUseAdaptiveAssessmentMode(browser);
+    setUseAdaptiveAssessmentMode(adaptiveMode);
+
+    if (adaptiveMode) {
+      console.log('[PORTAL] Using adaptive assessment mode for browser/device:', browser.name);
+      setIsFullscreenActive(true);
+      await handleFullscreenReady();
+      return;
+    }
+
+    setStepSafe('fullscreen_prompt');
+  }
 
   // NEW: Handler for when user enters fullscreen and is ready to start
   const handleFullscreenReady = async () => {
@@ -1056,6 +1087,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
       if (videoRef.current) {
         videoRef.current.srcObject = streamRef.current;
+        void playVideo(videoRef.current);
       }
     } else {
       // No existing stream - request a new one (fallback)
@@ -1070,6 +1102,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          void playVideo(videoRef.current);
         }
         console.log('[PROCTORING] Camera stream initialized successfully');
       } catch (err) {
@@ -1341,6 +1374,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             isCameraActive={proctoringState.isCameraActive}
             isMicrophoneActive={proctoringState.isMicrophoneActive}
             copyPasteBlocking={(assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true}
+            enforceFullscreen={!useAdaptiveAssessmentMode}
           />
         </AssessmentErrorBoundary>
       );
@@ -1391,7 +1425,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     <>
       {renderContent()}
       {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
-      {step === 'assessment' && !isFullscreenActive && (
+      {step === 'assessment' && !useAdaptiveAssessmentMode && !isFullscreenActive && (
         <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-white border-2 border-yellow-500 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
             <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />

@@ -10,6 +10,7 @@
 export interface BrowserInfo {
   name: 'Chrome' | 'Firefox' | 'Safari' | 'Edge' | 'iOS Safari' | 'Arc' | 'Brave' | 'Unknown';
   isIOS: boolean;
+  isMobile: boolean;
   isPrivateMode: boolean | null; // null if detection not complete
   supportsMediaDevices: boolean;
   supportsFullscreen: boolean;
@@ -20,6 +21,7 @@ export function detectBrowser(): BrowserInfo {
     return {
       name: 'Unknown',
       isIOS: false,
+      isMobile: false,
       isPrivateMode: null,
       supportsMediaDevices: false,
       supportsFullscreen: false
@@ -31,6 +33,7 @@ export function detectBrowser(): BrowserInfo {
   const isFirefox = ua.includes('firefox');
   const isSafari = ua.includes('safari') && !ua.includes('chrome');
   const isIOS = /iphone|ipad|ipod/.test(ua);
+  const isMobile = isIOS || /android|mobile/.test(ua);
   const isIOSSafari = isIOS && isSafari;
   const isArc = ua.includes('arc');
   const isBrave = ua.includes('brave');
@@ -49,6 +52,7 @@ export function detectBrowser(): BrowserInfo {
   return {
     name: browserName,
     isIOS,
+    isMobile,
     isPrivateMode: null, // Will be detected async
     supportsMediaDevices: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
     supportsFullscreen: !!(
@@ -397,6 +401,10 @@ export interface CompatibilityReport {
   warnings: string[];
 }
 
+export function shouldUseAdaptiveAssessmentMode(browser: BrowserInfo = detectBrowser()): boolean {
+  return browser.isIOS || browser.isMobile || !browser.supportsFullscreen;
+}
+
 export function checkBrowserCompatibility(): CompatibilityReport {
   const browser = detectBrowser();
   const issues: string[] = [];
@@ -413,8 +421,8 @@ export function checkBrowserCompatibility(): CompatibilityReport {
   }
 
   // Browser-specific warnings
-  if (browser.name === 'Safari' || browser.name === 'iOS Safari') {
-    warnings.push('Safari has limited support for some features. For best experience, use Chrome, Firefox, or Edge.');
+  if (shouldUseAdaptiveAssessmentMode(browser)) {
+    warnings.push('Adaptive assessment mode will be used on this browser/device so the test can run reliably without depending on fullscreen support.');
   }
 
   if (browser.name === 'Unknown') {

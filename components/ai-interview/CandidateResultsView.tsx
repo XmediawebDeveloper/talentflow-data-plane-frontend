@@ -273,7 +273,52 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   // Live skill coverage — WebSocket monitor for in_progress sessions
   const [liveSession, setLiveSession] = useState(interview);
   const [liveWsConnected, setLiveWsConnected] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   useEffect(() => { setLiveSession(interview); }, [interview]);
+
+  // Live activity feed — tracks real-time skill coverage changes and question events
+  type LiveEvent =
+    | { kind: 'question'; qNum: number; isFollowUp: boolean; ts: number }
+    | { kind: 'covered'; skill: string; ts: number }
+    | { kind: 'medium'; skill: string; ts: number }
+    | { kind: 'low'; skill: string; ts: number };
+  const [currentQuestion, setCurrentQuestion] = useState<{ qNum: number; isFollowUp: boolean } | null>(null);
+  const prevScRef = useRef<typeof liveSession.skill_coverage | null>(null);
+
+  // Live events — loaded from DB (coverage_events field on session), saved back on each new event
+  const [liveEvents, setLiveEvents] = useState<LiveEvent[]>(
+    () => (interview.coverage_events as LiveEvent[] | undefined) || []
+  );
+  // Sync if interview prop refreshes with newer DB data (e.g. after REST poll)
+  useEffect(() => {
+    if (interview.coverage_events && interview.coverage_events.length > 0) {
+      setLiveEvents(prev =>
+        prev.length >= interview.coverage_events!.length ? prev : (interview.coverage_events as LiveEvent[])
+      );
+    }
+  }, [interview.coverage_events]);
+
+  // Batch-save new events to DB — debounced so rapid bursts don't flood the API
+  const pendingEventsRef = useRef<LiveEvent[]>([]);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushEvents = (sessionId: string) => {
+    if (pendingEventsRef.current.length === 0) return;
+    const toSave = pendingEventsRef.current;
+    pendingEventsRef.current = [];
+    aiInterviewService.appendCoverageEvents(sessionId, toSave);
+  };
+  const scheduleFlush = (sessionId: string) => {
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(() => flushEvents(sessionId), 3000);
+  };
+
+  // Tick every second to keep "X ago" relative time fresh
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!lastUpdatedAt) return;
+    const t = setInterval(() => setTick(n => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [lastUpdatedAt]);
 
   // REST polling fallback — refresh full session data every 8s while in_progress.
   // This keeps skill_coverage, conversation_transcript, ai_evaluation, etc. up to date
@@ -287,6 +332,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     const id = setInterval(() => {
       aiInterviewService.get(sessionId)
         .then(updated => {
+          setLastUpdatedAt(new Date());
           setLiveSession(prev => {
             // If WebSocket is active and has more skill coverage data than REST, keep WebSocket data.
             const prevSc = prev.skill_coverage;
@@ -337,8 +383,49 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
         try {
           const msg = JSON.parse(e.data);
           if (msg.type === 'skill_coverage_update') {
+            setLastUpdatedAt(new Date());
             setLiveSession(prev => ({ ...prev, skill_coverage: msg }));
+
+            // Diff against previous snapshot to detect skill state changes
+            const prev = prevScRef.current;
+            prevScRef.current = msg;
+            if (prev) {
+              const nowCovered   = new Set<string>((msg.covered        || []).map((s: string) => s.toLowerCase()));
+              const nowMedium    = new Set<string>((msg.medium_covered || []).map((s: string) => s.toLowerCase()));
+              const nowLow       = new Set<string>((msg.low_covered    || []).map((s: string) => s.toLowerCase()));
+              const wasCovered   = new Set<string>((prev.covered        || []).map((s: string) => s.toLowerCase()));
+              const wasMedium    = new Set<string>((prev.medium_covered || []).map((s: string) => s.toLowerCase()));
+              const wasLow       = new Set<string>((prev.low_covered    || []).map((s: string) => s.toLowerCase()));
+
+              const newEvents: LiveEvent[] = [];
+              const ts = Date.now();
+              // Newly strongly covered
+              for (const s of msg.covered    || []) if (!wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'covered', skill: s, ts });
+              // Newly medium covered (wasn't medium or covered before)
+              for (const s of msg.medium_covered || []) if (!wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'medium', skill: s, ts });
+              // Newly low covered (wasn't touched before)
+              for (const s of msg.low_covered || []) if (!wasLow.has(s.toLowerCase()) && !wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'low', skill: s, ts });
+
+              if (newEvents.length > 0) {
+                setLiveEvents(prev => [...newEvents, ...prev].slice(0, 20));
+                pendingEventsRef.current.push(...newEvents);
+                scheduleFlush(liveSession.id);
+              }
+            } else {
+              prevScRef.current = msg;
+            }
+          } else if (msg.type === 'question_timer_started') {
+            const qNum = msg.question_number ?? 0;
+            const isFollowUp = !!msg.is_follow_up;
+            setCurrentQuestion({ qNum, isFollowUp });
+            const qEvent: LiveEvent = { kind: 'question' as const, qNum, isFollowUp, ts: Date.now() };
+            setLiveEvents(prev => [qEvent, ...prev].slice(0, 20));
+            pendingEventsRef.current.push(qEvent);
+            scheduleFlush(liveSession.id);
           } else if (msg.type === 'interview_closing' || msg.type === 'interview_complete' || msg.type === 'interview_ended') {
+            // Flush any pending events before fetching final state
+            if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+            flushEvents(liveSession.id);
             // Interview finished — refresh from REST to get final ai_evaluation
             aiInterviewService.get(liveSession.id)
               .then(updated => setLiveSession(updated))
@@ -405,6 +492,20 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     return fetchedClusters || { mth: [], nth: [] };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [(liveSession as any).special_instructions, fetchedClusters]);
+
+  // ─── Best-seen skill coverage ref ────────────────────────────────────────
+  // Persist the richest skill_coverage snapshot we've ever seen in this session.
+  // Used as last-resort fallback when the completed session's eval data is all-zero/weak.
+  const bestSeenSkillCoverageRef = useRef<typeof liveSession.skill_coverage>(undefined);
+  useEffect(() => {
+    const sc = liveSession.skill_coverage;
+    if (!sc) return;
+    const meaningful = (sc.covered?.length ?? 0) + (sc.medium_covered?.length ?? 0) + (sc.low_covered?.length ?? 0);
+    if (meaningful === 0) return;
+    const prev = bestSeenSkillCoverageRef.current;
+    const prevMeaningful = prev ? (prev.covered?.length ?? 0) + (prev.medium_covered?.length ?? 0) + (prev.low_covered?.length ?? 0) : 0;
+    if (meaningful >= prevMeaningful) bestSeenSkillCoverageRef.current = sc;
+  }, [liveSession.skill_coverage]);
 
   // ─── Cross-cluster delta tracking ─────────────────────────────────────────
   // Detect when a single answer adds skills from 2+ different clusters.
@@ -578,7 +679,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
     { key: 'overview',       label: 'Overview',        icon: <BarChart3 className="w-4 h-4" /> },
     { key: 'skill_coverage', label: 'Skill Coverage',  icon: <Activity className="w-4 h-4" />, live: isInProgress },
-    { key: 'clusters',       label: 'Cluster Insights', icon: <Layers className="w-4 h-4" /> },
+    { key: 'clusters',       label: 'Cluster Insights', icon: <Layers className="w-4 h-4" />, live: isInProgress },
     { key: 'sentiment',      label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
     { key: 'qa',             label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',      label: 'Recording',        icon: <Video className="w-4 h-4" /> },
@@ -751,18 +852,41 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   })()
                 : null;
 
-              // For in-progress sessions: prefer the real-time WebSocket field (current).
-              // For completed sessions: prefer the LLM-evaluated skill_coverage_map
-              // (the live field is often stale — questions_asked=0, all skills uncovered —
-              // because it reflects the initial server state, not the post-eval result).
+              // Determine whether eval-derived data has any meaningful coverage.
+              // If skill_coverage_map came back all-zero/not_started (backend eval issue),
+              // fall back to the live skill_coverage field which the backend also persists.
+              const hasMeaningfulCoverage = (sc: typeof buildFromEval) =>
+                !!sc && (sc.covered.length + sc.medium_covered.length + sc.low_covered.length) > 0;
               const liveSkillCoverage = liveSession.skill_coverage ?? null;
               const rawSc = isInProgress
                 ? (liveSkillCoverage || buildFromEval || null)
-                : (buildFromEval || liveSkillCoverage || null);
+                : (hasMeaningfulCoverage(buildFromEval)
+                    ? buildFromEval
+                    : liveSkillCoverage || bestSeenSkillCoverageRef.current || buildFromEval || null);
+
+              // If no coverage data yet during in-progress, build an initial state from
+              // cluster config so the skill grid shows immediately instead of a placeholder.
+              const clusterSkills = [...new Set([
+                ...clusterConfig.mth.flatMap(c => c.skills),
+                ...clusterConfig.nth.flatMap(c => c.skills),
+              ])];
+              const initialFromClusters = !rawSc && isInProgress && clusterSkills.length > 0
+                ? {
+                    covered: [] as string[], medium_covered: [] as string[],
+                    low_covered: [] as string[], uncovered: clusterSkills,
+                    nice_to_have_skills: [] as string[],
+                    total_questions: liveSession.total_questions || clusterSkills.length,
+                    questions_asked: 0,
+                    round_name: undefined as string | undefined,
+                    hr_topics: undefined as Record<string, string> | undefined,
+                  }
+                : null;
+
               // Always patch questions_asked from transcript when we have transcript data
-              const sc = rawSc && transcriptQCount > 0
-                ? { ...rawSc, questions_asked: transcriptQCount }
-                : rawSc;
+              const scBase = rawSc || initialFromClusters;
+              const sc = scBase && transcriptQCount > 0
+                ? { ...scBase, questions_asked: transcriptQCount }
+                : scBase;
               const allSkills = [
                 ...(sc?.covered || []),
                 ...(sc?.medium_covered || []),
@@ -770,12 +894,33 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 ...(sc?.uncovered || []),
               ];
               const total = allSkills.length;
-              const coveredCount = (sc?.covered.length || 0) + (sc?.medium_covered.length || 0);
-              const coveragePct = total > 0 ? Math.round((coveredCount / total) * 100) : 0;
+              // "Touched" = any level of coverage (strong + medium + low).
+              // This matches what Cluster Insights counts as "addressed".
+              const touchedCount = (sc?.covered.length || 0) + (sc?.medium_covered.length || 0) + (sc?.low_covered.length || 0);
+              const touchedPct = total > 0 ? Math.round((touchedCount / total) * 100) : 0;
+              // "Strong" = covered + medium_covered only (properly demonstrated)
+              const strongCount = (sc?.covered.length || 0) + (sc?.medium_covered.length || 0);
+              const strongPct = total > 0 ? Math.round((strongCount / total) * 100) : 0;
+              // Ring shows "touched" so it matches Cluster Insights; goal tracks "strong"
+              const coveragePct = touchedPct;
 
               if (!sc && !isInProgress) {
                 return renderPlaceholder('Skill coverage data not available for this session');
               }
+
+              const stronglyCoveredCount = sc?.covered.length || 0;
+              const allCoveredGoalPct = total > 0 ? Math.round((stronglyCoveredCount / total) * 100) : 0;
+              const remainingUncovered = (sc?.uncovered.length || 0);
+              const remainingToStrengthen = (sc?.low_covered.length || 0) + (sc?.medium_covered.length || 0);
+              const isGoalMet = total > 0 && stronglyCoveredCount === total;
+
+              const getLastUpdatedLabel = () => {
+                if (!lastUpdatedAt) return null;
+                const secs = Math.floor((Date.now() - lastUpdatedAt.getTime()) / 1000);
+                if (secs < 5) return 'just now';
+                if (secs < 60) return `${secs}s ago`;
+                return `${Math.floor(secs / 60)}m ago`;
+              };
 
               return (
                 <div className="space-y-5">
@@ -791,7 +936,13 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       {isInProgress && (
                         <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          {liveWsConnected ? 'LIVE — WebSocket' : 'LIVE — reconnecting…'}
+                          {liveWsConnected ? 'LIVE — WebSocket' : 'LIVE — polling'}
+                        </span>
+                      )}
+                      {isInProgress && lastUpdatedAt && (
+                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                          <RefreshCw className="w-3 h-3" />
+                          Updated {getLastUpdatedLabel()}
                         </span>
                       )}
                       {sc && (
@@ -802,12 +953,63 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     </div>
                   </div>
 
-                  {/* No data yet (in_progress but coverage not received) */}
+                  {/* Coverage summary banner */}
+                  {sc && (
+                    <div className={`rounded-xl border p-3.5 ${isGoalMet ? 'bg-green-50 border-green-300' : touchedCount === total ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'}`}>
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="flex-shrink-0">
+                          {isGoalMet ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <Activity className="w-5 h-5 text-blue-500" />}
+                        </div>
+                        <span className={`text-sm font-semibold flex-1 ${isGoalMet ? 'text-green-800' : 'text-gray-800'}`}>
+                          {isGoalMet ? 'All skills strongly covered!' : touchedCount === total ? `All ${total} skills touched — depth varies` : `${touchedCount}/${total} skills touched`}
+                        </span>
+                      </div>
+                      {/* Two-row progress: touched vs strongly covered */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 w-28 flex-shrink-0">Skills touched</span>
+                          <div className="flex-1 h-1.5 bg-white rounded-full overflow-hidden">
+                            <div className="h-1.5 bg-blue-400 rounded-full transition-[width] duration-700" style={{ width: `${touchedPct}%` }} />
+                          </div>
+                          <span className="text-xs font-bold text-blue-700 w-8 text-right">{touchedPct}%</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 w-28 flex-shrink-0">Strong coverage</span>
+                          <div className="flex-1 h-1.5 bg-white rounded-full overflow-hidden">
+                            <div className="h-1.5 bg-green-500 rounded-full transition-[width] duration-700" style={{ width: `${strongPct}%` }} />
+                          </div>
+                          <span className="text-xs font-bold text-green-700 w-8 text-right">{strongPct}%</span>
+                        </div>
+                      </div>
+                      {!isGoalMet && isInProgress && remainingUncovered > 0 && (
+                        <p className="text-xs text-amber-600 mt-1.5">
+                          {remainingUncovered} skill{remainingUncovered !== 1 ? 's' : ''} not yet touched
+                        </p>
+                      )}
+                      {!isGoalMet && isInProgress && remainingToStrengthen > 0 && remainingUncovered === 0 && (
+                        <p className="text-xs text-blue-600 mt-1.5">
+                          All skills touched — {remainingToStrengthen} need deeper coverage
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* No data yet — only shows if no cluster config available to pre-populate */}
                   {!sc && isInProgress && (
                     <div className="border border-dashed border-gray-300 rounded-xl p-8 text-center">
                       <RefreshCw className="w-8 h-8 text-gray-400 mx-auto mb-3 animate-spin" />
-                      <p className="text-gray-500 font-medium">Interview in progress</p>
-                      <p className="text-sm text-gray-400 mt-1">Skill coverage will appear here as questions are asked</p>
+                      <p className="text-gray-500 font-medium">Waiting for first answer…</p>
+                      <p className="text-sm text-gray-400 mt-1">Coverage updates as the candidate answers each question</p>
+                    </div>
+                  )}
+
+                  {/* Explanatory note — shown when completed with low strong coverage */}
+                  {!isInProgress && sc && strongPct <= 30 && (
+                    <div className="flex items-start gap-2.5 p-3 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-700">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <span>
+                        <strong>Why low strong coverage?</strong> Skills move to "Strongly Covered" only when the candidate gives a detailed, correct answer. Brief or partial answers are recorded as Low Coverage (skill was touched but not demonstrated deeply).
+                      </span>
                     </div>
                   )}
 
@@ -828,12 +1030,13 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               style={{ transform: 'rotate(-90deg)', transformOrigin: '44px 44px', transition: 'stroke-dashoffset 0.6s ease' }}
                             />
                           </svg>
-                          <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
                             <span className="text-xl font-bold text-gray-900">{coveragePct}%</span>
+                            <span className="text-[9px] text-gray-400 leading-none">touched</span>
                           </div>
                         </div>
                         {/* Legend */}
-                        <div className="flex-1 grid grid-cols-2 gap-2">
+                        <div className="flex-1 space-y-1.5">
                           {[
                             { label: 'Strongly Covered', count: sc.covered.length, color: 'bg-green-500' },
                             { label: 'Partially Covered', count: sc.medium_covered.length, color: 'bg-yellow-400' },
@@ -846,6 +1049,10 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               <span className="ml-auto text-sm font-semibold text-gray-800">{count}</span>
                             </div>
                           ))}
+                          <div className="pt-1 border-t border-gray-100 flex items-center gap-2">
+                            <span className="text-xs text-gray-500">Strong coverage</span>
+                            <span className="ml-auto text-xs font-bold text-gray-800">{strongPct}%</span>
+                          </div>
                         </div>
                         {/* Progress bar */}
                         <div className="flex-shrink-0 w-48">
@@ -857,6 +1064,129 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           </div>
                         </div>
                       </div>
+
+                      {/* ── Coverage Activity (live during interview, persisted after completion) ── */}
+                      {(isInProgress || isCompleted) && (
+                        <div className="border border-gray-200 rounded-xl overflow-hidden">
+                          {/* Header */}
+                          <div className={`flex items-center justify-between px-4 py-2.5 border-b border-gray-200 ${isInProgress ? 'bg-gray-50' : 'bg-white'}`}>
+                            <div className="flex items-center gap-2">
+                              {isInProgress
+                                ? <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                                : <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
+                              <span className="text-sm font-semibold text-gray-800">
+                                {isInProgress ? 'Live Activity' : 'Coverage Activity'}
+                              </span>
+                            </div>
+                            {isInProgress && currentQuestion && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                                {currentQuestion.isFollowUp ? `Q${currentQuestion.qNum} — Follow-up` : `Q${currentQuestion.qNum} in progress`}
+                              </span>
+                            )}
+                            {isCompleted && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                                {sc.questions_asked} questions asked
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Status row — "Next to cover" during live, "Final result" when done */}
+                          {isInProgress && sc.uncovered.length > 0 && (
+                            <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 border-b border-red-100">
+                              <span className="text-xs text-red-500 font-medium flex-shrink-0">Next to cover</span>
+                              <span className="text-xs font-bold text-red-700 truncate">{sc.uncovered[0]}</span>
+                              {sc.uncovered.length > 1 && (
+                                <span className="ml-auto text-xs text-red-400 flex-shrink-0">+{sc.uncovered.length - 1} more</span>
+                              )}
+                            </div>
+                          )}
+                          {isInProgress && sc.uncovered.length === 0 && sc.low_covered.length > 0 && (
+                            <div className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 border-b border-orange-100">
+                              <span className="text-xs text-orange-500 font-medium flex-shrink-0">Deepening</span>
+                              <span className="text-xs font-bold text-orange-700 truncate">{sc.low_covered[0]}</span>
+                              <span className="ml-auto text-xs text-orange-400 flex-shrink-0">follow-up</span>
+                            </div>
+                          )}
+                          {isCompleted && (
+                            <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 border-b border-gray-100 text-xs text-gray-600">
+                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{sc.covered.length} strong</span>
+                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400" />{sc.medium_covered.length} partial</span>
+                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" />{sc.low_covered.length} low</span>
+                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" />{sc.uncovered.length} untouched</span>
+                            </div>
+                          )}
+
+                          {/* Progress bars — animate during live, static summary when done */}
+                          <div className="px-4 py-3 space-y-2 border-b border-gray-100">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-gray-500 w-20 flex-shrink-0">Touched</span>
+                              <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-2.5 rounded-full transition-[width] duration-700 ease-out bg-blue-400"
+                                  style={{ width: `${touchedPct}%` }}
+                                />
+                              </div>
+                              <span className="text-[11px] font-bold text-blue-700 w-8 text-right">{touchedPct}%</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] text-gray-500 w-20 flex-shrink-0">Strong</span>
+                              <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-2.5 rounded-full transition-[width] duration-700 ease-out bg-green-500"
+                                  style={{ width: `${strongPct}%` }}
+                                />
+                              </div>
+                              <span className="text-[11px] font-bold text-green-700 w-8 text-right">{strongPct}%</span>
+                            </div>
+                          </div>
+
+                          {/* Event feed — from localStorage (persisted during live session) */}
+                          <div className="divide-y divide-gray-50 max-h-56 overflow-y-auto">
+                            {liveEvents.length === 0 ? (
+                              <div className="px-4 py-4 text-center text-xs text-gray-400">
+                                {isInProgress ? 'Waiting for first answer…' : 'No activity recorded for this session'}
+                              </div>
+                            ) : (
+                              liveEvents.map((ev, i) => {
+                                const ago = isInProgress
+                                  ? (() => { const s = Math.floor((Date.now() - ev.ts) / 1000); return s < 60 ? `${s}s ago` : `${Math.floor(s/60)}m ago`; })()
+                                  : new Date(ev.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                if (ev.kind === 'question') return (
+                                  <div key={i} className="flex items-center gap-2.5 px-4 py-2 bg-blue-50">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                                    <span className="text-xs text-blue-700 font-medium">
+                                      {ev.isFollowUp ? `Q${ev.qNum} — Follow-up started` : `Q${ev.qNum} started`}
+                                    </span>
+                                    <span className="ml-auto text-[10px] text-gray-400 flex-shrink-0">{ago}</span>
+                                  </div>
+                                );
+                                if (ev.kind === 'covered') return (
+                                  <div key={i} className="flex items-center gap-2.5 px-4 py-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
+                                    <span className="text-xs text-gray-700"><span className="font-semibold text-green-700">{ev.skill}</span> — Strongly Covered ✓</span>
+                                    <span className="ml-auto text-[10px] text-gray-400 flex-shrink-0">{ago}</span>
+                                  </div>
+                                );
+                                if (ev.kind === 'medium') return (
+                                  <div key={i} className="flex items-center gap-2.5 px-4 py-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 flex-shrink-0" />
+                                    <span className="text-xs text-gray-700"><span className="font-semibold text-yellow-700">{ev.skill}</span> — Partially Covered</span>
+                                    <span className="ml-auto text-[10px] text-gray-400 flex-shrink-0">{ago}</span>
+                                  </div>
+                                );
+                                if (ev.kind === 'low') return (
+                                  <div key={i} className="flex items-center gap-2.5 px-4 py-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />
+                                    <span className="text-xs text-gray-700"><span className="font-semibold text-orange-600">{ev.skill}</span> — Low Coverage</span>
+                                    <span className="ml-auto text-[10px] text-gray-400 flex-shrink-0">{ago}</span>
+                                  </div>
+                                );
+                                return null;
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Live cluster breakdown — only for in-progress when cluster config is available */}
                       {isInProgress && (() => {
@@ -901,17 +1231,27 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         );
                       })()}
 
-                      {/* Skill chips grid */}
-                      {[
-                        { title: 'Strongly Covered', skills: sc.covered, bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800', dot: 'bg-green-500' },
-                        { title: 'Partially Covered', skills: sc.medium_covered, bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800', dot: 'bg-yellow-400' },
-                        { title: 'Low Coverage', skills: sc.low_covered, bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-400' },
-                        { title: 'Not Yet Covered', skills: sc.uncovered, bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', dot: 'bg-red-400' },
-                      ].filter(g => g.skills.length > 0).map(({ title, skills, bg, border, text, dot }) => (
-                        <div key={title} className={`border ${border} rounded-xl p-4`}>
+                      {/* Skill chips grid — during interview, uncovered skills shown first as focus areas */}
+                      {(isInProgress ? [
+                        { title: 'Not Yet Covered', skills: sc.uncovered, bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', dot: 'bg-red-400', highlight: true },
+                        { title: 'Low Coverage', skills: sc.low_covered, bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-400', highlight: false },
+                        { title: 'Partially Covered', skills: sc.medium_covered, bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800', dot: 'bg-yellow-400', highlight: false },
+                        { title: 'Strongly Covered', skills: sc.covered, bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800', dot: 'bg-green-500', highlight: false },
+                      ] : [
+                        { title: 'Strongly Covered', skills: sc.covered, bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800', dot: 'bg-green-500', highlight: false },
+                        { title: 'Partially Covered', skills: sc.medium_covered, bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800', dot: 'bg-yellow-400', highlight: false },
+                        { title: 'Low Coverage', skills: sc.low_covered, bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-400', highlight: false },
+                        { title: 'Not Yet Covered', skills: sc.uncovered, bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', dot: 'bg-red-400', highlight: false },
+                      ]).filter(g => g.skills.length > 0).map(({ title, skills, bg, border, text, dot, highlight }) => (
+                        <div key={title} className={`border ${border} rounded-xl p-4 ${highlight ? 'ring-2 ring-red-300' : ''}`}>
                           <div className="flex items-center gap-2 mb-3">
                             <span className={`w-2 h-2 rounded-full ${dot}`} />
-                            <h4 className={`text-sm font-semibold ${text}`}>{title}</h4>
+                            <h4 className={`text-sm font-semibold ${text}`}>
+                              {highlight ? '🎯 ' : ''}{title}
+                            </h4>
+                            {highlight && skills.length > 0 && (
+                              <span className="text-xs text-red-600 font-medium">← Focus here</span>
+                            )}
                             <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${bg} ${text}`}>{skills.length}</span>
                           </div>
                           <div className="flex flex-wrap gap-1.5">
@@ -1323,11 +1663,17 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               // Show live/post-completion cluster coverage when cluster_insights is absent.
               // This covers: in-progress sessions AND completed timed-mode sessions (cluster_insights
               // is only generated for flexible mode — timed mode must derive it from skill_coverage).
-              const hasClusterInsights = eval_.cluster_insights && eval_.cluster_insights.length > 0;
+              // Also fall back when cluster_insights are all-Weak/zero (backend eval returned bad data).
+              const ciAllWeakOrZero = Array.isArray(eval_.cluster_insights) &&
+                eval_.cluster_insights.length > 0 &&
+                (eval_.cluster_insights as any[]).every((ci: any) =>
+                  !ci.band_score || ci.band_score === 'Weak' || ci.band_score === 'Not Covered' ||
+                  ci.band_score === 'Not Evaluated' || ci.band === 0);
+              const hasClusterInsights = eval_.cluster_insights && eval_.cluster_insights.length > 0 && !ciAllWeakOrZero;
               const hasClusterConfig = clusterConfig.mth.length + clusterConfig.nth.length > 0;
               // Build eval-derived coverage (always, so we can check whether it exists)
               const clusterRawMap = eval_.skill_coverage_map as Record<string, string> | undefined;
-              const scFromEval = clusterRawMap && Object.keys(clusterRawMap).length > 0 ? {
+              const scFromEvalRaw = clusterRawMap && Object.keys(clusterRawMap).length > 0 ? {
                 covered:          Object.keys(clusterRawMap).filter(s => clusterRawMap[s] === 'covered'),
                 medium_covered:   Object.keys(clusterRawMap).filter(s => clusterRawMap[s] === 'medium'),
                 low_covered:      Object.keys(clusterRawMap).filter(s => clusterRawMap[s] === 'low'),
@@ -1336,16 +1682,31 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 total_questions: eval_.total_questions ?? 0,
                 questions_asked: eval_.total_questions ?? 0,
               } : null;
-              const hasEvalCoverage = scFromEval !== null;
+              // If eval coverage is all-zero, use live field or best-seen as fallback
+              const evalCovMeaningful = scFromEvalRaw &&
+                (scFromEvalRaw.covered.length + scFromEvalRaw.medium_covered.length + scFromEvalRaw.low_covered.length) > 0;
+              const scFromEval = evalCovMeaningful
+                ? scFromEvalRaw
+                : (liveSession.skill_coverage || bestSeenSkillCoverageRef.current
+                    ? { ...(liveSession.skill_coverage || bestSeenSkillCoverageRef.current)!, nice_to_have_skills: [], total_questions: eval_.total_questions ?? 0, questions_asked: eval_.total_questions ?? 0 }
+                    : scFromEvalRaw);
+              // If no coverage data yet during in-progress but cluster config exists,
+              // bootstrap an empty state so cluster bars are immediately visible (all 0%).
+              const clusterInitial = isInProgress && !scFromEval && !liveSession.skill_coverage && hasClusterConfig
+                ? { covered: [] as string[], medium_covered: [] as string[], low_covered: [] as string[],
+                    uncovered: [...clusterConfig.mth, ...clusterConfig.nth].flatMap(c => c.skills),
+                    nice_to_have_skills: [] as string[], total_questions: 0, questions_asked: 0 }
+                : null;
+              const hasEvalCoverage = scFromEval !== null || clusterInitial !== null;
               // Enter the derived view when:
               //   • interview is in-progress (live), OR
               //   • completed but no cluster_insights — either cluster config or eval coverage data exists
               if (!hasClusterInsights && (isInProgress || hasClusterConfig || hasEvalCoverage)) {
-                // For completed sessions, prefer LLM-evaluated coverage over stale live field.
-                // For in-progress, prefer live WebSocket data.
+                // For in-progress: prefer live WebSocket data, then scFromEval, then initial bootstrap.
+                // For completed: scFromEval already resolves to live/best-seen if eval was zero.
                 const sc = isInProgress
-                  ? (liveSession.skill_coverage ?? scFromEval)
-                  : (scFromEval ?? liveSession.skill_coverage ?? null);
+                  ? (liveSession.skill_coverage ?? scFromEval ?? clusterInitial)
+                  : (scFromEval ?? liveSession.skill_coverage ?? bestSeenSkillCoverageRef.current ?? null);
 
                 // Use resolved cluster config (session special_instructions → fetched config fallback)
                 const allClusters = [
