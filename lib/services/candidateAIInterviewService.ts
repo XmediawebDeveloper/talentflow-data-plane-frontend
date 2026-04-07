@@ -82,6 +82,7 @@ export interface CandidateSystemCheckRequest {
   audio_level_db?: number;
   network_latency_ms?: number;
   network_latency_variance_ms?: number;
+  internet_speed_mbps?: number;
   ai_engine_latency_ms?: number;
 }
 
@@ -231,13 +232,14 @@ export const candidateAIInterviewService = {
 
   async reportProctorEvent(
     token: string,
-    event: { event_type: string; timestamp?: string; details?: Record<string, any> },
+    event: { event_type: string; timestamp?: string; severity?: string; details?: Record<string, any> },
   ): Promise<{ success: boolean; violation_count: number; warning_issued: boolean }> {
     const response = await candidateApi.post(
       `/candidate/ai-interview/${token}/proctor-event`,
       {
         event_type: event.event_type,
         timestamp: event.timestamp || new Date().toISOString(),
+        severity: event.severity || 'minor',
         details: event.details || {},
       },
     );

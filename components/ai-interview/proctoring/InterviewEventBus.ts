@@ -28,13 +28,14 @@ export type ProctoringEventType =
   | 'face_mismatch'
   | 'face_identity_changed'
   | 'voice_mismatch'
-  | 'voice_identity_changed';
+  | 'voice_identity_changed'
+  | 'screen_share_stopped';
 
 export interface ProctoringEvent {
   id: string;
   type: ProctoringEventType;
   message: string;
-  severity: 'low' | 'medium' | 'high';
+  severity: 'minor' | 'moderate' | 'severe';
   timestamp: Date;
   details?: Record<string, any>;
 }
@@ -60,29 +61,34 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   face_identity_changed: 'A different person has been detected. Identity verification failed.',
   voice_mismatch: 'Voice verification warning. Voice pattern does not match the registered speaker.',
   voice_identity_changed: 'A different speaker has been detected. Voice verification failed.',
+  screen_share_stopped: 'Screen sharing was stopped. Screen sharing is mandatory throughout the interview.',
 };
 
-// Severity mapping
-const EVENT_SEVERITY: Record<ProctoringEventType, 'low' | 'medium' | 'high'> = {
-  tab_switch: 'low',
-  copy_attempt: 'medium',
-  paste_attempt: 'medium',
-  voice_detected: 'medium',
-  multiple_voices: 'high',
-  camera_disabled: 'high',
-  microphone_disabled: 'high',
-  camera_obstructed: 'high',
-  screenshot_attempt: 'high',
-  screen_recording_attempt: 'high',
-  window_blur: 'low',
-  fullscreen_exit: 'high',
-  face_missing: 'high',
-  multiple_faces: 'high',
-  gaze_away: 'medium',
-  face_mismatch: 'medium',
-  face_identity_changed: 'high',
-  voice_mismatch: 'medium',
-  voice_identity_changed: 'high',
+// Severity mapping — Minor / Moderate / Severe
+const EVENT_SEVERITY: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe'> = {
+  // Minor (1 pt) — low-friction accidental events
+  tab_switch:               'minor',
+  window_blur:              'minor',
+  gaze_away:                'minor',
+  copy_attempt:             'minor',
+  paste_attempt:            'minor',
+  fullscreen_exit:          'minor',
+  // Moderate (2 pts) — suspicious but not conclusive
+  camera_obstructed:        'moderate',
+  voice_detected:           'moderate',
+  multiple_voices:          'moderate',
+  screenshot_attempt:       'moderate',
+  screen_recording_attempt: 'moderate',
+  face_missing:             'moderate',
+  face_mismatch:            'moderate',
+  voice_mismatch:           'moderate',
+  // Severe (3 pts) — strong integrity signals
+  camera_disabled:          'severe',
+  microphone_disabled:      'severe',
+  multiple_faces:           'severe',
+  face_identity_changed:    'severe',
+  voice_identity_changed:   'severe',
+  screen_share_stopped:     'severe',
 };
 
 type Listener = (event: ProctoringEvent) => void;

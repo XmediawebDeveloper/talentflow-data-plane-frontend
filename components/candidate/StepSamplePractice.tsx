@@ -23,6 +23,12 @@ interface StepSamplePracticeProps {
   onGoBack?: () => void;
   selectedLanguage?: string;
   submitting?: boolean;
+  /** Face verification — runs continuous identity check against system-check baseline */
+  faceVerification?: {
+    hasBaseline: () => boolean;
+    startVerification: (video: HTMLVideoElement) => void;
+    stopVerification: () => void;
+  };
 }
 
 // ── Practice question ────────────────────────────────────────────────────────
@@ -63,6 +69,7 @@ export default function StepSamplePractice({
   onGoBack,
   selectedLanguage = 'English',
   submitting = false,
+  faceVerification,
 }: StepSamplePracticeProps) {
   // ── State ────────────────────────────────────────────────────────────────
 
@@ -80,6 +87,16 @@ export default function StepSamplePractice({
   const [transcribeError, setTranscribeError] = useState('');
   const [recordedVideoUrl, setRecordedVideoUrl] = useState<string | null>(null);
   const [showReplay, setShowReplay] = useState(false);
+  // false in Brave (blocks Google Speech API) and Firefox — backend transcription used instead
+  const [hasLiveTranscript, setHasLiveTranscript] = useState(false);
+  // true when auto-speak was attempted but TTS didn't start (Brave blocks without user gesture)
+  const [autoSpeakBlocked, setAutoSpeakBlocked] = useState(false);
+  // Face identity warning shown when verification detects a different person
+  const [faceWarning, setFaceWarning] = useState<string | null>(null);
+  // Recorded video duration in seconds — null = no recording yet
+  const [recordedDurationSeconds, setRecordedDurationSeconds] = useState<number | null>(null);
+  // Live elapsed seconds shown during recording
+  const [recordingElapsed, setRecordingElapsed] = useState(0);
 
   // ── Refs ─────────────────────────────────────────────────────────────────
 
@@ -97,8 +114,12 @@ export default function StepSamplePractice({
   const recognitionRef = useRef<any>(null);
   const webSpeechFinalRef = useRef('');
   const liveTranscriptRef = useRef('');
+  const audioMimeTypeUsedRef = useRef('');
   const hasAutoSpokeRef = useRef(false);
   const startRecordingRef = useRef<() => void>(() => {});
+  const periodicTranscriptionRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartTimeRef = useRef<number | null>(null);
+  const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Webcam + mic setup on mount ──────────────────────────────────────────
 
@@ -120,7 +141,9 @@ export default function StepSamplePractice({
         setMicReady(true);
 
         // Audio analyser for level meter
-        const audioCtx = new AudioContext();
+        const AudioContextImpl: typeof AudioContext =
+          window.AudioContext || (window as any).webkitAudioContext;
+        const audioCtx = new AudioContextImpl();
         audioContextRef.current = audioCtx;
         const source = audioCtx.createMediaStreamSource(stream);
         const analyser = audioCtx.createAnalyser();
@@ -171,6 +194,14 @@ export default function StepSamplePractice({
         try { recognitionRef.current.stop(); } catch { /* ignore */ }
         recognitionRef.current = null;
       }
+      if (periodicTranscriptionRef.current) {
+        clearInterval(periodicTranscriptionRef.current);
+        periodicTranscriptionRef.current = null;
+      }
+      if (elapsedIntervalRef.current) {
+        clearInterval(elapsedIntervalRef.current);
+        elapsedIntervalRef.current = null;
+      }
       if (audioContextRef.current) {
         audioContextRef.current.close().catch(() => {});
         audioContextRef.current = null;
@@ -181,8 +212,18 @@ export default function StepSamplePractice({
         mediaStreamRef.current = null;
       }
       window.speechSynthesis?.cancel();
+      // Stop face verification when leaving this step
+      faceVerification?.stopVerification();
     };
   }, []);
+
+  // ── Start face verification once camera is live ───────────────────────────
+  useEffect(() => {
+    if (!micReady || !faceVerification?.hasBaseline()) return;
+    if (!videoRef.current) return;
+    faceVerification.startVerification(videoRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [micReady]);
 
   // ── TTS: Speak the practice question ──────────────────────────────────────
   // Called only on explicit user click so the browser always has a user gesture.
@@ -197,7 +238,7 @@ export default function StepSamplePractice({
     window.speechSynthesis.cancel();
 
     const doSpeak = (voice: SpeechSynthesisVoice | null) => {
-      // Resume in case Chrome paused the synth engine
+      // Resume in case the synth engine was paused
       window.speechSynthesis.resume();
 
       const utterance = new SpeechSynthesisUtterance(PRACTICE_QUESTION);
@@ -209,7 +250,11 @@ export default function StepSamplePractice({
       utterance.onstart = () => setAiSpeaking(true);
       utterance.onend = () => { setAiSpeaking(false); };
       utterance.onerror = (e) => {
-        if ((e as SpeechSynthesisErrorEvent).error === 'interrupted') return;
+        const err = (e as SpeechSynthesisErrorEvent).error;
+        // 'interrupted'/'canceled' are expected when cancel() is called — not real errors
+        if (err === 'interrupted' || err === 'canceled') return;
+        // 'not-allowed': browser blocked TTS (no user gesture — e.g. auto-speak in Brave)
+        // Don't disable the button; user can still click Play Question manually
         setAiSpeaking(false);
       };
 
@@ -217,27 +262,42 @@ export default function StepSamplePractice({
       window.speechSynthesis.speak(utterance);
     };
 
-    const trySpeak = () => {
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        // Voices already loaded — 150ms delay after cancel() to avoid Chrome silent-drop
-        setTimeout(() => doSpeak(pickVoice()), 150);
-      } else {
-        // Voices not yet loaded — wait for voiceschanged then speak
-        const onVoicesChanged = () => {
-          window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
-          setTimeout(() => doSpeak(pickVoice()), 150);
-        };
-        window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
-        // Fallback: if voiceschanged never fires, speak with default voice after 1s
-        setTimeout(() => {
-          window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
-          doSpeak(null);
-        }, 1000);
-      }
-    };
+    // IMPORTANT: speechSynthesis.speak() MUST be called in the same synchronous task as
+    // the user gesture in Brave. Any setTimeout or async boundary breaks user-gesture context
+    // and Brave rejects with 'not-allowed'.
+    //
+    // Brave fingerprint protection can return an empty getVoices() list — we must NOT wait
+    // for voiceschanged in that case. Instead, call speak() synchronously with null voice
+    // (system default), then upgrade to the preferred voice when voices load.
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      // Voices already available (Brave / most Chromium browsers): call synchronously
+      doSpeak(pickVoice());
+    } else {
+      // Voices not yet available — speak immediately with system default to preserve user-gesture context.
+      // This is critical for Brave where getVoices() may always return [] due to fingerprint protection.
+      doSpeak(null);
 
-    trySpeak();
+      // Upgrade to preferred voice if voiceschanged fires while we're still speaking
+      let upgraded = false;
+      const onVoicesChanged = () => {
+        if (upgraded) return;
+        upgraded = true;
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+        const preferred = pickVoice();
+        if (!preferred || !window.speechSynthesis.speaking) return;
+        // Re-speak with better voice (user gesture context no longer needed — TTS is already running)
+        window.speechSynthesis.cancel();
+        doSpeak(preferred);
+      };
+      window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged);
+      // Cleanup listener if voiceschanged never fires (no memory leak)
+      setTimeout(() => {
+        if (upgraded) return;
+        upgraded = true;
+        window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged);
+      }, 3000);
+    }
   }, []);
 
   // Keep ref in sync with liveTranscript state (avoids stale-closure issues in callbacks)
@@ -247,18 +307,78 @@ export default function StepSamplePractice({
   useEffect(() => {
     if (micReady && !hasAutoSpokeRef.current) {
       hasAutoSpokeRef.current = true;
-      // Small delay so the component fully renders before TTS fires
-      const t = setTimeout(() => speakQuestion(), 600);
+      // Small delay so the component fully renders before TTS fires.
+      // NOTE: Brave blocks TTS when called from setTimeout (no user gesture).
+      // If speaking doesn't start within 2s we flag autoSpeakBlocked so the
+      // Play Question button gets a visual hint prompting the user to click it.
+      const t = setTimeout(() => {
+        speakQuestion();
+        // Watch for TTS being silently blocked (Brave) — if aiSpeaking never becomes
+        // true after 2s, assume autoplay was blocked
+        const watchdog = setTimeout(() => {
+          if (!window.speechSynthesis?.speaking) {
+            setAutoSpeakBlocked(true);
+          }
+        }, 2000);
+        return () => clearTimeout(watchdog);
+      }, 600);
       return () => clearTimeout(t);
     }
   }, [micReady, speakQuestion]);
 
+  // ── Periodic backend transcription (Brave / Firefox fallback) ────────────
+  // Brave blocks webkitSpeechRecognition (Google cloud API). Instead, we send the
+  // accumulated audio blob to the Whisper backend every 5 seconds to give near-live
+  // transcript feedback (~5s lag). Firefox uses this path too.
+
+  const stopPeriodicTranscription = useCallback(() => {
+    if (periodicTranscriptionRef.current) {
+      clearInterval(periodicTranscriptionRef.current);
+      periodicTranscriptionRef.current = null;
+    }
+  }, []);
+
+  const startPeriodicTranscription = useCallback(() => {
+    if (periodicTranscriptionRef.current) return; // already running
+    periodicTranscriptionRef.current = setInterval(async () => {
+      // Need at least ~2s of audio (4 chunks at 500ms timeslice) before sending
+      const chunks = audioChunksRef.current;
+      if (chunks.length < 4) return;
+      // Only run while actively recording
+      if (mediaRecorderRef.current?.state !== 'recording') return;
+
+      const mimeType = audioMimeTypeUsedRef.current || 'audio/webm';
+      // Create a snapshot of chunks so far (copy the array — don't slice the ref)
+      const snapshot = chunks.slice();
+      const blob = new Blob(snapshot, { type: mimeType });
+      const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
+      const file = new File([blob], `live.${ext}`, { type: mimeType });
+
+      try {
+        const text = await candidateAIInterviewService.transcribePracticeAudio(token, file);
+        // Only update if still recording (don't overwrite final transcript)
+        if (text.trim() && mediaRecorderRef.current?.state === 'recording') {
+          setLiveTranscript(text.trim());
+          setHasLiveTranscript(true); // show the live transcript area on first result
+        }
+      } catch { /* ignore — best-effort, final transcription happens on stop */ }
+    }, 5000); // every 5 seconds
+  }, [token]);
+
   // ── Live transcription (Web Speech API) ──────────────────────────────────
 
   const startLiveTranscription = useCallback(() => {
+    // Brave blocks Google's cloud Speech API — skip directly to periodic transcription
+    const isBrave = typeof navigator !== 'undefined' && 'brave' in navigator;
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition || isBrave) {
+      // No Web Speech API (Firefox) or Brave — use periodic backend transcription
+      setHasLiveTranscript(false);
+      startPeriodicTranscription();
+      return;
+    }
+    setHasLiveTranscript(true);
 
     webSpeechFinalRef.current = '';
     setLiveTranscript('');
@@ -290,7 +410,21 @@ export default function StepSamplePractice({
       setLiveTranscript(combined.trim());
     };
 
-    recognition.onerror = () => { /* ignore — best-effort */ };
+    recognition.onerror = (e: any) => {
+      const code: string = e?.error ?? '';
+      // 'service-not-allowed': browser policy blocks Google's cloud Speech API.
+      // 'not-allowed': mic permission denied.
+      // 'network': API endpoint unreachable.
+      // In all these cases live Web Speech will never produce results —
+      // fall back to periodic backend (Whisper) transcription.
+      if (code === 'service-not-allowed' || code === 'not-allowed' || code === 'network') {
+        setHasLiveTranscript(false);
+        try { recognition.stop(); } catch { /* ignore */ }
+        recognitionRef.current = null;
+        startPeriodicTranscription(); // start backend-based near-live transcript
+      }
+      // All other errors (aborted, audio-capture, no-speech…) are transient — ignore.
+    };
 
     recognition.onend = () => {
       // Restart if still recording (recognition can time out after silence)
@@ -301,14 +435,16 @@ export default function StepSamplePractice({
 
     recognitionRef.current = recognition;
     try { recognition.start(); } catch { /* ignore */ }
-  }, []);
+  }, [startPeriodicTranscription]);
 
   const stopLiveTranscription = useCallback(() => {
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch { /* ignore */ }
       recognitionRef.current = null;
     }
-  }, []);
+    stopPeriodicTranscription();
+    setHasLiveTranscript(false);
+  }, [stopPeriodicTranscription]);
 
   // ── Recording + transcription ─────────────────────────────────────────────
 
@@ -316,6 +452,20 @@ export default function StepSamplePractice({
     if (!mediaRecorderRef.current || mediaRecorderRef.current.state === 'inactive') return;
 
     setIsRecording(false);
+
+    // Compute and store how long the recording lasted
+    const durationMs = recordingStartTimeRef.current !== null
+      ? Date.now() - recordingStartTimeRef.current
+      : 0;
+    const durationSec = Math.floor(durationMs / 1000);
+    setRecordedDurationSeconds(durationSec);
+    recordingStartTimeRef.current = null;
+    if (elapsedIntervalRef.current) {
+      clearInterval(elapsedIntervalRef.current);
+      elapsedIntervalRef.current = null;
+    }
+    setRecordingElapsed(0);
+
     stopLiveTranscription();
 
     // Capture browser live transcript before clearing state.
@@ -369,11 +519,14 @@ export default function StepSamplePractice({
     setIsTranscribing(true);
     setTranscribeError('');
 
-    const mimeType = chunks[0].type || 'audio/webm';
-    const audioBlob = new Blob(chunks, { type: mimeType });
-    // Firefox records as ogg — derive correct extension so backend (Whisper) processes it correctly
-    const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
-    const namedBlob = new File([audioBlob], `practice.${ext}`, { type: mimeType });
+    // chunks[0].type may be empty in Safari when no mimeType was specified at MediaRecorder creation.
+    // Fall back to the mimeType we requested, then to audio/mp4 (Safari's native format).
+    const recordedMime = chunks[0]?.type || '';
+    const effectiveMime = recordedMime || audioMimeTypeUsedRef.current || 'audio/mp4';
+    const audioBlob = new Blob(chunks, { type: effectiveMime });
+    // Derive correct extension so backend (Whisper) processes it correctly
+    const ext = effectiveMime.includes('ogg') ? 'ogg' : effectiveMime.includes('mp4') ? 'mp4' : 'webm';
+    const namedBlob = new File([audioBlob], `practice.${ext}`, { type: effectiveMime });
 
     try {
       const text = await candidateAIInterviewService.transcribePracticeAudio(token, namedBlob);
@@ -407,14 +560,15 @@ export default function StepSamplePractice({
     const audioStream = new MediaStream(audioTracks);
     audioChunksRef.current = [];
 
-    // Pick best supported MIME type
+    // Pick best supported MIME type (try/catch required — Safari may throw on isTypeSupported)
     const mimeType = [
       'audio/webm;codecs=opus',
       'audio/webm',
       'audio/ogg;codecs=opus',
       'audio/ogg',
-      'audio/mp4',  // Safari fallback
-    ].find((m) => MediaRecorder.isTypeSupported(m)) || '';
+      'audio/mp4',  // Safari / Firefox fallback
+    ].find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
+    audioMimeTypeUsedRef.current = mimeType;
 
     const mr = new MediaRecorder(audioStream, mimeType ? { mimeType } : undefined);
     mr.ondataavailable = (e) => {
@@ -431,6 +585,7 @@ export default function StepSamplePractice({
       'video/webm;codecs=vp9,opus',
       'video/webm;codecs=vp8,opus',
       'video/webm',
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',  // Safari H.264/AAC
       'video/mp4',
     ].find((m) => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
     const vr = new MediaRecorder(
@@ -447,8 +602,19 @@ export default function StepSamplePractice({
     setInputMode('none');
     setTranscribeError('');
     setLiveTranscript('');
+    setRecordedDurationSeconds(null);
 
-    // Start live transcription via Web Speech API (Chromium only — silent fallback on Firefox)
+    // Track recording start time for duration calculation
+    recordingStartTimeRef.current = Date.now();
+    setRecordingElapsed(0);
+    if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current);
+    elapsedIntervalRef.current = setInterval(() => {
+      if (recordingStartTimeRef.current !== null) {
+        setRecordingElapsed(Math.floor((Date.now() - recordingStartTimeRef.current) / 1000));
+      }
+    }, 500);
+
+    // Start live transcription via Web Speech API (Chromium only — silent fallback on Firefox/Brave)
     startLiveTranscription();
   }, [startLiveTranscription]);
 
@@ -486,10 +652,19 @@ export default function StepSamplePractice({
     setAiSpeaking(false);
     setRecordedVideoUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
     setShowReplay(false);
+    setRecordedDurationSeconds(null);
+    setRecordingElapsed(0);
+    recordingStartTimeRef.current = null;
+    if (elapsedIntervalRef.current) {
+      clearInterval(elapsedIntervalRef.current);
+      elapsedIntervalRef.current = null;
+    }
     window.speechSynthesis?.cancel();
   }, [stopLiveTranscription]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
+
+  const MIN_RECORDING_SECONDS = 10;
 
   // Show live transcript while recording, final transcript when done
   const displayAnswer = isRecording
@@ -499,11 +674,15 @@ export default function StepSamplePractice({
     : typedAnswer;
   const hasAnswer = (isRecording ? false : displayAnswer.trim().length > 0);
 
+  // "Start Interview" is only enabled once the candidate has recorded ≥10 seconds of video
+  const canStartInterview = recordedDurationSeconds !== null && recordedDurationSeconds >= MIN_RECORDING_SECONDS;
+  const recordingTooShort = recordedDurationSeconds !== null && recordedDurationSeconds < MIN_RECORDING_SECONDS;
+
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" style={{ colorScheme: 'light' }}>
       {/* Header */}
       <div className="text-center space-y-1">
         <span className="inline-block px-4 py-1.5 rounded-full bg-gray-100 text-gray-700 text-sm font-medium">
@@ -563,22 +742,32 @@ export default function StepSamplePractice({
 
             {/* Play button */}
             {ttsSupported && (
-              <button
-                type="button"
-                onClick={speakQuestion}
-                disabled={aiSpeaking}
-                className={`self-start inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:cursor-not-allowed ${
-                  aiSpeaking
-                    ? 'bg-[#7C3AED]/20 text-[#A78BFA] border border-[#7C3AED]/30'
-                    : 'bg-[#3B82F6]/20 text-[#60A5FA] border border-[#3B82F6]/30 hover:bg-[#3B82F6]/30'
-                }`}
-              >
-                {aiSpeaking ? (
-                  <><Volume2 className="w-3.5 h-3.5" /> Playing…</>
-                ) : (
-                  <><Play className="w-3.5 h-3.5" /> {voiceReady ? 'Replay Question' : 'Play Question'}</>
+              <div className="flex flex-col gap-1.5">
+                {autoSpeakBlocked && !aiSpeaking && (
+                  <p className="text-xs text-amber-400 flex items-center gap-1">
+                    <Volume2 className="w-3 h-3 shrink-0" />
+                    Click to hear the question aloud
+                  </p>
                 )}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => { setAutoSpeakBlocked(false); speakQuestion(); }}
+                  disabled={aiSpeaking}
+                  className={`self-start inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:cursor-not-allowed ${
+                    aiSpeaking
+                      ? 'bg-[#7C3AED]/20 text-[#A78BFA] border border-[#7C3AED]/30'
+                      : autoSpeakBlocked
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 animate-pulse'
+                        : 'bg-[#3B82F6]/20 text-[#60A5FA] border border-[#3B82F6]/30 hover:bg-[#3B82F6]/30'
+                  }`}
+                >
+                  {aiSpeaking ? (
+                    <><Volume2 className="w-3.5 h-3.5" /> Playing…</>
+                  ) : (
+                    <><Play className="w-3.5 h-3.5" /> {voiceReady ? 'Replay Question' : 'Play Question'}</>
+                  )}
+                </button>
+              </div>
             )}
           </div>
 
@@ -592,7 +781,7 @@ export default function StepSamplePractice({
             <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${showReplay ? 'hidden' : ''}`} />
             {/* Replay video */}
             {showReplay && recordedVideoUrl && (
-              <video ref={replayVideoRef} src={recordedVideoUrl} controls playsInline className="w-full h-full object-cover" />
+              <video ref={replayVideoRef} src={recordedVideoUrl} controls playsInline controlsList="nodownload nopictureinpicture" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} className="w-full h-full object-cover" />
             )}
 
             {/* Audio level bar — only when live */}
@@ -611,7 +800,12 @@ export default function StepSamplePractice({
             {!showReplay && (isRecording || isTranscribing) && (
               <div className={`absolute top-2 left-2 flex items-center gap-1.5 text-white text-xs font-medium px-2.5 py-1 rounded-full backdrop-blur-sm ${isRecording ? 'bg-red-500/90' : 'bg-blue-600/90'}`}>
                 {isRecording ? (
-                  <><span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" /> Recording</>
+                  <>
+                    <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
+                    {recordingElapsed < MIN_RECORDING_SECONDS
+                      ? `${recordingElapsed}s / ${MIN_RECORDING_SECONDS}s`
+                      : `Recording · ${recordingElapsed}s`}
+                  </>
                 ) : (
                   <><Loader2 className="w-3 h-3 animate-spin" /> Transcribing…</>
                 )}
@@ -674,18 +868,35 @@ export default function StepSamplePractice({
 
             {/* Live/final transcript display */}
             {(isRecording && liveTranscript) ? (
+              // Live transcript — Chrome/Edge (Web Speech API) or Brave/Firefox (periodic backend)
               <div className="flex-1 bg-[#0F1A2E] border border-white/[0.06] rounded-lg p-3 overflow-y-auto min-h-[60px]">
                 <p className="text-[#CBD5E1] text-sm leading-relaxed">{liveTranscript}<span className="animate-pulse text-[#3B82F6]">▌</span></p>
+                {periodicTranscriptionRef.current !== null && (
+                  <p className="text-[10px] text-[#475569] mt-1">Updates every few seconds</p>
+                )}
+              </div>
+            ) : isRecording && !hasLiveTranscript ? (
+              // Recording in progress — periodic transcription running but no result yet (first 5s)
+              <div className="flex-1 bg-[#0F1A2E] border border-white/[0.06] rounded-lg p-3 flex flex-col items-center justify-center gap-2 min-h-[60px]">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 bg-red-400 rounded-full animate-ping flex-shrink-0" />
+                  <span className="text-sm text-[#94A3B8] font-medium">Recording your voice…</span>
+                </div>
+                <p className="text-xs text-[#475569] text-center">
+                  Transcript will appear shortly — keep speaking
+                </p>
               </div>
             ) : displayAnswer && !isRecording ? (
+              // Final answer after recording
               <div className="flex-1 bg-[#0F1A2E] border border-white/[0.06] rounded-lg p-3 overflow-y-auto min-h-[60px]">
                 <p className="text-[#CBD5E1] text-sm leading-relaxed">{displayAnswer}</p>
               </div>
             ) : (
+              // Idle / type mode
               <textarea
                 value={typedAnswer}
                 onChange={e => { if (!isRecording) { setTypedAnswer(e.target.value); setInputMode('typing'); } }}
-                placeholder={isRecording ? 'Listening… speak now' : 'Start recording or type your answer here…'}
+                placeholder={isTranscribing ? 'Transcribing your answer…' : 'Start recording or type your answer here…'}
                 readOnly={isRecording || isTranscribing}
                 className="flex-1 min-h-[60px] bg-[#0F1A2E] border border-white/[0.06] rounded-lg p-3 text-sm text-[#CBD5E1] placeholder-[#475569] resize-none focus:outline-none focus:border-[#3B82F6]/50 transition-colors"
                 rows={3}
@@ -732,24 +943,41 @@ export default function StepSamplePractice({
           <ChevronLeft className="w-4 h-4" />
           Go Back
         </button>
-        <button
-          type="button"
-          onClick={onStartInterview}
-          disabled={submitting}
-          className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-sm"
-        >
-          {submitting ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Starting...
-            </>
-          ) : (
-            <>
-              Start Interview
-              <ChevronRight className="w-4 h-4" />
-            </>
+        <div className="flex flex-col items-end gap-1.5">
+          {/* Requirement message — shown until condition is met */}
+          {!canStartInterview && !isRecording && (
+            <p className={`text-xs font-medium ${recordingTooShort ? 'text-red-500' : 'text-gray-500'}`}>
+              {recordingTooShort
+                ? `Recording too short (${recordedDurationSeconds}s) — minimum ${MIN_RECORDING_SECONDS}s required`
+                : `Record at least ${MIN_RECORDING_SECONDS} seconds of video to continue`}
+            </p>
           )}
-        </button>
+          {isRecording && (
+            <p className={`text-xs font-medium ${recordingElapsed >= MIN_RECORDING_SECONDS ? 'text-green-600' : 'text-amber-500'}`}>
+              {recordingElapsed >= MIN_RECORDING_SECONDS
+                ? `✓ ${recordingElapsed}s recorded — you may stop and continue`
+                : `${recordingElapsed}s / ${MIN_RECORDING_SECONDS}s — keep recording…`}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={onStartInterview}
+            disabled={submitting || !canStartInterview}
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              <>
+                Start Interview
+                <ChevronRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

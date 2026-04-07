@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   ArrowLeft, Clock, MessageSquare, ThumbsUp, ThumbsDown,
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
@@ -29,9 +29,33 @@ type TabKey = 'overview' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'cl
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
   event_type: string;
-  severity: string;
+  severity: string; // 'minor' | 'moderate' | 'severe' (legacy: 'low'|'medium'|'high')
   timestamp?: string;
   details?: Record<string, unknown>;
+}
+
+// Normalise legacy severity strings to canonical minor/moderate/severe
+function normaliseSeverity(raw?: string): 'minor' | 'moderate' | 'severe' {
+  const s = (raw ?? '').toLowerCase();
+  if (s === 'severe' || s === 'high') return 'severe';
+  if (s === 'moderate' || s === 'medium') return 'moderate';
+  return 'minor';
+}
+
+// Point weights per severity
+const SEV_WEIGHT: Record<'minor' | 'moderate' | 'severe', number> = { minor: 1, moderate: 2, severe: 3 };
+
+interface RiskThresholds { low: number; medium: number }
+const DEFAULT_THRESHOLDS: RiskThresholds = { low: 3, medium: 8 };
+
+function getRiskLevelWeighted(
+  score: number,
+  thresholds: RiskThresholds = DEFAULT_THRESHOLDS,
+): { label: string; color: string; bg: string; border: string } {
+  if (score === 0)                    return { label: 'Clean',       color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-300'  };
+  if (score <= thresholds.low)        return { label: 'Low Risk',    color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-200'  };
+  if (score <= thresholds.medium)     return { label: 'Medium Risk', color: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-300' };
+  return                                     { label: 'High Risk',   color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-300'    };
 }
 
 const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string; bg: string; border: string }> = {
@@ -55,13 +79,6 @@ const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color
   voice_mismatch:           { label: 'Voice Mismatch',       icon: <Mic className="w-4 h-4" />,           color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
   voice_identity_changed:   { label: 'Voice ID Changed',     icon: <Mic className="w-4 h-4" />,           color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
 };
-
-function getRiskLevel(count: number): { label: string; color: string; bg: string; border: string } {
-  if (count === 0)  return { label: 'Clean',       color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-300' };
-  if (count <= 2)   return { label: 'Low Risk',    color: 'text-green-600',  bg: 'bg-green-50',  border: 'border-green-200' };
-  if (count <= 5)   return { label: 'Medium Risk', color: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-300' };
-  return              { label: 'High Risk',    color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-300'   };
-}
 
 function formatTs(ts?: string) {
   if (!ts) return '—';
@@ -200,6 +217,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const [screenError, setScreenError] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
   const [violationPage, setViolationPage] = useState(1);
+  const [riskThresholds, setRiskThresholds] = useState<RiskThresholds>(DEFAULT_THRESHOLDS);
+  const [showThresholdEditor, setShowThresholdEditor] = useState(false);
   const [identityPhotoUrl, setIdentityPhotoUrl] = useState<string | null>(null);
   const [identityPhotoError, setIdentityPhotoError] = useState(false);
 
@@ -251,59 +270,178 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     return () => { cancelled = true; };
   }, [interview.identity_photo_path, interview.id, identityPhotoUrl, identityPhotoError]);
 
-  // Live skill coverage — WebSocket monitor + REST fallback for in_progress sessions
+  // Live skill coverage — WebSocket monitor for in_progress sessions
   const [liveSession, setLiveSession] = useState(interview);
   const [liveWsConnected, setLiveWsConnected] = useState(false);
   useEffect(() => { setLiveSession(interview); }, [interview]);
 
+  // REST polling fallback — refresh full session data every 8s while in_progress.
+  // This keeps skill_coverage, conversation_transcript, ai_evaluation, etc. up to date
+  // even when WebSocket updates are partial or delayed.
+  const liveWsConnectedRef = useRef(false);
+  useEffect(() => { liveWsConnectedRef.current = liveWsConnected; }, [liveWsConnected]);
+
+  useEffect(() => {
+    if (liveSession.status !== 'in_progress') return;
+    const sessionId = liveSession.id;
+    const id = setInterval(() => {
+      aiInterviewService.get(sessionId)
+        .then(updated => {
+          setLiveSession(prev => {
+            // If WebSocket is active and has more skill coverage data than REST, keep WebSocket data.
+            const prevSc = prev.skill_coverage;
+            const newSc = updated.skill_coverage;
+            const prevTotal = (prevSc?.covered?.length ?? 0) + (prevSc?.medium_covered?.length ?? 0) +
+              (prevSc?.low_covered?.length ?? 0) + (prevSc?.uncovered?.length ?? 0);
+            const newTotal = (newSc?.covered?.length ?? 0) + (newSc?.medium_covered?.length ?? 0) +
+              (newSc?.low_covered?.length ?? 0) + (newSc?.uncovered?.length ?? 0);
+            const keepWsSkillCoverage = liveWsConnectedRef.current && prevTotal >= newTotal;
+            return { ...updated, skill_coverage: keepWsSkillCoverage ? prevSc : newSc };
+          });
+        })
+        .catch(() => {});
+    }, 8000);
+    return () => clearInterval(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveSession.status, liveSession.id]);
+
   useEffect(() => {
     if (liveSession.status !== 'in_progress') return;
 
-    // Try a monitor WebSocket for push-based updates
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '').replace(/\/api\/v1$/, '') || 'localhost:8000';
-    const wsUrl = `${protocol}//${apiBase}/api/v1/ws/ai-interview/${liveSession.id}/monitor`;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (!token) return;
+
+    const wsUrl = `${protocol}//${apiBase}/api/v1/ws/ai-interview/${liveSession.id}/monitor?token=${encodeURIComponent(token)}`;
 
     let ws: WebSocket | null = null;
-    let pollId: ReturnType<typeof setInterval> | null = null;
+    let pingId: ReturnType<typeof setInterval> | null = null;
+    let reconnectId: ReturnType<typeof setTimeout> | null = null;
+    let dead = false;
 
-    const startPolling = () => {
-      if (pollId) return;
-      pollId = setInterval(() => {
-        aiInterviewService.get(liveSession.id)
-          .then((updated) => setLiveSession(updated))
-          .catch(() => {});
-      }, 3000);
-    };
-
-    try {
+    const connect = () => {
+      if (dead) return;
       ws = new WebSocket(wsUrl);
-      ws.onopen = () => { setLiveWsConnected(true); };
+
+      ws.onopen = () => {
+        setLiveWsConnected(true);
+        // Keepalive ping every 20s
+        if (pingId) clearInterval(pingId);
+        pingId = setInterval(() => {
+          if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
+        }, 20000);
+      };
+
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);
-          // Backend pushes full session updates or skill_coverage patches
-          if (msg.type === 'session_update' && msg.data) {
-            setLiveSession((prev) => ({ ...prev, ...msg.data }));
-          } else if (msg.type === 'skill_coverage' && msg.data) {
-            setLiveSession((prev) => ({ ...prev, skill_coverage: msg.data }));
-          } else if (msg.type === 'status_update' && msg.data?.status) {
-            setLiveSession((prev) => ({ ...prev, ...msg.data }));
+          if (msg.type === 'skill_coverage_update') {
+            setLiveSession(prev => ({ ...prev, skill_coverage: msg }));
+          } else if (msg.type === 'interview_closing' || msg.type === 'interview_complete' || msg.type === 'interview_ended') {
+            // Interview finished — refresh from REST to get final ai_evaluation
+            aiInterviewService.get(liveSession.id)
+              .then(updated => setLiveSession(updated))
+              .catch(() => {});
           }
-        } catch { /* non-JSON frame, ignore */ }
+        } catch { /* ignore non-JSON */ }
       };
-      ws.onerror = () => { setLiveWsConnected(false); startPolling(); };
-      ws.onclose = () => { setLiveWsConnected(false); startPolling(); };
-    } catch {
-      startPolling();
-    }
+
+      ws.onerror = () => setLiveWsConnected(false);
+
+      ws.onclose = () => {
+        setLiveWsConnected(false);
+        if (pingId) { clearInterval(pingId); pingId = null; }
+        // Reconnect after 3s unless torn down
+        if (!dead) reconnectId = setTimeout(connect, 3000);
+      };
+    };
+
+    connect();
 
     return () => {
-      if (ws) { ws.onopen = null; ws.onmessage = null; ws.onerror = null; ws.onclose = null; ws.close(); }
-      if (pollId) clearInterval(pollId);
+      dead = true;
+      if (pingId) clearInterval(pingId);
+      if (reconnectId) clearTimeout(reconnectId);
+      if (ws) { ws.onopen = null; ws.onmessage = null; ws.onerror = null; ws.onclose = null; ws.close(1000); }
       setLiveWsConnected(false);
     };
   }, [liveSession.status, liveSession.id]);
+
+  // ─── Cluster config resolution ───────────────────────────────────────────
+  // Sessions may not inherit special_instructions from the parent config.
+  // Parse from session first; fall back to fetching the config once via config_id.
+  type ClusterDef = { id: string; name: string; priority: number; skills: string[] };
+
+  const parseClusterConfig = (si?: string | null): { mth: ClusterDef[]; nth: ClusterDef[] } => {
+    if (!si) return { mth: [], nth: [] };
+    try {
+      const parsed = JSON.parse(si);
+      return { mth: parsed.mth_clusters || [], nth: parsed.nth_clusters || [] };
+    } catch { return { mth: [], nth: [] }; }
+  };
+
+  const [fetchedClusters, setFetchedClusters] = useState<{ mth: ClusterDef[]; nth: ClusterDef[] } | null>(null);
+
+  // Fetch parent config once when session has no cluster data
+  useEffect(() => {
+    const fromSession = parseClusterConfig((liveSession as any).special_instructions);
+    if (fromSession.mth.length > 0 || fromSession.nth.length > 0) return; // session has it
+    const configId = (liveSession as any).config_id;
+    if (!configId) return;
+    aiInterviewService.get(configId)
+      .then(cfg => {
+        const clusters = parseClusterConfig((cfg as any).special_instructions);
+        if (clusters.mth.length > 0 || clusters.nth.length > 0) setFetchedClusters(clusters);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveSession.id]);
+
+  // Effective cluster config: session > fetched config
+  const clusterConfig = useMemo(() => {
+    const fromSession = parseClusterConfig((liveSession as any).special_instructions);
+    if (fromSession.mth.length > 0 || fromSession.nth.length > 0) return fromSession;
+    return fetchedClusters || { mth: [], nth: [] };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(liveSession as any).special_instructions, fetchedClusters]);
+
+  // ─── Cross-cluster delta tracking ─────────────────────────────────────────
+  // Detect when a single answer adds skills from 2+ different clusters.
+  const prevSkillCoverageRef = useRef<typeof liveSession.skill_coverage>(undefined);
+  const [crossClusterEvents, setCrossClusterEvents] = useState<{
+    qNum: number; clusters: string[]; skills: string[]; ts: number;
+  }[]>([]);
+
+  useEffect(() => {
+    const sc = liveSession.skill_coverage;
+    const prev = prevSkillCoverageRef.current;
+    prevSkillCoverageRef.current = sc;
+    if (!sc || !prev || clusterConfig.mth.length + clusterConfig.nth.length === 0) return;
+
+    // Skills newly covered since last update
+    const prevSet = new Set([...prev.covered, ...prev.medium_covered, ...prev.low_covered].map(s => s.toLowerCase()));
+    const newSkills = [...sc.covered, ...sc.medium_covered, ...sc.low_covered]
+      .filter(s => !prevSet.has(s.toLowerCase()));
+    if (newSkills.length === 0) return;
+
+    // Map new skills → which clusters they belong to
+    const allClusters = [
+      ...clusterConfig.mth.map(c => ({ ...c, section: 'mth' })),
+      ...clusterConfig.nth.map(c => ({ ...c, section: 'nth' })),
+    ];
+    const newSkillsLower = new Set(newSkills.map(s => s.toLowerCase()));
+    const hitClusters = allClusters
+      .filter(c => c.skills.some(s => newSkillsLower.has(s.toLowerCase())))
+      .map(c => c.name);
+
+    if (hitClusters.length > 1) {
+      setCrossClusterEvents(prev => [
+        ...prev.slice(-9),
+        { qNum: sc.questions_asked, clusters: hitClusters, skills: newSkills, ts: Date.now() },
+      ]);
+    }
+  }, [liveSession.skill_coverage, clusterConfig]);
 
   const eval_ = liveSession.ai_evaluation || {};
   const isCompleted = liveSession.status === 'completed';
@@ -397,7 +535,20 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     [interview],
   );
   const totalViolations = violations.length;
-  const risk = getRiskLevel(totalViolations);
+
+  // Severity-based weighted score and breakdown
+  const severityStats = useMemo(() => {
+    let minor = 0, moderate = 0, severe = 0, score = 0;
+    violations.forEach(v => {
+      const sev = normaliseSeverity(v.severity);
+      if (sev === 'minor')    minor++;
+      if (sev === 'moderate') moderate++;
+      if (sev === 'severe')   severe++;
+      score += SEV_WEIGHT[sev];
+    });
+    return { minor, moderate, severe, score };
+  }, [violations]);
+  const risk = getRiskLevelWeighted(severityStats.score, riskThresholds);
 
   // Count by event type
   const violationCounts = useMemo(() => {
@@ -412,7 +563,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     violations.forEach(v => {
       const minute = v.timestamp ? v.timestamp.slice(0, 16) : 'unknown';
       const key = `${minute}__${v.event_type}`;
-      if (!map[key]) map[key] = { event_type: v.event_type, severity: v.severity, timestamp: v.timestamp, count: 0 };
+      if (!map[key]) map[key] = { event_type: v.event_type, severity: normaliseSeverity(v.severity), timestamp: v.timestamp, count: 0 };
       map[key].count += 1;
     });
     return Object.values(map).sort((a, b) =>
@@ -444,12 +595,16 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     </div>
   );
 
-  const getPlaceholderMessage = () => {
-    if (isInProgress) return 'Interview in progress — data will appear once completed';
-    if (!isCompleted && !isPartial) return 'Interview not yet started — no data available';
+  const getPlaceholderMessage = (tabKey?: string) => {
+    // Skill Coverage and Clusters handle their own in-progress state — don't block them
+    if (isInProgress && tabKey !== 'skill_coverage' && tabKey !== 'clusters') {
+      return 'Interview in progress — data will appear once completed';
+    }
+    if (!isInProgress && !isCompleted && !isPartial) return 'Interview not yet started — no data available';
     return null;
   };
 
+  // Generic placeholder (for tabs that don't pass a key)
   const placeholderMsg = getPlaceholderMessage();
 
   return (
@@ -568,22 +723,46 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
           <div className="p-6">
             {/* Skill Coverage Tab */}
             {activeTab === 'skill_coverage' && (() => {
-              // Prefer live skill_coverage; fall back to ai_evaluation.skill_coverage_map
-              // for completed sessions where the live field was never persisted.
+              // questions_asked: use the transcript as the source of truth.
+              // The backend's skill_coverage.questions_asked can be 0 (stale initial state).
+              // Count assistant messages from the transcript — each is a question Linda asked.
+              const transcriptQCount = (liveSession.conversation_transcript ?? [])
+                .filter((t: any) => (t.role === 'assistant' || t.speaker === 'linda') && t.content?.trim())
+                .length;
+
+              // Derive skill coverage from ai_evaluation.skill_coverage_map when:
+              //   a) live field is absent, OR
+              //   b) live field has questions_asked=0 (stale initial state) on a completed session
               const rawMap = eval_.skill_coverage_map as Record<string, string> | undefined;
-              const sc = liveSession.skill_coverage || (rawMap && Object.keys(rawMap).length > 0 ? (() => {
-                const allSkills = Object.keys(rawMap);
-                return {
-                  covered:          allSkills.filter(s => rawMap[s] === 'covered'),
-                  medium_covered:   allSkills.filter(s => rawMap[s] === 'medium'),
-                  low_covered:      allSkills.filter(s => rawMap[s] === 'low'),
-                  uncovered:        allSkills.filter(s => !rawMap[s] || rawMap[s] === 'not_started'),
-                  nice_to_have_skills: (eval_.nice_to_have_skills as string[] | undefined) || [],
-                  total_questions:  (eval_.total_questions as number | undefined) || liveSession.total_questions || 0,
-                  questions_asked:  (eval_.questions_asked as number | undefined) || 0,
-                  hr_topics:        (eval_.hr_topics as Record<string, string> | undefined) || undefined,
-                };
-              })() : null);
+              const buildFromEval = rawMap && Object.keys(rawMap).length > 0
+                ? (() => {
+                    const allSkills = Object.keys(rawMap);
+                    return {
+                      covered:             allSkills.filter(s => rawMap[s] === 'covered'),
+                      medium_covered:      allSkills.filter(s => rawMap[s] === 'medium'),
+                      low_covered:         allSkills.filter(s => rawMap[s] === 'low'),
+                      uncovered:           allSkills.filter(s => !rawMap[s] || rawMap[s] === 'not_started'),
+                      nice_to_have_skills: (eval_.nice_to_have_skills as string[] | undefined) || [],
+                      total_questions:     (eval_.total_questions as number | undefined) || liveSession.total_questions || 0,
+                      questions_asked:     transcriptQCount,
+                      hr_topics:           (eval_.hr_topics as Record<string, string> | undefined) || undefined,
+                      round_name:          undefined as string | undefined,
+                    };
+                  })()
+                : null;
+
+              // For in-progress sessions: prefer the real-time WebSocket field (current).
+              // For completed sessions: prefer the LLM-evaluated skill_coverage_map
+              // (the live field is often stale — questions_asked=0, all skills uncovered —
+              // because it reflects the initial server state, not the post-eval result).
+              const liveSkillCoverage = liveSession.skill_coverage ?? null;
+              const rawSc = isInProgress
+                ? (liveSkillCoverage || buildFromEval || null)
+                : (buildFromEval || liveSkillCoverage || null);
+              // Always patch questions_asked from transcript when we have transcript data
+              const sc = rawSc && transcriptQCount > 0
+                ? { ...rawSc, questions_asked: transcriptQCount }
+                : rawSc;
               const allSkills = [
                 ...(sc?.covered || []),
                 ...(sc?.medium_covered || []),
@@ -612,7 +791,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       {isInProgress && (
                         <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          {liveWsConnected ? 'LIVE — WebSocket' : 'LIVE — polling 3s'}
+                          {liveWsConnected ? 'LIVE — WebSocket' : 'LIVE — reconnecting…'}
                         </span>
                       )}
                       {sc && (
@@ -678,6 +857,49 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           </div>
                         </div>
                       </div>
+
+                      {/* Live cluster breakdown — only for in-progress when cluster config is available */}
+                      {isInProgress && (() => {
+                        // Use resolved clusterConfig (session → fetched config fallback)
+                        const allClusters = [
+                          ...clusterConfig.mth.map(c => ({ ...c, section: 'mth' as const })),
+                          ...clusterConfig.nth.map(c => ({ ...c, section: 'nth' as const })),
+                        ].sort((a, b) => b.priority - a.priority || a.name.localeCompare(b.name));
+                        if (allClusters.length === 0) return null;
+
+                        const covL = new Set([...sc.covered, ...sc.medium_covered, ...sc.low_covered].map(s => s.toLowerCase()));
+                        const clusterStats = allClusters.map(c => {
+                          const cov = c.skills.filter(s => covL.has(s.toLowerCase())).length;
+                          return { ...c, cov, pct: c.skills.length > 0 ? Math.round((cov / c.skills.length) * 100) : 0 };
+                        });
+                        const touched = clusterStats.filter(c => c.cov > 0).length;
+
+                        return (
+                          <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-semibold text-gray-800">Cluster Coverage</h4>
+                              <span className="text-xs text-gray-500">{touched}/{allClusters.length} clusters active</span>
+                            </div>
+                            {clusterStats.map(c => (
+                              <div key={c.id}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${c.section === 'mth' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>P{c.priority}</span>
+                                    <span className="text-xs text-gray-700">{c.name}</span>
+                                  </div>
+                                  <span className={`text-xs font-semibold ${c.pct >= 70 ? 'text-green-600' : c.pct >= 40 ? 'text-yellow-600' : c.pct > 0 ? 'text-orange-500' : 'text-gray-400'}`}>{c.cov}/{c.skills.length}</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-1.5 rounded-full transition-[width] duration-700 ease-out ${c.pct >= 70 ? 'bg-green-500' : c.pct >= 40 ? 'bg-yellow-500' : c.pct > 0 ? 'bg-orange-400' : 'bg-gray-200'}`}
+                                    style={{ width: `${c.pct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
 
                       {/* Skill chips grid */}
                       {[
@@ -1094,16 +1316,242 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             )}
 
             {/* Cluster Insights Tab */}
-            {activeTab === 'clusters' && (
-              placeholderMsg ? renderPlaceholder(placeholderMsg) : (
+            {activeTab === 'clusters' && (() => {
+              const clusterPlaceholder = getPlaceholderMessage('clusters');
+              if (clusterPlaceholder) return renderPlaceholder(clusterPlaceholder);
+
+              // Show live/post-completion cluster coverage when cluster_insights is absent.
+              // This covers: in-progress sessions AND completed timed-mode sessions (cluster_insights
+              // is only generated for flexible mode — timed mode must derive it from skill_coverage).
+              const hasClusterInsights = eval_.cluster_insights && eval_.cluster_insights.length > 0;
+              const hasClusterConfig = clusterConfig.mth.length + clusterConfig.nth.length > 0;
+              // Build eval-derived coverage (always, so we can check whether it exists)
+              const clusterRawMap = eval_.skill_coverage_map as Record<string, string> | undefined;
+              const scFromEval = clusterRawMap && Object.keys(clusterRawMap).length > 0 ? {
+                covered:          Object.keys(clusterRawMap).filter(s => clusterRawMap[s] === 'covered'),
+                medium_covered:   Object.keys(clusterRawMap).filter(s => clusterRawMap[s] === 'medium'),
+                low_covered:      Object.keys(clusterRawMap).filter(s => clusterRawMap[s] === 'low'),
+                uncovered:        Object.keys(clusterRawMap).filter(s => !clusterRawMap[s] || clusterRawMap[s] === 'not_started'),
+                nice_to_have_skills: [],
+                total_questions: eval_.total_questions ?? 0,
+                questions_asked: eval_.total_questions ?? 0,
+              } : null;
+              const hasEvalCoverage = scFromEval !== null;
+              // Enter the derived view when:
+              //   • interview is in-progress (live), OR
+              //   • completed but no cluster_insights — either cluster config or eval coverage data exists
+              if (!hasClusterInsights && (isInProgress || hasClusterConfig || hasEvalCoverage)) {
+                // For completed sessions, prefer LLM-evaluated coverage over stale live field.
+                // For in-progress, prefer live WebSocket data.
+                const sc = isInProgress
+                  ? (liveSession.skill_coverage ?? scFromEval)
+                  : (scFromEval ?? liveSession.skill_coverage ?? null);
+
+                // Use resolved cluster config (session special_instructions → fetched config fallback)
+                const allClusters = [
+                  ...clusterConfig.mth.map(c => ({ ...c, section: 'mth' as const })),
+                  ...clusterConfig.nth.map(c => ({ ...c, section: 'nth' as const })),
+                ].sort((a, b) => b.priority - a.priority || a.name.localeCompare(b.name));
+
+                // Case-insensitive sets for skill matching
+                const coveredLower = new Set([...(sc?.covered || []), ...(sc?.medium_covered || []), ...(sc?.low_covered || [])].map(s => s.toLowerCase()));
+                const strongLower = new Set((sc?.covered || []).map(s => s.toLowerCase()));
+                const medLower = new Set((sc?.medium_covered || []).map(s => s.toLowerCase()));
+
+                // Per-cluster stats
+                const clusterStats = allClusters.map(c => {
+                  const covered = c.skills.filter(s => coveredLower.has(s.toLowerCase())).length;
+                  const pct = c.skills.length > 0 ? Math.round((covered / c.skills.length) * 100) : 0;
+                  return { ...c, skillTotal: c.skills.length, covered, pct };
+                });
+
+                const touchedClusters = clusterStats.filter(c => c.covered > 0);
+
+                // Priority adherence: group clusters by priority level, compare group averages
+                const priorityGroups = clusterStats.reduce((acc, c) => {
+                  (acc[c.priority] = acc[c.priority] || []).push(c);
+                  return acc;
+                }, {} as Record<number, typeof clusterStats>);
+                const sortedPris = Object.keys(priorityGroups).map(Number).sort((a, b) => b - a);
+                let adherencePass = 0, adherenceTotal = 0;
+                for (let i = 0; i < sortedPris.length - 1; i++) {
+                  const hiAvg = priorityGroups[sortedPris[i]].reduce((s, c) => s + c.pct, 0) / priorityGroups[sortedPris[i]].length;
+                  const loAvg = priorityGroups[sortedPris[i + 1]].reduce((s, c) => s + c.pct, 0) / priorityGroups[sortedPris[i + 1]].length;
+                  adherenceTotal++;
+                  if (hiAvg >= loAvg) adherencePass++;
+                }
+                const adherencePct = adherenceTotal > 0 ? Math.round((adherencePass / adherenceTotal) * 100) : 100;
+                const isAdherent = adherencePct >= 70;
+
+                const totalSkills = (sc?.covered.length ?? 0) + (sc?.medium_covered.length ?? 0) + (sc?.low_covered.length ?? 0) + (sc?.uncovered.length ?? 0);
+                const overallPct = totalSkills > 0 ? Math.round(((sc?.covered.length ?? 0) + (sc?.medium_covered.length ?? 0)) / totalSkills * 100) : 0;
+                const transcriptQCount = (liveSession.conversation_transcript ?? [])
+                  .filter((t: any) => (t.role === 'assistant' || t.speaker === 'linda') && t.content?.trim())
+                  .length;
+
+                return (
+                  <div className="space-y-4">
+                    {/* Status banner */}
+                    {isInProgress ? (
+                      <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-xl">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                          <span className="text-sm font-semibold text-red-700">LIVE</span>
+                          <span className="text-xs text-red-600">Full cluster insights available after completion</span>
+                        </div>
+                        <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                          {liveWsConnected ? 'WebSocket' : 'reconnecting…'}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                        <span className="text-sm font-semibold text-gray-700">Completed</span>
+                        <span className="text-xs text-gray-500">Skill coverage derived from evaluation results</span>
+                      </div>
+                    )}
+
+                    {/* Stats row */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+                        <p className="text-2xl font-bold text-gray-900">{transcriptQCount}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Questions Asked</p>
+                      </div>
+                      <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+                        <p className="text-2xl font-bold text-blue-700">{touchedClusters.length}<span className="text-base text-gray-400">/{allClusters.length || '—'}</span></p>
+                        <p className="text-xs text-gray-500 mt-0.5">Clusters Touched</p>
+                      </div>
+                      <div className={`rounded-xl p-3 text-center border ${isAdherent ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                        <p className={`text-2xl font-bold ${isAdherent ? 'text-green-700' : 'text-yellow-700'}`}>{adherencePct}%</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Priority Adherence</p>
+                      </div>
+                    </div>
+
+                    {/* Cross-cluster events — delta-based: only fires when a single answer touched 2+ clusters */}
+                    {crossClusterEvents.length > 0 && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-blue-600" />
+                          <span className="text-xs font-semibold text-blue-800">Cross-Cluster Events Detected</span>
+                          <span className="ml-auto text-xs text-blue-600">{crossClusterEvents.length} event{crossClusterEvents.length > 1 ? 's' : ''}</span>
+                        </div>
+                        {crossClusterEvents.slice(-3).map((ev, i) => (
+                          <div key={i} className="bg-white rounded-lg px-3 py-2 border border-blue-100">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] text-gray-400">Q{ev.qNum}</span>
+                              {ev.clusters.map(cn => (
+                                <span key={cn} className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">{cn}</span>
+                              ))}
+                              <span className="text-[10px] text-gray-400 ml-auto">{ev.skills.length} skill{ev.skills.length > 1 ? 's' : ''} newly covered</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Also show "X clusters active" summary even without delta events */}
+                    {crossClusterEvents.length === 0 && touchedClusters.length > 1 && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Activity className="w-4 h-4 text-blue-600" />
+                          <span className="text-xs font-semibold text-blue-800">Cross-Cluster Coverage Active</span>
+                          <span className="ml-auto text-xs text-blue-600">{touchedClusters.length} clusters addressed</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {touchedClusters.map(c => (
+                            <span key={c.id} className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                              {c.name} — {c.covered}/{c.skillTotal}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Per-cluster coverage bars */}
+                    {allClusters.length > 0 ? (
+                      <div className="space-y-2.5">
+                        <p className="text-sm font-semibold text-gray-700">Cluster Coverage (Priority Order)</p>
+                        {clusterStats.map(c => (
+                          <div key={c.id} className="bg-white border border-gray-200 rounded-xl p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${c.section === 'mth' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
+                                  P{c.priority}
+                                </span>
+                                <span className="text-sm font-medium text-gray-900 truncate">{c.name}</span>
+                                <span className="text-xs text-gray-400 flex-shrink-0">{c.section === 'mth' ? 'MTH' : 'NTH'}</span>
+                              </div>
+                              <span className={`text-sm font-bold flex-shrink-0 ml-2 ${c.pct >= 70 ? 'text-green-600' : c.pct >= 40 ? 'text-yellow-600' : c.pct > 0 ? 'text-orange-500' : 'text-gray-400'}`}>
+                                {c.pct}%
+                              </span>
+                            </div>
+                            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-2 rounded-full transition-[width] duration-700 ease-out ${c.pct >= 70 ? 'bg-green-500' : c.pct >= 40 ? 'bg-yellow-500' : c.pct > 0 ? 'bg-orange-400' : 'bg-gray-200'}`}
+                                style={{ width: `${c.pct}%` }}
+                              />
+                            </div>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className="text-xs text-gray-400">{c.covered}/{c.skillTotal} skills addressed</span>
+                              <div className="flex flex-wrap gap-1 justify-end">
+                                {c.skills.slice(0, 5).map(s => {
+                                  const sl = s.toLowerCase();
+                                  const isStrong = strongLower.has(sl);
+                                  const isMed = medLower.has(sl);
+                                  const isCov = coveredLower.has(sl);
+                                  return (
+                                    <span key={s} className={`text-xs px-1.5 py-0.5 rounded-full ${isStrong ? 'bg-green-100 text-green-700' : isMed ? 'bg-yellow-100 text-yellow-700' : isCov ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
+                                      {s}
+                                    </span>
+                                  );
+                                })}
+                                {c.skills.length > 5 && <span className="text-xs text-gray-400">+{c.skills.length - 5}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : sc ? (
+                      /* Fallback when no cluster config — simple 4-quadrant grid */
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { label: 'Strongly Covered', skills: sc.covered, color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
+                          { label: 'Partially Covered', skills: sc.medium_covered, color: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-200' },
+                          { label: 'Low Coverage', skills: sc.low_covered, color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200' },
+                          { label: 'Not Covered', skills: sc.uncovered, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' },
+                        ].map(({ label, skills, color, bg, border }) => (
+                          <div key={label} className={`${bg} ${border} border rounded-xl p-4`}>
+                            <p className={`text-xs font-semibold ${color} mb-2`}>{label} ({skills.length})</p>
+                            <div className="flex flex-wrap gap-1">
+                              {skills.map(s => <span key={s} className={`text-xs px-2 py-0.5 rounded-full ${bg} ${border} border ${color}`}>{s}</span>)}
+                              {skills.length === 0 && <span className="text-xs text-gray-400">—</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="border border-dashed border-gray-300 rounded-xl p-8 text-center">
+                        {isInProgress
+                          ? <RefreshCw className="w-8 h-8 text-gray-400 mx-auto mb-3 animate-spin" />
+                          : <Activity className="w-8 h-8 text-gray-400 mx-auto mb-3" />}
+                        <p className="text-gray-500 font-medium">{isInProgress ? 'Interview in progress' : 'No coverage data yet'}</p>
+                        <p className="text-sm text-gray-400 mt-1">{isInProgress ? 'Coverage will appear here as questions are asked' : 'Cluster coverage data will appear once scoring completes'}</p>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-gray-400 text-center">{transcriptQCount}/{sc?.total_questions ?? 0} questions asked · {overallPct}% overall skill coverage</p>
+                  </div>
+                );
+              }
+
+              return (
                 <ClusterInsightsTab
                   clusterInsights={eval_.cluster_insights || []}
                   capabilityScore={eval_.capability_score ?? null}
                   sectionScores={eval_.section_scores ?? null}
                   capabilityScoreReasoning={eval_.capability_score_reasoning ?? null}
                 />
-              )
-            )}
+              );
+            })()}
 
             {/* Sentiment Tab */}
             {activeTab === 'sentiment' && (
@@ -1358,38 +1806,117 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             {activeTab === 'violations' && (
               <div className="space-y-6">
 
-                {/* Risk Level Banner */}
-                <div className={`flex items-center justify-between px-4 py-3 rounded-lg border ${risk.bg} ${risk.border}`}>
-                  <div className="flex items-center gap-3">
-                    <ShieldAlert className={`w-5 h-5 ${risk.color}`} />
-                    <div>
-                      <p className={`text-sm font-semibold ${risk.color}`}>
-                        Integrity Status: {risk.label}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {totalViolations === 0
-                          ? 'No violations detected during this interview.'
-                          : `${totalViolations} violation event${totalViolations !== 1 ? 's' : ''} recorded — 0–2 Low, 3–5 Medium, 6+ High`}
-                      </p>
+                {/* Risk Summary Banner */}
+                <div className={`rounded-lg border ${risk.bg} ${risk.border} overflow-hidden`}>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <ShieldAlert className={`w-5 h-5 ${risk.color}`} />
+                      <div>
+                        <p className={`text-sm font-semibold ${risk.color}`}>
+                          Integrity Status: {risk.label}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {totalViolations === 0
+                            ? 'No violations detected during this interview.'
+                            : `Risk score: ${severityStats.score} pts — Minor×${severityStats.minor} (×1) · Moderate×${severityStats.moderate} (×2) · Severe×${severityStats.severe} (×3)`}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-2xl font-bold ${risk.color}`}>{severityStats.score}</span>
+                      <button
+                        onClick={() => setShowThresholdEditor(p => !p)}
+                        title="Configure risk thresholds"
+                        className="p-1.5 rounded border border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-white transition-colors"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
-                  <span className={`text-2xl font-bold ${risk.color}`}>{totalViolations}</span>
+
+                  {/* Severity Breakdown Pills */}
+                  {totalViolations > 0 && (
+                    <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-gray-500">Breakdown:</span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        severityStats.minor > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                        Minor: {severityStats.minor}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        severityStats.moderate > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                        Moderate: {severityStats.moderate}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        severityStats.severe > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-400'
+                      }`}>
+                        Severe: {severityStats.severe}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Threshold Editor */}
+                  {showThresholdEditor && (
+                    <div className="px-4 pb-3 border-t border-gray-200 pt-3 bg-white bg-opacity-60">
+                      <p className="text-xs font-medium text-gray-600 mb-2">Configure Risk Thresholds (score points)</p>
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                          <span className="w-24">Low Risk ≤</span>
+                          <input
+                            type="number" min={1} max={riskThresholds.medium - 1}
+                            value={riskThresholds.low}
+                            onChange={e => setRiskThresholds(t => ({ ...t, low: Math.max(1, Math.min(t.medium - 1, Number(e.target.value))) }))}
+                            className="w-14 px-2 py-1 rounded border border-gray-300 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                          <span className="text-gray-400">pts</span>
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                          <span className="w-24">Medium Risk ≤</span>
+                          <input
+                            type="number" min={riskThresholds.low + 1}
+                            value={riskThresholds.medium}
+                            onChange={e => setRiskThresholds(t => ({ ...t, medium: Math.max(t.low + 1, Number(e.target.value)) }))}
+                            className="w-14 px-2 py-1 rounded border border-gray-300 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                          <span className="text-gray-400">pts</span>
+                        </label>
+                        <span className="text-xs text-gray-400">High Risk = above Medium threshold</span>
+                        <button
+                          onClick={() => { setRiskThresholds(DEFAULT_THRESHOLDS); }}
+                          className="text-xs text-blue-500 hover:underline"
+                        >
+                          Reset defaults
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1.5">Minor = 1 pt · Moderate = 2 pts · Severe = 3 pts</p>
+                    </div>
+                  )}
                 </div>
 
-                {/* Violation Type Grid */}
+                {/* Violation Type Grid — only types with at least one occurrence */}
+                {(() => {
+                  const activeTypes = [
+                    'face_missing', 'multiple_faces', 'gaze_away',
+                    'tab_switch', 'window_blur', 'fullscreen_exit',
+                    'camera_disabled', 'camera_obstructed', 'microphone_disabled',
+                    'copy_attempt', 'paste_attempt',
+                    'voice_detected', 'multiple_voices',
+                    'face_mismatch', 'face_identity_changed',
+                    'voice_mismatch', 'voice_identity_changed',
+                    'screenshot_attempt', 'screen_recording_attempt',
+                  ].filter(type => (violationCounts[type] ?? 0) > 0);
+                  return (
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Violation Breakdown</h3>
+                  {activeTypes.length === 0 ? (
+                    <p className="text-sm text-gray-400">No violations recorded.</p>
+                  ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {[
-                      'face_missing', 'multiple_faces', 'gaze_away',
-                      'tab_switch', 'window_blur', 'fullscreen_exit',
-                      'camera_disabled', 'camera_obstructed', 'microphone_disabled',
-                      'copy_attempt', 'paste_attempt',
-                      'voice_detected', 'multiple_voices',
-                      'face_mismatch', 'face_identity_changed',
-                      'voice_mismatch', 'voice_identity_changed',
-                      'screenshot_attempt', 'screen_recording_attempt',
-                    ].map(type => {
+                    {activeTypes.map(type => {
                       const cfg = EVENT_CONFIG[type];
                       const count = violationCounts[type] ?? 0;
                       if (!cfg) return null;
@@ -1415,7 +1942,10 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       );
                     })}
                   </div>
+                  )}
                 </div>
+                  );
+                })()}
 
                 {/* Event Log Table */}
                 <div>
@@ -1442,11 +1972,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           <tbody className="divide-y divide-gray-100">
                             {pagedViolations.map((row, idx) => {
                               const cfg = EVENT_CONFIG[row.event_type];
-                              const sev = row.severity?.toLowerCase() ?? 'low';
+                              const sev = normaliseSeverity(row.severity);
                               const sevStyle =
-                                sev === 'high'   ? 'bg-red-100 text-red-700' :
-                                sev === 'medium' ? 'bg-orange-100 text-orange-700' :
-                                                   'bg-gray-100 text-gray-600';
+                                sev === 'severe'   ? 'bg-red-100 text-red-700' :
+                                sev === 'moderate' ? 'bg-orange-100 text-orange-700' :
+                                                     'bg-blue-50 text-blue-600';
                               const countStyle =
                                 row.count >= 5 ? 'text-red-600 font-bold' :
                                 row.count >= 3 ? 'text-orange-500 font-semibold' :

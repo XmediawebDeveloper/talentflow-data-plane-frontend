@@ -1160,7 +1160,7 @@ export default function AIInterviewClusters() {
       if (totalWeight <= 0) return {};
       const result: Record<string, number> = {};
       let remaining = totalMin;
-      const sorted = [...clusters].sort((a, b) => b.priority - a.priority);
+      const sorted = [...clusters].sort((a, b) => b.priority - a.priority || (a.name ?? '').localeCompare(b.name ?? ''));
       sorted.forEach((c, i) => {
         const mins = i === sorted.length - 1
           ? remaining

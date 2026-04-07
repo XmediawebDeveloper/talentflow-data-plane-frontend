@@ -40,6 +40,35 @@ interface CandidateBasicInfo {
   }[];
 }
 
+function getCodingEvaluationState(q: QuestionEvaluation) {
+  const judged = q.candidate_test_results;
+  const hasCode = !!q.candidate_code_submission?.trim();
+  const hasJudgedTests = !!judged?.details && judged.details.length > 0;
+  const marks = judged?.marks_breakdown;
+
+  if (!hasCode) {
+    return {
+      summary: 'No code submitted.',
+      warning: null as string | null,
+      marks,
+    };
+  }
+
+  if (!hasJudgedTests) {
+    return {
+      summary: 'Code submission exists, but judged test-case results are missing. Rescore required.',
+      warning: 'Saved run output may be visible below, but it is not authoritative judged evaluation.',
+      marks,
+    };
+  }
+
+  return {
+    summary: judged?.summary || q.feedback || 'Judged coding evaluation available.',
+    warning: null as string | null,
+    marks,
+  };
+}
+
 export default function CandidateResultDetails({
   onBack,
   assessmentId,
@@ -967,7 +996,7 @@ export default function CandidateResultDetails({
             <>
               {/* Tab Navigation */}
               <div className="border-b border-gray-200 bg-gray-50">
-                <div className="flex gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 overflow-x-auto">
+                <div className="flex flex-wrap gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3">
                   {detailedResult.round_scores.map((round, idx) => {
                     const isActive = activeTab === round.round_type;
                     const questionsForRound = detailedResult.question_evaluations.filter(
@@ -978,7 +1007,7 @@ export default function CandidateResultDetails({
                       <button
                         key={idx}
                         onClick={() => setActiveTab(round.round_type)}
-                        className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                        className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                           isActive
                             ? 'bg-white text-gray-800 border-t-2 border-x border-gray-800 shadow-sm'
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -997,7 +1026,7 @@ export default function CandidateResultDetails({
                   {/* Violations Tab */}
                   <button
                     onClick={() => setActiveTab('violations')}
-                    className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                       activeTab === 'violations'
                         ? 'bg-white text-red-700 border-t-2 border-x border-red-500 shadow-sm'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -1125,6 +1154,12 @@ export default function CandidateResultDetails({
 
                               {/* Question Content */}
                               <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
+                                {q.question_type === 'coding' && getCodingEvaluationState(q).warning && (
+                                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                                    {getCodingEvaluationState(q).warning}
+                                  </div>
+                                )}
+
                                 {/* Candidate's Answer */}
                                 <div>
                                   <div className="flex items-center gap-2 mb-3">
@@ -1204,14 +1239,42 @@ export default function CandidateResultDetails({
                                         </div>
                                         <div className="text-sm font-medium text-sky-900">CANDIDATE OUTPUT</div>
                                       </div>
-                                      <div className="rounded-lg p-4 font-mono text-sm overflow-x-auto bg-sky-950 text-sky-100">
-                                        <pre className="whitespace-pre-wrap">
-                                          {q.candidate_code_execution_output || 'No output captured'}
-                                        </pre>
+                                    <div className="rounded-lg p-4 font-mono text-sm overflow-x-auto bg-sky-950 text-sky-100">
+                                      <pre className="whitespace-pre-wrap">
+                                        {q.candidate_code_execution_output || 'No output captured'}
+                                      </pre>
+                                    </div>
+                                  </div>
+
+                                  {q.candidate_test_results?.marks_breakdown && (
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                          <Award className="w-4 h-4 text-indigo-700" />
+                                        </div>
+                                        <div className="text-sm font-medium text-indigo-900">MARKS BREAKDOWN</div>
+                                      </div>
+                                      <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-2 text-sm text-indigo-950">
+                                        <div>
+                                          Syntax: {q.candidate_test_results.marks_breakdown.syntax?.earned ?? 0}/{q.candidate_test_results.marks_breakdown.syntax?.total ?? 0}
+                                          {q.candidate_test_results.marks_breakdown.syntax?.reason ? ` - ${q.candidate_test_results.marks_breakdown.syntax.reason}` : ''}
+                                        </div>
+                                        <div>
+                                          Execution: {q.candidate_test_results.marks_breakdown.execution?.earned ?? 0}/{q.candidate_test_results.marks_breakdown.execution?.total ?? 0}
+                                          {q.candidate_test_results.marks_breakdown.execution?.reason ? ` - ${q.candidate_test_results.marks_breakdown.execution.reason}` : ''}
+                                        </div>
+                                        <div>
+                                          Output: {q.candidate_test_results.marks_breakdown.output?.earned ?? 0}/{q.candidate_test_results.marks_breakdown.output?.total ?? 0}
+                                          {q.candidate_test_results.marks_breakdown.output?.reason ? ` - ${q.candidate_test_results.marks_breakdown.output.reason}` : ''}
+                                        </div>
+                                        <div className="font-semibold pt-2 border-t border-indigo-200">
+                                          Final: {q.points_earned}/{q.points_possible} ({q.score}%)
+                                        </div>
                                       </div>
                                     </div>
+                                  )}
 
-                                    {q.candidate_test_results?.details && q.candidate_test_results.details.length > 0 && (
+                                  {q.candidate_test_results?.details && q.candidate_test_results.details.length > 0 && (
                                       <div>
                                         <div className="flex items-center gap-2 mb-3">
                                           <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -1285,8 +1348,14 @@ export default function CandidateResultDetails({
                                         </div>
                                       </div>
                                     )}
-                                  </>
-                                )}
+
+                                  {q.candidate_code_submission && (!q.candidate_test_results?.details || q.candidate_test_results.details.length === 0) && (
+                                    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                                      No judged test-case results were recorded for this coding submission. This result should be rescored.
+                                    </div>
+                                  )}
+                                </>
+                              )}
 
                                 {/* Correct Answer (for MCQ) */}
                                 {q.correct_answer && q.correct_answer.length > 0 && (
@@ -1312,7 +1381,7 @@ export default function CandidateResultDetails({
                                 )}
 
                                 {/* AI Feedback */}
-                                {!isHRRound && q.feedback && (
+                                {!isHRRound && (q.feedback || q.question_type === 'coding') && (
                                   <div>
                                     <div className="flex items-center gap-2 mb-3">
                                       <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -1323,18 +1392,20 @@ export default function CandidateResultDetails({
                                       </div>
                                     </div>
                                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                                      <div className="text-gray-800 leading-relaxed">{q.feedback}</div>
+                                      <div className="text-gray-800 leading-relaxed">
+                                        {q.question_type === 'coding' ? getCodingEvaluationState(q).summary : q.feedback}
+                                      </div>
                                     </div>
                                   </div>
                                 )}
 
                                 {/* Strengths */}
-                                {!isHRRound && q.strengths && q.strengths.length > 0 && (
+                                {!isHRRound && ((q.strengths && q.strengths.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.strengths && q.candidate_test_results.strengths.length > 0)) && (
                                   <div className="pt-4 border-t border-gray-200">
                                     <div className="bg-green-50 rounded-lg p-4">
                                       <div className="text-sm font-medium text-green-800 mb-2">Strengths</div>
                                       <ul className="text-sm text-green-700 space-y-1">
-                                        {q.strengths.map((s, i) => (
+                                        {(q.strengths && q.strengths.length > 0 ? q.strengths : (q.candidate_test_results?.strengths || [])).map((s, i) => (
                                           <li key={i} className="flex items-start gap-2">
                                             <CheckCircle className="w-3 h-3 mt-1 flex-shrink-0" />
                                             {s}
@@ -1346,12 +1417,12 @@ export default function CandidateResultDetails({
                                 )}
 
                                 {/* Areas for Improvement */}
-                                {!isHRRound && q.areas_for_improvement && q.areas_for_improvement.length > 0 && (
+                                {!isHRRound && ((q.areas_for_improvement && q.areas_for_improvement.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.improvements && q.candidate_test_results.improvements.length > 0)) && (
                                   <div className="pt-4 border-t border-gray-200">
                                     <div className="bg-amber-50 rounded-lg p-4">
                                       <div className="text-sm font-medium text-amber-900 mb-2">What to Improve</div>
                                       <ul className="text-sm text-amber-800 space-y-1">
-                                        {q.areas_for_improvement.map((item, i) => (
+                                        {(q.areas_for_improvement && q.areas_for_improvement.length > 0 ? q.areas_for_improvement : (q.candidate_test_results?.improvements || [])).map((item, i) => (
                                           <li key={i} className="flex items-start gap-2">
                                             <AlertCircle className="w-3 h-3 mt-1 flex-shrink-0" />
                                             {item}

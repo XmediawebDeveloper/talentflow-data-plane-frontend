@@ -78,7 +78,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
   ];
 
   const importantInstructions = [
-    { icon: Clock, text: 'Once started, the timer cannot be paused or stopped.' },
+    { icon: Clock, text: 'If a genuine network or client failure occurs, your session can recover and resume from the saved server state.' },
     { icon: RefreshCcw, text: 'You cannot return to previous sections once submitted.' },
     { icon: Wifi, text: 'Ensure you have a stable internet connection throughout the test.' },
     { icon: AlertCircle, text: 'Do not refresh the page or navigate away during the assessment.' },

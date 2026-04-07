@@ -45,6 +45,9 @@ export default function SelectSourceModal({
   // Check if user has scoring permission
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
 
+  // Check if user has upload permission
+  const canUploadResumes = isTenantAdmin || (user?.permissions?.canUploadResumes ?? false);
+
   // State
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
   const [resumes, setResumes] = useState<Resume[]>([]);
@@ -695,8 +698,8 @@ export default function SelectSourceModal({
                   />
                 </div>
                 <div className="flex items-center gap-2 sm:gap-4">
-                  {/* Upload Resume button - only for My Resumes tab */}
-                  {activeTab === 'my-resumes' && (
+                  {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC */}
+                  {activeTab === 'my-resumes' && canUploadResumes && (
                     <button
                       onClick={() => setShowUploadModal(true)}
                       className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"

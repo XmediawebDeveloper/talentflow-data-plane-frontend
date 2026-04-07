@@ -29,7 +29,7 @@ export interface ProctoringWarning {
   type: ProctoringEventType;
   message: string;
   timestamp: Date;
-  severity: 'low' | 'medium' | 'high';
+  severity: 'minor' | 'moderate' | 'severe';
 }
 
 interface UseInterviewProctoringMonitorOptions {
@@ -38,7 +38,7 @@ interface UseInterviewProctoringMonitorOptions {
   enabled?: boolean;
   voiceDetectionSensitivity?: number;
   obstructionThreshold?: number;
-  reportEvent?: (token: string, event: { event_type: string; timestamp: string; details: Record<string, any> }) => Promise<any>;
+  reportEvent?: (token: string, event: { event_type: string; timestamp: string; severity: string; details: Record<string, any> }) => Promise<any>;
 }
 
 interface ProctoringState {
@@ -320,27 +320,32 @@ export function useInterviewProctoringMonitor({
     if (!reporter) return;
 
     // Send each event individually (backend API expects single events)
-    // But we're doing it in a batch cycle, not per-detection
+    // severity is top-level, NOT nested inside details
     for (const event of batch) {
       try {
-        await reporter(tokenRef.current, {
+        const result = await reporter(tokenRef.current, {
           event_type: event.event_type,
           timestamp: event.timestamp,
-          details: {
-            ...event.details,
-            severity: event.severity,
-          },
+          severity: event.severity,
+          details: event.details,
         });
+        if (result && (result as any).success === false) {
+          console.warn(`[INTERVIEW_PROCTORING] Backend rejected ${event.event_type}:`, result);
+        }
       } catch (err) {
         console.error(`[INTERVIEW_PROCTORING] Failed to send event ${event.event_type}:`, err);
-        // Re-queue failed event for next flush
-        backendQueueRef.current.push(event);
+        // Re-queue failed event for next flush (max 3 retries via retry_count)
+        const retryCount = (event.details?._retry ?? 0) as number;
+        if (retryCount < 3) {
+          backendQueueRef.current.push({
+            ...event,
+            details: { ...event.details, _retry: retryCount + 1 },
+          });
+        }
       }
     }
 
-    if (batch.length > 0) {
-      console.log(`[INTERVIEW_PROCTORING] Flushed ${batch.length} events to backend`);
-    }
+    console.log(`[INTERVIEW_PROCTORING] Flushed ${batch.length} event(s) to backend`);
   }, []);
 
   // ==================== VIDEO WORKER ====================
@@ -760,30 +765,38 @@ export function useInterviewProctoringMonitor({
 
   return {
     state,
-    emitEvent, // For external callers (face detection, etc.)
+    emitEvent,           // For external callers (face detection, etc.)
     setReducedFrequency, // For load shedding from InterviewUI
+    flushEvents: flushBackendQueue, // Explicit pre-completion flush — call before interview ends
   };
 }
 
 // ==================== HELPERS ====================
 
-function getSeverity(type: ProctoringEventType): string {
-  const map: Record<ProctoringEventType, string> = {
-    tab_switch: 'low',
-    copy_attempt: 'medium',
-    paste_attempt: 'medium',
-    voice_detected: 'medium',
-    multiple_voices: 'high',
-    camera_disabled: 'high',
-    microphone_disabled: 'high',
-    camera_obstructed: 'high',
-    screenshot_attempt: 'high',
-    screen_recording_attempt: 'high',
-    window_blur: 'low',
-    fullscreen_exit: 'high',
-    face_missing: 'high',
-    multiple_faces: 'high',
-    gaze_away: 'medium',
+function getSeverity(type: ProctoringEventType): 'minor' | 'moderate' | 'severe' {
+  const map: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe'> = {
+    // Minor (1 pt) — low-friction accidental events
+    tab_switch:               'minor',
+    window_blur:              'minor',
+    gaze_away:                'minor',
+    copy_attempt:             'minor',
+    paste_attempt:            'minor',
+    fullscreen_exit:          'minor',
+    // Moderate (2 pts) — suspicious but not conclusive
+    camera_obstructed:        'moderate',
+    voice_detected:           'moderate',
+    multiple_voices:          'moderate',
+    screenshot_attempt:       'moderate',
+    screen_recording_attempt: 'moderate',
+    face_missing:             'moderate',
+    face_mismatch:            'moderate',
+    voice_mismatch:           'moderate',
+    // Severe (3 pts) — strong integrity signals
+    camera_disabled:          'severe',
+    microphone_disabled:      'severe',
+    multiple_faces:           'severe',
+    face_identity_changed:    'severe',
+    voice_identity_changed:   'severe',
   };
-  return map[type] || 'low';
+  return map[type] ?? 'minor';
 }

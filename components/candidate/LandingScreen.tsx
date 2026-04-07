@@ -237,7 +237,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
                 <ul className="text-amber-700 grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <li className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 bg-amber-600 rounded-full"></span>
-                    Once started, you cannot pause
+                    Recovery is supported if a network or client failure occurs
                   </li>
                   <li className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 bg-amber-600 rounded-full"></span>

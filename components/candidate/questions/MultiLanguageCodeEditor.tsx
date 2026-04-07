@@ -34,6 +34,7 @@ import {
 interface MultiLanguageCodeEditorProps {
   question: CurrentQuestion;
   answer: {
+    question_id?: string;
     text_response?: string;
     video_response_url?: string;
     selected_options?: string[];
@@ -45,6 +46,7 @@ interface MultiLanguageCodeEditorProps {
     code_execution_error?: string;
   };
   onAnswerChange: (answer: {
+    question_id?: string;
     text_response?: string;
     video_response_url?: string;
     selected_options?: string[];
@@ -122,11 +124,11 @@ const buildInitialEditorState = (
   const previousAnswer = question.previous_answer;
   const restoredCode =
     previousAnswer?.code_submission ||
-    (answer.language === selectedLanguage ? answer.code_submission : undefined) ||
+    (answer.question_id === question.question_id && answer.language === selectedLanguage ? answer.code_submission : undefined) ||
     '';
   const restoredInput =
     previousAnswer?.code_input ||
-    (answer.language === selectedLanguage ? answer.code_input : undefined) ||
+    (answer.question_id === question.question_id && answer.language === selectedLanguage ? answer.code_input : undefined) ||
     '';
   const restoredExecutionOutput =
     buildSavedExecutionOutput(previousAnswer) ||
@@ -134,11 +136,11 @@ const buildInitialEditorState = (
       text_response: null,
       selected_options: null,
       code_submission: restoredCode || null,
-      language: answer.language || null,
+      language: answer.question_id === question.question_id ? (answer.language || null) : null,
       code_input: restoredInput || null,
-      code_execution_status: answer.code_execution_status || null,
-      code_execution_output: answer.code_execution_output || null,
-      code_execution_error: answer.code_execution_error || null,
+      code_execution_status: answer.question_id === question.question_id ? (answer.code_execution_status || null) : null,
+      code_execution_output: answer.question_id === question.question_id ? (answer.code_execution_output || null) : null,
+      code_execution_error: answer.question_id === question.question_id ? (answer.code_execution_error || null) : null,
       is_locked: false,
     });
 
@@ -248,6 +250,7 @@ export function MultiLanguageCodeEditor({
     // Notify parent of the restored/initialized code so auto-save can track it
     onAnswerChange({
       ...answer,
+      question_id: question.question_id,
       code_submission: nextEditorState.code,
       code_input: nextEditorState.input,
       language: selectedLanguage,
@@ -382,6 +385,7 @@ export function MultiLanguageCodeEditor({
     // Notify parent directly so auto-save triggers on every keystroke (with 3s debounce in parent)
     onAnswerChange({
       ...answer,
+      question_id: question.question_id,
       code_submission: newCode,
       language: selectedLanguage,
       code_execution_status: undefined,
@@ -413,6 +417,7 @@ export function MultiLanguageCodeEditor({
     setExecutionOutput(null);
     onAnswerChange({
       ...answer,
+      question_id: question.question_id,
       language: langId,
       code_execution_status: undefined,
       code_execution_output: undefined,
@@ -435,6 +440,7 @@ export function MultiLanguageCodeEditor({
         setExecutionOutput(null);
         onAnswerChange({
           ...answer,
+          question_id: question.question_id,
           code_submission: template,
           language: selectedLanguage,
           code_execution_status: undefined,
@@ -468,6 +474,7 @@ export function MultiLanguageCodeEditor({
       });
       onAnswerChange({
         ...answer,
+        question_id: question.question_id,
         code_submission: code,
         code_input: inputToUse,
         language: selectedLanguage,
@@ -521,6 +528,7 @@ export function MultiLanguageCodeEditor({
       });
       onAnswerChange({
         ...answer,
+        question_id: question.question_id,
         code_submission: code,
         code_input: customInput,
         language: selectedLanguage,
@@ -646,9 +654,9 @@ export function MultiLanguageCodeEditor({
       </div>
 
       {/* Main Layout: side-by-side on md+, tab-based on mobile */}
-      <div className="flex flex-col md:flex-row gap-4 h-[calc(100vh-300px)] md:h-[650px] min-h-[420px]">
+      <div className="flex flex-col md:flex-row gap-4 h-auto md:h-[650px] min-h-0 md:min-h-[420px]">
       {/* Left Panel - Problem Description & Output */}
-      <div className={`${activeMobileTab === 'editor' ? 'hidden md:flex' : 'flex'} w-full md:w-[45%] flex-col bg-white rounded-xl border border-gray-200 overflow-hidden`}>
+      <div className={`${activeMobileTab === 'editor' ? 'hidden md:flex' : 'flex'} w-full md:w-[45%] flex-col bg-white rounded-xl border border-gray-200 overflow-hidden min-h-[280px] md:min-h-0`}>
         {/* Header */}
         <div className="flex items-center gap-2 p-3 border-b border-gray-200 bg-gray-50">
           <Code className="w-4 h-4 text-gray-600" />
@@ -895,7 +903,7 @@ export function MultiLanguageCodeEditor({
       </div>
 
       {/* Right Panel - Code Editor */}
-      <div className={`${activeMobileTab === 'problem' ? 'hidden md:flex' : 'flex'} w-full md:w-[55%] flex-col bg-gray-900 rounded-xl overflow-hidden`}>
+      <div className={`${activeMobileTab === 'problem' ? 'hidden md:flex' : 'flex'} w-full md:w-[55%] flex-col bg-gray-900 rounded-xl overflow-hidden min-h-[420px] md:min-h-0`}>
         {/* Editor Header */}
         <div className="flex items-center justify-between px-2 sm:px-4 py-2 sm:py-3 bg-gray-800 border-b border-gray-700 gap-2 flex-wrap">
           {/* Language Selector */}
@@ -1072,6 +1080,7 @@ export function MultiLanguageCodeEditor({
                     setExecutionOutput(null);
                     onAnswerChange({
                       ...answer,
+                      question_id: question.question_id,
                       code_submission: code,
                       code_input: nextInput,
                       language: selectedLanguage,
@@ -1094,6 +1103,7 @@ export function MultiLanguageCodeEditor({
                 setExecutionOutput(null);
                 onAnswerChange({
                   ...answer,
+                  question_id: question.question_id,
                   code_submission: code,
                   code_input: nextInput,
                   language: selectedLanguage,

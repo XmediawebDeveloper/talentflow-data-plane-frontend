@@ -612,6 +612,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // If editing a draft or published JD, we can update it directly.
   const [editingId, setEditingId] = useState<string | null>(null);
+  // true when editingId was loaded from an existing JD (not created fresh in this session)
+  const [isPreExistingDraft, setIsPreExistingDraft] = useState(false);
   // sourceJdId tracks the original JD for reference
   const [sourceJdId, setSourceJdId] = useState<string | null>(null);
 
@@ -683,11 +685,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       if (effectiveEditingJD.status === 'draft') {
         // Editing a draft - update it directly
         setEditingId(effectiveEditingJD.id);
+        setIsPreExistingDraft(true);
         setSourceJdId(null);
         console.log('[DEBUG] Setting editingId for draft:', effectiveEditingJD.id);
       } else if (effectiveEditingJD.status === 'published') {
         // Editing published JD - update it directly (creates new version on republish)
         setEditingId(effectiveEditingJD.id);
+        setIsPreExistingDraft(true);
         setSourceJdId(effectiveEditingJD.id);
         console.log('[DEBUG] Setting editingId for published:', effectiveEditingJD.id);
       }
@@ -793,6 +797,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     salaryRange?: string;
   }>({});
 
+  // Sanitize a salary number from backend/extraction: if > 8 digits (>99999999), clear it
+  const sanitizeExtractedSalary = (val: number | null | undefined): string => {
+    if (val == null) return '';
+    const intVal = Math.trunc(val);
+    if (intVal > 99999999) return '';
+    return String(intVal);
+  };
+
   // Helper function to parse salary value (handles LPA, L, K, commas, ₹)
   const parseSalaryValue = (value: string): number | null => {
     if (!value || value.trim() === '') return null;
@@ -842,9 +854,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return 'Please enter the maximum salary to complete the range (e.g., 3 LPA to 4 LPA)';
     }
 
-    // If only max is filled, prompt for min
+    // If only max is filled, validate limit then prompt for min
     if (minSalary === null && maxSalary !== null) {
+      if (maxSalary > 99999999) {
+        return 'Maximum salary cannot exceed ₹9,99,99,999 (8 digits)';
+      }
       return 'Please enter the minimum salary to complete the range (e.g., 3 LPA to 4 LPA)';
+    }
+
+    // Max salary must not exceed 8 digits (99,999,999)
+    if (maxSalary !== null && maxSalary > 99999999) {
+      return 'Maximum salary cannot exceed ₹9,99,99,999 (8 digits)';
     }
 
     // Both are filled - validate range
@@ -1193,8 +1213,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         employmentType: prev.employmentType,
         workModel: prev.workModel,
         // Pre-fill salary from AI extraction
-        salaryFrom: params.salary_min != null ? String(params.salary_min).split('.')[0] : (prev.salaryFrom || ''),
-        salaryTo: params.salary_max != null ? String(params.salary_max).split('.')[0] : (prev.salaryTo || ''),
+        salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || prev.salaryFrom || '') : (prev.salaryFrom || ''),
+        salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || prev.salaryTo || '') : (prev.salaryTo || ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
@@ -1210,8 +1230,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // Log what was pre-filled and trigger validation
       if (params.salary_min || params.salary_max) {
         console.log('[TalentFlow] Salary pre-filled:', { min: params.salary_min, max: params.salary_max });
-        const fromVal = params.salary_min != null ? String(params.salary_min).split('.')[0] : '';
-        const toVal = params.salary_max != null ? String(params.salary_max).split('.')[0] : '';
+        const fromVal = sanitizeExtractedSalary(params.salary_min);
+        const toVal = sanitizeExtractedSalary(params.salary_max);
         const error = validateSalaryRange(fromVal, toVal);
         setValidationErrors(prev => ({ ...prev, salaryRange: error }));
       }
@@ -1759,8 +1779,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         employmentType: params.job_type || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: params.work_mode || (isEditMode ? extractedData.workModel : 'onsite'),
         // Pre-fill salary from AI extraction
-        salaryFrom: params.salary_min != null ? String(params.salary_min).split('.')[0] : (extractedData.salaryFrom || ''),
-        salaryTo: params.salary_max != null ? String(params.salary_max).split('.')[0] : (extractedData.salaryTo || ''),
+        salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || extractedData.salaryFrom || '') : (extractedData.salaryFrom || ''),
+        salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || extractedData.salaryTo || '') : (extractedData.salaryTo || ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
@@ -3168,9 +3188,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const confirmCancelJD = async () => {
     setIsCancelling(true);
     try {
-      // Delete the JD if it exists (editingId means we have a draft saved)
-      if (editingId) {
-        await jdService.delete(editingId);
+      // Only delete the draft if:
+      // - There's a saved draft (editingId exists)
+      // - AND either it was created fresh this session (not pre-existing) OR the user made changes
+      const shouldDelete = editingId && (!isPreExistingDraft || hasUnsavedChanges);
+      if (shouldDelete) {
+        await jdService.delete(editingId!);
         toast.info('JD draft has been deleted');
       }
       // Navigate to job openings
@@ -3498,8 +3521,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           industryType: industryValue,
           industryTypeRequired: false,  // Default to false - user can enable if needed
           department: effectiveEditingJD.department || '',
-          salaryFrom: effectiveEditingJD.salary_min != null ? String(effectiveEditingJD.salary_min).split('.')[0] : '',
-          salaryTo: effectiveEditingJD.salary_max != null ? String(effectiveEditingJD.salary_max).split('.')[0] : '',
+          salaryFrom: sanitizeExtractedSalary(effectiveEditingJD.salary_min),
+          salaryTo: sanitizeExtractedSalary(effectiveEditingJD.salary_max),
           compensationType: (effectiveEditingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
           assessmentGuidance: effectiveEditingJD.assessment_guidance || '',
           internalRecruiterComments: effectiveEditingJD.internal_comments ? effectiveEditingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
@@ -4590,6 +4613,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={extractedData.salaryFrom || ''}
                         onChange={(e) => {
                           const newValue = e.target.value;
+                          if (newValue.replace(/\D/g, '').length > 8) return;
                           setExtractedData(prev => ({ ...prev, salaryFrom: newValue }));
                           markExtractedDataModified();
                           const error = validateSalaryRange(newValue, extractedData.salaryTo || '');
@@ -4611,6 +4635,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={extractedData.salaryTo || ''}
                         onChange={(e) => {
                           const newValue = e.target.value;
+                          if (newValue.replace(/\D/g, '').length > 8) return;
                           setExtractedData(prev => ({ ...prev, salaryTo: newValue }));
                           markExtractedDataModified();
                           const error = validateSalaryRange(extractedData.salaryFrom || '', newValue);
@@ -6548,13 +6573,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           <DialogHeader>
             <DialogTitle className="text-base sm:text-lg">Cancel JD Creation?</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
-              Are you sure you want to cancel? {editingId ? 'This will delete the current draft and all your progress will be lost.' : 'All your progress will be lost.'}
+              Are you sure you want to cancel? {editingId && (!isPreExistingDraft || hasUnsavedChanges) ? 'This will delete the current draft and all your progress will be lost.' : 'You will be taken back to the job openings list.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <button
               onClick={() => setShowCancelDialog(false)}
-              className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700 text-white"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700 bg-white"
             >
               Continue Editing
             </button>

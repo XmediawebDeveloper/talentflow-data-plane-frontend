@@ -30,6 +30,7 @@ import {
 import { Button } from '@/components/ui/button';
 import {
   candidateService,
+  sendPauseBeacon,
   AssessmentInfo,
   CurrentQuestion,
   SubmitAnswerResponse
@@ -60,6 +61,7 @@ interface AssessmentInterfaceProps {
   rounds: Round[];
   startedAt: string; // ISO timestamp when assessment started
   durationMinutes: number; // Total assessment duration (default 30)
+  initialTimeRemainingSeconds?: number;
   onAnswerSubmit: (
     questionId: string,
     answer: {
@@ -93,6 +95,7 @@ export function AssessmentInterface({
   rounds,
   startedAt,
   durationMinutes,
+  initialTimeRemainingSeconds,
   onAnswerSubmit,
   onComplete,
   onNavigate,
@@ -104,6 +107,7 @@ export function AssessmentInterface({
   copyPasteBlocking = true,
 }: AssessmentInterfaceProps) {
   type AnswerState = {
+    question_id?: string;
     text_response?: string;
     video_response_url?: string;
     selected_options?: string[];
@@ -118,6 +122,7 @@ export function AssessmentInterface({
   const buildAnswerFromPrevious = (q: typeof currentQuestion): AnswerState => {
     if (q.previous_answer) {
       return {
+        question_id: q.question_id,
         text_response: q.previous_answer.text_response || undefined,
         selected_options: q.previous_answer.selected_options || undefined,
         code_submission: q.previous_answer.code_submission || undefined,
@@ -135,6 +140,7 @@ export function AssessmentInterface({
         if (raw) {
           const parsed = JSON.parse(raw);
           return {
+            question_id: q.question_id,
             text_response: parsed.text_response || undefined,
             selected_options: parsed.selected_options || undefined,
             code_submission: parsed.code_submission || undefined,
@@ -149,7 +155,7 @@ export function AssessmentInterface({
         console.warn('[LOCAL-BACKUP] Failed to restore draft from localStorage:', error);
       }
     }
-    return {};
+    return { question_id: q.question_id };
   };
 
   // Initialize answer from previous_answer immediately so child components (e.g.
@@ -226,12 +232,19 @@ export function AssessmentInterface({
     const totalDuration = durationMinutes * 60;
     totalDurationSecsRef.current = totalDuration;
 
+    if (typeof initialTimeRemainingSeconds === 'number' && initialTimeRemainingSeconds >= 0) {
+      const restored = Math.max(0, Math.min(totalDuration, initialTimeRemainingSeconds));
+      assessmentStartTimeRef.current = Date.now() - ((totalDuration - restored) * 1000);
+      globalTimeRemainingRef.current = restored;
+      return restored;
+    }
+
     // Restore from sessionStorage if saved during network disconnect or crash
     try {
       const saved = sessionStorage.getItem(`assessment_timer_${token}`);
       if (saved) {
-        const { remainingSeconds, savedAt } = JSON.parse(saved);
-        const elapsedSinceReload = Math.floor((Date.now() - savedAt) / 1000);
+        const { remainingSeconds, savedAt, isPaused } = JSON.parse(saved);
+        const elapsedSinceReload = isPaused ? 0 : Math.floor((Date.now() - savedAt) / 1000);
         const restored = Math.max(0, remainingSeconds - elapsedSinceReload);
         if (restored > 0) {
           sessionStorage.removeItem(`assessment_timer_${token}`);
@@ -466,6 +479,7 @@ export function AssessmentInterface({
       });
 
       navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+      sendPauseBeacon(token, 'beforeunload');
       console.log('[UNLOAD] Flushed answer via sendBeacon');
     };
 
@@ -478,11 +492,13 @@ export function AssessmentInterface({
     if (!isOnline) {
       console.log('[NETWORK] Connection lost - pausing timer');
       isTimerPausedRef.current = true;
+      void candidateService.pauseAssessment(token, 'network_offline');
       // Save current remaining time immediately so reload can restore it
       try {
         sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
           remainingSeconds: globalTimeRemainingRef.current,
-          savedAt: Date.now()
+          savedAt: Date.now(),
+          isPaused: true,
         }));
       } catch {}
       setShowNetworkBanner(true);
@@ -495,6 +511,7 @@ export function AssessmentInterface({
         return;
       }
       console.log('[NETWORK] Connection restored - processing retry queue');
+      isTimerPausedRef.current = false;
       setShowNetworkBanner(false);
       if (queueSize > 0) {
         setAutoSaveStatus('retrying');
@@ -504,6 +521,19 @@ export function AssessmentInterface({
       }
     }
   }, [isOnline, queueSize, processQueue, token]);
+
+  useEffect(() => {
+    const serverPaused = Boolean(assessmentInfo.is_paused);
+    isTimerPausedRef.current = !isOnline || serverPaused;
+
+    if (typeof assessmentInfo.time_remaining_seconds === 'number' && assessmentInfo.time_remaining_seconds >= 0) {
+      const normalizedRemaining = Math.max(0, Math.min(totalDurationSecsRef.current, assessmentInfo.time_remaining_seconds));
+      assessmentStartTimeRef.current = Date.now() - ((totalDurationSecsRef.current - normalizedRemaining) * 1000);
+      globalTimeRemainingRef.current = normalizedRemaining;
+      setGlobalTimeRemaining(normalizedRemaining);
+      onTimeUpdate?.(normalizedRemaining);
+    }
+  }, [assessmentInfo.is_paused, assessmentInfo.time_remaining_seconds, isOnline, onTimeUpdate]);
 
   // 🛡️ PROCTORING: Exit Fullscreen on Complete
   const exitFullscreen = async () => {
@@ -803,7 +833,8 @@ export function AssessmentInterface({
       try {
         sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
           remainingSeconds: remaining,
-          savedAt: Date.now()
+          savedAt: Date.now(),
+          isPaused: false,
         }));
       } catch {}
 
@@ -875,14 +906,18 @@ export function AssessmentInterface({
   useEffect(() => {
     if (currentQuestion.previous_answer) {
       setAnswer({
+        question_id: currentQuestion.question_id,
         text_response: currentQuestion.previous_answer.text_response || undefined,
         selected_options: currentQuestion.previous_answer.selected_options || undefined,
         code_submission: currentQuestion.previous_answer.code_submission || undefined,
         code_input: currentQuestion.previous_answer.code_input || undefined,
         language: currentQuestion.previous_answer.language || undefined,
+        code_execution_status: currentQuestion.previous_answer.code_execution_status || undefined,
+        code_execution_output: currentQuestion.previous_answer.code_execution_output || undefined,
+        code_execution_error: currentQuestion.previous_answer.code_execution_error || undefined,
       });
     } else {
-      setAnswer({});
+      setAnswer({ question_id: currentQuestion.question_id });
     }
 
     // Update ALL question statuses from backend (if available)
@@ -931,6 +966,8 @@ export function AssessmentInterface({
     if (limit === null || limit === undefined || limit <= 0) return;
 
     const timer = setInterval(() => {
+      if (isTimerPausedRef.current) return;
+
       const elapsed = Math.floor((Date.now() - questionWallStartRef.current) / 1000);
       const remaining = Math.max(0, limit - elapsed);
       setTimeRemaining(remaining);
@@ -1616,8 +1653,8 @@ export function AssessmentInterface({
 
         {/* Progress Stepper */}
         <div className="w-full bg-white border-b border-gray-200">
-          <div className="w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-3 overflow-x-auto">
-            <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-max mx-auto">
+          <div className="w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-3">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mx-auto">
               {progressSteps.map((step, index) => (
                 <div key={index} className="flex items-center">
                   <div className="flex items-center gap-2">
@@ -1637,7 +1674,7 @@ export function AssessmentInterface({
                     </span>
                   </div>
                   {index < progressSteps.length - 1 && (
-                    <div className={`w-6 sm:w-12 h-0.5 mx-2 ${
+                    <div className={`hidden sm:block w-6 sm:w-12 h-0.5 mx-2 ${
                       step.completed ? 'bg-green-500' : 'bg-gray-300'
                     }`} />
                   )}
@@ -1649,8 +1686,8 @@ export function AssessmentInterface({
 
         {/* Round Progress Bar */}
         <div className="w-full bg-gray-50 border-b border-gray-200">
-          <div className="w-full px-2 sm:px-4 lg:px-8 py-1.5 sm:py-2 overflow-x-auto">
-            <div className="flex items-center justify-center gap-2 sm:gap-3 min-w-max mx-auto">
+          <div className="w-full px-2 sm:px-4 lg:px-8 py-1.5 sm:py-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mx-auto">
               {rounds.map((round, idx) => {
                 const Icon = getRoundIcon(round.round_type);
                 const isActive = round.round_type === currentQuestion.round_type;

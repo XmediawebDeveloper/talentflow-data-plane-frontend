@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Loader2, AlertTriangle, RefreshCw, CheckCircle, Maximize2, Monitor } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, CheckCircle, Maximize2, Monitor, Clock, KeyRound, Mail } from 'lucide-react';
 import { requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
 import { toast } from 'sonner';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
@@ -24,6 +24,7 @@ type Step =
   | 'loading'
   | 'consent'
   | 'identity'
+  | 'reauth'          // OTP re-verification on fresh browser session
   | 'system_check'
   | 'intro_video'
   | 'language_select'
@@ -76,6 +77,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [identitySubmitting, setIdentitySubmitting] = useState(false);
   const [languageSubmitting, setLanguageSubmitting] = useState(false);
   const [startSubmitting, setStartSubmitting] = useState(false);
+  const [screenShareDeclined, setScreenShareDeclined] = useState(false);
+  // true when candidate stopped screen sharing during the interview
+  const [screenShareStopped, setScreenShareStopped] = useState(false);
+  const [resharing, setResharing] = useState(false);
 
   // Language state
   const [availableLanguages, setAvailableLanguages] = useState<string[]>(['English']);
@@ -107,6 +112,23 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     },
   });
 
+  // sessionStorage key for this interview's current step
+  const SESSION_KEY = `tf_ai_step_${token}`;
+  // Steps that aren't tracked by the backend and must be persisted client-side
+  const POST_CHECK_STEPS: Step[] = ['intro_video', 'language_select', 'sample_practice', 'fullscreen_prompt'];
+  // Session-auth marker — set after OTP verified; cleared when browser is closed (sessionStorage)
+  const SESSION_AUTH_KEY = `tf_ai_authed_${token}`;
+
+  // State for the reauth (OTP re-verification) gate
+  const [reauthTargetStep, setReauthTargetStep] = useState<Step>('system_check');
+  const [reauthOtpSent, setReauthOtpSent] = useState(false);
+  const [reauthOtpCode, setReauthOtpCode] = useState('');
+  const [reauthOtpVerifying, setReauthOtpVerifying] = useState(false);
+  const [reauthOtpSending, setReauthOtpSending] = useState(false);
+  const [reauthOtpError, setReauthOtpError] = useState<string | null>(null);
+  const [reauthCooldown, setReauthCooldown] = useState(0);
+  const reauthCooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Load interview info and determine initial step
   const loadInterview = useCallback(async () => {
     if (stepRef.current === 'interview') return;
@@ -121,18 +143,83 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         setSelectedLanguage(info.selected_language || info.available_languages[0]);
       }
 
-      // Determine initial step based on interview status
+      // ── 1. Terminal / active states ──
       if (info.status === 'in_progress') {
+        sessionStorage.removeItem(SESSION_KEY);
         setStep('interview');
-      } else if (info.status === 'completed' || info.status === 'cancelled' || info.status === 'expired') {
-        setErrorMessage(`This interview is ${info.status}.`);
+        return;
+      }
+      if (info.status === 'completed' || info.status === 'cancelled') {
+        sessionStorage.removeItem(SESSION_KEY);
+        setStep('completed');
+        return;
+      }
+      if (info.status === 'expired') {
+        setIsExpiredError(true);
         setStep('error');
-      } else if (info.status === 'system_check') {
-        // Resume from system check if system_check status
-        setStep('system_check');
-      } else {
-        // invited, consent_pending, draft, scheduled — all start at consent
+        return;
+      }
+
+      // ── 2. Progress-based restoration using backend fields ──
+      if (!info.consent_accepted_at) {
         setStep('consent');
+        return;
+      }
+      if (!info.identity_verified) {
+        setStep('identity');
+        return;
+      }
+
+      // ── 2b. Session auth gate ──────────────────────────────────────────────
+      // identity_verified = true means OTP was done in a PREVIOUS session.
+      // When the browser is closed sessionStorage is wiped, so SESSION_AUTH_KEY is gone.
+      // Require a fresh OTP before letting the candidate resume at any step.
+      const sessionAuthed = sessionStorage.getItem(SESSION_AUTH_KEY) === '1';
+      if (!sessionAuthed) {
+        // Determine where to send them AFTER they pass OTP
+        let targetStep: Step = 'system_check';
+        if (info.system_check_passed) {
+          const savedStep = sessionStorage.getItem(SESSION_KEY) as Step | null;
+          if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
+            targetStep = savedStep;
+          } else if (info.introduction_video_url) {
+            targetStep = 'intro_video';
+          } else if ((info.available_languages?.length ?? 0) > 1 && !info.selected_language) {
+            targetStep = 'language_select';
+          } else {
+            targetStep = 'sample_practice';
+          }
+        }
+        setReauthTargetStep(targetStep);
+        setStep('reauth');
+        return;
+      }
+      // ────────────────────────────────────────────────────────────────────────
+
+      if (!info.system_check_passed) {
+        setStep('system_check');
+        return;
+      }
+
+      // ── 3. Post-system-check steps — restore from sessionStorage ──
+      const savedStep = sessionStorage.getItem(SESSION_KEY) as Step | null;
+      if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
+        // Skip language_select if language already confirmed
+        if (savedStep === 'language_select' && info.selected_language) {
+          setStep(info.introduction_video_url ? 'intro_video' : 'sample_practice');
+          return;
+        }
+        setStep(savedStep);
+        return;
+      }
+
+      // ── 4. Default post-check entry point ──
+      if (info.introduction_video_url) {
+        setStep('intro_video');
+      } else if ((info.available_languages?.length ?? 0) > 1 && !info.selected_language) {
+        setStep('language_select');
+      } else {
+        setStep('sample_practice');
       }
     } catch (err: any) {
       // AIU19: HTTP 410 = auto-expired (past scheduled_at) — show specific message, no retry
@@ -152,6 +239,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   useEffect(() => {
     loadInterview();
   }, [loadInterview]);
+
+  // Persist post-check steps to sessionStorage so refresh restores the correct position
+  useEffect(() => {
+    if (POST_CHECK_STEPS.includes(step as Step)) {
+      sessionStorage.setItem(SESSION_KEY, step);
+    } else if (step === 'interview' || step === 'completed' || step === 'error') {
+      sessionStorage.removeItem(SESSION_KEY);
+    }
+  }, [step]);
 
   // Scroll to top on every step transition
   useEffect(() => {
@@ -231,6 +327,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     try {
       const result = await candidateAIInterviewService.verifyIdentity(token, data);
       setInterview(result);
+      // Mark this browser session as OTP-authenticated so re-opens don't need re-auth
+      sessionStorage.setItem(SESSION_AUTH_KEY, '1');
+      // Register face baseline from identity photo — so system check & interview can compare against it.
+      // Fire-and-forget: models load in background while user sees system check UI.
+      if (data.photo) {
+        faceVerification.registerFaceFromBlob(data.photo).catch(() => {});
+      }
       setStep('system_check');
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || 'Failed to verify identity. Please try again.');
@@ -291,7 +394,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     setStep('fullscreen_prompt');
   };
 
-  // Called from fullscreen prompt after entering fullscreen — actually starts the interview
+  // Called from fullscreen prompt button — handles screen share, fullscreen entry, then starts interview
   const handleFullscreenReady = useCallback(async () => {
     if (startSubmitting) return;
     setStartSubmitting(true);
@@ -304,7 +407,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       console.warn('[Portal] Failed to pre-create AudioContext:', e);
     }
 
-    // Start screen recording (best-effort — requires user to grant screen share permission)
+    // Step 1: Request screen recording BEFORE entering fullscreen.
+    // Browsers (Chrome) exit fullscreen automatically to show the screen-share picker.
+    // By requesting screen share first (while not in fullscreen) we avoid a second
+    // "Fullscreen Required" popup when the interview step loads.
     try {
       const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: { frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -321,16 +427,41 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       sr.ondataavailable = (e) => { if (e.data.size > 0) screenChunksRef.current.push(e.data); };
       sr.start(5000);
       screenRecorderRef.current = sr;
-      // If candidate stops sharing manually, stop the recorder gracefully
+      // If candidate stops sharing manually — record as severe malpractice and block the interview
       screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
         if (screenRecorderRef.current?.state !== 'inactive') {
           try { screenRecorderRef.current?.stop(); } catch { /* ignore */ }
         }
+        screenRecorderRef.current = null;
+        screenStreamRef.current = null;
+        // Only show the blocking overlay when the interview is actually running
+        if (stepRef.current === 'interview') {
+          setScreenShareStopped(true);
+          // Emit as severe proctoring event
+          InterviewEventBus.emit('screen_share_stopped');
+          // Report to backend
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'screen_share_stopped',
+            severity: 'severe',
+            details: { reason: 'candidate_stopped_sharing' },
+          }).catch(() => {});
+        }
       });
-    } catch (e) {
-      // User cancelled screen share or browser doesn't support — interview still starts
-      console.warn('[ScreenRecording] Screen capture not started:', e);
+      setScreenShareDeclined(false);
+    } catch (e: any) {
+      // NotAllowedError / AbortError = user explicitly cancelled the picker — block the interview.
+      // Any other error (browser doesn't support getDisplayMedia) = proceed without recording.
+      const cancelled = e?.name === 'NotAllowedError' || e?.name === 'AbortError';
+      if (cancelled) {
+        setScreenShareDeclined(true);
+        setStartSubmitting(false);
+        return; // do NOT enter fullscreen or start interview
+      }
+      console.warn('[ScreenRecording] Screen capture not supported on this browser:', e);
     }
+
+    // Step 2: Now enter fullscreen — screen-share picker is already done so no exit/re-entry cycle.
+    try { await requestFullscreen(); } catch { /* proceed anyway */ }
 
     try {
       await candidateAIInterviewService.recordPracticeComplete(token);
@@ -375,26 +506,169 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     );
   }
 
+  // ========== COMPLETED ==========
+  if (step === 'completed') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
+        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
+          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-8 h-8 text-green-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">Interview Completed</h1>
+          <p className="text-gray-600 mb-2">
+            Thank you for completing your interview. Your responses have been recorded and are being reviewed.
+          </p>
+          <p className="text-sm text-gray-500">
+            You will be contacted with next steps. You may close this window.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // ========== ERROR ==========
   if (step === 'error') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="max-w-md w-full text-center">
-          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
-            <AlertTriangle className="w-8 h-8 text-red-500" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
+        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${isExpiredError ? 'bg-amber-100' : 'bg-red-100'}`}>
+            {isExpiredError
+              ? <Clock className="w-8 h-8 text-amber-600" />
+              : <AlertTriangle className="w-8 h-8 text-red-600" />
+            }
           </div>
-          <h1 className="text-xl font-semibold text-gray-900 mb-2">
-            {isExpiredError ? 'Interview Expired' : 'Unable to Load Interview'}
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">
+            {isExpiredError ? 'Interview Link Expired' : 'Unable to Load Interview'}
           </h1>
-          <p className="text-sm text-gray-600 mb-6">{errorMessage}</p>
+          <p className="text-gray-600 mb-6">{errorMessage || (isExpiredError ? 'This interview link has expired and is no longer available.' : 'An error occurred while loading your interview.')}</p>
           {!isExpiredError && (
             <button
               onClick={loadInterview}
-              className="inline-flex items-center gap-2 mx-auto px-6 py-2.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm"
+              className="inline-flex items-center gap-2 mx-auto px-6 py-2.5 text-sm font-medium bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-all shadow-sm"
             >
               <RefreshCw className="w-4 h-4" />
               Retry
             </button>
+          )}
+          {isExpiredError && (
+            <p className="text-sm text-gray-500">Please contact the recruiter if you believe this is a mistake.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ========== REAUTH (OTP re-verification on fresh browser session) ==========
+  if (step === 'reauth') {
+    const candidateEmail = interview?.candidate_email || '';
+    const maskedEmail = candidateEmail.replace(/(.{2})[^@]+(@.+)/, '$1***$2');
+
+    const startReauthCooldown = () => {
+      setReauthCooldown(60);
+      reauthCooldownRef.current = setInterval(() => {
+        setReauthCooldown(prev => {
+          if (prev <= 1) { clearInterval(reauthCooldownRef.current!); reauthCooldownRef.current = null; return 0; }
+          return prev - 1;
+        });
+      }, 1000);
+    };
+
+    const handleReauthSendOtp = async () => {
+      if (reauthOtpSending || reauthCooldown > 0) return;
+      setReauthOtpSending(true);
+      setReauthOtpError(null);
+      try {
+        await candidateAIInterviewService.sendOtp(token, candidateEmail);
+        setReauthOtpSent(true);
+        startReauthCooldown();
+      } catch (err: any) {
+        setReauthOtpError(err?.response?.data?.detail || 'Failed to send OTP. Please try again.');
+      } finally {
+        setReauthOtpSending(false);
+      }
+    };
+
+    const handleReauthVerifyOtp = async () => {
+      if (!reauthOtpCode.trim() || reauthOtpVerifying) return;
+      setReauthOtpVerifying(true);
+      setReauthOtpError(null);
+      try {
+        const result = await candidateAIInterviewService.verifyOtp(token, candidateEmail, reauthOtpCode.trim());
+        if (result.verified) {
+          sessionStorage.setItem(SESSION_AUTH_KEY, '1');
+          setStep(reauthTargetStep);
+        } else {
+          setReauthOtpError('Invalid OTP code. Please check and try again.');
+        }
+      } catch (err: any) {
+        setReauthOtpError(err?.response?.data?.detail || 'Verification failed. Please try again.');
+      } finally {
+        setReauthOtpVerifying(false);
+      }
+    };
+
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" style={{ colorScheme: 'light' }}>
+        <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8">
+          <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <KeyRound className="w-8 h-8 text-indigo-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2 text-center">Verify Your Identity</h1>
+          <p className="text-sm text-gray-500 mb-6 text-center">
+            For security, please verify your email to continue your interview.
+          </p>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6 flex items-center gap-3">
+            <Mail className="w-5 h-5 text-gray-400 shrink-0" />
+            <div>
+              <p className="text-xs text-gray-500">Sending OTP to</p>
+              <p className="text-sm font-medium text-gray-800">{maskedEmail}</p>
+            </div>
+          </div>
+
+          {!reauthOtpSent ? (
+            <button
+              onClick={handleReauthSendOtp}
+              disabled={reauthOtpSending}
+              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+            >
+              {reauthOtpSending ? <><Loader2 className="w-4 h-4 animate-spin" />Sending...</> : 'Send OTP'}
+            </button>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Enter OTP</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={reauthOtpCode}
+                  onChange={(e) => setReauthOtpCode(e.target.value.replace(/\D/g, ''))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleReauthVerifyOtp(); }}
+                  placeholder="6-digit code"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              {reauthOtpError && (
+                <p className="text-sm text-red-600 flex items-center gap-1">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />{reauthOtpError}
+                </p>
+              )}
+              <button
+                onClick={handleReauthVerifyOtp}
+                disabled={reauthOtpVerifying || reauthOtpCode.length < 4}
+                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+              >
+                {reauthOtpVerifying ? <><Loader2 className="w-4 h-4 animate-spin" />Verifying...</> : 'Verify & Continue'}
+              </button>
+              <button
+                onClick={handleReauthSendOtp}
+                disabled={reauthOtpSending || reauthCooldown > 0}
+                className="w-full text-sm text-indigo-600 hover:text-indigo-700 disabled:text-gray-400 py-1"
+              >
+                {reauthCooldown > 0 ? `Resend OTP in ${reauthCooldown}s` : 'Resend OTP'}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -406,37 +680,72 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 md:p-10">
-          <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Monitor className="w-10 h-10 text-indigo-600" />
-          </div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
-            Enter Fullscreen Mode
-          </h1>
-          <p className="text-gray-600 mb-6 text-center text-sm">
-            The AI interview requires fullscreen mode to ensure a focused and fair environment.
-          </p>
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6">
-            <p className="font-semibold text-indigo-900 mb-3 text-sm">Interview Rules:</p>
-            <ul className="space-y-2 text-sm text-indigo-800">
-              <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Browser navigation will be hidden</span></li>
-              <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Exiting fullscreen will be flagged as a violation</span></li>
-              <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Keep the window focused throughout the interview</span></li>
-            </ul>
-          </div>
-          <button
-            onClick={async () => {
-              try { await requestFullscreen(); } catch { /* proceed anyway */ }
-              handleFullscreenReady();
-            }}
-            disabled={startSubmitting}
-            className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-          >
-            {startSubmitting ? (
-              <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
-            ) : (
-              <><Maximize2 className="w-5 h-5" />Enter Fullscreen &amp; Start Interview</>
-            )}
-          </button>
+
+          {screenShareDeclined ? (
+            /* ── Screen share declined — block the interview ── */
+            <>
+              <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="w-10 h-10 text-red-600" />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+                Screen Sharing Required
+              </h1>
+              <p className="text-gray-600 mb-5 text-center text-sm">
+                Screen sharing permission was denied. This is mandatory to ensure a fair and monitored interview.
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+                <p className="font-semibold text-red-800 mb-2 text-sm">Why is this required?</p>
+                <ul className="space-y-1.5 text-sm text-red-700">
+                  <li className="flex items-start gap-2"><span className="mt-0.5">•</span><span>Screen recording prevents proxy interviews and malpractice</span></li>
+                  <li className="flex items-start gap-2"><span className="mt-0.5">•</span><span>The recording is reviewed only if a violation is flagged</span></li>
+                  <li className="flex items-start gap-2"><span className="mt-0.5">•</span><span>You cannot proceed without granting this permission</span></li>
+                </ul>
+              </div>
+              <button
+                onClick={() => { setScreenShareDeclined(false); handleFullscreenReady(); }}
+                disabled={startSubmitting}
+                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg"
+              >
+                {startSubmitting ? (
+                  <><Loader2 className="w-5 h-5 animate-spin" />Requesting Permission...</>
+                ) : (
+                  <><Monitor className="w-5 h-5" />Allow Screen Sharing &amp; Continue</>
+                )}
+              </button>
+            </>
+          ) : (
+            /* ── Normal fullscreen prompt ── */
+            <>
+              <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Monitor className="w-10 h-10 text-indigo-600" />
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
+                Enter Fullscreen Mode
+              </h1>
+              <p className="text-gray-600 mb-6 text-center text-sm">
+                The AI interview requires fullscreen mode and screen sharing to ensure a focused and fair environment.
+              </p>
+              <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6">
+                <p className="font-semibold text-indigo-900 mb-3 text-sm">Interview Rules:</p>
+                <ul className="space-y-2 text-sm text-indigo-800">
+                  <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Screen sharing is required to prevent malpractice</span></li>
+                  <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Browser navigation will be hidden (fullscreen mode)</span></li>
+                  <li className="flex items-start gap-2"><span className="text-indigo-500 mt-0.5">✓</span><span>Exiting fullscreen will be flagged as a violation</span></li>
+                </ul>
+              </div>
+              <button
+                onClick={() => { handleFullscreenReady(); }}
+                disabled={startSubmitting}
+                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+              >
+                {startSubmitting ? (
+                  <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
+                ) : (
+                  <><Maximize2 className="w-5 h-5" />Share Screen &amp; Start Interview</>
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
@@ -444,6 +753,60 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
   // ========== INTERVIEW (live AI interview) ==========
   if (step === 'interview' && interview) {
+    // Re-share screen handler — called from screen-share-stopped overlay
+    const handleReshareScreen = async () => {
+      if (resharing) return;
+      setResharing(true);
+      try {
+        const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
+          video: { frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
+        });
+        screenStreamRef.current = screenStream;
+        const screenMime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+          .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
+        const sr = new MediaRecorder(screenStream, {
+          ...(screenMime ? { mimeType: screenMime } : {}),
+          videoBitsPerSecond: 300_000,
+        });
+        screenChunksRef.current = [];
+        sr.ondataavailable = (e) => { if (e.data.size > 0) screenChunksRef.current.push(e.data); };
+        sr.start(5000);
+        screenRecorderRef.current = sr;
+        // Re-attach ended listener
+        screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
+          if (screenRecorderRef.current?.state !== 'inactive') {
+            try { screenRecorderRef.current?.stop(); } catch { /* ignore */ }
+          }
+          screenRecorderRef.current = null;
+          screenStreamRef.current = null;
+          if (stepRef.current === 'interview') {
+            setScreenShareStopped(true);
+            InterviewEventBus.emit('screen_share_stopped');
+            candidateAIInterviewService.reportProctorEvent(token, {
+              event_type: 'screen_share_stopped',
+              severity: 'severe',
+              details: { reason: 'candidate_stopped_sharing' },
+            }).catch(() => {});
+          }
+        });
+        setScreenShareStopped(false);
+      } catch (e: any) {
+        // User cancelled re-share — report as additional malpractice
+        const cancelled = e?.name === 'NotAllowedError' || e?.name === 'AbortError';
+        if (cancelled) {
+          InterviewEventBus.emit('screen_share_stopped');
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'screen_share_stopped',
+            severity: 'severe',
+            details: { reason: 'reshare_declined' },
+          }).catch(() => {});
+        }
+      } finally {
+        setResharing(false);
+      }
+    };
+
     return (
       <>
         <InterviewUI
@@ -457,8 +820,39 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           faceVerification={faceVerification.hasBaseline() ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
         />
-        {/* Fullscreen exit overlay */}
-        {!isFullscreenActive && (
+        {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
+        {screenShareStopped && (
+          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
+                <AlertTriangle className="w-8 h-8 text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Screen Sharing Stopped</h2>
+              <p className="text-gray-600 mb-2 text-sm">
+                Screen sharing is mandatory throughout the interview. This incident has been recorded as a violation.
+              </p>
+              <p className="text-sm text-red-600 font-medium mb-6">
+                You must re-enable screen sharing to continue.
+              </p>
+              <button
+                onClick={handleReshareScreen}
+                disabled={resharing}
+                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+              >
+                {resharing ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Requesting Permission...</>
+                ) : (
+                  <><Monitor className="w-4 h-4" />Re-share Screen</>
+                )}
+              </button>
+              <p className="text-xs text-gray-400 mt-4">
+                If you continue to decline, the interview will be marked as suspicious.
+              </p>
+            </div>
+          </div>
+        )}
+        {/* Fullscreen exit overlay — only shown when screen share is active */}
+        {!screenShareStopped && !isFullscreenActive && (
           <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white border-2 border-yellow-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
@@ -597,7 +991,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           token={token}
           position={interview.position}
           onAllPassed={handleSystemCheckPassed}
-          onRegisterFace={faceVerification.registerFace}
+          onRegisterFace={async (video) => {
+            // Only register from live video if no baseline was set from the identity photo.
+            // This covers the reauth case (browser was closed — identity photo is gone).
+            if (faceVerification.hasBaseline()) return true;
+            return faceVerification.registerFace(video);
+          }}
+          onVerifyFace={faceVerification.hasBaseline() ? faceVerification.verifyCurrentFace : undefined}
         />
       </PreInterviewLayout>
     );
@@ -650,6 +1050,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           onGoBack={goBack}
           selectedLanguage={selectedLanguage}
           submitting={startSubmitting}
+          faceVerification={faceVerification.hasBaseline() ? {
+            hasBaseline: faceVerification.hasBaseline,
+            startVerification: faceVerification.startVerification,
+            stopVerification: faceVerification.stopVerification,
+          } : undefined}
         />
       </PreInterviewLayout>
     );

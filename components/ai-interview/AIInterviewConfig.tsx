@@ -148,21 +148,24 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
   };
 }
 
-function getTimedModePercentages(nthEnabled: boolean, hrEnabled: boolean) {
+function getTimedModePercentages(nthEnabled: boolean, hrEnabled: boolean, hrPct: number = DEFAULT_PCT.hr) {
   const allocation = getTimedModeAllocation(nthEnabled, hrEnabled);
   const scoringQuestionTotal = allocation.mthQuestions + allocation.nthQuestions;
 
   if (scoringQuestionTotal <= 0) {
-    return { mth: 0, nth: 0, hr: 0 };
+    return { mth: 0, nth: 0, hr: hrEnabled ? hrPct : 0 };
   }
 
-  const mth = Math.round((allocation.mthQuestions / scoringQuestionTotal) * 100);
-  const nth = nthEnabled ? 100 - mth : 0;
+  // When HR is enabled it gets hrPct of the total score;
+  // MTH + NTH split the remaining (100 - hrPct) proportionally.
+  const scoringBudget = hrEnabled ? 100 - hrPct : 100;
+  const mth = Math.round((allocation.mthQuestions / scoringQuestionTotal) * scoringBudget);
+  const nth = nthEnabled ? scoringBudget - mth : 0;
 
   return {
     mth,
     nth,
-    hr: 0,
+    hr: hrEnabled ? hrPct : 0,
   };
 }
 
@@ -524,7 +527,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             <div className="space-y-2.5">
               {config.clusters
                 .slice()
-                .sort((a, b) => b.priority - a.priority)
+                .sort((a, b) => b.priority - a.priority || (a.name ?? '').localeCompare(b.name ?? ''))
                 .map(cluster => {
                   const isCollapsed = collapsedClusters.has(cluster.id);
                   const clusterSkills = config.skills.filter(s =>
@@ -1371,7 +1374,7 @@ export default function AIInterviewConfig() {
   };
 
   const timedAllocation = getTimedModeAllocation(nth.enabled, hrEnabled);
-  const timedPercentages = getTimedModePercentages(nth.enabled, hrEnabled);
+  const timedPercentages = getTimedModePercentages(nth.enabled, hrEnabled, hrPct);
   const fixedMthMin = timedAllocation.mthMinutes;
   const fixedNthMin = timedAllocation.nthMinutes;
   const fixedHrMin  = timedAllocation.hrMinutes;
@@ -1488,13 +1491,15 @@ export default function AIInterviewConfig() {
       const jdSet = new Set((selectedJd?.must_have_skills || []).map(s => s.toLowerCase()));
       const jdSkills = mth.skills.filter(s => jdSet.has(s.name.toLowerCase())).map(s => s.name);
       const customSkills = mth.skills.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
-      // Clusters → topics + topic_weights + topic_time_minutes
+      // Clusters → topics + topic_weights + topic_time_minutes + topic_skills
       const topics = mth.clusters.map(c => c.name).filter(Boolean);
       const topicWeights: Record<string, number> = {};
+      const topicSkills: Record<string, string[]> = {};
       const topicTime = allocateClusterMinutes(mth.clusters, fixedMthMin);
       mth.clusters.forEach(c => {
         if (c.name) {
           topicWeights[c.name] = c.priority * 20;
+          if (c.skills?.length) topicSkills[c.name] = c.skills.map((s: any) => typeof s === 'string' ? s : s.name).filter(Boolean);
         }
       });
 
@@ -1504,6 +1509,7 @@ export default function AIInterviewConfig() {
         duration_minutes: dur('mth'),
         topics,
         topic_weights: topics.length > 0 ? topicWeights : undefined,
+        topic_skills: topics.length > 0 ? topicSkills : undefined,
         topic_time_minutes: topics.length > 0 ? topicTime : undefined,
         enabled: true,
         order: 2,
@@ -1520,10 +1526,12 @@ export default function AIInterviewConfig() {
       const customSkills = nth.skills.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
       const topics = nth.clusters.map(c => c.name).filter(Boolean);
       const topicWeights: Record<string, number> = {};
+      const topicSkills: Record<string, string[]> = {};
       const nthTopicTime = allocateClusterMinutes(nth.clusters, fixedNthMin);
       nth.clusters.forEach(c => {
         if (c.name) {
           topicWeights[c.name] = c.priority * 20;
+          if (c.skills?.length) topicSkills[c.name] = c.skills.map((s: any) => typeof s === 'string' ? s : s.name).filter(Boolean);
         }
       });
 
@@ -1533,6 +1541,7 @@ export default function AIInterviewConfig() {
         duration_minutes: dur('nth'),
         topics,
         topic_weights: topics.length > 0 ? topicWeights : undefined,
+        topic_skills: topics.length > 0 ? topicSkills : undefined,
         topic_time_minutes: topics.length > 0 ? nthTopicTime : undefined,
         enabled: true,
         order: 3,

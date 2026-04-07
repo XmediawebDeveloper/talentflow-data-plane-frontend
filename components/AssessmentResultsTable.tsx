@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2, Trash2, Award, Play } from 'lucide-react';
 import React from 'react';
 import { useRouter } from 'next/navigation';
@@ -60,9 +60,14 @@ interface AssessmentResultsTableProps {
 export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail, canDownloadPDF = false, canBatchDownload = false }: AssessmentResultsTableProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const stickyScrollbarRef = useRef<HTMLDivElement | null>(null);
+  const stickyScrollbarInnerRef = useRef<HTMLDivElement | null>(null);
+  const isSyncingScrollRef = useRef(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [selectedResults, setSelectedResults] = useState<string[]>([]);
+  const [showStickyScrollbar, setShowStickyScrollbar] = useState(false);
 
   // Filters (inline dropdowns matching AssessmentResults.tsx)
   const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Pending'>('all');
@@ -124,6 +129,39 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       console.error('Failed to save column preferences:', error);
     }
   }, [columns]);
+
+  useEffect(() => {
+    const updateStickyScrollbar = () => {
+      const tableEl = tableScrollRef.current;
+      const innerEl = stickyScrollbarInnerRef.current;
+      if (!tableEl || !innerEl) return;
+
+      const hasHorizontalOverflow = tableEl.scrollWidth > tableEl.clientWidth;
+      setShowStickyScrollbar(hasHorizontalOverflow);
+      innerEl.style.width = `${tableEl.scrollWidth}px`;
+    };
+
+    updateStickyScrollbar();
+
+    const tableEl = tableScrollRef.current;
+    if (!tableEl || typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateStickyScrollbar);
+      return () => window.removeEventListener('resize', updateStickyScrollbar);
+    }
+
+    const resizeObserver = new ResizeObserver(updateStickyScrollbar);
+    resizeObserver.observe(tableEl);
+    const tableChild = tableEl.firstElementChild;
+    if (tableChild) {
+      resizeObserver.observe(tableChild);
+    }
+    window.addEventListener('resize', updateStickyScrollbar);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateStickyScrollbar);
+    };
+  }, [enabledColumns.length, filteredResults.length, selectedResultDetail, selectedResults.length]);
 
   const [selectedResultDetail, setSelectedResultDetail] = useState<string | null>(null);
 
@@ -493,6 +531,22 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     return 'text-red-600';
   };
 
+  const syncHorizontalScroll = (source: 'table' | 'sticky') => {
+    const tableEl = tableScrollRef.current;
+    const stickyEl = stickyScrollbarRef.current;
+    if (!tableEl || !stickyEl || isSyncingScrollRef.current) return;
+
+    isSyncingScrollRef.current = true;
+    if (source === 'table') {
+      stickyEl.scrollLeft = tableEl.scrollLeft;
+    } else {
+      tableEl.scrollLeft = stickyEl.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false;
+    });
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Header */}
@@ -687,7 +741,11 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-x-auto">
+      <div
+        ref={tableScrollRef}
+        className="hidden md:block overflow-x-auto"
+        onScroll={() => syncHorizontalScroll('table')}
+      >
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200">
@@ -1055,6 +1113,18 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           </tbody>
         </table>
       </div>
+
+      {showStickyScrollbar && (
+        <div className="hidden md:block sticky bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+          <div
+            ref={stickyScrollbarRef}
+            className="overflow-x-auto overflow-y-hidden"
+            onScroll={() => syncHorizontalScroll('sticky')}
+          >
+            <div ref={stickyScrollbarInnerRef} className="h-4" />
+          </div>
+        </div>
+      )}
 
       {/* Mobile Card View */}
       <div className="md:hidden divide-y divide-gray-200">

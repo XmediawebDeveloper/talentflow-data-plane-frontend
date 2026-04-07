@@ -16,7 +16,7 @@ interface WarningItem {
   id: string;
   type: ProctoringEventType;
   message: string;
-  severity: 'low' | 'medium' | 'high';
+  severity: 'minor' | 'moderate' | 'severe';
   timestamp: Date;
 }
 
@@ -67,10 +67,10 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   voice_identity_changed: 'Speaker Changed',
 };
 
-const SEVERITY_COLORS: Record<'low' | 'medium' | 'high', { bg: string; border: string; text: string; icon: string }> = {
-  low: { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-800', icon: 'text-yellow-500' },
-  medium: { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-800', icon: 'text-orange-500' },
-  high: { bg: 'bg-red-50', border: 'border-red-400', text: 'text-red-800', icon: 'text-red-500' },
+const SEVERITY_COLORS: Record<'minor' | 'moderate' | 'severe', { bg: string; border: string; text: string; icon: string }> = {
+  minor:    { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-800', icon: 'text-yellow-500' },
+  moderate: { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-800', icon: 'text-orange-500' },
+  severe:   { bg: 'bg-red-50',    border: 'border-red-400',    text: 'text-red-800',    icon: 'text-red-500'    },
 };
 
 // Individual warning card — memoized to prevent re-renders of siblings
@@ -123,11 +123,11 @@ const WarningCard = memo(function WarningCard({
       </div>
       <div className="absolute top-2 right-10">
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-          warning.severity === 'high' ? 'bg-red-200 text-red-800' :
-          warning.severity === 'medium' ? 'bg-orange-200 text-orange-800' :
+          warning.severity === 'severe'   ? 'bg-red-200 text-red-800' :
+          warning.severity === 'moderate' ? 'bg-orange-200 text-orange-800' :
           'bg-yellow-200 text-yellow-800'
         }`}>
-          {warning.severity.toUpperCase()}
+          {warning.severity.charAt(0).toUpperCase() + warning.severity.slice(1)}
         </span>
       </div>
     </div>

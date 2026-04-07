@@ -92,8 +92,78 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
   }, []);
 
   /**
+   * Register the candidate's face from an image Blob (e.g. the identity photo).
+   * Preferred over registerFace() — uses the verified identity image rather than live video.
+   *
+   * @param blob - Image blob (photo captured during identity verification)
+   * @returns true if registration succeeded
+   */
+  const registerFaceFromBlob = useCallback(async (blob: Blob): Promise<boolean> => {
+    const loaded = await loadModels();
+    if (!loaded) return false;
+
+    const faceapi = faceApiRef.current;
+    if (!faceapi) return false;
+
+    try {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = url;
+      });
+
+      const detection = await faceapi
+        .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      URL.revokeObjectURL(url);
+
+      if (!detection?.descriptor) {
+        console.warn('[FaceVerification] No face detected in identity photo');
+        return false;
+      }
+
+      baselineDescriptorRef.current = detection.descriptor;
+      console.log('[FaceVerification] Face baseline registered from identity photo');
+      return true;
+    } catch (err) {
+      console.error('[FaceVerification] registerFaceFromBlob failed:', err);
+      return false;
+    }
+  }, [loadModels]);
+
+  /**
+   * Verify the current video frame against the registered baseline.
+   * Used at system check to confirm the person in front of the camera matches identity.
+   *
+   * @param videoElement - The video element showing the webcam feed
+   * @returns { matched, distance } or null if baseline/models not ready
+   */
+  const verifyCurrentFace = useCallback(async (
+    videoElement: HTMLVideoElement,
+  ): Promise<{ matched: boolean; distance: number } | null> => {
+    const faceapi = faceApiRef.current;
+    if (!faceapi || !baselineDescriptorRef.current) return null;
+
+    videoElementRef.current = videoElement;
+    const descriptor = await extractDescriptor();
+    if (!descriptor) return null;
+
+    const distance = faceapi.euclideanDistance(
+      Array.from(baselineDescriptorRef.current),
+      Array.from(descriptor),
+    );
+
+    return { matched: distance < MISMATCH_THRESHOLD, distance };
+  }, [extractDescriptor]);
+
+  /**
    * Register the candidate's face during system check.
    * Captures multiple descriptors and averages them for a robust baseline.
+   * Prefer registerFaceFromBlob() when the identity photo is available.
    *
    * @param videoElement - The video element showing the webcam feed
    * @returns true if registration succeeded
@@ -199,6 +269,8 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
 
   return {
     registerFace,
+    registerFaceFromBlob,
+    verifyCurrentFace,
     startVerification,
     stopVerification,
     hasBaseline,

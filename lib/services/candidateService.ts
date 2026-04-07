@@ -175,6 +175,9 @@ export interface AssessmentInfo {
   message: string;
   session_token?: string;  // Session token for page refresh support
   proctoring_settings?: AssessmentProctoringSettings | null;
+  time_remaining_seconds?: number | null;
+  is_paused?: boolean;
+  pause_reason?: string | null;
 }
 
 export interface ConsentResponse {
@@ -283,6 +286,8 @@ export interface StartAssessmentResponse {
   message: string;
   session_token?: string;  // Unique session token for single-session enforcement
   proctoring_settings?: AssessmentProctoringSettings | null;
+  time_remaining_seconds?: number | null;
+  is_paused?: boolean;
 }
 
 export interface AnswerSubmission {
@@ -392,9 +397,26 @@ export interface AssessmentResult {
 
 export interface HeartbeatResponse {
   success: boolean;
-  elapsed_seconds: number;
-  remaining_seconds: number;
+  time_remaining_seconds: number;
+  tab_switch_count?: number;
+  is_paused?: boolean;
+  pause_reason?: string | null;
 }
+
+export const sendPauseBeacon = (token: string, reason: string): boolean => {
+  if (typeof window === 'undefined' || !navigator.sendBeacon) return false;
+  const sessionToken = sessionTokenManager.getToken(token);
+  const url = `${API_BASE_URL}/candidate/assessment/${token}/pause`;
+  const payload = JSON.stringify({
+    session_token: sessionToken,
+    reason,
+  });
+  try {
+    return navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+  } catch {
+    return false;
+  }
+};
 
 export interface ProctorEvent {
   event_type:
@@ -606,6 +628,17 @@ export const candidateService = {
         throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Failed to accept consent');
       }
       throw error;
+    }
+  },
+
+  async pauseAssessment(token: string, reason: string): Promise<void> {
+    try {
+      await candidateApi.post(`/candidate/assessment/${token}/pause`, {
+        session_token: sessionTokenManager.getToken(token),
+        reason,
+      });
+    } catch (error) {
+      console.warn('[RECOVERY] Failed to pause assessment:', error);
     }
   },
 

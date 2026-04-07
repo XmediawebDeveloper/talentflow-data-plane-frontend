@@ -62,6 +62,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Silence detection — "Are you there?" banner (Req 14b)
   const [showSilenceBanner, setShowSilenceBanner] = useState(false);
   const silenceBannerTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Countdown shown inside banner before auto-skip (seconds remaining)
+  const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
+  const silenceCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Interview completion modal (Req 16)
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -88,6 +91,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [questionNumber, setQuestionNumber] = useState<number | null>(null);
   const [totalQuestions, setTotalQuestions] = useState<number | null>(null);
   const questionNumberRef = useRef<number | null>(null); // sync ref for stale-closure reads
+  // Clarification mode — true when backend signals is_clarification on a same-Q timer event
+  const [isClarification, setIsClarification] = useState(false);
 
   // Skill coverage (real-time, timed mode only)
   const [skillCoverage, setSkillCoverage] = useState<{
@@ -256,7 +261,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     return candidateAIInterviewService.reportProctorEvent(t, event);
   }, []);
 
-  const { state: proctoringState, emitEvent, setReducedFrequency } = useInterviewProctoringMonitor({
+  const { state: proctoringState, emitEvent, setReducedFrequency, flushEvents } = useInterviewProctoringMonitor({
     token,
     stream: webcamStream,
     enabled: isConnected,
@@ -264,6 +269,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     obstructionThreshold: 30,
     reportEvent: reportProctorEvent,
   });
+  // Stable ref so ws.onclose closure can always call the latest flush function
+  const flushProctoringEventsRef = useRef(flushEvents);
+  useEffect(() => { flushProctoringEventsRef.current = flushEvents; }, [flushEvents]);
 
   // Fullscreen — disabled (no popup/overlay)
   const isFullscreenActive = true;
@@ -344,19 +352,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         mediaRecorderRef.current = recorder;
         console.log(`[Recording] Started: mimeType=${recorder.mimeType}, videoBps=${opts.videoBitsPerSecond}, audioBps=${opts.audioBitsPerSecond}`);
       };
+      // Use isTypeSupported() to select the best available codec across browsers:
+      // - Chrome/Brave: vp9 > vp8 webm
+      // - Firefox: vp8 webm (vp9 may not have HW encode; ogg is audio-only)
+      // - Safari: no WebM support at all — needs mp4/avc1
+      const codecCandidates = [
+        "video/webm;codecs=vp9",
+        "video/webm;codecs=vp8",
+        "video/mp4;codecs=avc1",  // Safari 14.1+
+        "video/mp4",              // Safari fallback
+      ];
+      const supportedMime = typeof MediaRecorder !== 'undefined'
+        ? codecCandidates.find(m => MediaRecorder.isTypeSupported(m))
+        : undefined;
       try {
-        startRecorder({ ...RECORDER_OPTIONS, mimeType: "video/webm;codecs=vp9" });
-      } catch {
-        try {
-          startRecorder({ ...RECORDER_OPTIONS, mimeType: "video/webm;codecs=vp8" });
-        } catch {
-          try {
-            // Last resort: browser default codec, still apply bitrate cap
-            startRecorder(RECORDER_OPTIONS);
-          } catch (err) {
-            console.error("[Recording] MediaRecorder not supported:", err);
-          }
-        }
+        startRecorder(supportedMime ? { ...RECORDER_OPTIONS, mimeType: supportedMime } : RECORDER_OPTIONS);
+      } catch (err) {
+        console.error("[Recording] MediaRecorder not supported:", err);
       }
     }
     // Start face verification if baseline is registered
@@ -378,7 +390,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | AudioWorkletNode | null>(null);
   const recordingContextRef = useRef<AudioContext | null>(null);
   const voiceVerifBufferRef = useRef<Float32Array[]>([]);
   const audioQueueRef = useRef<AudioBuffer[]>([]); // kept for proctoring load-shedding count only
@@ -393,6 +405,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isAiSpeakingRef = useRef(false);
   const isProcessingRef = useRef(false);
+  // Cancellable ref for the 800ms "start recording after Linda stops" setTimeout.
+  // Cancelled by the Next Q handler to prevent stale recording after a skip.
+  const startRecordingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Callback to execute after speak_text TTS finishes (replaces browser speechSynthesis)
   const speakTextCallbackRef = useRef<(() => void) | null>(null);
@@ -440,6 +455,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             clearInterval(questionTimerIntervalRef.current);
             questionTimerIntervalRef.current = null;
           }
+          // Safety-net: frontend timer hit 0. Backend should send question_timer_expired
+          // momentarily; if it doesn't (network delay), send skip_question ourselves.
+          setTimeout(() => {
+            setQuestionTimerExpired(true);
+            setIsClarification(false);
+            setShowSilenceBanner(false);
+            setSilenceCountdown(null);
+            if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+            setStatus("Time's up — moving to the next question...");
+            // Clear processing state so startRecordingInternal isn't blocked when next Q arrives.
+            // (stopRecordingSilentRef early-returns if not recording, so clear explicitly.)
+            setIsProcessing(false);
+            isProcessingRef.current = false;
+            clearNoResponseTimer();
+            stopRecordingSilentRef.current();
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'skip_question', source: 'timer_expired' }));
+            }
+          }, 0);
           return 0;
         }
         return prev - 1;
@@ -452,7 +486,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const speechDetectedRef = useRef(false);
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.008);
-  const silenceDurationMsRef = useRef(2500); // default 2.5s; backend overrides via vad_config
+  const silenceDurationMsRef = useRef(2000); // default 2s; backend overrides via vad_config
 
   // VAD: adaptive noise floor calibration + rolling RMS window
   const noiseFloorRef = useRef(0);          // calibrated ambient noise floor
@@ -467,6 +501,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // treats noise as a candidate answer, advancing coverage/questions incorrectly.
   const speechFrameCountRef = useRef(0);
   const MIN_SPEECH_FRAMES = 5;
+
+  // Silent-stream detector — catches Brave fingerprinting blocking mic audio.
+  // After calibration, if every frame's RMS is essentially zero for SILENT_FRAMES_LIMIT
+  // consecutive frames (~3s), the mic stream is dead and we warn the user immediately
+  // rather than waiting the full 10s for the two no-response timers to fire.
+  const silentFrameCountRef = useRef(0);       // consecutive near-zero frames after calib
+  const silentStreamWarnedRef = useRef(false); // show warning only once per recording session
+  const SILENT_FRAMES_LIMIT = 32;              // ~3 seconds at 93ms/frame
+  const SILENT_RMS_MAX = 0.0001;               // below this = effectively zero / blocked
 
   // Save AI message
   const saveAiMessage = useCallback(() => {
@@ -536,7 +579,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const startWebSpeechRecognition = useCallback(() => {
     if (typeof window === 'undefined') return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      // Firefox doesn't support Web Speech API — show a one-time note in the transcript area
+      setCurrentTranscript("(live transcript unavailable in this browser — your audio is still being recorded)");
+      setTimeout(() => setCurrentTranscript(""), 4000);
+      return;
+    }
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
     }
@@ -682,6 +730,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setTimeout(() => { disconnect(); }, 1500);
         return;
       }
+      setIsClarification(false);
       setStatus("Your turn - speak now...");
       setTimeout(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -719,6 +768,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           silenceDurationMsRef.current = data.vad_config.silence_duration_ms;
         }
         break;
+      case "session_resumed": {
+        // Restore prior conversation messages so the candidate sees their history
+        const priorMsgs: Array<{ role: string; content: string }> = data.prior_messages || [];
+        if (priorMsgs.length > 0) {
+          setMessages(
+            priorMsgs.map((m) => ({
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            }))
+          );
+        }
+        setStatus(`Session resumed — continuing from question ${data.prior_question_count}`);
+        break;
+      }
       case "greeting":
         tokenBufferRef.current = data.text;
         revealedCharsRef.current = 0;
@@ -773,6 +836,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
         break;
       case "speaking_started":
+        // Stop any stale recording that may have started due to a race condition
+        // (e.g. Next Q clicked within the 800 ms "start recording" delay window).
+        stopRecordingSilentRef.current();
         isAiSpeakingRef.current = true;
         setIsAiSpeaking(true);
         avatarState.onAiStartSpeaking();
@@ -780,6 +846,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         pendingBuffersRef.current = 0;
         nextPlayTimeRef.current = 0;
         noResponseRetryRef.current = 0;
+        // Clear silence banner + countdown when Linda starts speaking
+        setShowSilenceBanner(false);
+        setSilenceCountdown(null);
+        if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
         setStatus("Linda is speaking...");
         startRevealingTokens();
         // Clear stale expired timer when Linda starts speaking the next question
@@ -814,10 +884,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             setTimeout(() => { disconnect(); }, 1500);
             return;
           }
-          setStatus("Your turn - speak now...");
+          setIsClarification(false);
+      setStatus("Your turn - speak now...");
           // 800ms delay before opening mic — lets room echo of Linda's TTS fully decay
           // so Whisper doesn't transcribe Linda's audio as the candidate's speech.
-          setTimeout(() => {
+          if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
+          startRecordingTimerRef.current = setTimeout(() => {
+            startRecordingTimerRef.current = null;
             if (wsRef.current?.readyState === WebSocket.OPEN) {
               startRecordingInternal();
             }
@@ -851,15 +924,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               return;
             }
             console.warn("[Safety-net] TalkingHead onAudioEnd never fired — starting mic manually");
-            setStatus("Your turn - speak now...");
-            setTimeout(() => { startRecordingInternal(); }, 800);
+            setIsClarification(false);
+      setStatus("Your turn - speak now...");
+            if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
+            startRecordingTimerRef.current = setTimeout(() => {
+              startRecordingTimerRef.current = null;
+              startRecordingInternal();
+            }, 800);
           }
         }, 3000);
         break;
       }
       case "processing":
         setIsProcessing(true);
-        setShowSilenceBanner(false); // candidate responded — hide silence banner
+        // Candidate responded — clear silence banner and its auto-skip countdown
+        setShowSilenceBanner(false);
+        setSilenceCountdown(null);
+        if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
         setStatus("Processing your speech...");
         tokenBufferRef.current = "";
         revealedCharsRef.current = 0;
@@ -885,15 +966,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // DON'T show the timer yet if Linda is still speaking — it will be shown
         // once Linda stops (via the pending timer useEffect below).
         setQuestionTimerExpired(false);
-        // Follow-up detection: if question_number hasn't changed, this is a follow-up
-        // question within the same slot — keep the existing timer running, don't reset.
+        // Follow-up / clarification detection:
+        // If question_number hasn't changed, this is a same-slot event — timer keeps running.
+        // Backend may include is_clarification:true to distinguish clarification from follow-up.
         const incomingQNum = data.question_number ?? null;
         const isFollowUp = incomingQNum !== null && incomingQNum === questionNumberRef.current;
         if (isFollowUp) {
-          // Follow-up: timer continues from wherever it is — just update total if provided
           if (data.total_questions != null) setTotalQuestions(data.total_questions);
+          if (data.is_clarification === true) {
+            setIsClarification(true);
+            setStatus("Clarifying the question — timer continues");
+          }
           break;
         }
+        // New question — clear clarification state
+        setIsClarification(false);
 
         // New question — deduct any remaining time from the previous question slot so
         // the global timer always steps by exactly the full question duration.
@@ -931,6 +1018,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   clearInterval(questionTimerIntervalRef.current);
                   questionTimerIntervalRef.current = null;
                 }
+                // Safety-net: send skip_question if backend hasn't acted yet
+                setTimeout(() => {
+                  setQuestionTimerExpired(true);
+                  setIsClarification(false);
+                  setShowSilenceBanner(false);
+                  setSilenceCountdown(null);
+                  if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+                  setStatus("Time's up — moving to the next question...");
+                  // Clear processing state so startRecordingInternal isn't blocked when next Q arrives.
+                  setIsProcessing(false);
+                  isProcessingRef.current = false;
+                  clearNoResponseTimer();
+                  stopRecordingSilentRef.current();
+                  if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({ type: 'skip_question', source: 'timer_expired' }));
+                  }
+                }, 0);
                 return 0;
               }
               return prev - 1;
@@ -946,7 +1050,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
         }
-        stopRecordingSilentRef.current(); // stop mic — backend handles advancing to next question
+        // Clear clarification badge and silence countdown — question is advancing
+        setIsClarification(false);
+        setShowSilenceBanner(false);
+        setSilenceCountdown(null);
+        if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+        // Clear processing state so startRecordingInternal isn't blocked when next Q arrives.
+        setIsProcessing(false);
+        isProcessingRef.current = false;
+        clearNoResponseTimer();
+        stopRecordingSilentRef.current();
         setStatus("Time's up — moving to the next question...");
         break;
       case "skill_coverage_update":
@@ -963,16 +1076,38 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           hr_topics: data.hr_topics && Object.keys(data.hr_topics).length > 0 ? data.hr_topics : undefined,
         });
         break;
-      case "silence_detected":
-        // Backend sent "Are you there?" TTS at 25s of silence — also show UI banner
+      case "silence_detected": {
+        // Backend detected silence — show banner with 30s auto-skip countdown.
+        // Candidate can respond or dismiss; if they stay silent the question is skipped.
         setShowSilenceBanner(true);
+        // Clear any previous countdown/timer
         if (silenceBannerTimerRef.current) clearTimeout(silenceBannerTimerRef.current);
-        silenceBannerTimerRef.current = setTimeout(() => setShowSilenceBanner(false), 8000);
+        if (silenceCountdownRef.current) clearInterval(silenceCountdownRef.current);
+        const SKIP_AFTER_S = 5;
+        setSilenceCountdown(SKIP_AFTER_S);
+        let remaining = SKIP_AFTER_S;
+        silenceCountdownRef.current = setInterval(() => {
+          remaining -= 1;
+          setSilenceCountdown(remaining);
+          if (remaining <= 0) {
+            clearInterval(silenceCountdownRef.current!);
+            silenceCountdownRef.current = null;
+            setShowSilenceBanner(false);
+            setSilenceCountdown(null);
+            // Auto-skip: send skip_question so backend advances without ending interview
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'skip_question', source: 'silence_timeout' }));
+            }
+          }
+        }, 1000);
         break;
+      }
       case "question_timer_nudge":
-        // Candidate has been silent for 45s — show a gentle prompt in the status bar
-        setShowSilenceBanner(false); // clear earlier banner if still showing
-        setStatus("Take your time — share whatever comes to mind, or say 'skip' to move on.");
+        // Candidate has been silent for a long time — gentle prompt; don't override the
+        // silence banner countdown if it's already running.
+        if (!showSilenceBanner) {
+          setStatus("Take your time — share whatever comes to mind, or say 'skip' to move on.");
+        }
         break;
       case "interview_completion_message":
         // Show the official completion message before disconnect (Req 16)
@@ -996,6 +1131,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         shouldDisconnectAfterAudioRef.current = true;
         setStatus("Interview completed. Thank you!");
         disconnect();
+        break;
+      case "auto_disconnect":
+        // Server signals that results are saved and the session should close.
+        // Disconnect after any remaining audio finishes playing.
+        setIsClosing(true); isClosingRef.current = true;
+        shouldDisconnectAfterAudioRef.current = true;
+        if (!isPlayingRef.current) {
+          // No audio playing — disconnect immediately
+          setStatus("Interview completed. Thank you!");
+          setTimeout(() => { disconnect(); }, 500);
+        }
         break;
       case "language_error":
         // Stop current recording first (otherwise startRecordingInternal
@@ -1173,7 +1319,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          channelCount: 1,
+          channelCount: { ideal: 1 }, // prefer mono but don't require it — Safari rejects hard constraint
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
@@ -1209,7 +1355,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       }
 
       const source = ctx.createMediaStreamSource(stream);
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
 
       // Downsample to 16kHz for the backend (hardware rate is typically 44.1/48kHz)
       const targetSampleRate = 16000;
@@ -1225,6 +1370,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       calibDoneRef.current = false;
       rmsWindowRef.current = [];
       speechFrameCountRef.current = 0;
+      // Reset silent-stream detector for this recording session
+      silentFrameCountRef.current = 0;
+      silentStreamWarnedRef.current = false;
 
       // Skip the first CALIB_SKIP frames before calibrating — avoids capturing
       // the candidate's opening words as "ambient noise".
@@ -1233,35 +1381,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // Rolling window size for smoothed RMS (reduces single-frame spikes)
       const RMS_WINDOW = 8;
 
-      processor.onaudioprocess = (e) => {
+      // ── Shared audio processing (VAD + PCM encode + WS send) ──────────────
+      // Defined once, called by both AudioWorklet and ScriptProcessor paths.
+      const processAudioChunk = (input: Float32Array) => {
         if (!isRecordingRef.current) return;
-        // When muted, the track produces all-zero audio which would immediately
-        // trigger the silence detector and send an unwanted end_turn to the backend.
-        // Skip VAD and audio sending entirely while muted — just keep the processor alive.
         if (isMutedRef.current) return;
-        const input = e.inputBuffer.getChannelData(0);
 
         // Collect raw audio at native sample rate for voice verification
         if (voiceVerification?.hasBaseline()) {
           voiceVerifBufferRef.current.push(new Float32Array(input));
         }
 
-        // Compute RMS amplitude (more accurate than mean absolute value)
+        // Compute RMS amplitude
         let sumSq = 0;
         for (let i = 0; i < input.length; i++) { sumSq += input[i] * input[i]; }
         const rms = Math.sqrt(sumSq / input.length);
 
-        // Adaptive noise floor: skip first CALIB_SKIP frames, then calibrate on next CALIB_FRAMES
+        // Adaptive noise floor calibration
         if (!calibDoneRef.current) {
           calibFramesRef.current++;
-          // Skip initial frames so user speech doesn't pollute the noise measurement
           if (calibFramesRef.current > CALIB_SKIP) {
             calibSumRef.current += rms;
             const measured = calibFramesRef.current - CALIB_SKIP;
             if (measured >= CALIB_FRAMES) {
               const measuredFloor = calibSumRef.current / measured;
-              // 1.5× multiplier — less aggressive than 2×, avoids treating soft speech as noise.
-              // Hard cap at 0.025 so a loud environment can't disable VAD entirely.
               noiseFloorRef.current = Math.min(
                 Math.max(silenceThresholdRef.current, measuredFloor * 1.5),
                 0.025
@@ -1269,7 +1412,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               calibDoneRef.current = true;
             }
           }
-          // Still send audio during calibration, just skip VAD decisions
         }
 
         // Smooth RMS using a rolling window
@@ -1278,28 +1420,51 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (window.length > RMS_WINDOW) window.shift();
         const smoothedRms = window.reduce((a, b) => a + b, 0) / window.length;
 
-        // Use calibrated floor once ready, otherwise fall back to server threshold
         const effectiveThreshold = calibDoneRef.current
           ? noiseFloorRef.current
           : silenceThresholdRef.current;
 
+        // ── Silent-stream detector ──────────────────────────────────────────
+        // After calibration, if every frame's RMS stays essentially zero for
+        // ~3 seconds, the microphone stream is dead (Brave fingerprinting
+        // blocking, hardware muted, or OS-level permission revoked after grant).
+        // Warn the user immediately instead of waiting 10 seconds.
+        if (calibDoneRef.current && !silentStreamWarnedRef.current) {
+          if (rms < SILENT_RMS_MAX) {
+            silentFrameCountRef.current++;
+            if (silentFrameCountRef.current >= SILENT_FRAMES_LIMIT) {
+              silentStreamWarnedRef.current = true;
+              const isBrave = !!(navigator as any).brave;
+              if (isBrave) {
+                setStatus(
+                  "Microphone audio is being blocked — in Brave, go to brave://settings/shields, " +
+                  "set Fingerprinting to Standard (not Aggressive), then refresh"
+                );
+              } else {
+                setStatus(
+                  "Microphone appears silent — check your system audio settings or try a different browser"
+                );
+              }
+            }
+          } else {
+            // Got a non-zero frame — stream is alive, cancel the check
+            silentFrameCountRef.current = 0;
+            silentStreamWarnedRef.current = true; // no need to check again
+          }
+        }
+
         if (smoothedRms > effectiveThreshold) {
           speechFrameCountRef.current++;
           silenceStartRef.current = null;
-          // Only treat as real speech after MIN_SPEECH_FRAMES consecutive frames above
-          // threshold (~450ms). Brief noise events (taps, coughs, rustles) stay below
-          // this count and will be discarded silently — no end_turn sent.
           if (speechFrameCountRef.current >= MIN_SPEECH_FRAMES) {
             speechDetectedRef.current = true;
           }
-          // Notify backend on first confirmed speech — resets question timer
           if (speechDetectedRef.current && !speechStartSentRef.current) {
             speechStartSentRef.current = true;
             if (wsRef.current?.readyState === WebSocket.OPEN) {
               wsRef.current.send(JSON.stringify({ type: "speech_started" }));
             }
           }
-          // Clear no-response timer — candidate is speaking
           clearNoResponseTimer();
           noResponseRetryRef.current = 0;
         } else if (speechDetectedRef.current) {
@@ -1310,8 +1475,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             return;
           }
         } else if (speechFrameCountRef.current > 0 && speechFrameCountRef.current < MIN_SPEECH_FRAMES) {
-          // Frames above threshold but not enough to count as real speech (noise event).
-          // Silence has now returned — discard silently without sending end_turn.
           if (silenceStartRef.current === null) {
             silenceStartRef.current = Date.now();
           } else if (Date.now() - silenceStartRef.current > 500) {
@@ -1320,7 +1483,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           }
         }
 
-        // Downsample to 16kHz using linear interpolation for better quality
+        // Downsample to 16kHz using linear interpolation
         let samples: Float32Array;
         if (downsampleRatio > 1) {
           const outputLen = Math.floor(input.length / downsampleRatio);
@@ -1346,31 +1509,101 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
       };
 
-      source.connect(processor);
-      processor.connect(ctx.destination);
-      processorRef.current = processor;
+      // ── AudioWorklet (primary) → ScriptProcessor (fallback) ───────────────
+      // AudioWorklet runs off the main thread — no UI jank during recording.
+      // ScriptProcessor is deprecated but kept as fallback for older browsers.
+      let audioNodeConnected = false;
+
+      if (ctx.audioWorklet) {
+        try {
+          // Inline worklet via blob URL — no separate file needed.
+          // Accumulates 4096 samples (same as ScriptProcessor) before posting,
+          // so VAD timing is identical between both paths.
+          const workletCode = `
+            class PCMProcessor extends AudioWorkletProcessor {
+              constructor() {
+                super();
+                this._buf = [];
+                this._size = 4096;
+              }
+              process(inputs) {
+                const ch = inputs[0]?.[0];
+                if (ch) {
+                  for (let i = 0; i < ch.length; i++) this._buf.push(ch[i]);
+                  while (this._buf.length >= this._size) {
+                    const chunk = new Float32Array(this._buf.splice(0, this._size));
+                    this.port.postMessage(chunk, [chunk.buffer]);
+                  }
+                }
+                return true;
+              }
+            }
+            registerProcessor('pcm-processor', PCMProcessor);
+          `;
+          const blob = new Blob([workletCode], { type: 'application/javascript' });
+          const workletUrl = URL.createObjectURL(blob);
+          await ctx.audioWorklet.addModule(workletUrl);
+          URL.revokeObjectURL(workletUrl);
+
+          const workletNode = new AudioWorkletNode(ctx, 'pcm-processor', {
+            channelCount: 1,
+            channelCountMode: 'explicit',
+            channelInterpretation: 'discrete',
+          });
+          workletNode.port.onmessage = (e: MessageEvent<Float32Array>) => {
+            processAudioChunk(e.data);
+          };
+          source.connect(workletNode);
+          workletNode.connect(ctx.destination);
+          processorRef.current = workletNode;
+          audioNodeConnected = true;
+          console.log('[InterviewUI] AudioWorklet active');
+        } catch (err) {
+          console.warn('[InterviewUI] AudioWorklet unavailable, falling back to ScriptProcessor:', err);
+        }
+      }
+
+      if (!audioNodeConnected) {
+        // Fallback: ScriptProcessor (deprecated but universally supported)
+        const processor = ctx.createScriptProcessor(4096, 1, 1);
+        processor.onaudioprocess = (e) => {
+          processAudioChunk(e.inputBuffer.getChannelData(0));
+        };
+        source.connect(processor);
+        processor.connect(ctx.destination);
+        processorRef.current = processor;
+        console.log('[InterviewUI] ScriptProcessor active (AudioWorklet not available)');
+      }
       isRecordingRef.current = true;
       setIsRecording(true);
       avatarState.onUserStartSpeaking();
       setStatus(`Listening... (auto-stops after ${silenceDurationMsRef.current / 1000}s silence)`);
       startWebSpeechRecognition();
 
-      // No-response detection — only fire after 20s of total silence
-      // (3s was too aggressive; candidate may just be thinking)
+      // No-response detection — fire after 5s of total silence with no speech.
+      // If candidate hasn't spoken, ask "Are you there?" then skip after another 5s.
       clearNoResponseTimer();
       noResponseTimerRef.current = setTimeout(() => {
         if (!speechDetectedRef.current && isRecordingRef.current) {
           handleNoResponseRef.current();
         }
-      }, 20000);
+      }, 5000);
     } catch (err: any) {
       const errName = err?.name ?? '';
       if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
-        setStatus("Microphone access denied — please allow microphone in browser settings and refresh");
+        const isBrave = !!(navigator as any).brave;
+        if (isBrave) {
+          setStatus("Microphone blocked by Brave Shields — click the Brave icon in the address bar, disable Shields for this site, then refresh");
+        } else {
+          setStatus("Microphone access denied — please allow microphone in browser settings and refresh");
+        }
       } else if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
         setStatus("No microphone detected — please connect a microphone and refresh");
       } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
         setStatus("Microphone is in use by another app — please close it and refresh");
+      } else if (errName === 'OverconstrainedError' || errName === 'ConstraintNotSatisfiedError') {
+        // Some Firefox/Safari builds reject channelCount:1 on certain devices
+        setStatus("Microphone constraint not supported — please try a different audio device");
       } else {
         setStatus("Microphone error — please check your audio device and refresh");
       }
@@ -1491,7 +1724,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       setStatus("Linda is speaking...");
 
       speakViaTTS(areYouThereMsg, () => {
-        setStatus("Your turn - speak now...");
+        setIsClarification(false);
+      setStatus("Your turn - speak now...");
         setTimeout(() => {
           if (wsRef.current?.readyState === WebSocket.OPEN) {
             startRecordingInternal();
@@ -1506,7 +1740,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
       micPopupTimerRef.current = setTimeout(() => {
         handleMicPopupNo();
-      }, 3000);
+      }, 15000);
     }
   }, [stopRecordingSilent, avatarState, handleMicPopupNo]);
 
@@ -1546,14 +1780,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (event.code === 1000 || shouldDisconnectAfterAudioRef.current || isClosingRef.current) {
         setStatus("Interview completed. Thank you!");
-        // Upload FIRST, then navigate — prevents the page change from killing the in-flight request
-        uploadRecording().then(() => {
-          onInterviewComplete?.();
-        });
+        // Flush proctoring events + upload recording before navigating away.
+        // Both run concurrently — proctoring flush MUST complete before onInterviewComplete
+        // otherwise camera_disabled, mic_disabled etc. events are lost.
+        const flushProctoring = flushProctoringEventsRef.current?.() ?? Promise.resolve();
+        Promise.all([flushProctoring, uploadRecording()])
+          .catch(() => {})
+          .finally(() => { onInterviewComplete?.(); });
       } else if (event.code !== 3001 && !isUnmountedRef.current && !isClosingRef.current) {
-        // Unexpected disconnection — do NOT auto-reconnect because the backend would
-        // restart the interview from Q1 (new session). Show a "Connection lost" overlay
-        // so the candidate can refresh and resume manually via the same interview link.
+        // Unexpected disconnection — flush proctoring events, then show reconnect message
+        flushProctoringEventsRef.current?.().catch(() => {});
         setStatus("Connection lost. Please refresh the page to continue.");
         stopRecordingSilentRef.current();
         uploadRecording().catch(() => {});
@@ -1634,6 +1870,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, currentAiText, currentTranscript]);
+
+  // Flush proctoring events when the page is about to close (tab close, refresh, etc.)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Fire-and-forget: sendBeacon is best effort but survives page close
+      // candidateAIInterviewService uses unauthenticated token-based URLs, so no auth header needed
+      flushProctoringEventsRef.current?.().catch(() => {});
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // DevTools / keyboard blocking during active interview
   useEffect(() => {
@@ -1747,12 +1994,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           <div className="bg-gray-900 border border-amber-500 rounded-2xl p-8 max-w-sm text-center shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="text-amber-500 text-5xl mb-4">🎤</div>
             <h2 className="text-xl font-bold text-white mb-2">Microphone Issue?</h2>
-            <p className="text-gray-400 mb-6">We couldn&apos;t detect any audio. Is your microphone working?</p>
+            <p className="text-gray-400 mb-3">We couldn&apos;t detect any audio. Is your microphone working?</p>
+            {!!(navigator as any).brave && (
+              <p className="text-amber-400 text-xs mb-4">
+                Brave detected — if Fingerprinting is set to &quot;Aggressive&quot; in Shields, it can block microphone audio.
+                Try setting it to &quot;Standard&quot; in brave://settings/shields, then refresh.
+              </p>
+            )}
             <div className="flex gap-3 justify-center">
               <button onClick={handleMicPopupYes} className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-white transition-colors">Yes, Resume</button>
               <button onClick={handleMicPopupNo} className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">No, End Interview</button>
             </div>
-            <p className="text-xs text-gray-500 mt-3">Auto-closing in 3 seconds...</p>
+            <p className="text-xs text-gray-500 mt-3">Auto-closing in 15 seconds...</p>
           </div>
         </div>
       )}
@@ -1760,16 +2013,46 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       {/* ── Silence detection banner (Req 14b) ── */}
       {showSilenceBanner && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-3 duration-300">
-          <div className="flex items-center gap-3 px-5 py-3 rounded-2xl border border-[#F59E0B]/30 bg-[#0A1020]/95 backdrop-blur-xl shadow-2xl">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-[#F59E0B]/40 bg-[#0A1020]/95 backdrop-blur-xl shadow-2xl max-w-sm">
             <div className="w-2 h-2 rounded-full bg-[#F59E0B] animate-pulse shrink-0" />
-            <span className="text-[#F59E0B] font-medium" style={{ fontSize: 14 }}>
-              Are you still there? Take your time — or say &quot;skip&quot; to move on.
-            </span>
+            <div className="flex-1 min-w-0">
+              <span className="text-[#F59E0B] font-medium block" style={{ fontSize: 13 }}>
+                Are you still there? Take your time — or say &quot;skip&quot;.
+              </span>
+              {silenceCountdown !== null && (
+                <span className="text-[#94a3b8] text-[11px]">
+                  Auto-skipping in{' '}
+                  <span className={`font-bold tabular-nums ${silenceCountdown <= 3 ? 'text-red-400' : 'text-[#F59E0B]'}`}>
+                    {silenceCountdown}s
+                  </span>
+                </span>
+              )}
+            </div>
             <button
-              onClick={() => setShowSilenceBanner(false)}
-              className="text-[#475569] hover:text-white ml-1 shrink-0"
-              style={{ fontSize: 16, lineHeight: 1 }}
+              onClick={() => {
+                setShowSilenceBanner(false);
+                setSilenceCountdown(null);
+                if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+              }}
+              className="text-[#475569] hover:text-white shrink-0 text-lg leading-none"
             >×</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Time's Up banner — shown when per-question timer expires ── */}
+      {questionTimerExpired && !showSilenceBanner && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[105] animate-in fade-in slide-in-from-bottom-3 duration-300">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-red-500/50 bg-[#0A1020]/95 backdrop-blur-xl shadow-2xl max-w-xs">
+            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="text-red-400 font-semibold block" style={{ fontSize: 13 }}>
+                Time&apos;s Up!
+              </span>
+              <span className="text-[#94a3b8] text-[11px]">
+                Moving to the next question…
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -1801,8 +2084,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       {/* ── Main interview UI ── */}
       <div className="flex h-screen overflow-hidden bg-[#0F1117]">
 
-        {/* ════ LEFT PANEL: Video feeds (dark) — equal halves ════ */}
-        <div className="w-[420px] flex-shrink-0 flex flex-col bg-[#0F1117] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+        {/* ════ LEFT PANEL: Video feeds (dark) — 40% ════ */}
+        <div className="w-[40%] flex-shrink-0 flex flex-col bg-[#0F1117] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
 
           {/* ── Top half: LINDA AI Avatar ── */}
           <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -1843,7 +2126,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 <span className={`text-[11px] font-semibold ${
                   isAiSpeaking ? 'text-purple-300' : isRecording ? 'text-red-300' : 'text-amber-300'
                 }`}>
-                  {isAiSpeaking ? 'Speaking...' : isRecording ? (isMuted ? 'Muted' : 'Your turn') : isProcessing ? 'Processing...' : isConnected ? 'Ready' : 'Connecting...'}
+                  {isAiSpeaking ? (isClarification ? 'Clarifying...' : 'Speaking...') : isRecording ? (isMuted ? 'Muted' : 'Your turn') : isProcessing ? 'Processing...' : isConnected ? 'Ready' : 'Connecting...'}
                 </span>
               </div>
             </div>
@@ -1901,26 +2184,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 </div>
               )}
 
-              {/* Mic + Camera controls at bottom */}
+              {/* Mic + Camera — locked during interview to prevent malpractice */}
               <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-3 py-2.5 bg-gradient-to-t from-black/70 to-transparent">
-                <button
-                  onClick={toggleMute}
-                  title={isMuted ? 'Unmute' : 'Mute'}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
-                    isMuted ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' : 'bg-white/20 backdrop-blur-sm text-white hover:bg-white/30'
-                  }`}
+                <div
+                  title="Microphone is locked — audio must stay on throughout the interview"
+                  className="w-9 h-9 rounded-full flex items-center justify-center bg-white/10 text-white/40 cursor-not-allowed"
                 >
-                  {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={toggleVideo}
-                  title={isVideoOff ? 'Camera on' : 'Camera off'}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 ${
-                    isVideoOff ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' : 'bg-white/20 backdrop-blur-sm text-white hover:bg-white/30'
-                  }`}
+                  <Mic className="w-4 h-4" />
+                </div>
+                <div
+                  title="Camera is locked — video must stay on throughout the interview"
+                  className="w-9 h-9 rounded-full flex items-center justify-center bg-white/10 text-white/40 cursor-not-allowed"
                 >
-                  {isVideoOff ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
-                </button>
+                  <Video className="w-4 h-4" />
+                </div>
               </div>
             </div>
           </div>
@@ -1963,6 +2240,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   <span className="text-white text-xs font-bold tabular-nums">Q {questionNumber}</span>
                   <span className="text-white/50 text-xs">/</span>
                   <span className="text-white/70 text-xs font-semibold tabular-nums">{totalQuestions}</span>
+                </div>
+              )}
+              {/* Clarification badge — shown when backend signals is_clarification */}
+              {isClarification && (
+                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/30 border border-amber-400/50 animate-pulse">
+                  <span className="text-amber-200 text-[10px] font-bold tracking-wide">CLARIFYING</span>
                 </div>
               )}
               <style>{`@keyframes qNumPop{0%{opacity:0;transform:scale(0.7) translateY(-4px)}60%{transform:scale(1.12) translateY(0)}100%{opacity:1;transform:scale(1) translateY(0)}}`}</style>
@@ -2008,6 +2291,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               </button>
             </div>
           </div>
+
 
           {/* Chat messages */}
           <div
@@ -2115,28 +2399,63 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             <div className="flex items-center justify-between mb-2">
               <span className="text-gray-400 text-xs font-medium">Type or speak your answer</span>
               <div className="flex items-center gap-2">
-                {/* Next Question button — increments number immediately */}
-                {questionTimerSeconds !== null && !questionTimerExpired && !isAiSpeaking && !isClosing && (
+                {/* Next Question button — visible during answer time and when timer expires */}
+                {questionTimerSeconds !== null && !isAiSpeaking && !isClosing && (
                   <button
+                    disabled={questionTimerExpired}
                     onClick={() => {
-                      // Stop mic WITHOUT sending end_turn — otherwise silence detection
-                      // fires end_turn after we skip, causing "Processing..." stuck state
-                      // and the Web Speech API transcript from ambient audio appearing as
-                      // the candidate's answer.
+                      if (questionTimerExpired) return; // skip_question already sent by timer
+
+                      // 1. Stop mic silently — no end_turn, no processing state
                       stopRecordingSilentRef.current();
 
-                      // Deduct remaining per-question time from global budget
+                      // 2. Clear no-response timer explicitly (stopRecordingSilent skips this
+                      //    when isRecording=false, e.g. candidate never spoke)
+                      clearNoResponseTimer();
+
+                      // 3. Clear processing state in case it was set by a previous answer
+                      setIsProcessing(false);
+                      isProcessingRef.current = false;
+
+                      // 4. Reset audioEndReceivedRef so the stale Q1 audio_end can't
+                      //    trigger handleAllAudioFinished → startRecording before Q2 is asked.
+                      audioEndReceivedRef.current = false;
+
+                      // 5. Cancel any audio-end safety-net fallback from Q1
+                      if (audioEndFallbackRef.current) {
+                        clearTimeout(audioEndFallbackRef.current);
+                        audioEndFallbackRef.current = null;
+                      }
+
+                      // 5b. Cancel any pending "start recording" timer so a stale
+                      //     startRecordingInternal() call can't fire after the skip.
+                      if (startRecordingTimerRef.current) {
+                        clearTimeout(startRecordingTimerRef.current);
+                        startRecordingTimerRef.current = null;
+                      }
+
+                      // 5c. Visual feedback while waiting for Linda to speak the next question
+                      setStatus("Linda is preparing the next question...");
+
+                      // 6. Dismiss silence banner if active
+                      if (showSilenceBanner) {
+                        setShowSilenceBanner(false);
+                        setSilenceCountdown(null);
+                        if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+                      }
+
+                      // 7. Deduct remaining per-question time from global budget
                       const remaining = questionTimerSecondsRef.current ?? 0;
                       if (remaining > 0 && !isFlexibleMode && !isNewFlexibleMode) {
                         setRemainingSeconds(prev => Math.max(0, prev - remaining));
                       }
-                      // Send skip to backend — it will generate the next question and
-                      // respond with question_timer_started carrying the new question_number.
-                      // Do NOT optimistically increment questionNumber here because that
-                      // would cause the follow-up detection to fire a false positive.
+
+                      // 8. Send skip — backend generates next Q
                       if (wsRef.current?.readyState === WebSocket.OPEN) {
                         wsRef.current.send(JSON.stringify({ type: 'skip_question', source: 'candidate' }));
                       }
+
+                      // 9. Clear question timer state
                       if (questionTimerIntervalRef.current) {
                         clearInterval(questionTimerIntervalRef.current);
                         questionTimerIntervalRef.current = null;
@@ -2147,10 +2466,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                       setQuestionTimerSeconds(null);
                       setQuestionTimerExpired(false);
                     }}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all duration-200 hover:opacity-80"
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all duration-200 ${
+                      questionTimerExpired
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:opacity-80'
+                    }`}
                     style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.08), rgba(236,72,153,0.08))', borderColor: 'rgba(124,58,237,0.25)', color: '#7c3aed' }}
                   >
-                    Next Q →
+                    {questionTimerExpired ? 'Skipping…' : 'Next Q →'}
                   </button>
                 )}
                 {/* Recording badge */}

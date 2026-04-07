@@ -58,10 +58,10 @@ function QuickActionButton({
         onClick={onClick}
         disabled={disabled}
         className={`
-          w-full px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm rounded-md transition-all shadow-sm text-left flex items-center gap-2
+          w-full px-3 py-2.5 text-sm font-medium rounded-md transition-all text-left flex items-center gap-2.5
           ${disabled
-            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            : className || 'bg-gray-700 text-white hover:bg-gray-800'
+            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+            : className || 'bg-gray-800 text-white hover:bg-gray-700 shadow-sm'
           }
         `}
         title={disabled ? disabledTooltip : undefined}
@@ -210,6 +210,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
   // Track Invites modal state
   const [showTrackInvitesModal, setShowTrackInvitesModal] = useState(false);
+
 
   // Fetch JD History when modal opens
   useEffect(() => {
@@ -1251,7 +1252,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {activeTab === 'overview' && (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column - Job Details */}
-        <div className="lg:col-span-10 space-y-4 sm:space-y-6">
+        <div className="lg:col-span-8 space-y-4 sm:space-y-6">
           {/* Complete Job Description */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {/* JD Header - COMMENTED OUT
@@ -1393,27 +1394,21 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         </div>
 
         {/* Right Column - Actions & Activity */}
-        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+        <div className="lg:col-span-4 space-y-4 sm:space-y-6">
           {/* Quick Actions */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Quick Actions</h3>
+            <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 sm:mb-4">Quick Actions</h3>
             <div className="space-y-2">
-              {/* 1. Invite for Assessment - Permission + Plan feature + Feature flag + JD Status */}
-              {permissions.canCreateAssessments && hasPlanFeature('assessment') && (
+              {/* 1. View JD History */}
+              {permissions.canReadJD && (
                 <QuickActionButton
-                  icon={<Mail className="w-4 h-4" />}
-                  label="Invite for Assessment"
-                  onClick={() => setShowInviteToAssessmentModal(true)}
-                  disabled={!features.assessment || job.status === 'Disabled'}
-                  disabledTooltip={
-                    !features.assessment
-                      ? 'Assessments module is not enabled for your organization'
-                      : 'Assessments are not available for disabled JDs'
-                  }
+                  icon={<History className="w-4 h-4" />}
+                  label="View JD History"
+                  onClick={() => setShowJDHistory(true)}
                 />
               )}
 
-              {/* 2. AI Talent Match - runs on-page, shows results in AI Talent Match tab */}
+              {/* 2. AI Talent Match */}
               {permissions.canRunAiMatch && aiTalentMatchAvailable && (
                 <QuickActionButton
                   icon={<Brain className="w-4 h-4" />}
@@ -1428,16 +1423,33 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* 3. View JD History - Permission (always available if user can view JD) */}
-              {permissions.canReadJD && (
+              {/* 3. Score Resumes */}
+              {permissions.canRunScoring && hasPlanFeature('resume_scoring') && (
                 <QuickActionButton
-                  icon={<History className="w-4 h-4" />}
-                  label="View JD History"
-                  onClick={() => setShowJDHistory(true)}
+                  icon={<Target className="w-4 h-4" />}
+                  label="Score Resumes"
+                  onClick={() => setShowSelectSourceModal(true)}
+                  disabled={job.status === 'Disabled'}
+                  disabledTooltip="Resume scoring is not available for disabled JDs"
                 />
               )}
 
-              {/* 4. Assessment Status - Permission + Plan feature + Feature flag */}
+              {/* 4. Invite for Assessment */}
+              {permissions.canCreateAssessments && hasPlanFeature('assessment') && (
+                <QuickActionButton
+                  icon={<Mail className="w-4 h-4" />}
+                  label="Invite for Assessment"
+                  onClick={() => setShowInviteToAssessmentModal(true)}
+                  disabled={!features.assessment || job.status === 'Disabled'}
+                  disabledTooltip={
+                    !features.assessment
+                      ? 'Assessments module is not enabled for your organization'
+                      : 'Assessments are not available for disabled JDs'
+                  }
+                />
+              )}
+
+              {/* 5. Assessment Status */}
               {permissions.canViewAssessments && hasPlanFeature('assessment') && (
                 <QuickActionButton
                   icon={<BarChart className="w-4 h-4" />}
@@ -1448,35 +1460,57 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* 5. Resume Scoring - Score resumes in this JD page (shows popup, no navigation) */}
-              {permissions.canRunScoring && hasPlanFeature('resume_scoring') && (
-                <QuickActionButton
-                  icon={<Target className="w-4 h-4" />}
-                  label="Resume Scoring"
-                  onClick={() => setShowSelectSourceModal(true)}
-                  disabled={job.status === 'Disabled'}
-                  disabledTooltip="Resume scoring is not available for disabled JDs"
-                />
-              )}
-
-              {/* 6. Add Applicants - Permission + Plan feature + Feature flag + JD Status */}
-              {permissions.canUploadResumes && hasPlanFeature('resume_upload') && features.resume_upload && (
-                <QuickActionButton
-                  icon={<UserPlus className="w-4 h-4" />}
-                  label="Add Applicants"
-                  onClick={() => setShowSelectSourceModal(true)}
-                  disabled={job.status === 'Disabled'}
-                  disabledTooltip="Cannot add applicants to disabled JDs"
-                />
-              )}
+              {/* Add Applicants - hidden */}
             </div>
           </div>
 
-          {/* Recent Activity - Show last 5 activities */}
+          {/* Applicant Statistics */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Recent Activity</h3>
+            <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 sm:mb-4">Applicant Statistics</h3>
             <div className="space-y-4">
-              {/* Activity 1: Resume scoring */}
+              <div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-600">Total Scored Resumes</span>
+                  <span className="font-medium text-gray-900">{scoredResumesStats.total}</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-2">
+                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: scoredResumesStats.total > 0 ? '100%' : '0%' }}></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-600">Exact Match</span>
+                  <span className="font-medium text-gray-900">{scoredResumesStats.exactMatch}</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-2">
+                  <div className="bg-green-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.exactMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-600">Partial Match</span>
+                  <span className="font-medium text-gray-900">{scoredResumesStats.partialMatch}</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-2">
+                  <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-600">No Match</span>
+                  <span className="font-medium text-gray-900">{scoredResumesStats.noMatch}</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-2">
+                  <div className="bg-red-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+            <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 sm:mb-4">Recent Activity</h3>
+            <div className="space-y-4">
               {scoredResumesStats.total > 0 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -1486,7 +1520,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               )}
-              {/* Activity 2: Exact matches found */}
               {scoredResumesStats.exactMatch > 0 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -1496,7 +1529,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               )}
-              {/* Activity 3: Partial matches found */}
               {scoredResumesStats.partialMatch > 0 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-yellow-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -1506,7 +1538,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               )}
-              {/* Activity 4: JD version update */}
               {job.currentVersion && job.currentVersion > 1 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -1516,65 +1547,18 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               )}
-              {/* Activity 5: Job published */}
               {job.status === 'Published' && job.postedDate && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
                     <div className="text-sm text-gray-900">Job published by {job.postedBy || 'System'}</div>
-                    <div className="text-xs text-gray-500">
-                      {formatISTDateTime(job.postedDate)}
-                    </div>
+                    <div className="text-xs text-gray-500">{formatISTDateTime(job.postedDate)}</div>
                   </div>
                 </div>
               )}
-              {/* No activity fallback */}
               {scoredResumesStats.total === 0 && job.status !== 'Published' && !job.currentVersion && (
                 <div className="text-sm text-gray-500 italic">No recent activity</div>
               )}
-            </div>
-          </div>
-
-          {/* Applicant Statistics */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Applicant Statistics</h3>
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Total Scored Resumes</span>
-                  <span className="text-gray-900">{scoredResumesStats.total}</span>
-                </div>
-                <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: scoredResumesStats.total > 0 ? '100%' : '0%' }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Exact Match</span>
-                  <span className="text-gray-900">{scoredResumesStats.exactMatch}</span>
-                </div>
-                <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.exactMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Partial Match</span>
-                  <span className="text-gray-900">{scoredResumesStats.partialMatch}</span>
-                </div>
-                <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">No Match</span>
-                  <span className="text-gray-900">{scoredResumesStats.noMatch}</span>
-                </div>
-                <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-red-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
-                </div>
-              </div>
             </div>
           </div>
 

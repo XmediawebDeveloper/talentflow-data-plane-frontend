@@ -50,9 +50,9 @@ export default function PreInterviewLayout({
   const steps = stepLabels ?? STEP_LABELS.slice(0, totalSteps);
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50 !bg-gray-50 [color-scheme:light]">
       {/* Progress Stepper */}
-      <nav className="bg-white/90 backdrop-blur-sm border-b border-gray-200 px-4 py-4 sm:px-8 sm:py-5">
+      <nav className="bg-white/90 backdrop-blur-sm border-b border-gray-200 px-4 py-4 sm:px-8 sm:py-5 !bg-white/90 !border-gray-200">
         <div className="w-full max-w-6xl mx-auto">
           <div className="flex items-center justify-between">
             {steps.map((label, index) => {

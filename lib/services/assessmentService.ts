@@ -165,9 +165,22 @@ export interface QuestionEvaluation {
     total?: number;
     points_earned?: number;
     points_total?: number;
+    testcase_points_earned?: number;
+    testcase_points_total?: number;
+    question_points_earned?: number;
+    question_points_total?: number;
     score_percentage?: number;
     syntax_valid?: boolean;
     execution_status?: string;
+    summary?: string;
+    strengths?: string[];
+    improvements?: string[];
+    marks_breakdown?: {
+      syntax?: { earned: number; total: number; status?: string; reason?: string };
+      execution?: { earned: number; total: number; status?: string; reason?: string };
+      output?: { earned: number; total: number; status?: string; reason?: string };
+      total_marks?: number;
+    };
     details?: Array<{
       test_number: number;
       passed: boolean;
@@ -344,6 +357,11 @@ export interface AuditTrailListResponse {
 
 // 4b. Combined Audit Trail (Lifecycle + Candidate Activities)
 export type AuditActivityCategory = 'assessment_lifecycle' | 'candidate_activity';
+interface DownloadSessionResponse {
+  token: string;
+  expires_in_seconds: number;
+  scope: string;
+}
 export type AuditActivityType =
   | 'assessment_created'
   | 'assessment_updated'
@@ -855,9 +873,13 @@ export const assessmentService = {
     try {
       const params: any = {};
       if (attemptId) params.attempt_id = attemptId;
+      const downloadSession = await api.post<DownloadSessionResponse>('/reports/download-session');
       const response = await api.get(`/reports/export/assessment/${assessmentId}`, {
         responseType: 'blob',
         params,
+        headers: {
+          'X-Download-Session': downloadSession.data.token,
+        },
         timeout: 120000, // 2 minutes timeout for PDF generation
       });
       return response.data;
@@ -872,8 +894,12 @@ export const assessmentService = {
    */
   async exportBulkPDFs(assessmentIds: string[]): Promise<Blob> {
     try {
+      const downloadSession = await api.post<DownloadSessionResponse>('/reports/download-session');
       const response = await api.post(`/reports/export/assessments/bulk`, assessmentIds, {
         responseType: 'blob',
+        headers: {
+          'X-Download-Session': downloadSession.data.token,
+        },
       });
       return response.data;
     } catch (error) {
@@ -887,8 +913,12 @@ export const assessmentService = {
    */
   async exportResultsBulkPDFs(assessmentId: string, resultIds: string[]): Promise<Blob> {
     try {
+      const downloadSession = await api.post<DownloadSessionResponse>('/reports/download-session');
       const response = await api.post(`/reports/export/assessment/${assessmentId}/results/bulk`, resultIds, {
         responseType: 'blob',
+        headers: {
+          'X-Download-Session': downloadSession.data.token,
+        },
       });
       return response.data;
     } catch (error) {

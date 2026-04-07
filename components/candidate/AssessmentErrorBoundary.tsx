@@ -1,6 +1,7 @@
 'use client';
 
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { sendPauseBeacon } from '@/lib/services/candidateService';
 
 interface Props {
   children: ReactNode;
@@ -20,6 +21,7 @@ export class AssessmentErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ERROR BOUNDARY] Client-side error caught — reloading to recover:', error, info);
+    sendPauseBeacon(this.props.token, 'client_error');
     // sessionStorage already has latest timer from periodic saves in the interval
     // Reload after a brief moment to let the error log flush
     setTimeout(() => {

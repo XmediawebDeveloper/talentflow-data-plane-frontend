@@ -146,7 +146,7 @@ export default function StepConsent({
   const descToShow = isLongDesc && !showFullDesc ? jdDescription!.slice(0, 600) + '…' : jdDescription;
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-6" style={{ colorScheme: 'light' }}>
 
       {/* ── Hero banner ── */}
       <div className="rounded-2xl overflow-hidden shadow-sm">
@@ -222,20 +222,37 @@ export default function StepConsent({
 
       {/* ── JD Description ── */}
       {jdDescription && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden" style={{ colorScheme: 'light' }}>
           <div className="px-5 py-3 border-b border-gray-100 bg-gray-50">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">About the Role</h2>
           </div>
           <div className="p-5">
-            <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed
-              prose-headings:text-gray-900 prose-headings:font-semibold
-              prose-p:text-gray-700 prose-p:my-1.5
-              prose-li:text-gray-700 prose-li:my-0.5
-              prose-strong:text-gray-900
-              prose-a:text-gray-700 prose-a:no-underline
-              prose-code:bg-gray-100 prose-code:text-gray-800 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
-              prose-pre:bg-gray-50 prose-pre:border prose-pre:border-gray-200 prose-pre:text-gray-700 prose-pre:rounded-lg prose-pre:text-sm prose-pre:font-normal">
-              <ReactMarkdown>{descToShow || ''}</ReactMarkdown>
+            {/* prose-invert must NOT apply here — force light mode via inline style so
+                the dark class on <html> (from OS dark mode / next-themes) cannot invert
+                the typography plugin's colors inside this container. */}
+            <div
+              className="prose prose-sm max-w-none leading-relaxed
+                prose-headings:font-semibold
+                prose-p:my-1.5
+                prose-li:my-0.5
+                prose-a:no-underline
+                prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
+                prose-pre:rounded-lg prose-pre:text-sm prose-pre:font-normal"
+              style={{
+                color: '#374151',
+                colorScheme: 'light',
+              }}
+            >
+              <style>{`
+                .jd-prose * { color: #374151 !important; background-color: transparent !important; }
+                .jd-prose h1, .jd-prose h2, .jd-prose h3, .jd-prose h4 { color: #111827 !important; }
+                .jd-prose strong { color: #111827 !important; }
+                .jd-prose code { background-color: #f3f4f6 !important; color: #1f2937 !important; }
+                .jd-prose pre { background-color: #f9fafb !important; color: #374151 !important; border: 1px solid #e5e7eb !important; }
+              `}</style>
+              <div className="jd-prose">
+                <ReactMarkdown>{descToShow || ''}</ReactMarkdown>
+              </div>
             </div>
             {isLongDesc && (
               <button
@@ -288,7 +305,7 @@ export default function StepConsent({
             <p className="font-semibold text-amber-800 mb-1">Before You Begin</p>
             <ul className="text-amber-700 text-sm space-y-1">
               <li>• Camera and microphone access are required</li>
-              <li>• Once started, the interview cannot be paused</li>
+              <li>• If a genuine network or client failure occurs, the assessment can recover from the saved server state</li>
               <li>• Ensure you are in a quiet, well-lit environment</li>
               <li>• Tab switching and copy/paste are monitored</li>
             </ul>

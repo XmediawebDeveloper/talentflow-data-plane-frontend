@@ -338,8 +338,8 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
 
   const relatedPaths: Record<string, string[]> = {
     '/recruitment/job-openings': resumeViewSource === 'job-details'
-      ? ['/recruitment/job-details', '/recruitment/resume-view']
-      : ['/recruitment/job-details'],
+      ? ['/recruitment/job-details', '/recruitment/resume-view', '/recruitment/jd-creation']
+      : ['/recruitment/job-details', '/recruitment/jd-creation'],
     '/recruitment/my-resumes': resumeViewSource === 'my-resumes' ? ['/recruitment/resume-view'] : [],
     '/recruitment/resume-database': resumeViewSource === 'resume-database' ? ['/recruitment/resume-view'] : [],
     '/recruitment/ai-talent-match': resumeViewSource === 'ai-talent-match' ? ['/recruitment/resume-view'] : [],

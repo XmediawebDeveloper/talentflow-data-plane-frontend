@@ -196,7 +196,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // SYNC STEP STATE WITH REF
   // ============================================
 
-  // Custom setStep that updates both state and ref
+  // sessionStorage key for this assessment's in-progress step
+  const ASSESS_SESSION_KEY = `tf_assess_step_${token}`;
+  // Steps that aren't re-derivable from backend on refresh and must be persisted
+  const ASSESS_PERSIST_STEPS: AssessmentStep[] = ['system_check', 'hr_questions', 'fullscreen_prompt'];
+
+  // Custom setStep that updates both state, ref, and sessionStorage
   const setStepSafe = useCallback((newStep: AssessmentStep) => {
     if (!isMountedRef.current) {
       console.log('[DEBUG] Ignoring setStep - component unmounted');
@@ -211,6 +216,14 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     console.log('[DEBUG] Setting step:', stepRef.current, '->', newStep);
     stepRef.current = newStep;
+
+    // Persist resumable steps; clear when past the flow or on terminal states
+    if (ASSESS_PERSIST_STEPS.includes(newStep)) {
+      sessionStorage.setItem(ASSESS_SESSION_KEY, newStep);
+    } else if (['assessment', 'completing', 'completed', 'results', 'error'].includes(newStep)) {
+      sessionStorage.removeItem(ASSESS_SESSION_KEY);
+    }
+
     setStep(newStep);
   }, []);
 
@@ -399,6 +412,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         consent_accepted: info.consent_accepted,
         attempt_id: info.attempt_id
       });
+      if (info.session_token) {
+        sessionTokenManager.setToken(info.session_token, token);
+      }
       setAssessmentInfo(info);
 
       // DISABLED: Identity verification removed - candidates can directly attend
@@ -480,9 +496,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         // Need to accept consent FIRST
         setStepSafe('consent');
       } else if (info.can_start) {
-        clearHRCompleted(token);
-        // Consent accepted, show landing/preview
-        setStepSafe('landing');
+        // Check if candidate was mid-flow before refresh (system_check, hr_questions, fullscreen_prompt)
+        const savedStep = sessionStorage.getItem(ASSESS_SESSION_KEY) as AssessmentStep | null;
+        if (savedStep && ASSESS_PERSIST_STEPS.includes(savedStep)) {
+          // Mark flow as active so background polling doesn't interfere
+          isFlowActiveRef.current = true;
+          setStepSafe(savedStep);
+        } else {
+          clearHRCompleted(token);
+          // Consent accepted, show landing/preview
+          setStepSafe('landing');
+        }
       } else {
         // Cannot start (expired, etc)
         const msg = info.message || 'This assessment is not available';
@@ -1056,11 +1080,20 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // Start heartbeat for session keepalive
     heartbeatRef.current = setInterval(async () => {
       try {
-        await candidateService.sendHeartbeat(token);
+        const heartbeat = await candidateService.sendHeartbeat(token);
+        if (typeof heartbeat.time_remaining_seconds === 'number') {
+          setOverlayTimeRemaining(heartbeat.time_remaining_seconds);
+          setAssessmentInfo(prev => prev ? {
+            ...prev,
+            time_remaining_seconds: heartbeat.time_remaining_seconds,
+            is_paused: heartbeat.is_paused ?? false,
+            pause_reason: heartbeat.pause_reason ?? null,
+          } : prev);
+        }
       } catch (err) {
         console.error('Heartbeat failed:', err);
       }
-    }, 30000);
+    }, 10000);
 
     console.log('[PROCTORING] Advanced monitoring active via useProctoringMonitor hook');
   };
@@ -1097,6 +1130,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         return (
           <ErrorScreen
             message={error || 'An error occurred'}
+            variant={isExpiredLink ? 'expired' : 'error'}
             onRetry={isExpiredLink ? undefined : () => {
               isFlowActiveRef.current = false;
               isStartingRef.current = false;
@@ -1297,6 +1331,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             rounds={assessmentData?.rounds || []}
             startedAt={assessmentData?.started_at || assessmentInfo?.attempt_started_at || new Date().toISOString()}
             durationMinutes={assessmentInfo?.duration_minutes || 30}
+            initialTimeRemainingSeconds={assessmentData?.time_remaining_seconds ?? assessmentInfo?.time_remaining_seconds ?? undefined}
             onAnswerSubmit={handleAnswerSubmit}
             onComplete={handleCompleteAssessment}
             onNavigate={handleNavigateToQuestion}

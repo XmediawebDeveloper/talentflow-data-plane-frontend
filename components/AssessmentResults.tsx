@@ -401,6 +401,30 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   };
 
+  const getInviteSourceMeta = (src?: string) => {
+    const value = src || 'Manual';
+    const styleMap: Record<string, string> = {
+      'JD': 'bg-blue-100 text-blue-700',
+      'Assessment': 'bg-purple-100 text-purple-700',
+      'Resume Scoring': 'bg-orange-100 text-orange-700',
+      'My Resumes': 'bg-orange-100 text-orange-700',
+      'Internal DB': 'bg-teal-100 text-teal-700',
+      'Manual': 'bg-gray-100 text-gray-600',
+    };
+    const labelMap: Record<string, string> = {
+      'JD': 'Job',
+      'Assessment': 'Assessment',
+      'Resume Scoring': 'Resume Scoring',
+      'My Resumes': 'My Resumes',
+      'Internal DB': 'Internal DB',
+      'Manual': 'Manual',
+    };
+    return {
+      cls: styleMap[value] || 'bg-gray-100 text-gray-600',
+      label: labelMap[value] || value,
+    };
+  };
+
   const formatTimelineDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
     return formatIST(dateStr);
@@ -705,7 +729,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       const innerEl = stickyScrollbarInnerRef.current;
       if (!tableEl || !innerEl) return;
 
-      const hasHorizontalOverflow = tableEl.scrollWidth > tableEl.clientWidth;
+      const hasHorizontalOverflow = tableEl.scrollWidth - tableEl.clientWidth > 1;
       setShowStickyScrollbar(hasHorizontalOverflow);
       innerEl.style.width = `${tableEl.scrollWidth}px`;
     };
@@ -725,10 +749,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       resizeObserver.observe(tableChild);
     }
     window.addEventListener('resize', updateStickyScrollbar);
+    window.addEventListener('scroll', updateStickyScrollbar, true);
+    const postRenderTimer = window.setTimeout(updateStickyScrollbar, 150);
 
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateStickyScrollbar);
+      window.removeEventListener('scroll', updateStickyScrollbar, true);
+      window.clearTimeout(postRenderTimer);
     };
   }, [columns, candidateResults.length, assessmentDetails, isFetching]);
 
@@ -1158,12 +1186,149 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               {selectedRows.length > 0 && `${selectedRows.length} selected`}
             </div>
           </div>
+          <div className="xl:hidden divide-y divide-gray-200">
+            {paginatedCandidates.length === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <div className="flex flex-col items-center">
+                  <Users className="w-12 h-12 text-gray-300 mb-3" />
+                  {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' || passFailFilter !== 'all' ? (
+                    <>
+                      <p className="text-gray-600 mb-1">No candidates match your search criteria</p>
+                      <p className="text-sm text-gray-500">Try adjusting your filters or search query</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-gray-600 mb-1">No candidates have completed this assessment yet</p>
+                      <p className="text-sm text-gray-500">Share the assessment link to invite candidates</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              paginatedCandidates.map((candidate) => {
+                const inviteMeta = getInviteSourceMeta(candidate.inviteSource);
+                return (
+                  <div key={candidate.id} className="p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedRows.includes(candidate.id)}
+                        onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
+                        className="mt-1 w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs shrink-0">
+                                {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-gray-900 truncate">{candidate.name || 'Unknown'}</div>
+                                <div className="text-xs text-gray-500 truncate">{candidate.email || '-'}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border shrink-0 ${getStatusColor(candidate.status)}`}>
+                            {candidate.status}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">CID</div>
+                            <div className="font-mono text-purple-700">{candidate.candidateDisplayId || '-'}</div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Invite Source</div>
+                            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-1 ${inviteMeta.cls}`}>
+                              {inviteMeta.label}
+                            </span>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Completed</div>
+                            <div className="text-gray-700">{candidate.completedDate}</div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Duration</div>
+                            <div className="text-gray-700">{candidate.duration}</div>
+                          </div>
+                          {assessmentDetails?.technical_enabled && (
+                            <div className="rounded-lg bg-gray-50 p-2">
+                              <div className="text-gray-500">Tech</div>
+                              <div className={candidate.tech_score !== undefined ? getScoreColor(candidate.tech_score) : 'text-gray-400'}>
+                                {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
+                              </div>
+                            </div>
+                          )}
+                          {assessmentDetails?.coding_enabled && (
+                            <div className="rounded-lg bg-gray-50 p-2">
+                              <div className="text-gray-500">Coding</div>
+                              <div className={candidate.coding_score !== undefined ? getScoreColor(candidate.coding_score) : 'text-gray-400'}>
+                                {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {candidate.phone && (
+                          <div className="mt-2 text-xs text-gray-500">Phone: {candidate.phone}</div>
+                        )}
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {candidate.status !== 'Pending' && (
+                            <button
+                              onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                              title="View Details"
+                            >
+                              <Eye className="w-3.5 h-3.5 shrink-0" />
+                              View Details
+                            </button>
+                          )}
+                          {canDownloadPDF && canDownloadResultPdf(candidate) ? (
+                            <button
+                              onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
+                              disabled={downloadingPDF === candidate.id}
+                              className="inline-flex items-center gap-1 px-3 py-2 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Download PDF Report"
+                            >
+                              {downloadingPDF === candidate.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Download className="w-3 h-3" />
+                              )}
+                              PDF
+                            </button>
+                          ) : null}
+                          <button
+                            onClick={() => handleDeleteResult(candidate.id, candidate.name)}
+                            disabled={isDeleting === candidate.id}
+                            className="inline-flex items-center gap-1 px-3 py-2 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                            title="Delete"
+                          >
+                            {isDeleting === candidate.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3 h-3" />
+                            )}
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
           <div
             ref={tableScrollRef}
-            className="overflow-x-auto"
+            className="hidden xl:block overflow-x-auto"
             onScroll={() => syncHorizontalScroll('table')}
           >
-            <table className="w-full">
+            <table className="w-full min-w-max">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-4 py-3 w-10">
@@ -1341,28 +1506,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('inviteSource') && (
                         <td className="px-4 py-4">
                           {(() => {
-                            const src = candidate.inviteSource || 'Manual';
-                            const styleMap: Record<string, string> = {
-                              'JD':            'bg-blue-100 text-blue-700',
-                              'Assessment':    'bg-purple-100 text-purple-700',
-                              'Resume Scoring':'bg-orange-100 text-orange-700',
-                              'My Resumes':    'bg-orange-100 text-orange-700',
-                              'Internal DB':   'bg-teal-100 text-teal-700',
-                              'Manual':        'bg-gray-100 text-gray-600',
-                            };
-                            const labelMap: Record<string, string> = {
-                              'JD':            'Job',
-                              'Assessment':    'Assessment',
-                              'Resume Scoring':'Resume Scoring',
-                              'My Resumes':    'My Resumes',
-                              'Internal DB':   'Internal DB',
-                              'Manual':        'Manual',
-                            };
-                            const cls = styleMap[src] || 'bg-gray-100 text-gray-600';
-                            const label = labelMap[src] || src;
+                            const meta = getInviteSourceMeta(candidate.inviteSource);
                             return (
-                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${cls}`}>
-                                {label}
+                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${meta.cls}`}>
+                                {meta.label}
                               </span>
                             );
                           })()}
@@ -1500,7 +1647,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </div>
 
           {showStickyScrollbar && (
-            <div className="sticky bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+            <div className="hidden xl:block sticky bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
               <div
                 ref={stickyScrollbarRef}
                 className="overflow-x-auto overflow-y-hidden"

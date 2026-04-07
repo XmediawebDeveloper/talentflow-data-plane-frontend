@@ -59,7 +59,7 @@ export default function StepIntroVideo({
   }, [videoSrc]);
 
   return (
-    <div className="w-full max-w-3xl mx-auto space-y-6">
+    <div className="w-full max-w-3xl mx-auto space-y-6" style={{ colorScheme: 'light' }}>
       {/* Blue gradient header card */}
       <div className="bg-gray-800 rounded-2xl p-8 text-center text-white shadow-lg">
         <div className="flex items-center justify-center gap-3 mb-3">

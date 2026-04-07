@@ -318,39 +318,30 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
           <div className="flex items-start justify-between">
             <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                  <Video className="w-5 h-5 text-gray-600" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    {config.display_id && (
-                      <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-gray-900 text-white rounded">
-                        {config.display_id}
-                      </span>
-                    )}
-                    <h1 className="text-xl font-semibold text-gray-900">
-                      {config.jd_title || config.position || 'Untitled'}
-                    </h1>
-                    {config.jd_version && (
-                      <span className="px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-500 rounded">
-                        v{config.jd_version}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 mt-1">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(config.status)}`}>
-                      {getStatusLabel(config.status)}
-                    </span>
-                    {config.jd_experience_level && (
-                      <span className="text-xs text-gray-500">{config.jd_experience_level}</span>
-                    )}
-                  </div>
-                </div>
+              <div className="flex items-center gap-3 mb-3">
+                {config.display_id && (
+                  <span className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold border border-blue-200">
+                    {config.display_id}
+                  </span>
+                )}
+                <h1 className="text-2xl font-semibold text-gray-900">
+                  {config.jd_title || config.position || 'Untitled'}
+                </h1>
+                {config.jd_version && (
+                  <span className="px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-500 rounded">
+                    v{config.jd_version}
+                  </span>
+                )}
+                <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(config.status)}`}>
+                  {getStatusLabel(config.status)}
+                </span>
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-500 mt-2 ml-12 flex-wrap">
+              <div className="flex items-center gap-4 text-sm text-gray-500 flex-wrap">
+                {config.jd_experience_level && (
+                  <span>{config.jd_experience_level}</span>
+                )}
                 <span className="flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
+                  <Clock className="w-4 h-4" />
                   {formattedDuration}
                 </span>
                 <span className={`flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded-full border ${
@@ -366,7 +357,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 </span>
                 {enabledRounds.length > 0 ? (
                   <span className="flex items-center gap-1.5 flex-wrap">
-                    <Layers className="w-3.5 h-3.5 shrink-0" />
+                    <Layers className="w-4 h-4 shrink-0" />
                     {enabledRounds.map((r, i) => (
                       <span key={i} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full border border-gray-200">
                         {ROUND_LABELS[r.type] || r.type}
@@ -375,18 +366,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   </span>
                 ) : config.interview_type ? (
                   <span className="flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 shrink-0" />
+                    <Layers className="w-4 h-4 shrink-0" />
                     <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full border border-gray-200">
                       {config.interview_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                     </span>
                   </span>
                 ) : null}
                 <span className="flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5" />
+                  <Users className="w-4 h-4" />
                   {invitationStats.total} invite{invitationStats.total !== 1 ? 's' : ''}
                 </span>
                 <span className="flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5" />
+                  <Calendar className="w-4 h-4" />
                   {formatIST(config.created_at)}
                 </span>
                 {config.created_by_name && (
@@ -394,7 +385,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 )}
                 {config.available_languages && config.available_languages.length > 0 && (
                   <span className="flex items-center gap-1">
-                    <Globe className="w-3.5 h-3.5" />
+                    <Globe className="w-4 h-4" />
                     {config.available_languages.join(', ')}
                   </span>
                 )}

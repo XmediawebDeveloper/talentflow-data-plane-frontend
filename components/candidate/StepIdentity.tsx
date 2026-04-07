@@ -57,6 +57,9 @@ export default function StepIdentity({
   const streamRef = useRef<MediaStream | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const livenessFaceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Loaded face-api.js module + options for face detection fallback
+  const faceApiRef = useRef<{ module: any; options: any } | null>(null);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isFormValid = name.trim() !== '' && email.trim() !== '' && isEmailValid && otpVerified;
@@ -115,6 +118,7 @@ export default function StepIdentity({
     }
     if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
     if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null; }
+    if (livenessFaceIntervalRef.current) { clearInterval(livenessFaceIntervalRef.current); livenessFaceIntervalRef.current = null; }
   }, []);
 
   useEffect(() => {
@@ -124,6 +128,52 @@ export default function StepIdentity({
       if (cooldownRef.current) clearInterval(cooldownRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load face-api.js in the background so it's ready when the user starts the liveness check
+  useEffect(() => {
+    const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights/';
+    import('face-api.js').then(async (fa) => {
+      if (!fa.nets.tinyFaceDetector.isLoaded) {
+        await fa.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
+      }
+      faceApiRef.current = {
+        module: fa,
+        options: new fa.TinyFaceDetectorOptions({ scoreThreshold: 0.4 }),
+      };
+    }).catch(() => { /* model unavailable — face checks will be soft */ });
+  }, []);
+
+  // Helper: detect number of faces from canvas snapshot (works cross-browser)
+  const detectFaceCount = useCallback(async (): Promise<number | null> => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.readyState < 2) return null;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+    canvas.width = video.videoWidth || 320;
+    canvas.height = video.videoHeight || 240;
+    ctx.drawImage(video, 0, 0);
+
+    // Path A: native FaceDetector (Chrome/Edge with flag)
+    if (typeof window !== 'undefined' && 'FaceDetector' in window) {
+      try {
+        const detector = new (window as any).FaceDetector({ fastMode: false });
+        const bitmap = await createImageBitmap(canvas);
+        const faces = await detector.detect(bitmap);
+        bitmap.close();
+        return faces.length;
+      } catch { /* fall through */ }
+    }
+    // Path B: face-api.js TinyFaceDetector
+    if (faceApiRef.current) {
+      try {
+        const { module: fa, options } = faceApiRef.current;
+        const detections = await fa.detectAllFaces(canvas, options);
+        return detections.length;
+      } catch { /* fall through */ }
+    }
+    return null; // model not available — skip check
   }, []);
 
   const startCamera = useCallback(async () => {
@@ -145,38 +195,37 @@ export default function StepIdentity({
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
 
-    // Face count check (best-effort)
-    let faceCheckPassed = true;
-    if (typeof window !== 'undefined' && 'FaceDetector' in window) {
-      try {
-        const detector = new (window as any).FaceDetector({ fastMode: true });
-        const faces = await detector.detect(video);
-        if (faces.length === 0) {
-          setFaceError('No face detected. Position your face clearly and try again.');
-          faceCheckPassed = false; setPhase('photo_ready');
-        } else if (faces.length > 1) {
-          setFaceError(`${faces.length} faces detected. Ensure only you are visible and try again.`);
-          faceCheckPassed = false; setPhase('photo_ready');
-        } else { setFaceError(null); }
-      } catch { setFaceError(null); }
+    // Face count check — uses detectFaceCount which tries native FaceDetector then face-api.js
+    const faceCount = await detectFaceCount();
+    if (faceCount !== null) {
+      // Only enforce check when detection was possible (faceCount=null means no model available)
+      if (faceCount === 0) {
+        setFaceError('No face detected. Center your face in the frame and try again.');
+        setPhase('photo_ready');
+        return;
+      }
+      if (faceCount > 1) {
+        setFaceError(`${faceCount} faces detected. Ensure only you are visible and try again.`);
+        setPhase('photo_ready');
+        return;
+      }
     }
+    setFaceError(null);
 
-    if (faceCheckPassed) {
-      canvas.toBlob(blob => {
-        if (blob) {
-          setPhotoBlob(blob);
-          setPhotoPreview(URL.createObjectURL(blob));
-          setPhase('captured');
-          streamRef.current?.getTracks().forEach(t => t.stop());
-          streamRef.current = null;
-        }
-      }, 'image/png');
-    }
-  }, []);
+    canvas.toBlob(blob => {
+      if (blob) {
+        setPhotoBlob(blob);
+        setPhotoPreview(URL.createObjectURL(blob));
+        setPhase('captured');
+        streamRef.current?.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+    }, 'image/png');
+  }, [detectFaceCount]);
 
   const handleFormSubmit = useCallback(() => {
     if (isFormValid) setPhase('photo_ready');
@@ -209,6 +258,18 @@ export default function StepIdentity({
       setLivenessProgress(0);
       setPhase('liveness');
 
+      // Track face presence during this step
+      let facePresentCount = 0;
+      let faceChecksRun = 0;
+
+      // Check face every 600ms while the step is running
+      if (livenessFaceIntervalRef.current) clearInterval(livenessFaceIntervalRef.current);
+      livenessFaceIntervalRef.current = setInterval(async () => {
+        const count = await detectFaceCount();
+        faceChecksRun++;
+        if (count !== null && count === 1) facePresentCount++;
+      }, 600);
+
       const startTime = performance.now();
       const animate = (now: number) => {
         const progress = Math.min(((now - startTime) / STEP_DURATION_MS) * 100, 100);
@@ -217,6 +278,16 @@ export default function StepIdentity({
           animFrameRef.current = requestAnimationFrame(animate);
         } else {
           animFrameRef.current = null;
+          clearInterval(livenessFaceIntervalRef.current!);
+          livenessFaceIntervalRef.current = null;
+
+          // Require at least 1 clean face detection during this step
+          // (skip enforcement only if detector wasn't available at all)
+          if (faceChecksRun > 0 && facePresentCount === 0) {
+            setFaceError(`Face not visible during "${LIVENESS_STEPS[stepIdx].action}". Position your face clearly and try again.`);
+            setPhase('photo_ready');
+            return;
+          }
           runStep(stepIdx + 1);
         }
       };
@@ -224,7 +295,7 @@ export default function StepIdentity({
     };
 
     runStep(0);
-  }, [cameraError, capturePhoto]);
+  }, [cameraError, capturePhoto, detectFaceCount]);
 
   const handleRetake = useCallback(() => {
     stopStream();
@@ -240,13 +311,11 @@ export default function StepIdentity({
     setPhase('form');
   }, [stopStream, photoPreview]);
 
-  // Auto-submit after capture
-  useEffect(() => {
-    if (phase === 'captured' && photoBlob) {
+  const handleConfirmAndSubmit = useCallback(() => {
+    if (photoBlob) {
       onVerify({ name: name.trim(), email: email.trim(), photo: photoBlob });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, photoBlob]);
+  }, [photoBlob, onVerify, name, email]);
 
   // ── Progress stepper (2 sections) ──
   const isPhotoPhase = phase !== 'form';
@@ -484,7 +553,7 @@ export default function StepIdentity({
   const LivenessIcon = currentLivenessStep?.icon;
 
   return (
-    <div className="w-full max-w-4xl mx-auto space-y-6">
+    <div className="w-full max-w-4xl mx-auto space-y-6" style={{ colorScheme: 'light' }}>
       {progressStepper}
       <div className="text-center">
         <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
@@ -672,12 +741,24 @@ export default function StepIdentity({
                     <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
                     <div>
                       <h4 className="text-sm font-semibold text-green-900">Photo Captured!</h4>
-                      <p className="text-xs text-green-700 mt-1">Liveness check complete. Submitting verification…</p>
+                      <p className="text-xs text-green-700 mt-1">Review your photo on the left. If it looks good, click Continue.</p>
                     </div>
                   </div>
                   <button
+                    type="button"
+                    onClick={handleConfirmAndSubmit}
+                    disabled={submitting}
+                    className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
+                  >
+                    {submitting
+                      ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
+                      : <>Continue <ArrowRight className="w-4 h-4" /></>
+                    }
+                  </button>
+                  <button
                     type="button" onClick={handleRetake}
-                    className="inline-flex items-center gap-2 border border-gray-300 text-gray-700 font-medium py-2.5 px-5 rounded-xl hover:bg-gray-50 transition-colors text-sm"
+                    disabled={submitting}
+                    className="w-full inline-flex items-center justify-center gap-2 border border-gray-300 text-gray-700 font-medium py-2.5 px-5 rounded-xl hover:bg-gray-50 transition-colors text-sm disabled:opacity-50"
                   >
                     <RefreshCw className="w-4 h-4" /> Retake Photo
                   </button>

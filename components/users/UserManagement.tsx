@@ -1472,6 +1472,12 @@ export default function UserManagement() {
   };
 
   const handleToggleActive = async (user: ApiUser) => {
+    // Pre-check: if activating and already at limit, show clear message
+    if (!user.is_active && isAtLimit) {
+      toast.error('User limit exceeded. Please upgrade your plan to activate more users.');
+      return;
+    }
+
     try {
       const endpoint = user.is_active ? 'deactivate' : 'activate';
       const response = await fetch(`${API_URL}/users/${user.id}/${endpoint}`, {
@@ -1506,7 +1512,8 @@ export default function UserManagement() {
       loadUsers();
     } catch (error: any) {
       console.error('Error toggling user status:', error);
-      toast.error(error.message || 'Failed to update user status');
+      const isNetworkError = error.message === 'Failed to fetch' || error.name === 'TypeError';
+      toast.error(isNetworkError ? 'Unable to update user status. Please check your connection and try again.' : (error.message || 'Failed to update user status'));
     }
   };
 
