@@ -117,7 +117,6 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
     if (isWaving) {
       lastWaveTimeRef.current = now;
       handPositionsRef.current = [];
-      console.log("👋 Wave detected: " + directionChanges + " direction changes");
     }
 
     return isWaving;
@@ -125,17 +124,7 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
 
   // Set video element reference
   const setVideoElement = useCallback((video: HTMLVideoElement | null) => {
-    console.log("🎥 setVideoElement called");
     videoRef.current = video;
-
-    if (video) {
-      console.log("✅ Video element connected:", {
-        width: video.videoWidth,
-        height: video.videoHeight,
-        readyState: video.readyState,
-        paused: video.paused
-      });
-    }
   }, []);
 
   // Load a CDN script tag (idempotent — skips if already loaded)
@@ -153,7 +142,6 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
   // Initialize MediaPipe Hands (only once)
   useEffect(() => {
     let mounted = true;
-    console.log("🚀 Initializing MediaPipe Hands...");
 
     const initializeHands = async () => {
       try {
@@ -161,12 +149,7 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
         // proper ES modules and break when webpack tries to bundle them.
         await loadScript("https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js");
 
-        if (!mounted) {
-          console.log("⚠️ Component unmounted during init");
-          return;
-        }
-
-        console.log("✅ MediaPipe module imported");
+        if (!mounted) return;
 
         const HandsClass = (window as any).Hands;
         if (!HandsClass) throw new Error("Hands global not found after CDN load");
@@ -179,22 +162,15 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
         hands.setOptions({
           maxNumHands: 1,
           modelComplexity: 0,
-          minDetectionConfidence: 0.4, // More lenient
-          minTrackingConfidence: 0.4,  // More lenient
+          minDetectionConfidence: 0.4,
+          minTrackingConfidence: 0.4,
         });
-
-        console.log("⚙️ MediaPipe options set");
 
         hands.onResults((results: any) => {
           if (!mounted) return;
 
           frameCountRef.current++;
           const handDetected = results.multiHandLandmarks && results.multiHandLandmarks.length > 0;
-
-          // Log first 10 frames, then every 60 frames
-          if (frameCountRef.current <= 10 || frameCountRef.current % 60 === 0) {
-            console.log(`📊 Frame ${frameCountRef.current}: Hand = ${handDetected}`);
-          }
 
           if (!handDetected) {
             loweredCountRef.current++;
@@ -203,7 +179,6 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
             if (lastStateRef.current && loweredCountRef.current >= FRAMES_TO_CONFIRM_LOWERED) {
               lastStateRef.current = false;
               setIsHandRaised(false);
-              console.log("✋ Hand lowered");
               callbacksRef.current?.onHandLowered?.();
             }
             return;
@@ -214,7 +189,6 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
           // Check wave first
           const isWaving = detectWave(landmarks);
           if (isWaving) {
-            console.log("👋 Wave detected!");
             callbacksRef.current?.onWaveDetected?.();
             return;
           }
@@ -234,22 +208,19 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
           if (!lastStateRef.current && raisedCountRef.current >= FRAMES_TO_CONFIRM_RAISED) {
             lastStateRef.current = true;
             setIsHandRaised(true);
-            console.log("🖐️ Hand raised!");
             callbacksRef.current?.onHandRaised?.();
           } else if (lastStateRef.current && loweredCountRef.current >= FRAMES_TO_CONFIRM_LOWERED) {
             lastStateRef.current = false;
             setIsHandRaised(false);
-            console.log("✋ Hand lowered");
             callbacksRef.current?.onHandLowered?.();
           }
         });
 
         handsRef.current = hands;
         setIsLoading(false);
-        console.log("✅ MediaPipe Hands ready!");
 
       } catch (err) {
-        console.error("❌ MediaPipe error:", err);
+        console.error("MediaPipe Hands init failed:", err);
         if (mounted) {
           setError(err instanceof Error ? err.message : "Failed to initialize MediaPipe");
           setIsLoading(false);
@@ -261,7 +232,6 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
 
     return () => {
       mounted = false;
-      console.log("🧹 Cleaning up MediaPipe");
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
@@ -273,38 +243,24 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
 
   // Process video frames
   useEffect(() => {
-    if (!enabled || !handsRef.current || isLoading || processingRef.current) {
-      console.log("⏸️ Not ready for processing:", { enabled, hands: !!handsRef.current, isLoading, processing: processingRef.current });
-      return;
-    }
+    if (!enabled || !handsRef.current || isLoading || processingRef.current) return;
 
     processingRef.current = true;
-    console.log("▶️ Starting frame processing");
 
     let lastProcessTime = 0;
     const PROCESS_INTERVAL = 100; // 10 fps
-    let processCount = 0;
     let retryCount = 0;
     const MAX_RETRIES = 30; // 3 seconds worth of retries
 
     const processFrame = async (timestamp: number) => {
-      // Check if we should stop
-      if (!processingRef.current) {
-        console.log("⏹️ Processing stopped");
-        return;
-      }
+      if (!processingRef.current) return;
 
       // Wait for video element
       if (!videoRef.current) {
         retryCount++;
-        if (retryCount <= 5 || retryCount % 10 === 0) {
-          console.log(`⏳ Waiting for video element (retry ${retryCount}/${MAX_RETRIES})`);
-        }
-
         if (retryCount < MAX_RETRIES) {
           animationFrameRef.current = requestAnimationFrame(processFrame);
         } else {
-          console.error("❌ Video element never connected");
           processingRef.current = false;
         }
         return;
@@ -321,23 +277,8 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
 
       // Check if video is ready
       if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
-        if (processCount === 0) {
-          console.log("⏳ Video not ready:", {
-            readyState: video.readyState,
-            dimensions: `${video.videoWidth}x${video.videoHeight}`
-          });
-        }
         animationFrameRef.current = requestAnimationFrame(processFrame);
         return;
-      }
-
-      // Process frame
-      processCount++;
-      if (processCount === 1) {
-        console.log("✅ First frame processing started!");
-      }
-      if (processCount <= 5 || processCount % 100 === 0) {
-        console.log(`🎬 Processing frame ${processCount}`);
       }
 
       try {
@@ -354,7 +295,6 @@ export function useHandRaiseDetection(config?: UseHandRaiseDetectionConfig) {
     animationFrameRef.current = requestAnimationFrame(processFrame);
 
     return () => {
-      console.log("⏹️ Stopping frame processing");
       processingRef.current = false;
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);

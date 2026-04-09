@@ -460,7 +460,7 @@ export default function DashboardLayout({
 
               <TermsReminderBanner />
               <PlanChangeReviewBanner />
-              <div className="flex-1 overflow-y-auto flex flex-col">
+              <div className="flex-1 overflow-y-auto flex flex-col scrollbar-auto-hide scrollbar-auto-hide-area">
                 {children}
               </div>
             </div>

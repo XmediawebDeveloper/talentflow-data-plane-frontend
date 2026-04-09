@@ -358,6 +358,8 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             className={`text-[10px] font-medium px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${SKILL_TYPE_COLORS[skillType]}`}
           >
             <option value="Skill">Skill</option>
+            <option value="Command">Command</option>
+            <option value="Certification">Certification</option>
           </select>
           {/* Flexible mode: move skill to the other category */}
           {mode === 'flexible' && onMoveSkill && !isLocked && (
@@ -643,7 +645,9 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
   const [savingQ, setSavingQ] = useState(false);
   const [questionError, setQuestionError] = useState('');
 
-  const atLimit = mode === 'fixed' && questionCount > 0 && selectedIds.length >= questionCount;
+  const FLEX_HR_MIN = 3;
+  const effectiveCount = mode === 'fixed' ? questionCount : FLEX_HR_MIN;
+  const atLimit = effectiveCount > 0 && selectedIds.length >= effectiveCount;
 
   const toggleQuestion = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -742,24 +746,16 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
       {enabled && (
         <div className="p-4 space-y-3">
 
-          {/* Flexible mode: no static questions */}
-          {mode === 'flexible' && (
-            <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-blue-50 border border-blue-100">
-              <Info className="w-3.5 h-3.5 text-blue-500 flex-shrink-0 mt-0.5" />
-              <p className="text-[11px] text-blue-700">
-                In Flexible mode Linda asks HR questions dynamically based on the conversation — no pre-selected questions needed.
-              </p>
-            </div>
-          )}
-
-          {/* Timed mode only: question bank selection */}
-          {mode === 'fixed' && (<>
+          {/* Question bank selection — both modes */}
+          <>
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-gray-600">
-                {`Select exactly ${questionCount} question${questionCount !== 1 ? 's' : ''} for Linda to ask`}
+                {mode === 'fixed'
+                  ? `Select exactly ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Linda to ask`
+                  : `Select at least ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Linda to ask`}
               </span>
-              <span className={`text-xs font-semibold ${selectedIds.length === questionCount ? 'text-green-600' : 'text-gray-500'}`}>
-                {selectedIds.length} / {questionCount} selected
+              <span className={`text-xs font-semibold ${selectedIds.length >= effectiveCount ? 'text-green-600' : 'text-gray-500'}`}>
+                {selectedIds.length} / {effectiveCount} selected
               </span>
             </div>
 
@@ -768,7 +764,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
               <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
                 <AlertCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
                 <p className="text-[11px] text-green-700">
-                  {questionCount} question{questionCount !== 1 ? 's' : ''} selected — limit reached. Deselect a question to choose a different one.
+                  {effectiveCount} question{effectiveCount !== 1 ? 's' : ''} selected — limit reached. Deselect a question to choose a different one.
                 </p>
               </div>
             )}
@@ -806,8 +802,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                 );})
               )}
             </div>
-
-          </>)}
+          </>
 
           {/* Add Question — available in both modes, persists to HR Question Bank */}
           {addingQuestion ? (
@@ -1437,7 +1432,7 @@ export default function AIInterviewConfig() {
         video.onloadedmetadata = () => {
           clearTimeout(timeout);
           URL.revokeObjectURL(video.src);
-          if (isFinite(video.duration) && Math.floor(video.duration) > 60) {
+          if (isFinite(video.duration) && Math.ceil(video.duration) > 60) {
             setVideoDurationError('Video must be 1 minute or less');
             toast.error('Video must be 1 minute or less');
             resolve(false);
@@ -1641,14 +1636,26 @@ export default function AIInterviewConfig() {
     if (!selectedJd) return;
     if (mode === 'flexible' && !pctValid) return;
 
-    // Validate HR round: must select exactly the required number of questions
+    // Validate HR round: must select at least 3 questions in both modes
     if (hrEnabled && hrSelectedIds.length === 0) {
       toast.error('HR round is enabled but no questions are selected. Please select the required HR questions or disable the HR round.');
       return;
     }
+    const HR_MIN_QUESTIONS = 3;
+    if (hrEnabled && hrSelectedIds.length < HR_MIN_QUESTIONS) {
+      toast.error(`Please select at least ${HR_MIN_QUESTIONS} HR questions (${hrSelectedIds.length} selected).`);
+      return;
+    }
+    // Timed mode: also enforce exact count from allocation
     const hrRequiredCount = mode === 'fixed' ? (timedAllocation.hrQuestions ?? 0) : 0;
     if (mode === 'fixed' && hrEnabled && hrRequiredCount > 0 && hrSelectedIds.length !== hrRequiredCount) {
       toast.error(`Please select exactly ${hrRequiredCount} HR question${hrRequiredCount !== 1 ? 's' : ''} (${hrSelectedIds.length} selected).`);
+      return;
+    }
+
+    // Validate Must-Have: at least one skill required in both modes
+    if (mth.skills.length === 0) {
+      toast.error('At least one Must-Have skill is required before generating clusters.');
       return;
     }
 
@@ -1656,18 +1663,6 @@ export default function AIInterviewConfig() {
     if (nth.enabled && nth.skills.length === 0) {
       toast.error('Nice-to-Have Skills is enabled but has no skills. Please add at least one skill or disable the Nice-to-Have round.');
       return;
-    }
-
-    // Flexible mode only: validate skill counts before proceeding
-    if (mode === 'flexible') {
-      if (mth.skills.length === 0 && nth.skills.length === 0) {
-        toast.error('No skills defined. Please add at least one Must-Have skill.');
-        return;
-      }
-      if (mth.skills.length === 0) {
-        toast.error('At least one Must-Have skill is required before generating clusters.');
-        return;
-      }
     }
 
     isNavigatingRef.current = true;

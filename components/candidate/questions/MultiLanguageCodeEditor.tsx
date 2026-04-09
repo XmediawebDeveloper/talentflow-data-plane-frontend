@@ -1121,14 +1121,6 @@ export function MultiLanguageCodeEditor({
           </div>
         )}
 
-        {/* Note */}
-        <div className="px-4 py-3 bg-gray-800 border-t border-gray-700 flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-gray-400">
-            Your code will be evaluated against hidden test cases upon submission. The sample tests
-            shown here are just for validation.
-          </p>
-        </div>
       </div>
       </div>
     </div>

@@ -36,7 +36,7 @@ export default function SelectSourceModal({
   onScoringComplete
 }: SelectSourceModalProps) {
   const router = useRouter();
-  const { user, tenant, isTenantAdmin } = useAuth();
+  const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
   const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
 
   // Check if user has Internal DB access permission
@@ -45,8 +45,8 @@ export default function SelectSourceModal({
   // Check if user has scoring permission
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
 
-  // Check if user has upload permission
-  const canUploadResumes = isTenantAdmin || (user?.permissions?.canUploadResumes ?? false);
+  // Check if user has upload permission (matches My Resumes page RBAC check)
+  const canUploadResumes = isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
 
   // State
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
@@ -409,9 +409,104 @@ export default function SelectSourceModal({
       };
     } catch (error: any) {
       console.error('Upload error:', error);
+
+      // Handle 409 duplicate resume
+      if (error?.response?.status === 409) {
+        const detail = error?.response?.data?.detail;
+        const existingResume = detail?.existing_resume;
+        const isExactDuplicate = detail?.is_exact_duplicate ?? true;
+        const contentDifferences = detail?.content_differences || [];
+
+        if (existingResume) {
+          return {
+            success: false,
+            error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Internal Resume Database.`,
+            existingResume: {
+              id: existingResume.id,
+              candidateName: existingResume.candidate_name || existingResume.file_name || 'Unknown',
+              email: existingResume.email || '',
+              currentTitle: existingResume.current_title || '',
+              folderName: existingResume.folder_name || '',
+              uploadedAt: existingResume.upload_date || '',
+              version: existingResume.version || 1,
+            },
+            duplicateData: {
+              file: files[0],
+              existingResume: {
+                id: existingResume.id,
+                candidate_name: existingResume.candidate_name || existingResume.file_name || 'Unknown',
+                email: existingResume.email || '',
+                folder_name: existingResume.folder_name,
+                folder_path: existingResume.folder_path || 'My Resumes',
+                upload_date: existingResume.upload_date || '',
+                file_size: existingResume.file_size || 0,
+                file_name: existingResume.file_name || '',
+                version: existingResume.version || 1,
+                version_count: existingResume.version_count || existingResume.version || 1,
+              },
+              contentDifferences,
+              isDuplicate: isExactDuplicate,
+            }
+          };
+        }
+
+        return {
+          success: false,
+          error: 'This resume already exists in the system.',
+        };
+      }
+
+      // Handle 400 validation errors
+      if (error?.response?.status === 400) {
+        const detail = error?.response?.data?.detail;
+
+        if (detail?.error === 'INVALID_RESUME') {
+          return {
+            success: false,
+            error: detail?.message || 'The uploaded file does not appear to be a valid resume. It may be a scorecard, invoice, or other document type.',
+          };
+        }
+
+        if (detail?.error === 'NO_CONTENT') {
+          return {
+            success: false,
+            error: detail?.message || 'The resume file has no readable content. The file may be blank, image-only, or heavily formatted.',
+          };
+        }
+
+        return {
+          success: false,
+          error: detail?.message || `Failed to upload ${files[0]?.name || 'file'}`,
+        };
+      }
+
+      // Handle 403 — read-only mode, quota exhausted, or permission denied
+      if (error?.response?.status === 403) {
+        const detail = error?.response?.data?.detail;
+
+        if (detail?.error === 'READ_ONLY_MODE') {
+          return {
+            success: false,
+            error: 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.',
+          };
+        }
+
+        if (detail?.error === 'QUOTA_EXHAUSTED') {
+          return {
+            success: false,
+            error: detail?.message || 'Resume upload quota exhausted. Please upgrade your plan to upload more resumes.',
+          };
+        }
+
+        return {
+          success: false,
+          error: 'You do not have permission to upload resumes. Please contact your administrator.',
+        };
+      }
+
       return {
         success: false,
-        error: error.message || 'Upload failed'
+        error: `Failed to upload ${files[0]?.name || 'file'}`,
       };
     }
   };

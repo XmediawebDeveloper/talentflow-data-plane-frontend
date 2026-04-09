@@ -56,6 +56,7 @@ interface AssessmentDetails {
   hr_percentage?: number;
   technical_percentage?: number;
   coding_percentage?: number;
+  passing_threshold?: number;
 }
 
 interface SectionResult {
@@ -234,6 +235,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           hr_percentage: details.hr_percentage,
           technical_percentage: details.technical_percentage,
           coding_percentage: details.coding_percentage,
+          passing_threshold: (details as any).passing_threshold ?? 70,
         });
       } catch (error) {
         console.error('Failed to fetch assessment details:', error);
@@ -718,6 +720,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return 'text-red-600';
   };
 
+  const passingThreshold = assessmentDetails?.passing_threshold ?? 70;
+
   const getMobileOverallScore = (candidate: CandidateResult) => {
     if (candidate.status !== 'Completed' || candidate.scoring_status !== 'completed') return null;
     return candidate.percentage;
@@ -726,7 +730,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const getMobilePassFail = (candidate: CandidateResult) => {
     const overallScore = getMobileOverallScore(candidate);
     if (overallScore === null) return null;
-    return overallScore >= 50 ? 'Pass' : 'Fail';
+    const passingThreshold = assessmentDetails?.passing_threshold ?? 70;
+    return overallScore >= passingThreshold ? 'Pass' : 'Fail';
   };
 
   // Reset to page 1 when filters change (MUST be before any early returns)
@@ -1334,19 +1339,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.status !== 'Pending' && (
                             <button
                               onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
-                              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                              className="inline-flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                               title="View Details"
                               aria-label={`View details for ${candidate.name || 'candidate'}`}
                             >
                               <Eye className="w-3.5 h-3.5 shrink-0" />
-                              View Details
                             </button>
                           )}
                           {canDownloadPDF && canDownloadResultPdf(candidate) ? (
                             <button
                               onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                               disabled={downloadingPDF === candidate.id}
-                              className="inline-flex items-center gap-1 px-3 py-2 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center justify-center w-9 h-9 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
                               aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                             >
@@ -1355,13 +1359,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               ) : (
                                 <Download className="w-3 h-3" />
                               )}
-                              PDF
                             </button>
                           ) : null}
                           <button
                             onClick={() => handleDeleteResult(candidate.id, candidate.name)}
                             disabled={isDeleting === candidate.id}
-                            className="inline-flex items-center gap-1 px-3 py-2 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
                             title="Delete"
                             aria-label={`Delete result for ${candidate.name || 'candidate'}`}
                           >
@@ -1370,7 +1373,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             ) : (
                               <Trash2 className="w-3 h-3" />
                             )}
-                            Delete
                           </button>
                         </div>
                       </div>
@@ -1580,8 +1582,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
                             </span>
                             {candidate.tech_score !== undefined && (
-                              <span className={`text-xs font-medium ${candidate.tech_score >= 50 ? 'text-green-600' : 'text-red-600'}`}>
-                                {candidate.tech_score >= 50 ? 'Pass' : 'Fail'}
+                              <span className={`text-xs font-medium ${candidate.tech_score >= passingThreshold ? 'text-green-600' : 'text-red-600'}`}>
+                                {candidate.tech_score >= passingThreshold ? 'Pass' : 'Fail'}
                               </span>
                             )}
                           </div>
@@ -1594,8 +1596,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                             </span>
                             {candidate.coding_score !== undefined && (
-                              <span className={`text-xs font-medium ${candidate.coding_score >= 50 ? 'text-green-600' : 'text-red-600'}`}>
-                                {candidate.coding_score >= 50 ? 'Pass' : 'Fail'}
+                              <span className={`text-xs font-medium ${candidate.coding_score >= passingThreshold ? 'text-green-600' : 'text-red-600'}`}>
+                                {candidate.coding_score >= passingThreshold ? 'Pass' : 'Fail'}
                               </span>
                             )}
                           </div>
@@ -1659,11 +1661,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.status !== 'Pending' && (
                           <button
                             onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                             title="View Details"
+                            aria-label={`View details for ${candidate.name || 'candidate'}`}
                           >
                             <Eye className="w-3.5 h-3.5 shrink-0" />
-                            View Details
                           </button>
                           )}
                           {/* AS-25: PDF Download Button — only for users with download_pdf permission */}
@@ -1671,29 +1673,29 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <button
                               onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                               disabled={downloadingPDF === candidate.id}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center justify-center w-9 h-9 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
+                              aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                             >
                               {downloadingPDF === candidate.id ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
                                 <Download className="w-3 h-3" />
                               )}
-                              PDF
                             </button>
                           ) : null}
                           <button
                             onClick={() => handleDeleteResult(candidate.id, candidate.name)}
                             disabled={isDeleting === candidate.id}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
                             title="Delete"
+                            aria-label={`Delete result for ${candidate.name || 'candidate'}`}
                           >
                             {isDeleting === candidate.id ? (
                               <Loader2 className="w-3 h-3 animate-spin" />
                             ) : (
                               <Trash2 className="w-3 h-3" />
                             )}
-                            Delete
                           </button>
                         </div>
                       </td>
@@ -1703,18 +1705,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </tbody>
             </table>
           </div>
-
-          {showStickyScrollbar && (
-            <div className="hidden xl:block sticky bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
-              <div
-                ref={stickyScrollbarRef}
-                className="overflow-x-auto overflow-y-hidden"
-                onScroll={() => syncHorizontalScroll('sticky')}
-              >
-                <div ref={stickyScrollbarInnerRef} className="h-4" />
-              </div>
-            </div>
-          )}
 
           {/* AS-23: Pagination Controls */}
           {totalPages > 1 && (
@@ -1785,6 +1775,19 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
           )}
         </div>
+
+        {/* Sticky horizontal scrollbar — outside overflow-hidden card so it sticks to the viewport */}
+        {showStickyScrollbar && (
+          <div className="hidden xl:block sticky bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+            <div
+              ref={stickyScrollbarRef}
+              className="overflow-x-auto overflow-y-hidden"
+              onScroll={() => syncHorizontalScroll('sticky')}
+            >
+              <div ref={stickyScrollbarInnerRef} className="h-4" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Export Format & Scope Selection Modal */}

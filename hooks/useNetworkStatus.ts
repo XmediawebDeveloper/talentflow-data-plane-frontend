@@ -21,23 +21,22 @@ export function useNetworkStatus(): NetworkStatusHook {
   const [lastOnlineTime, setLastOnlineTime] = useState<Date | null>(null);
   const [pendingRetries, setPendingRetries] = useState<(() => Promise<void>)[]>([]);
 
-  // Detect network status changes
+  // Detect network status changes via browser events (fast path)
   useEffect(() => {
     const handleOnline = () => {
-      console.log('[NETWORK] Connection restored');
+      console.log('[NETWORK] Connection restored (browser event)');
       setIsOnline(true);
       setLastOnlineTime(new Date());
     };
 
     const handleOffline = () => {
-      console.log('[NETWORK] Connection lost');
+      console.log('[NETWORK] Connection lost (browser event)');
       setIsOnline(false);
     };
 
     // Check initial state
     setIsOnline(navigator.onLine);
 
-    // Listen for network changes
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
@@ -45,6 +44,43 @@ export function useNetworkStatus(): NetworkStatusHook {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, []);
+
+  // Active connectivity polling — browser online/offline events only fire when the
+  // OS network interface goes up/down (e.g. airplane mode). They do NOT fire for
+  // WiFi-connected-but-no-internet, ISP drops, or VPN disconnects. Polling a real
+  // HTTP request is the only reliable way to detect those cases.
+  useEffect(() => {
+    // Shadow the current online state in a closure var so the poll callback
+    // can compare without stale-closure issues (state setters are always stable).
+    let localIsOnline = navigator.onLine;
+
+    const checkConnectivity = async () => {
+      try {
+        // Use a HEAD request to a tiny resource; cache:no-store forces a real round-trip.
+        await fetch('/favicon.ico', {
+          method: 'HEAD',
+          cache: 'no-store',
+          // AbortSignal.timeout is widely supported in modern browsers
+          signal: AbortSignal.timeout(1500),
+        });
+        if (!localIsOnline) {
+          localIsOnline = true;
+          setIsOnline(true);
+          setLastOnlineTime(new Date());
+          console.log('[NETWORK] Connectivity restored (active poll)');
+        }
+      } catch {
+        if (localIsOnline) {
+          localIsOnline = false;
+          setIsOnline(false);
+          console.log('[NETWORK] Connectivity lost (active poll)');
+        }
+      }
+    };
+
+    const pollInterval = setInterval(checkConnectivity, 2000);
+    return () => clearInterval(pollInterval);
   }, []);
 
   // Detect connection type and speed

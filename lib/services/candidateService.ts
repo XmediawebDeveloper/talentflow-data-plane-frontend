@@ -13,6 +13,12 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/a
 
 let currentSessionToken: string | null = null;
 let currentAssessmentToken: string | null = null;
+let lastNetworkFailureEventAt = 0;
+
+function dispatchCandidateNetworkEvent(name: 'candidate-network-failure' | 'candidate-network-restored', detail?: Record<string, unknown>) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(name, { detail }));
+}
 
 export const sessionTokenManager = {
   setToken(token: string, assessmentToken?: string) {
@@ -129,7 +135,14 @@ candidateApi.interceptors.request.use((config) => {
 
 // Add response interceptor for better cross-browser error handling
 candidateApi.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    dispatchCandidateNetworkEvent('candidate-network-restored', {
+      url: response.config?.url,
+      method: response.config?.method,
+      timestamp: Date.now(),
+    });
+    return response;
+  },
   (error) => {
     // Enhanced error logging for debugging browser-specific issues
     if (error.response) {
@@ -138,6 +151,16 @@ candidateApi.interceptors.response.use(
     } else if (error.request) {
       // Request was made but no response received (network issues)
       console.error('[CANDIDATE API] Network error - no response received:', error.message);
+      const now = Date.now();
+      if (now - lastNetworkFailureEventAt > 1500) {
+        lastNetworkFailureEventAt = now;
+        dispatchCandidateNetworkEvent('candidate-network-failure', {
+          url: error.config?.url,
+          method: error.config?.method,
+          message: error.message,
+          timestamp: now,
+        });
+      }
     } else {
       // Something else happened (browser security, CORS, etc.)
       console.error('[CANDIDATE API] Request setup error:', error.message);
@@ -590,6 +613,10 @@ export const candidateService = {
 
         if (error.response.status === 404) {
           throw new Error('Assessment not found. Please verify the link is correct.');
+        }
+
+        if (error.response.status >= 500) {
+          throw new Error('Server temporarily unavailable. Please try again.');
         }
 
         throw new Error(typeof errorDetail === 'string' ? errorDetail : (errorDetail?.message || 'Failed to get assessment info'));
@@ -1048,7 +1075,7 @@ export const candidateService = {
   /**
    * Send heartbeat to keep session alive
    */
-  async sendHeartbeat(token: string, options?: { tabVisible?: boolean; cameraActive?: boolean; screenShareActive?: boolean }): Promise<HeartbeatResponse> {
+  async sendHeartbeat(token: string, options?: { tabVisible?: boolean; cameraActive?: boolean; screenShareActive?: boolean; clientRemainingSeconds?: number }): Promise<HeartbeatResponse> {
     try {
       const response = await candidateApi.post<HeartbeatResponse>(
         `/candidate/assessment/${token}/heartbeat`,
@@ -1057,6 +1084,7 @@ export const candidateService = {
           tab_visible: options?.tabVisible ?? document.visibilityState === 'visible',
           camera_active: options?.cameraActive,
           screen_share_active: options?.screenShareActive,
+          client_remaining_seconds: options?.clientRemainingSeconds,
         }
       );
       return response.data;

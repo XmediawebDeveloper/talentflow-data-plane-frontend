@@ -319,8 +319,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Restore session on mount
   useEffect(() => {
     const restoreSession = async () => {
-      console.log('[AUTH] Restoring session...');
-      console.log('[AUTH] Has token:', authService.isAuthenticated());
 
       // ✅ HARD REFRESH DETECTION: Clear user cache on hard refresh
       // This ensures permissions are always fresh from API after Ctrl+Shift+R
@@ -329,7 +327,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const isHardRefresh = perfData && perfData.type === 'reload';
 
         if (isHardRefresh) {
-          console.log('[AUTH] 🔄 Hard refresh detected - clearing user cache');
           clearUserFromStorage();
           localStorage.removeItem('permission_version');
         }
@@ -337,10 +334,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Ensure cookies are synced with localStorage (cross-browser token recovery)
       // This fixes token loss in Firefox, Safari, iOS Safari, Arc, Brave, etc.
-      const recovered = ensureTokenCookies();
-      if (recovered) {
-        console.log('[AUTH] Tokens recovered from localStorage to cookies');
-      }
+      ensureTokenCookies();
 
       // First, try to restore from localStorage (fast path)
       const storedUser = getUserFromStorage();
@@ -375,7 +369,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Permission updates now use event-driven approach via refreshUser() which dispatches 'permissions-updated' event
         // On hard refresh, user data is loaded from localStorage - permission updates happen via backend save + refreshUser()
 
-        console.log('[AUTH] Restored user from localStorage:', storedUser.email);
         setUser(storedUser);
         // Use stored tenant if available, otherwise build a minimal tenant from stored user
         setTenant(storedTenant || {
@@ -445,7 +438,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             if (isLocalhost) localStorage.setItem('talentflow_subdomain', userData.tenantSubdomain);
           }
-          console.log('[AUTH] User validated with API');
         } catch (error: unknown) {
           // Check if this is a subscription inactive error (403)
           // handleApiError throws ApiError with .status property, not AxiosError with .response
@@ -539,8 +531,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Let the user stay on the page and let specific error handlers deal with it
           }
         }
-      } else {
-        console.log('[AUTH] No token found, skipping session restore');
       }
       setIsLoading(false);
     };
@@ -553,7 +543,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // and dispatches 'permissions-updated' event. This listener catches it and refreshes user data.
   useEffect(() => {
     const handlePermissionsUpdated = async () => {
-      console.log('[AUTH] Permissions updated event received - refreshing user data');
       try {
         // Fetch fresh user data with new permissions
         const apiUserData = await authService.getCurrentUser();
@@ -568,7 +557,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setUser(userData);
         saveUserToStorage(userData);
-        console.log('[AUTH] User data refreshed with new permissions:', userData.permissions);
 
         // Optionally show toast notification (if you have a toast library)
         // toast.success('Your permissions have been updated.');
@@ -579,10 +567,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('permissions-updated', handlePermissionsUpdated);
-      console.log('[AUTH] Permission update listener registered');
       return () => {
         window.removeEventListener('permissions-updated', handlePermissionsUpdated);
-        console.log('[AUTH] Permission update listener cleaned up');
       };
     }
   }, []); // Empty deps - only register once on mount

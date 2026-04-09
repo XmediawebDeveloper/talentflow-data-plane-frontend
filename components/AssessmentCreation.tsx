@@ -6,11 +6,23 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import { assessmentService, jdService } from '@/lib/services';
 import api from '@/lib/services/api';
-import JDCreation from '@/components/JDCreation';
+import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
+
+// Dynamic import to break circular dependency chain that causes TDZ error
+// when navigating to Assessment Results (AssessmentCreation → JDCreation creates
+// a synchronous module init cycle in the assessments page bundle)
+const JDCreation = dynamic(() => import('@/components/JDCreation'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+    </div>
+  ),
+});
 
 // 1:1 JD-Assessment relationship: JDs that already have assessments cannot be selected
 

@@ -535,7 +535,17 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
       let errorMessage = 'Upload failed. Please try again.';
       let fileName = selectedFiles[0]?.name || '';
 
-      if (error?.response?.status === 400 && error?.response?.data?.detail) {
+      if (error?.response?.status === 409) {
+        const detail = error?.response?.data?.detail;
+        const existingResume = detail?.existing_resume;
+        errorMessage = existingResume?.candidate_name
+          ? `A resume for ${existingResume.candidate_name} already exists in your Internal Resume Database.`
+          : 'This resume already exists in the system.';
+      } else if (error?.response?.status === 403) {
+        const detail = error?.response?.data?.detail;
+        const msg = typeof detail === 'string' ? detail : detail?.message;
+        errorMessage = msg || 'You do not have permission to upload resumes. Please contact your administrator.';
+      } else if (error?.response?.status === 400 && error?.response?.data?.detail) {
         const detail = error.response.data.detail;
 
         if (detail.error === 'INVALID_RESUME') {

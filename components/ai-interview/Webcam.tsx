@@ -34,7 +34,6 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
   useEffect(() => {
     const startWebcam = async () => {
       try {
-        console.log("📷 Starting webcam...");
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             width: { ideal: 640 },
@@ -53,7 +52,6 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
           videoRef.current.onloadedmetadata = () => {
             videoRef.current?.play().then(() => {
               setIsActive(true);
-              console.log("✅ Webcam active");
               onStream?.(stream);
 
               // Notify when video is fully ready for processing (guard against double-call)
@@ -75,7 +73,6 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
-        console.log("📷 Webcam stopped");
       }
     };
   }, []); // Only run once on mount

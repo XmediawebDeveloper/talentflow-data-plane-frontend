@@ -242,6 +242,18 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // Tracks remaining time reported by AssessmentInterface — shown in fullscreen overlay
   const [overlayTimeRemaining, setOverlayTimeRemaining] = useState<number | null>(null);
 
+  const getSavedPausedTimerSeconds = useCallback((): number | undefined => {
+    try {
+      const saved = sessionStorage.getItem(`assessment_timer_${token}`);
+      if (!saved) return undefined;
+      const parsed = JSON.parse(saved);
+      if (parsed?.isPaused === true && typeof parsed?.remainingSeconds === 'number') {
+        return parsed.remainingSeconds;
+      }
+    } catch {}
+    return undefined;
+  }, [token]);
+
   useRefreshPrevention({
     enabled: isAssessmentActive,
     message: 'You have an ongoing assessment. Leaving this page will end your session.',
@@ -411,7 +423,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     try {
       setStepSafe('loading');
-      const info = await candidateService.getAssessmentInfo(token, candidateName, role);
+      let info = await candidateService.getAssessmentInfo(token, candidateName, role);
 
       if (!isMountedRef.current) return;
 
@@ -460,6 +472,33 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         // Can resume existing attempt
         console.log('[DEBUG] Can resume - fetching current question');
         try {
+          try {
+            const resumeHeartbeat = await candidateService.sendHeartbeat(token, {
+              clientRemainingSeconds: getSavedPausedTimerSeconds(),
+            });
+            info = {
+              ...info,
+              time_remaining_seconds: resumeHeartbeat.time_remaining_seconds,
+              is_paused: resumeHeartbeat.is_paused ?? false,
+              pause_reason: resumeHeartbeat.pause_reason ?? null,
+            };
+            if (typeof resumeHeartbeat.time_remaining_seconds === 'number') {
+              setOverlayTimeRemaining(resumeHeartbeat.time_remaining_seconds);
+            }
+            if (!(resumeHeartbeat.is_paused ?? false)) {
+              try {
+                sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+                  remainingSeconds: resumeHeartbeat.time_remaining_seconds,
+                  savedAt: Date.now(),
+                  isPaused: false,
+                }));
+              } catch {}
+            }
+          } catch (heartbeatError) {
+            console.warn('[DEBUG] Resume heartbeat sync failed, continuing with current question fetch:', heartbeatError);
+          }
+
+          setAssessmentInfo(info);
           const question = await candidateService.getCurrentQuestion(token);
           if (!isMountedRef.current) return;
 
@@ -1110,10 +1149,11 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       }
     }
 
-    // Start heartbeat for session keepalive
-    heartbeatRef.current = setInterval(async () => {
+    const syncHeartbeat = async () => {
       try {
-        const heartbeat = await candidateService.sendHeartbeat(token);
+        const heartbeat = await candidateService.sendHeartbeat(token, {
+          clientRemainingSeconds: getSavedPausedTimerSeconds(),
+        });
         if (typeof heartbeat.time_remaining_seconds === 'number') {
           setOverlayTimeRemaining(heartbeat.time_remaining_seconds);
           setAssessmentInfo(prev => prev ? {
@@ -1122,11 +1162,29 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             is_paused: heartbeat.is_paused ?? false,
             pause_reason: heartbeat.pause_reason ?? null,
           } : prev);
+
+          if (!(heartbeat.is_paused ?? false)) {
+            try {
+              sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+                remainingSeconds: heartbeat.time_remaining_seconds,
+                savedAt: Date.now(),
+                isPaused: false,
+              }));
+            } catch {}
+          }
         }
       } catch (err) {
         console.error('Heartbeat failed:', err);
       }
-    }, 10000);
+    };
+
+    // Sync immediately on assessment/resume so the timer unpauses from the
+    // latest server-authoritative remaining time instead of waiting for the
+    // first interval tick after a recovery reload.
+    await syncHeartbeat();
+
+    // Start heartbeat for session keepalive
+    heartbeatRef.current = setInterval(syncHeartbeat, 3000);
 
     console.log('[PROCTORING] Advanced monitoring active via useProctoringMonitor hook');
   };
@@ -1168,7 +1226,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
               isFlowActiveRef.current = false;
               isStartingRef.current = false;
               setIsExpiredLink(false);
-              loadAssessmentInfo();
+              setError(null);
+              sessionTokenManager.setAssessmentToken(token);
+              sessionStorage.removeItem(ASSESS_SESSION_KEY);
+              window.location.reload();
             }}
           />
         );

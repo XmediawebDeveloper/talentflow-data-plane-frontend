@@ -320,36 +320,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     return () => clearInterval(t);
   }, [lastUpdatedAt]);
 
-  // REST polling fallback — refresh full session data every 8s while in_progress.
-  // This keeps skill_coverage, conversation_transcript, ai_evaluation, etc. up to date
-  // even when WebSocket updates are partial or delayed.
-  const liveWsConnectedRef = useRef(false);
-  useEffect(() => { liveWsConnectedRef.current = liveWsConnected; }, [liveWsConnected]);
-
-  useEffect(() => {
-    if (liveSession.status !== 'in_progress') return;
-    const sessionId = liveSession.id;
-    const id = setInterval(() => {
-      aiInterviewService.get(sessionId)
-        .then(updated => {
-          setLastUpdatedAt(new Date());
-          setLiveSession(prev => {
-            // If WebSocket is active and has more skill coverage data than REST, keep WebSocket data.
-            const prevSc = prev.skill_coverage;
-            const newSc = updated.skill_coverage;
-            const prevTotal = (prevSc?.covered?.length ?? 0) + (prevSc?.medium_covered?.length ?? 0) +
-              (prevSc?.low_covered?.length ?? 0) + (prevSc?.uncovered?.length ?? 0);
-            const newTotal = (newSc?.covered?.length ?? 0) + (newSc?.medium_covered?.length ?? 0) +
-              (newSc?.low_covered?.length ?? 0) + (newSc?.uncovered?.length ?? 0);
-            const keepWsSkillCoverage = liveWsConnectedRef.current && prevTotal >= newTotal;
-            return { ...updated, skill_coverage: keepWsSkillCoverage ? prevSc : newSc };
-          });
-        })
-        .catch(() => {});
-    }, 8000);
-    return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveSession.status, liveSession.id]);
+  // WebSocket is the sole source of truth for skill_coverage during in_progress.
+  // REST polling was removed — it overwrote WebSocket data with stale DB values.
 
   useEffect(() => {
     if (liveSession.status !== 'in_progress') return;
@@ -1013,295 +985,153 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     </div>
                   )}
 
-                  {sc && (
-                    <>
-                      {/* Overall coverage ring */}
-                      <div className="bg-white border border-gray-200 rounded-xl p-5 flex items-center gap-6">
-                        {/* Circle */}
-                        <div className="relative flex-shrink-0">
-                          <svg width="88" height="88" viewBox="0 0 88 88">
-                            <circle cx="44" cy="44" r="36" fill="none" stroke="#e5e7eb" strokeWidth="8" />
-                            <circle
-                              cx="44" cy="44" r="36" fill="none"
-                              stroke={coveragePct >= 70 ? '#22c55e' : coveragePct >= 40 ? '#f59e0b' : '#ef4444'}
-                              strokeWidth="8" strokeLinecap="round"
-                              strokeDasharray={`${2 * Math.PI * 36}`}
-                              strokeDashoffset={`${2 * Math.PI * 36 * (1 - coveragePct / 100)}`}
-                              style={{ transform: 'rotate(-90deg)', transformOrigin: '44px 44px', transition: 'stroke-dashoffset 0.6s ease' }}
-                            />
-                          </svg>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            <span className="text-xl font-bold text-gray-900">{coveragePct}%</span>
-                            <span className="text-[9px] text-gray-400 leading-none">touched</span>
-                          </div>
-                        </div>
-                        {/* Legend */}
-                        <div className="flex-1 space-y-1.5">
-                          {[
-                            { label: 'Strongly Covered', count: sc.covered.length, color: 'bg-green-500' },
-                            { label: 'Partially Covered', count: sc.medium_covered.length, color: 'bg-yellow-400' },
-                            { label: 'Low Coverage', count: sc.low_covered.length, color: 'bg-orange-400' },
-                            { label: 'Not Covered', count: sc.uncovered.length, color: 'bg-red-400' },
-                          ].map(({ label, count, color }) => (
-                            <div key={label} className="flex items-center gap-2">
-                              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${color}`} />
-                              <span className="text-sm text-gray-600">{label}</span>
-                              <span className="ml-auto text-sm font-semibold text-gray-800">{count}</span>
-                            </div>
-                          ))}
-                          <div className="pt-1 border-t border-gray-100 flex items-center gap-2">
-                            <span className="text-xs text-gray-500">Strong coverage</span>
-                            <span className="ml-auto text-xs font-bold text-gray-800">{strongPct}%</span>
-                          </div>
-                        </div>
-                        {/* Progress bar */}
-                        <div className="flex-shrink-0 w-48">
-                          <div className="flex h-3 rounded-full overflow-hidden bg-gray-100">
-                            <div className="bg-green-500 transition-all duration-500" style={{ width: `${(sc.covered.length / (total || 1)) * 100}%` }} />
-                            <div className="bg-yellow-400 transition-all duration-500" style={{ width: `${(sc.medium_covered.length / (total || 1)) * 100}%` }} />
-                            <div className="bg-orange-400 transition-all duration-500" style={{ width: `${(sc.low_covered.length / (total || 1)) * 100}%` }} />
-                            <div className="bg-red-400 transition-all duration-500" style={{ width: `${(sc.uncovered.length / (total || 1)) * 100}%` }} />
-                          </div>
-                        </div>
-                      </div>
+                  {sc && (() => {
+                    // Build cluster + skill data structured by section (MTH first, then NTH)
+                    const skillLevel: Record<string, 'covered' | 'medium' | 'low' | 'uncovered'> = {};
+                    for (const s of sc.covered)        skillLevel[s.toLowerCase()] = 'covered';
+                    for (const s of sc.medium_covered)  skillLevel[s.toLowerCase()] = 'medium';
+                    for (const s of sc.low_covered)     skillLevel[s.toLowerCase()] = 'low';
+                    for (const s of sc.uncovered)       skillLevel[s.toLowerCase()] = 'uncovered';
 
-                      {/* ── Coverage Activity (live during interview, persisted after completion) ── */}
-                      {(isInProgress || isCompleted) && (
+                    const levelCfg = {
+                      covered:   { label: 'Strong', short: '✓', bar: 'bg-green-500', text: 'text-green-700', chip: 'bg-green-100 text-green-700 border-green-200', pct: 100 },
+                      medium:    { label: 'Partial', short: '◑', bar: 'bg-yellow-400', text: 'text-yellow-700', chip: 'bg-yellow-100 text-yellow-700 border-yellow-200', pct: 65 },
+                      low:       { label: 'Low', short: '◷', bar: 'bg-orange-400', text: 'text-orange-600', chip: 'bg-orange-100 text-orange-600 border-orange-200', pct: 30 },
+                      uncovered: { label: 'Not Covered', short: '○', bar: 'bg-gray-200', text: 'text-gray-400', chip: 'bg-gray-100 text-gray-400 border-gray-200', pct: 0 },
+                    };
+
+                    // Group by section, sort by priority (high → low)
+                    const mthClusters = clusterConfig.mth
+                      .map(c => ({ ...c, section: 'mth' as const, skills: c.skills.map(s => ({ name: s, level: (skillLevel[s.toLowerCase()] || 'uncovered') as keyof typeof levelCfg })) }))
+                      .sort((a, b) => b.priority - a.priority);
+                    const nthClusters = clusterConfig.nth
+                      .map(c => ({ ...c, section: 'nth' as const, skills: c.skills.map(s => ({ name: s, level: (skillLevel[s.toLowerCase()] || 'uncovered') as keyof typeof levelCfg })) }))
+                      .sort((a, b) => b.priority - a.priority);
+                    const hasClusters = mthClusters.length + nthClusters.length > 0;
+
+                    // Find "currently being asked" — first uncovered skill, or first low if all touched
+                    const currentSkillTarget = sc.uncovered[0]?.toLowerCase() || sc.low_covered[0]?.toLowerCase() || null;
+
+                    const renderSection = (label: string, color: string, clusters: Array<{ id: string; name: string; priority: number; section: 'mth' | 'nth'; skills: Array<{ name: string; level: keyof typeof levelCfg }> }>) => {
+                      if (clusters.length === 0) return null;
+                      const sectionTouched = clusters.reduce((sum, c) => sum + c.skills.filter(s => s.level !== 'uncovered').length, 0);
+                      const sectionTotal = clusters.reduce((sum, c) => sum + c.skills.length, 0);
+                      const sectionPct = sectionTotal > 0 ? Math.round((sectionTouched / sectionTotal) * 100) : 0;
+
+                      return (
                         <div className="border border-gray-200 rounded-xl overflow-hidden">
-                          {/* Header */}
-                          <div className={`flex items-center justify-between px-4 py-2.5 border-b border-gray-200 ${isInProgress ? 'bg-gray-50' : 'bg-white'}`}>
-                            <div className="flex items-center gap-2">
-                              {isInProgress
-                                ? <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                : <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
-                              <span className="text-sm font-semibold text-gray-800">
-                                {isInProgress ? 'Live Activity' : 'Coverage Activity'}
-                              </span>
-                            </div>
-                            {isInProgress && currentQuestion && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
-                                {currentQuestion.isFollowUp ? `Q${currentQuestion.qNum} — Follow-up` : `Q${currentQuestion.qNum} in progress`}
-                              </span>
-                            )}
-                            {isCompleted && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
-                                {sc.questions_asked} questions asked
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Status row — "Next to cover" during live, "Final result" when done */}
-                          {isInProgress && sc.uncovered.length > 0 && (
-                            <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 border-b border-red-100">
-                              <span className="text-xs text-red-500 font-medium flex-shrink-0">Next to cover</span>
-                              <span className="text-xs font-bold text-red-700 truncate">{sc.uncovered[0]}</span>
-                              {sc.uncovered.length > 1 && (
-                                <span className="ml-auto text-xs text-red-400 flex-shrink-0">+{sc.uncovered.length - 1} more</span>
-                              )}
-                            </div>
-                          )}
-                          {isInProgress && sc.uncovered.length === 0 && sc.low_covered.length > 0 && (
-                            <div className="flex items-center gap-2 px-4 py-2.5 bg-orange-50 border-b border-orange-100">
-                              <span className="text-xs text-orange-500 font-medium flex-shrink-0">Deepening</span>
-                              <span className="text-xs font-bold text-orange-700 truncate">{sc.low_covered[0]}</span>
-                              <span className="ml-auto text-xs text-orange-400 flex-shrink-0">follow-up</span>
-                            </div>
-                          )}
-                          {isCompleted && (
-                            <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 border-b border-gray-100 text-xs text-gray-600">
-                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{sc.covered.length} strong</span>
-                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400" />{sc.medium_covered.length} partial</span>
-                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" />{sc.low_covered.length} low</span>
-                              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" />{sc.uncovered.length} untouched</span>
-                            </div>
-                          )}
-
-                          {/* Progress bars — animate during live, static summary when done */}
-                          <div className="px-4 py-3 space-y-2 border-b border-gray-100">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] text-gray-500 w-20 flex-shrink-0">Touched</span>
-                              <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div
-                                  className="h-2.5 rounded-full transition-[width] duration-700 ease-out bg-blue-400"
-                                  style={{ width: `${touchedPct}%` }}
-                                />
+                          {/* Section header */}
+                          <div className={`flex items-center justify-between px-4 py-2.5 border-b border-gray-200 ${color}`}>
+                            <span className="text-sm font-bold">{label}</span>
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-1.5">
+                                <div className="w-16 h-1.5 bg-white/40 rounded-full overflow-hidden">
+                                  <div className="h-1.5 rounded-full bg-white transition-[width] duration-700" style={{ width: `${sectionPct}%` }} />
+                                </div>
+                                <span className="text-xs font-bold">{sectionPct}%</span>
                               </div>
-                              <span className="text-[11px] font-bold text-blue-700 w-8 text-right">{touchedPct}%</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] text-gray-500 w-20 flex-shrink-0">Strong</span>
-                              <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                                <div
-                                  className="h-2.5 rounded-full transition-[width] duration-700 ease-out bg-green-500"
-                                  style={{ width: `${strongPct}%` }}
-                                />
-                              </div>
-                              <span className="text-[11px] font-bold text-green-700 w-8 text-right">{strongPct}%</span>
+                              <span className="text-xs">{sectionTouched}/{sectionTotal} skills</span>
                             </div>
                           </div>
 
-                          {/* Event feed — from localStorage (persisted during live session) */}
-                          <div className="divide-y divide-gray-50 max-h-56 overflow-y-auto">
-                            {liveEvents.length === 0 ? (
-                              <div className="px-4 py-4 text-center text-xs text-gray-400">
-                                {isInProgress ? 'Waiting for first answer…' : 'No activity recorded for this session'}
-                              </div>
-                            ) : (
-                              liveEvents.map((ev, i) => {
-                                const ago = isInProgress
-                                  ? (() => { const s = Math.floor((Date.now() - ev.ts) / 1000); return s < 60 ? `${s}s ago` : `${Math.floor(s/60)}m ago`; })()
-                                  : new Date(ev.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                if (ev.kind === 'question') return (
-                                  <div key={i} className="flex items-center gap-2.5 px-4 py-2 bg-blue-50">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
-                                    <span className="text-xs text-blue-700 font-medium">
-                                      {ev.isFollowUp ? `Q${ev.qNum} — Follow-up started` : `Q${ev.qNum} started`}
+                          {/* Clusters */}
+                          <div className="divide-y divide-gray-50">
+                            {clusters.map(c => {
+                              const cov = c.skills.filter(s => s.level !== 'uncovered').length;
+                              return (
+                                <div key={c.id} className="px-4 py-3">
+                                  {/* Cluster name + priority */}
+                                  <div className="flex items-center justify-between mb-2.5">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 flex-shrink-0">P{c.priority}</span>
+                                      <span className="text-xs font-semibold text-gray-800 truncate">{c.name}</span>
+                                    </div>
+                                    <span className={`text-xs font-bold flex-shrink-0 ml-2 ${cov === c.skills.length ? 'text-green-600' : cov > 0 ? 'text-orange-500' : 'text-gray-400'}`}>
+                                      {cov}/{c.skills.length}
                                     </span>
-                                    <span className="ml-auto text-[10px] text-gray-400 flex-shrink-0">{ago}</span>
                                   </div>
-                                );
-                                if (ev.kind === 'covered') return (
-                                  <div key={i} className="flex items-center gap-2.5 px-4 py-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
-                                    <span className="text-xs text-gray-700"><span className="font-semibold text-green-700">{ev.skill}</span> — Strongly Covered ✓</span>
-                                    <span className="ml-auto text-[10px] text-gray-400 flex-shrink-0">{ago}</span>
+
+                                  {/* Skills as rows with bars */}
+                                  <div className="space-y-1.5">
+                                    {c.skills.map(({ name, level }) => {
+                                      const cfg = levelCfg[level];
+                                      const isCurrent = isInProgress && currentSkillTarget === name.toLowerCase();
+                                      return (
+                                        <div key={name} className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-colors duration-300 ${isCurrent ? 'bg-blue-50 ring-1 ring-blue-300' : ''}`}>
+                                          {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />}
+                                          <span className={`text-[11px] w-28 truncate flex-shrink-0 font-medium ${isCurrent ? 'text-blue-700' : cfg.text}`} title={name}>
+                                            {name}
+                                          </span>
+                                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                            <div
+                                              className={`h-2 rounded-full transition-[width] duration-700 ease-out ${cfg.bar}`}
+                                              style={{ width: `${cfg.pct}%` }}
+                                            />
+                                          </div>
+                                          <span className={`text-[10px] font-semibold flex-shrink-0 ${cfg.text}`}>{cfg.label}</span>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
-                                );
-                                if (ev.kind === 'medium') return (
-                                  <div key={i} className="flex items-center gap-2.5 px-4 py-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 flex-shrink-0" />
-                                    <span className="text-xs text-gray-700"><span className="font-semibold text-yellow-700">{ev.skill}</span> — Partially Covered</span>
-                                    <span className="ml-auto text-[10px] text-gray-400 flex-shrink-0">{ago}</span>
-                                  </div>
-                                );
-                                if (ev.kind === 'low') return (
-                                  <div key={i} className="flex items-center gap-2.5 px-4 py-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />
-                                    <span className="text-xs text-gray-700"><span className="font-semibold text-orange-600">{ev.skill}</span> — Low Coverage</span>
-                                    <span className="ml-auto text-[10px] text-gray-400 flex-shrink-0">{ago}</span>
-                                  </div>
-                                );
-                                return null;
-                              })
-                            )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
-                      )}
+                      );
+                    };
 
-                      {/* Live cluster breakdown — only for in-progress when cluster config is available */}
-                      {isInProgress && (() => {
-                        // Use resolved clusterConfig (session → fetched config fallback)
-                        const allClusters = [
-                          ...clusterConfig.mth.map(c => ({ ...c, section: 'mth' as const })),
-                          ...clusterConfig.nth.map(c => ({ ...c, section: 'nth' as const })),
-                        ].sort((a, b) => b.priority - a.priority || a.name.localeCompare(b.name));
-                        if (allClusters.length === 0) return null;
+                    return (
+                      <>
+                        {/* Must-Have Skills section */}
+                        {renderSection('Must-Have Skills', 'bg-purple-600 text-white', mthClusters)}
 
-                        const covL = new Set([...sc.covered, ...sc.medium_covered, ...sc.low_covered].map(s => s.toLowerCase()));
-                        const clusterStats = allClusters.map(c => {
-                          const cov = c.skills.filter(s => covL.has(s.toLowerCase())).length;
-                          return { ...c, cov, pct: c.skills.length > 0 ? Math.round((cov / c.skills.length) * 100) : 0 };
-                        });
-                        const touched = clusterStats.filter(c => c.cov > 0).length;
+                        {/* Nice-to-Have Skills section */}
+                        {renderSection('Nice-to-Have Skills', 'bg-indigo-500 text-white', nthClusters)}
 
-                        return (
-                          <div className="border border-gray-200 rounded-xl p-4 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-semibold text-gray-800">Cluster Coverage</h4>
-                              <span className="text-xs text-gray-500">{touched}/{allClusters.length} clusters active</span>
+                        {/* Fallback: no cluster config — show flat skill list */}
+                        {!hasClusters && (
+                          <div className="border border-gray-200 rounded-xl p-4 space-y-2">
+                            <h4 className="text-sm font-semibold text-gray-800 mb-3">All Skills</h4>
+                            {[...sc.covered, ...sc.medium_covered, ...sc.low_covered, ...sc.uncovered].map(skill => {
+                              const level = skillLevel[skill.toLowerCase()] || 'uncovered';
+                              const cfg = levelCfg[level];
+                              const isCurrent = isInProgress && currentSkillTarget === skill.toLowerCase();
+                              return (
+                                <div key={skill} className={`flex items-center gap-2 px-2 py-1 rounded-lg ${isCurrent ? 'bg-blue-50 ring-1 ring-blue-300' : ''}`}>
+                                  {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />}
+                                  <span className={`text-[11px] w-28 truncate flex-shrink-0 font-medium ${isCurrent ? 'text-blue-700' : cfg.text}`}>{skill}</span>
+                                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                    <div className={`h-2 rounded-full transition-[width] duration-700 ease-out ${cfg.bar}`} style={{ width: `${cfg.pct}%` }} />
+                                  </div>
+                                  <span className={`text-[10px] font-semibold flex-shrink-0 ${cfg.text}`}>{cfg.label}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* HR Topics */}
+                        {sc.hr_topics && Object.keys(sc.hr_topics).length > 0 && (
+                          <div className="border border-purple-200 rounded-xl p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="w-2 h-2 rounded-full bg-purple-400" />
+                              <h4 className="text-sm font-semibold text-purple-800">HR Topics</h4>
                             </div>
-                            {clusterStats.map(c => (
-                              <div key={c.id}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${c.section === 'mth' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>P{c.priority}</span>
-                                    <span className="text-xs text-gray-700">{c.name}</span>
-                                  </div>
-                                  <span className={`text-xs font-semibold ${c.pct >= 70 ? 'text-green-600' : c.pct >= 40 ? 'text-yellow-600' : c.pct > 0 ? 'text-orange-500' : 'text-gray-400'}`}>{c.cov}/{c.skills.length}</span>
+                            <div className="grid grid-cols-2 gap-2">
+                              {Object.entries(sc.hr_topics).map(([topic, status]) => (
+                                <div key={topic} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-50 border border-purple-100">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
+                                  <span className="text-xs font-medium text-purple-800 truncate">{topic}</span>
+                                  <span className="ml-auto text-[10px] text-purple-500 font-medium">{String(status)}</span>
                                 </div>
-                                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-1.5 rounded-full transition-[width] duration-700 ease-out ${c.pct >= 70 ? 'bg-green-500' : c.pct >= 40 ? 'bg-yellow-500' : c.pct > 0 ? 'bg-orange-400' : 'bg-gray-200'}`}
-                                    style={{ width: `${c.pct}%` }}
-                                  />
-                                </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        );
-                      })()}
-
-                      {/* Skill chips grid — during interview, uncovered skills shown first as focus areas */}
-                      {(isInProgress ? [
-                        { title: 'Not Yet Covered', skills: sc.uncovered, bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', dot: 'bg-red-400', highlight: true },
-                        { title: 'Low Coverage', skills: sc.low_covered, bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-400', highlight: false },
-                        { title: 'Partially Covered', skills: sc.medium_covered, bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800', dot: 'bg-yellow-400', highlight: false },
-                        { title: 'Strongly Covered', skills: sc.covered, bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800', dot: 'bg-green-500', highlight: false },
-                      ] : [
-                        { title: 'Strongly Covered', skills: sc.covered, bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800', dot: 'bg-green-500', highlight: false },
-                        { title: 'Partially Covered', skills: sc.medium_covered, bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800', dot: 'bg-yellow-400', highlight: false },
-                        { title: 'Low Coverage', skills: sc.low_covered, bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800', dot: 'bg-orange-400', highlight: false },
-                        { title: 'Not Yet Covered', skills: sc.uncovered, bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800', dot: 'bg-red-400', highlight: false },
-                      ]).filter(g => g.skills.length > 0).map(({ title, skills, bg, border, text, dot, highlight }) => (
-                        <div key={title} className={`border ${border} rounded-xl p-4 ${highlight ? 'ring-2 ring-red-300' : ''}`}>
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className={`w-2 h-2 rounded-full ${dot}`} />
-                            <h4 className={`text-sm font-semibold ${text}`}>
-                              {highlight ? '🎯 ' : ''}{title}
-                            </h4>
-                            {highlight && skills.length > 0 && (
-                              <span className="text-xs text-red-600 font-medium">← Focus here</span>
-                            )}
-                            <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${bg} ${text}`}>{skills.length}</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {skills.map((skill) => (
-                              <span key={skill} className={`px-2.5 py-1 rounded-full text-xs font-medium border ${bg} ${border} ${text}`}>
-                                {skill}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-
-                      {/* Nice-to-have skills */}
-                      {sc.nice_to_have_skills.length > 0 && (
-                        <div className="border border-blue-200 rounded-xl p-4">
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="w-2 h-2 rounded-full bg-blue-400" />
-                            <h4 className="text-sm font-semibold text-blue-800">Nice-to-Have Skills</h4>
-                            <span className="ml-auto text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{sc.nice_to_have_skills.length}</span>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {sc.nice_to_have_skills.map((skill) => (
-                              <span key={skill} className="px-2.5 py-1 rounded-full text-xs font-medium border bg-blue-50 border-blue-200 text-blue-700">
-                                {skill}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* HR Topics */}
-                      {sc.hr_topics && Object.keys(sc.hr_topics).length > 0 && (
-                        <div className="border border-purple-200 rounded-xl p-4">
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="w-2 h-2 rounded-full bg-purple-400" />
-                            <h4 className="text-sm font-semibold text-purple-800">HR Topics Covered</h4>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            {Object.entries(sc.hr_topics).map(([topic, status]) => (
-                              <div key={topic} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-50 border border-purple-100">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
-                                <span className="text-xs font-medium text-purple-800 truncate">{topic}</span>
-                                <span className="ml-auto text-[10px] text-purple-500 font-medium">{status}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               );
             })()}

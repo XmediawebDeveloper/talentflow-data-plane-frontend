@@ -146,6 +146,17 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       // ── 1. Terminal / active states ──
       if (info.status === 'in_progress') {
         sessionStorage.removeItem(SESSION_KEY);
+        // Pre-create 24kHz AudioContext so TalkingHead uses the correct sample rate.
+        // Without this, TalkingHead defaults to the device rate (48kHz) and plays
+        // 24kHz PCM audio at 2× speed.
+        if (!(window as any).__interviewAudioContext) {
+          try {
+            const ctx = new AudioContext({ sampleRate: 24000 });
+            (window as any).__interviewAudioContext = ctx;
+          } catch (e) {
+            console.warn('[Portal] Failed to pre-create AudioContext on resume:', e);
+          }
+        }
         setStep('interview');
         return;
       }
@@ -468,6 +479,16 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       const result = await candidateAIInterviewService.startInterview(token);
       setInterview(result);
       setIsFullscreenActive(isFullscreen());
+      // Pre-create 24kHz AudioContext if the fullscreen button path didn't already do it.
+      // Guards against browsers that skip the fullscreen prompt (e.g. already fullscreen).
+      if (!(window as any).__interviewAudioContext) {
+        try {
+          const ctx = new AudioContext({ sampleRate: 24000 });
+          (window as any).__interviewAudioContext = ctx;
+        } catch (e) {
+          console.warn('[Portal] Failed to pre-create AudioContext on start:', e);
+        }
+      }
       setStep('interview');
     } catch (err: any) {
       const detail = err?.response?.data?.detail || 'Failed to start interview';

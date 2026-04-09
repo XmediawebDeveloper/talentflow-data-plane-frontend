@@ -219,7 +219,11 @@ export function AssessmentInterface({
   const assessmentStartTimeRef = useRef<number>(0);
   const totalDurationSecsRef = useRef(durationMinutes * 60);
   const isTimerPausedRef = useRef(false);
+  const immediateNetworkPauseRef = useRef(false);
   const globalTimeRemainingRef = useRef(0);
+  // Records the wall-clock ms when the timer was paused due to network loss.
+  // Used to shift assessmentStartTimeRef forward on resume so offline time is excluded.
+  const pauseStartWallTimeRef = useRef<number | null>(null);
 
   // Initialize: compute from wall clock (not decrement-based) to be accurate
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
@@ -250,7 +254,9 @@ export function AssessmentInterface({
         const elapsedSinceReload = isPaused ? 0 : Math.floor((Date.now() - savedAt) / 1000);
         const restored = Math.max(0, remainingSeconds - elapsedSinceReload);
         if (restored > 0) {
-          sessionStorage.removeItem(`assessment_timer_${token}`);
+          if (!isPaused) {
+            sessionStorage.removeItem(`assessment_timer_${token}`);
+          }
           // Adjust start ref so interval stays accurate with restored remaining time
           assessmentStartTimeRef.current = Date.now() - ((totalDuration - restored) * 1000);
           globalTimeRemainingRef.current = restored;
@@ -277,6 +283,28 @@ export function AssessmentInterface({
   // Track if component has been mounted for at least a short time
   // This prevents immediate completion due to timing/parsing issues
   const [isInitialized, setIsInitialized] = useState(false);
+
+  const persistPausedTimerSnapshot = () => {
+    try {
+      sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+        remainingSeconds: globalTimeRemainingRef.current,
+        savedAt: Date.now(),
+        isPaused: true,
+      }));
+    } catch {}
+  };
+
+  const pauseTimerForRecovery = (reason: string) => {
+    isTimerPausedRef.current = true;
+    immediateNetworkPauseRef.current = true;
+    if (pauseStartWallTimeRef.current === null) {
+      pauseStartWallTimeRef.current = Date.now();
+    }
+    persistPausedTimerSnapshot();
+    setShowNetworkBanner(true);
+    setAutoSaveStatus('offline');
+    void candidateService.pauseAssessment(token, reason);
+  };
 
   // Fullscreen state (only tracking, not used for pausing anymore)
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -494,22 +522,19 @@ export function AssessmentInterface({
   useEffect(() => {
     if (!isOnline) {
       console.log('[NETWORK] Connection lost - pausing timer');
-      isTimerPausedRef.current = true;
-      void candidateService.pauseAssessment(token, 'network_offline');
-      // Save current remaining time immediately so reload can restore it
-      try {
-        sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
-          remainingSeconds: globalTimeRemainingRef.current,
-          savedAt: Date.now(),
-          isPaused: true,
-        }));
-      } catch {}
-      setShowNetworkBanner(true);
-      setAutoSaveStatus('offline');
+      pauseTimerForRecovery('network_offline');
     } else {
-      if (isTimerPausedRef.current) {
-        // Was paused due to network loss — reload page to resume cleanly
-        console.log('[NETWORK] Connection restored - reloading to resume assessment');
+      if (immediateNetworkPauseRef.current || isTimerPausedRef.current) {
+        // Shift the wall-clock anchor forward by the time we were offline so the
+        // timer resumes from exactly where it stopped rather than counting offline
+        // time as elapsed.
+        if (pauseStartWallTimeRef.current !== null) {
+          const offlineMs = Date.now() - pauseStartWallTimeRef.current;
+          assessmentStartTimeRef.current += offlineMs;
+          pauseStartWallTimeRef.current = null;
+          console.log(`[NETWORK] Connection restored - excluded ${Math.round(offlineMs / 1000)}s offline from timer`);
+        }
+        // Reload to re-sync with server (server is the source of truth for remaining time)
         window.location.reload();
         return;
       }
@@ -526,17 +551,61 @@ export function AssessmentInterface({
   }, [isOnline, queueSize, processQueue, token]);
 
   useEffect(() => {
-    const serverPaused = Boolean(assessmentInfo.is_paused);
-    isTimerPausedRef.current = !isOnline || serverPaused;
+    const handleCandidateNetworkFailure = () => {
+      console.log('[NETWORK] Candidate API request failed - pausing timer immediately');
+      pauseTimerForRecovery('network_request_failed');
+    };
 
-    if (typeof assessmentInfo.time_remaining_seconds === 'number' && assessmentInfo.time_remaining_seconds >= 0) {
-      const normalizedRemaining = Math.max(0, Math.min(totalDurationSecsRef.current, assessmentInfo.time_remaining_seconds));
+    const handleCandidateNetworkRestored = () => {
+      if (!immediateNetworkPauseRef.current) return;
+      console.log('[NETWORK] Candidate API recovered - reloading assessment to resume timer');
+      window.location.reload();
+    };
+
+    window.addEventListener('candidate-network-failure', handleCandidateNetworkFailure);
+    window.addEventListener('candidate-network-restored', handleCandidateNetworkRestored);
+    return () => {
+      window.removeEventListener('candidate-network-failure', handleCandidateNetworkFailure);
+      window.removeEventListener('candidate-network-restored', handleCandidateNetworkRestored);
+    };
+  }, [token]);
+
+  useEffect(() => {
+    const serverPaused = Boolean(assessmentInfo.is_paused);
+    const shouldPauseTimer = !isOnline || serverPaused;
+    isTimerPausedRef.current = shouldPauseTimer;
+
+    const authoritativeRemaining = typeof assessmentInfo.time_remaining_seconds === 'number'
+      ? assessmentInfo.time_remaining_seconds
+      : initialTimeRemainingSeconds;
+
+    if (typeof authoritativeRemaining === 'number' && authoritativeRemaining >= 0) {
+      const normalizedRemaining = Math.max(0, Math.min(totalDurationSecsRef.current, authoritativeRemaining));
       assessmentStartTimeRef.current = Date.now() - ((totalDurationSecsRef.current - normalizedRemaining) * 1000);
       globalTimeRemainingRef.current = normalizedRemaining;
       setGlobalTimeRemaining(normalizedRemaining);
       onTimeUpdate?.(normalizedRemaining);
     }
-  }, [assessmentInfo.is_paused, assessmentInfo.time_remaining_seconds, isOnline, onTimeUpdate]);
+
+    if (!shouldPauseTimer) {
+      immediateNetworkPauseRef.current = false;
+      pauseStartWallTimeRef.current = null;
+      try {
+        sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+          remainingSeconds: globalTimeRemainingRef.current,
+          savedAt: Date.now(),
+          isPaused: false,
+        }));
+      } catch {}
+    }
+  }, [
+    assessmentInfo.is_paused,
+    assessmentInfo.time_remaining_seconds,
+    initialTimeRemainingSeconds,
+    isOnline,
+    onTimeUpdate,
+    token,
+  ]);
 
   // 🛡️ PROCTORING: Exit Fullscreen on Complete
   const exitAssessmentFullscreen = async () => {
@@ -872,6 +941,9 @@ export function AssessmentInterface({
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
+      // Don't resync from wall-clock while paused (e.g. offline) — the timer display
+      // should stay frozen until connectivity is restored.
+      if (isTimerPausedRef.current) return;
 
       // Resync global timer
       if (assessmentStartTimeRef.current && !isGlobalTimeExpired) {

@@ -377,7 +377,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-2 min-h-0">
+      <nav className="flex-1 overflow-y-auto py-2 min-h-0 scrollbar-auto-hide">
         {visibleSections.map((section) => (
           <div key={section.id} className="mb-2">
             {/* Section Header */}

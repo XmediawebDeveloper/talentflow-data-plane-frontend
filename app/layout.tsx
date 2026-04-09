@@ -33,6 +33,27 @@ export default function RootLayout({
         <link rel="icon" href="/logos/favicon.png" type="image/png" />
         <link rel="shortcut icon" href="/logos/favicon.png" type="image/png" />
         <link rel="apple-touch-icon" href="/logos/favicon.png" />
+        {/* Suppress MediaPipe / WASM glog output (I0000/W0000/E0000 format).
+            These are C++ developer logs baked into the binary that cannot be
+            disabled via API — they route through WASM put_char to console.log/warn. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                var glogRe = /^[IWE]\\d{4}\\s[\\d:.]+\\s+\\d+\\s+[\\w./]+\\.cc:\\d+\\]/;
+                function filter(orig) {
+                  return function() {
+                    if (arguments.length > 0 && typeof arguments[0] === 'string' && glogRe.test(arguments[0])) return;
+                    orig.apply(console, arguments);
+                  };
+                }
+                console.log  = filter(console.log);
+                console.warn = filter(console.warn);
+                console.info = filter(console.info);
+              })();
+            `,
+          }}
+        />
         {/* Token recovery script - runs before any navigation to restore cookies from localStorage */}
         <script
           dangerouslySetInnerHTML={{

@@ -529,7 +529,30 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       if (speechStartRef.current === null) {
         speechStartRef.current = performance.now();
       }
-      head.streamAudio({ audio: pcmData });
+
+      // The TalkingHead worklet passes Int16 samples through at the AudioContext's
+      // native rate. Most browsers run at 48kHz even when 24kHz is requested.
+      // If the context is NOT 24kHz we must resample before sending, otherwise
+      // audio plays at 2x speed (48kHz output / 24kHz input = 2x).
+      const ctxRate = (head.audioCtx as AudioContext | undefined)?.sampleRate ?? 24000;
+      const TTS_RATE = 24000;
+      if (ctxRate !== TTS_RATE && ctxRate > 0) {
+        const ratio = ctxRate / TTS_RATE; // e.g. 2.0 for 48kHz context
+        const src = new Int16Array(pcmData);
+        const outLen = Math.round(src.length * ratio);
+        const out = new Int16Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+          const pos = i / ratio;
+          const idx = Math.floor(pos);
+          const frac = pos - idx;
+          const a = src[idx] ?? 0;
+          const b = src[Math.min(idx + 1, src.length - 1)] ?? 0;
+          out[i] = Math.round(a + frac * (b - a));
+        }
+        head.streamAudio({ audio: out.buffer });
+      } else {
+        head.streamAudio({ audio: pcmData });
+      }
     };
 
     // ── Fallback: play Int16 PCM via Web Audio API when TalkingHead isn't ready ──

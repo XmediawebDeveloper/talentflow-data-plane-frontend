@@ -152,6 +152,11 @@ export interface QuestionEvaluation {
   round_type: string;
   question_type: string;
   question_text: string;
+  problem_title?: string | null;
+  input_format?: string | null;
+  output_format?: string | null;
+  sample_input?: string | null;
+  sample_output?: string | null;
   candidate_answer_text?: string;
   candidate_selected_options?: string[];
   candidate_code_submission?: string;

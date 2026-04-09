@@ -69,6 +69,53 @@ function getCodingEvaluationState(q: QuestionEvaluation) {
   };
 }
 
+function roundBreakdownMark(value: number | string | null | undefined) {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric)) return 0;
+  const whole = Math.floor(numeric);
+  const fraction = numeric - whole;
+  return fraction > 0.5 ? Math.ceil(numeric) : whole;
+}
+
+function getCandidateCodingInput(q: QuestionEvaluation) {
+  if (q.candidate_code_input && q.candidate_code_input.trim()) {
+    return q.candidate_code_input;
+  }
+  const firstDetailWithInput = q.candidate_test_results?.details?.find(detail => detail.input && detail.input.trim());
+  return firstDetailWithInput?.input || 'No input provided';
+}
+
+function getCandidateCodingOutput(q: QuestionEvaluation) {
+  if (q.candidate_code_execution_error && q.candidate_code_execution_error.trim()) {
+    return q.candidate_code_execution_error;
+  }
+  if (q.candidate_code_execution_output && q.candidate_code_execution_output.trim()) {
+    return q.candidate_code_execution_output;
+  }
+
+  if (q.candidate_code_execution_status === 'success') {
+    return 'Executed successfully without output.';
+  }
+
+  return 'No candidate terminal output captured';
+}
+
+function getNormalizedQuestionPossiblePoints(q: QuestionEvaluation) {
+  return q.points_possible === 100 ? 10 : (q.points_possible || 10);
+}
+
+function getDisplayedQuestionEarnedPoints(q: QuestionEvaluation) {
+  const normalizedEarned = q.points_possible === 100 ? (q.points_earned || 0) / 10 : (q.points_earned || 0);
+  return roundBreakdownMark(normalizedEarned);
+}
+
+function getDisplaySectionPercentage(questions: QuestionEvaluation[]) {
+  const totalPossible = questions.reduce((sum, q) => sum + getNormalizedQuestionPossiblePoints(q), 0);
+  const totalDisplayedEarned = questions.reduce((sum, q) => sum + getDisplayedQuestionEarnedPoints(q), 0);
+  if (totalPossible <= 0) return 0;
+  return Math.round((totalDisplayedEarned / totalPossible) * 100);
+}
+
 export default function CandidateResultDetails({
   onBack,
   assessmentId,
@@ -159,7 +206,12 @@ export default function CandidateResultDetails({
 
         // Map section scores directly from stored backend round scores.
         const sections = details.round_scores.map(round => {
-          const percentage = Math.round(round.raw_score ?? 0);
+          const questionsForRound = details.question_evaluations.filter(
+            q => q.round_type === round.round_type
+          );
+          const percentage = round.round_type === 'hr'
+            ? Math.round(round.raw_score ?? 0)
+            : getDisplaySectionPercentage(questionsForRound);
           return {
             name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
             score: round.questions_correct ?? 0,
@@ -207,7 +259,15 @@ export default function CandidateResultDetails({
           if (details.scoring_status === 'completed') status = 'Completed';
           else if (details.scoring_status === 'pending') status = 'Pending';
           const sections = details.round_scores.map(round => {
-            const percentage = Math.min(Math.round(round.raw_score ?? 0), 100);
+            const questionsForRound = details.question_evaluations.filter(
+              q => q.round_type === round.round_type
+            );
+            const percentage = Math.min(
+              round.round_type === 'hr'
+                ? Math.round(round.raw_score ?? 0)
+                : getDisplaySectionPercentage(questionsForRound),
+              100,
+            );
             return {
               name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
               score: round.questions_correct ?? 0,
@@ -1058,6 +1118,17 @@ export default function CandidateResultDetails({
                   const questionsForRound = detailedResult.question_evaluations.filter(
                     q => q.round_type === round.round_type
                   );
+                  const displayedSectionPercentage = isHRRound
+                    ? Math.round(round.raw_score ?? 0)
+                    : getDisplaySectionPercentage(questionsForRound);
+                  const displayedSectionPoints = questionsForRound.reduce(
+                    (sum, q) => sum + getDisplayedQuestionEarnedPoints(q),
+                    0,
+                  );
+                  const displayedSectionPossible = questionsForRound.reduce(
+                    (sum, q) => sum + getNormalizedQuestionPossiblePoints(q),
+                    0,
+                  );
 
                   return (
                     <div key={roundIdx} className="space-y-6">
@@ -1070,8 +1141,7 @@ export default function CandidateResultDetails({
                             <span className="ml-1">
                               {isHRRound ? 'Informational only' : (
                                 <>
-                                  {Math.round(questionsForRound.reduce((s, q) => s + (q.points_earned || 0), 0))}
-                                  /{questionsForRound.reduce((s, q) => s + (q.points_possible || 10), 0)} points
+                                  {displayedSectionPoints}/{displayedSectionPossible} points
                                 </>
                               )}
                             </span>
@@ -1081,8 +1151,8 @@ export default function CandidateResultDetails({
                           <div className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
                             {isHRRound ? 'Section Type' : 'Section Score'}
                           </div>
-                          <div className={`text-xl sm:text-3xl ${isHRRound ? 'text-gray-400' : getScoreColor(Math.round(round.raw_score ?? 0))}`}>
-                            {isHRRound ? '—' : `${Math.round(round.raw_score ?? 0)}%`}
+                          <div className={`text-xl sm:text-3xl ${isHRRound ? 'text-gray-400' : getScoreColor(displayedSectionPercentage)}`}>
+                            {isHRRound ? '—' : `${displayedSectionPercentage}%`}
                           </div>
                         </div>
                       </div>
@@ -1125,15 +1195,52 @@ export default function CandidateResultDetails({
                                       ))}
                                     </div>
                                     <div className="text-gray-900 leading-relaxed">{q.question_text}</div>
+                                    {q.question_type === 'coding' && (
+                                      <div className="mt-3 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                        {q.problem_title && (
+                                          <div>
+                                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Problem Title</div>
+                                            <div className="text-sm text-gray-900">{q.problem_title}</div>
+                                          </div>
+                                        )}
+                                        {q.input_format && (
+                                          <div>
+                                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Input Format</div>
+                                            <div className="text-sm text-gray-800 whitespace-pre-wrap">{q.input_format}</div>
+                                          </div>
+                                        )}
+                                        {q.output_format && (
+                                          <div>
+                                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Output Format</div>
+                                            <div className="text-sm text-gray-800 whitespace-pre-wrap">{q.output_format}</div>
+                                          </div>
+                                        )}
+                                        {(q.sample_input || q.sample_output) && (
+                                          <div className="grid gap-3 md:grid-cols-2">
+                                            <div>
+                                              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Example Input</div>
+                                              <div className="rounded bg-gray-900 p-3 font-mono text-sm text-green-300">
+                                                <pre className="whitespace-pre-wrap">{q.sample_input || 'No example input provided'}</pre>
+                                              </div>
+                                            </div>
+                                            <div>
+                                              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Example Output</div>
+                                              <div className="rounded bg-gray-900 p-3 font-mono text-sm text-green-300">
+                                                <pre className="whitespace-pre-wrap">{q.sample_output || 'No example output provided'}</pre>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                   {!isHRRound && (
                                     <div className="sm:ml-6 text-left sm:text-right flex-shrink-0">
                                       <div className="text-xs text-gray-600 mb-0.5 sm:mb-1">Score</div>
                                       <div className="flex items-center gap-2">
                                         {(() => {
-                                          // Normalize scores to be out of 10
-                                          const normalizedEarned = q.points_possible === 100 ? q.points_earned / 10 : q.points_earned;
-                                          const normalizedPossible = q.points_possible === 100 ? 10 : q.points_possible;
+                                          const normalizedEarned = getDisplayedQuestionEarnedPoints(q);
+                                          const normalizedPossible = getNormalizedQuestionPossiblePoints(q);
                                           const percentage = (normalizedEarned / normalizedPossible) * 100;
 
                                           return (
@@ -1203,32 +1310,7 @@ export default function CandidateResultDetails({
                                         <div className="text-sm font-medium text-yellow-200">CODE INPUT</div>
                                       </div>
                                       <div className="bg-yellow-700 rounded-lg p-4 text-white font-mono text-sm overflow-x-auto border border-yellow-500">
-                                        <pre className="whitespace-pre-wrap">{q.candidate_code_input || 'No input provided'}</pre>
-                                      </div>
-                                    </div>
-
-                                    <div>
-                                      <div className="flex items-center gap-2 mb-3">
-                                        <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                          <AlertCircle className="w-4 h-4 text-amber-700" />
-                                        </div>
-                                        <div className="text-sm font-medium text-amber-900">EXECUTION LOGS</div>
-                                        {q.candidate_code_execution_status && (
-                                          <span className="px-2 py-0.5 bg-black text-white rounded text-xs uppercase font-medium">
-                                            {q.candidate_code_execution_status.replace(/_/g, ' ')}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div className={`rounded-lg p-4 font-mono text-sm overflow-x-auto ${
-                                        q.candidate_code_execution_error
-                                          ? 'bg-red-950 text-red-100'
-                                          : 'bg-gray-900 text-gray-100'
-                                      }`}>
-                                        <pre className="whitespace-pre-wrap">
-                                          {q.candidate_code_execution_error || (q.candidate_code_execution_status === 'success'
-                                            ? 'Executed successfully without error.'
-                                            : 'No execution logs available')}
-                                        </pre>
+                                        <pre className="whitespace-pre-wrap">{getCandidateCodingInput(q)}</pre>
                                       </div>
                                     </div>
 
@@ -1241,7 +1323,7 @@ export default function CandidateResultDetails({
                                       </div>
                                     <div className="rounded-lg p-4 font-mono text-sm overflow-x-auto bg-sky-950 text-sky-100">
                                       <pre className="whitespace-pre-wrap">
-                                        {q.candidate_code_execution_output || 'No output captured'}
+                                        {getCandidateCodingOutput(q)}
                                       </pre>
                                     </div>
                                   </div>
@@ -1256,19 +1338,19 @@ export default function CandidateResultDetails({
                                       </div>
                                       <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-2 text-sm text-indigo-950">
                                         <div>
-                                          Syntax: {q.candidate_test_results.marks_breakdown.syntax?.earned ?? 0}/{q.candidate_test_results.marks_breakdown.syntax?.total ?? 0}
+                                          Syntax: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.syntax?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.syntax?.total)}
                                           {q.candidate_test_results.marks_breakdown.syntax?.reason ? ` - ${q.candidate_test_results.marks_breakdown.syntax.reason}` : ''}
                                         </div>
                                         <div>
-                                          Execution: {q.candidate_test_results.marks_breakdown.execution?.earned ?? 0}/{q.candidate_test_results.marks_breakdown.execution?.total ?? 0}
+                                          Execution: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.execution?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.execution?.total)}
                                           {q.candidate_test_results.marks_breakdown.execution?.reason ? ` - ${q.candidate_test_results.marks_breakdown.execution.reason}` : ''}
                                         </div>
                                         <div>
-                                          Output: {q.candidate_test_results.marks_breakdown.output?.earned ?? 0}/{q.candidate_test_results.marks_breakdown.output?.total ?? 0}
+                                          Output: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.output?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.output?.total)}
                                           {q.candidate_test_results.marks_breakdown.output?.reason ? ` - ${q.candidate_test_results.marks_breakdown.output.reason}` : ''}
                                         </div>
                                         <div className="font-semibold pt-2 border-t border-indigo-200">
-                                          Final: {q.points_earned}/{q.points_possible} ({q.score}%)
+                                          Final: {roundBreakdownMark(q.points_earned)}/{roundBreakdownMark(q.points_possible)} ({roundBreakdownMark(q.score)}%)
                                         </div>
                                       </div>
                                     </div>
