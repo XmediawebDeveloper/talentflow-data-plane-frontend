@@ -8,7 +8,7 @@ import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import ExcelJS from 'exceljs';
+import readXlsxFile from 'read-excel-file/browser';
 import { useQuota } from '@/contexts/QuotaContext';
 
 // Email validation regex
@@ -402,20 +402,16 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           const text = new TextDecoder().decode(arrayBuffer);
           rows = parseCSV(text);
         } else {
-          const workbook = new ExcelJS.Workbook();
-          await workbook.xlsx.load(arrayBuffer);
-          const sheet = workbook.worksheets[0];
-          const headers: string[] = [];
-          sheet.getRow(1).eachCell({ includeEmpty: true }, (cell) => {
-            headers.push(String(cell.value ?? ''));
-          });
-          sheet.eachRow((row, rowNumber) => {
-            if (rowNumber === 1) return;
-            const rowObj: Record<string, string> = {};
-            headers.forEach((h, i) => {
-              rowObj[h] = String(row.getCell(i + 1).value ?? '');
-            });
-            rows.push(rowObj);
+          const rawRows = await readXlsxFile(new Blob([arrayBuffer]));
+          if (rawRows.length < 2) {
+            toast.error('No data found in the file');
+            return;
+          }
+          const headers = rawRows[0].map(h => String(h ?? ''));
+          rows = rawRows.slice(1).map(row => {
+            const obj: Record<string, string> = {};
+            headers.forEach((h, i) => { obj[h] = String(row[i] ?? ''); });
+            return obj;
           });
         }
 
