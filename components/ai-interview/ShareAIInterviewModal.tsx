@@ -8,7 +8,7 @@ import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { useQuota } from '@/contexts/QuotaContext';
 
 // Email validation regex
@@ -355,6 +355,37 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     }
   };
 
+  // Parse CSV text into array of row objects
+  const parseCSV = (text: string): Record<string, string>[] => {
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) return [];
+    const parseRow = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"') {
+          if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+          else inQuotes = !inQuotes;
+        } else if (line[i] === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += line[i];
+        }
+      }
+      result.push(current.trim());
+      return result;
+    };
+    const headers = parseRow(lines[0]);
+    return lines.slice(1).filter(l => l.trim()).map(line => {
+      const values = parseRow(line);
+      const obj: Record<string, string> = {};
+      headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
+      return obj;
+    });
+  };
+
   // Handle Excel/CSV file upload
   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -362,12 +393,31 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     setExcelFileName(file.name);
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
-        const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        const arrayBuffer = evt.target?.result as ArrayBuffer;
+        let rows: Record<string, string>[] = [];
+
+        if (file.name.toLowerCase().endsWith('.csv')) {
+          const text = new TextDecoder().decode(arrayBuffer);
+          rows = parseCSV(text);
+        } else {
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(arrayBuffer);
+          const sheet = workbook.worksheets[0];
+          const headers: string[] = [];
+          sheet.getRow(1).eachCell({ includeEmpty: true }, (cell) => {
+            headers.push(String(cell.value ?? ''));
+          });
+          sheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+            const rowObj: Record<string, string> = {};
+            headers.forEach((h, i) => {
+              rowObj[h] = String(row.getCell(i + 1).value ?? '');
+            });
+            rows.push(rowObj);
+          });
+        }
 
         if (rows.length === 0) {
           toast.error('No data found in the file');
