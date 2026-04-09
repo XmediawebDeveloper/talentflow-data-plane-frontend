@@ -375,7 +375,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
 
     return [
-      { name: 'HR', percentage: 0, topics: [], enabled: true }, // HR always enabled via Question Bank
+      { name: 'HR', percentage: 0, topics: [], enabled: true },
       { name: 'Technical', percentage: techPct, topics: [], enabled: technicalEnabled },
       { name: 'Coding', percentage: codePct, topics: [], enabled: false }, // Coding starts disabled, enabled by JD
     ];
@@ -473,6 +473,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   }, [hrQuestionBank, editAssessmentId, editingAssessment]);
 
   const toggleHRQuestion = (id: string) => {
+    const hrSection = sections.find(s => s.name === 'HR');
+    if (!hrSection?.enabled) return;
+
     setSelectedHRQuestions(prev => {
       if (prev.includes(id)) {
         return prev.filter(q => q !== id);
@@ -486,6 +489,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   const selectAllHR = () => {
+    const hrSection = sections.find(s => s.name === 'HR');
+    if (!hrSection?.enabled) return;
+
     if (hrQuestionBank.length > HR_QUESTION_LIMIT) {
       toast.error(`Maximum ${HR_QUESTION_LIMIT} HR questions allowed. Selecting first ${HR_QUESTION_LIMIT}.`);
       setSelectedHRQuestions(hrQuestionBank.slice(0, HR_QUESTION_LIMIT).map(q => q.id));
@@ -493,9 +499,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       setSelectedHRQuestions(hrQuestionBank.map(q => q.id));
     }
   };
-  const deselectAllHR = () => setSelectedHRQuestions([]);
+  const deselectAllHR = () => {
+    const hrSection = sections.find(s => s.name === 'HR');
+    if (!hrSection?.enabled) return;
+    setSelectedHRQuestions([]);
+  };
 
   const openAddHRQuizModal = () => {
+    const hrSection = sections.find(s => s.name === 'HR');
+    if (!hrSection?.enabled) return;
+
     setNewHRQuestion(EMPTY_HR_QUESTION_FORM);
     setShowAddHRQuizModal(true);
   };
@@ -1197,7 +1210,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       }
 
       setSections(sections.map(s => {
-        if (s.name === 'HR') return s; // HR always enabled via Question Bank
+        if (s.name === 'HR') return { ...s, enabled: false, percentage: 0 };
         if (s.name === 'Technical') return { ...s, percentage: newTechPct };
         if (s.name === 'Coding') return { ...s, percentage: newCodingPct };
         return s;
@@ -1329,9 +1342,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           : `${selectedJob?.title} - Assessment - Version 1`,
         description: `Assessment for ${selectedJob?.title} position`,
         duration_minutes: duration,  // 30 min for Technical + Coding only (HR is separate)
-        hr_enabled: selectedHRQuestions.length > 0,
+        hr_enabled: hrSection?.enabled || false,
         hr_percentage: 0,
-        hr_topics: selectedHRQuestions.map(id => {
+        hr_topics: (hrSection?.enabled ? selectedHRQuestions : []).map(id => {
           const q = hrQuestionBank.find(hq => hq.id === id);
           return q ? { text: q.text, type: q.type, time: q.time, correct_answer: (q as any).correct_answer } : null;
         }).filter(Boolean),
@@ -1380,7 +1393,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         version: resultAssessment.version || 1,
         job: selectedJob,
         duration: resultAssessment.duration_minutes,
-        sections: sections.filter(section => section.name === 'HR' ? selectedHRQuestions.length > 0 : section.enabled).map(section => ({
+        sections: sections.filter(section => section.enabled).map(section => ({
           name: section.name,
           percentage: section.percentage,
           topics: section.topics,
@@ -1452,9 +1465,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         title: `${selectedJob?.title} - Assessment - Version 1`,
         description: `Assessment for ${selectedJob?.title} position`,
         duration_minutes: duration,
-        hr_enabled: selectedHRQuestions.length > 0,
+        hr_enabled: hrSection?.enabled || false,
         hr_percentage: 0,
-        hr_topics: selectedHRQuestions.map(id => {
+        hr_topics: (hrSection?.enabled ? selectedHRQuestions : []).map(id => {
           const q = hrQuestionBank.find(hq => hq.id === id);
           return q ? { text: q.text, type: q.type, time: q.time, correct_answer: (q as any).correct_answer } : null;
         }).filter(Boolean),
@@ -1518,9 +1531,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           title: `${selectedJob?.title} - Assessment - Version 1`,
           description: `Assessment for ${selectedJob?.title} position`,
           duration_minutes: duration,
-          hr_enabled: selectedHRQuestions.length > 0,
+          hr_enabled: hrSection?.enabled || false,
           hr_percentage: 0,
-          hr_topics: selectedHRQuestions.map(id => {
+          hr_topics: (hrSection?.enabled ? selectedHRQuestions : []).map(id => {
             const q = hrQuestionBank.find(hq => hq.id === id);
             return q ? { text: q.text, type: q.type, time: q.time, correct_answer: (q as any).correct_answer } : null;
           }).filter(Boolean),
@@ -1811,7 +1824,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Step 2: Configure Assessment
   if (step === 'configure') {
-    const enabledSectionsCount = sections.filter(section => section.name === 'HR' ? selectedHRQuestions.length > 0 : section.enabled).length;
+    const hrSection = sections.find(section => section.name === 'HR');
+    const hrEnabled = hrSection?.enabled || false;
+    const enabledSectionsCount = sections.filter(section => section.enabled).length;
 
     return (
       <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50 relative">
@@ -1858,7 +1873,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
                 <div className="space-y-3">
                   {/* HR Round - Summary (selection is in Section Distribution below) */}
-                  <div className="p-3 sm:p-4 border border-gray-300 bg-white rounded-lg">
+                  <div className={`p-3 sm:p-4 border rounded-lg transition-all ${hrEnabled ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-50'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 sm:gap-3 min-w-0">
                         <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0 mt-0.5" />
@@ -1867,26 +1882,28 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                             <span className="text-sm sm:text-base font-medium text-gray-900">HR Round</span>
                             <span className="px-1.5 sm:px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">Question Bank</span>
                             <span className="px-1.5 sm:px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">No Timer</span>
+                            {!hrEnabled && (
+                              <span className="px-1.5 sm:px-2 py-0.5 bg-gray-200 text-gray-600 rounded text-xs">Disabled</span>
+                            )}
                           </div>
                           <p className="text-xs text-gray-500 mt-0.5 leading-snug">
-                            {selectedHRQuestions.length} of {HR_QUESTION_LIMIT} questions selected (max {HR_QUESTION_LIMIT}) — select questions in Section Distribution below
+                            {hrEnabled
+                              ? `${selectedHRQuestions.length} of ${HR_QUESTION_LIMIT} questions selected (max ${HR_QUESTION_LIMIT}) — select questions in Section Distribution below`
+                              : 'Enable HR round to select or manage HR questions.'}
                           </p>
                         </div>
                       </div>
                       <button
-                        onClick={() => {
-                          if (selectedHRQuestions.length > 0) {
-                            setSelectedHRQuestions([]);
-                          } else {
-                            setSelectedHRQuestions(hrQuestionBank.slice(0, HR_QUESTION_LIMIT).map(q => q.id));
-                          }
-                        }}
+                        type="button"
+                        aria-label="Toggle HR round"
+                        aria-pressed={hrEnabled}
+                        onClick={handleHRToggle}
                         className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-                          selectedHRQuestions.length > 0 ? 'bg-gray-800' : 'bg-gray-300'
+                          hrEnabled ? 'bg-gray-800' : 'bg-gray-300'
                         }`}
                       >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          selectedHRQuestions.length > 0 ? 'translate-x-6' : 'translate-x-1'
+                          hrEnabled ? 'translate-x-6' : 'translate-x-1'
                         }`} />
                       </button>
                     </div>
@@ -2145,8 +2162,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
                 <div className="space-y-3 sm:space-y-4">
                   {/* HR Question Bank Section */}
-                  {(hrQuestionBank.length > 0 || selectedHRQuestions.length > 0) && (
-                  <div className="p-3 sm:p-4 border border-gray-200 rounded-lg">
+                  {(hrQuestionBank.length > 0 || selectedHRQuestions.length > 0 || !!hrSection) && (
+                  <div
+                    aria-disabled={!hrEnabled}
+                    className={`p-3 sm:p-4 border rounded-lg transition-all ${
+                      hrEnabled ? 'border-gray-200 bg-white' : 'border-gray-200 bg-gray-50 opacity-70'
+                    }`}
+                  >
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Users className="w-4 h-4 text-gray-600" />
@@ -2158,15 +2180,20 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         <button
                           type="button"
                           onClick={openAddHRQuizModal}
-                          className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-gray-700 hover:bg-gray-50 font-medium"
+                          disabled={!hrEnabled}
+                          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 font-medium ${
+                            hrEnabled
+                              ? 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                              : 'border-gray-200 text-gray-400 cursor-not-allowed'
+                          }`}
                         >
                           <Plus className="w-3.5 h-3.5" />
                           Add Quiz
                         </button>
-                        <span className={`${selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-orange-600 font-medium' : 'text-gray-500'}`}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
-                        <button type="button" onClick={selectAllHR} className="text-blue-600 hover:text-blue-800 font-medium">All</button>
+                        <span className={`${hrEnabled && selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-orange-600 font-medium' : 'text-gray-500'}`}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
+                        <button type="button" onClick={selectAllHR} disabled={!hrEnabled} className={hrEnabled ? 'text-blue-600 hover:text-blue-800 font-medium' : 'text-gray-400 cursor-not-allowed font-medium'}>All</button>
                         <span className="text-gray-300">|</span>
-                        <button type="button" onClick={deselectAllHR} className="text-gray-500 hover:text-gray-700 font-medium">None</button>
+                        <button type="button" onClick={deselectAllHR} disabled={!hrEnabled} className={hrEnabled ? 'text-gray-500 hover:text-gray-700 font-medium' : 'text-gray-400 cursor-not-allowed font-medium'}>None</button>
                       </div>
                     </div>
 
@@ -2180,11 +2207,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                         return (
                           <div
                             key={q.id}
-                            onClick={() => toggleHRQuestion(q.id)}
-                            className={`flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition-all text-xs ${
+                            onClick={() => hrEnabled && toggleHRQuestion(q.id)}
+                            className={`flex items-center gap-2.5 p-2 rounded-lg transition-all text-xs ${
+                              hrEnabled ? 'cursor-pointer' : 'cursor-not-allowed'
+                            } ${
                               isSelected
                                 ? 'bg-blue-50 border border-blue-200'
-                                : 'bg-gray-50 border border-transparent hover:bg-gray-100'
+                                : hrEnabled
+                                  ? 'bg-gray-50 border border-transparent hover:bg-gray-100'
+                                  : 'bg-gray-50 border border-transparent'
                             }`}
                           >
                             <input

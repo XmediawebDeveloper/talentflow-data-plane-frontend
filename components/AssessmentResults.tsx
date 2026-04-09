@@ -84,6 +84,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const stickyScrollbarRef = useRef<HTMLDivElement | null>(null);
   const stickyScrollbarInnerRef = useRef<HTMLDivElement | null>(null);
   const isSyncingScrollRef = useRef(false);
+  const [stickyScrollbarPosition, setStickyScrollbarPosition] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -748,6 +749,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       const hasHorizontalOverflow = tableEl.scrollWidth - tableEl.clientWidth > 1;
       setShowStickyScrollbar(hasHorizontalOverflow);
       innerEl.style.width = `${tableEl.scrollWidth}px`;
+
+      const rect = tableEl.getBoundingClientRect();
+      setStickyScrollbarPosition({
+        left: Math.max(rect.left, 0),
+        width: Math.max(rect.width, 0),
+      });
     };
 
     updateStickyScrollbar();
@@ -764,17 +771,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     if (tableChild) {
       resizeObserver.observe(tableChild);
     }
+
     window.addEventListener('resize', updateStickyScrollbar);
     window.addEventListener('scroll', updateStickyScrollbar, true);
-    const postRenderTimer = window.setTimeout(updateStickyScrollbar, 150);
+    const timer = window.setTimeout(updateStickyScrollbar, 150);
 
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateStickyScrollbar);
       window.removeEventListener('scroll', updateStickyScrollbar, true);
-      window.clearTimeout(postRenderTimer);
+      window.clearTimeout(timer);
     };
-  }, [columns, candidateResults.length, assessmentDetails, isFetching]);
+  }, [candidateResults.length, assessmentDetails, isFetching, totalItems]);
 
   // Use API results only (no mock data)
   const displayResults = candidateResults;
@@ -882,6 +890,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const completedCount = candidateResults.length > 0 ? apiStats.completed_count : filteredCandidates.filter(c => c.status === 'Completed').length;
   const inProgressCount = candidateResults.length > 0 ? apiStats.in_progress_count : filteredCandidates.filter(c => c.status === 'In Progress').length;
   const pendingCount = candidateResults.length > 0 ? apiStats.pending_count : filteredCandidates.filter(c => c.status === 'Pending').length;
+  const stickyHeaderClass = 'bg-gray-50';
 
   const syncHorizontalScroll = (source: 'table' | 'sticky') => {
     const tableEl = tableScrollRef.current;
@@ -1385,13 +1394,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
           <div
             ref={tableScrollRef}
-            className="hidden xl:block overflow-x-auto"
+            className="hidden 2xl:block overflow-x-auto"
             onScroll={() => syncHorizontalScroll('table')}
           >
-            <table className="w-full min-w-max">
+            <table className="w-full min-w-[1480px] table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 w-10">
+                  <th className={`px-4 py-3 w-10 ${stickyHeaderClass}`}>
                     <input
                       type="checkbox"
                       checked={selectedRows.length === paginatedCandidates.length && paginatedCandidates.length > 0}
@@ -1400,11 +1409,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     />
                   </th>
                   {isColumnEnabled('cid') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">CID</th>
+                    <th className={`w-24 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>CID</th>
                   )}
                   {isColumnEnabled('candidate') && (
                     <th
-                      className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className={`w-40 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
                       onClick={() => handleSort('name')}
                     >
                       <div className="flex items-center gap-1">
@@ -1414,7 +1423,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('email') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                    <th className={`w-52 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Mail className="w-3 h-3" />
                         Email
@@ -1422,7 +1431,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('jdTitle') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                    <th className={`w-40 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Briefcase className="w-3 h-3" />
                         JD Title
@@ -1430,7 +1439,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('phone') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Phone className="w-3 h-3" />
                         Phone
@@ -1438,11 +1447,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('inviteSource') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">Invite Source</th>
+                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
                   {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                     <th
-                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
                       onClick={() => handleSort('score')}
                     >
                       <div className="flex items-center justify-center gap-1">
@@ -1453,7 +1462,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   )}
                   {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
                     <th
-                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
                       onClick={() => handleSort('score')}
                     >
                       <div className="flex items-center justify-center gap-1">
@@ -1464,7 +1473,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   )}
                   {isColumnEnabled('status') && (
                     <th
-                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center justify-center gap-1">
@@ -1474,7 +1483,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('timeline') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                    <th className={`w-56 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         Timeline
@@ -1483,7 +1492,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   )}
                   {isColumnEnabled('completed') && (
                     <th
-                      className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className={`w-32 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
                       onClick={() => handleSort('date')}
                     >
                       <div className="flex items-center gap-1">
@@ -1493,9 +1502,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('duration') && (
-                    <th className="text-center px-4 py-3 text-xs text-gray-600">Duration</th>
+                    <th className={`w-28 text-center px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Duration</th>
                   )}
-                  <th className="text-center px-4 py-3 text-xs text-gray-600">Actions</th>
+                  <th className={`w-32 text-center px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -1531,7 +1540,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </td>
                       {isColumnEnabled('cid') && (
                         <td className="px-4 py-4">
-                          <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                          <span className="inline-flex max-w-full break-all text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
                             {candidate.candidateDisplayId || '-'}
                           </span>
                         </td>
@@ -1542,25 +1551,25 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs">
                               {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </div>
-                            <div className="text-sm text-gray-900 font-medium">{candidate.name || 'Unknown'}</div>
+                            <div className="text-sm text-gray-900 font-medium break-words">{candidate.name || 'Unknown'}</div>
                           </div>
                         </td>
                       )}
                       {isColumnEnabled('email') && (
                         <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600">{candidate.email}</div>
+                          <div className="text-sm text-gray-600 break-all">{candidate.email}</div>
                         </td>
                       )}
                       {isColumnEnabled('jdTitle') && (
                         <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600 truncate max-w-[200px]" title={jdTitle || 'N/A'}>
+                          <div className="text-sm text-gray-600 break-words" title={jdTitle || 'N/A'}>
                             {jdTitle || 'N/A'}
                           </div>
                         </td>
                       )}
                       {isColumnEnabled('phone') && (
                         <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600">{candidate.phone || '-'}</div>
+                          <div className="text-sm text-gray-600 break-all">{candidate.phone || '-'}</div>
                         </td>
                       )}
                       {isColumnEnabled('inviteSource') && (
@@ -1612,7 +1621,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('timeline') && (
                         <td className="px-4 py-4 text-xs text-gray-500">
-                          <div className="space-y-1">
+                          <div className="space-y-1 break-words">
                             {candidate.sent_at && (
                               <div className="flex items-center gap-2">
                                 <Mail className="w-3 h-3 text-blue-500" />
@@ -1776,12 +1785,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           )}
         </div>
 
-        {/* Sticky horizontal scrollbar — outside overflow-hidden card so it sticks to the viewport */}
         {showStickyScrollbar && (
-          <div className="hidden xl:block sticky bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+          <div
+            className="hidden 2xl:block fixed bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
+            style={{ left: stickyScrollbarPosition.left, width: stickyScrollbarPosition.width }}
+          >
             <div
               ref={stickyScrollbarRef}
-              className="overflow-x-auto overflow-y-hidden"
+              className="overflow-x-hidden overflow-y-hidden"
               onScroll={() => syncHorizontalScroll('sticky')}
             >
               <div ref={stickyScrollbarInnerRef} className="h-4" />

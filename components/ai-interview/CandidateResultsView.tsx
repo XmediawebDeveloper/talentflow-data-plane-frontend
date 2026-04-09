@@ -7,7 +7,7 @@ import {
   BarChart3, Brain, FileText, Layers, Bot,
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
-  Shield, CheckCircle2, XCircle, Activity, RefreshCw,
+  Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -24,7 +24,7 @@ interface CandidateResultsViewProps {
   onBack: () => void;
 }
 
-type TabKey = 'overview' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'clusters' | 'violations' | 'skill_coverage';
+type TabKey = 'overview' | 'evaluation' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'clusters' | 'violations' | 'skill_coverage';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -216,9 +216,22 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const [screenLoading, setScreenLoading] = useState(false);
   const [screenError, setScreenError] = useState(false);
   const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
+  const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
   const [violationPage, setViolationPage] = useState(1);
   const [riskThresholds, setRiskThresholds] = useState<RiskThresholds>(DEFAULT_THRESHOLDS);
   const [showThresholdEditor, setShowThresholdEditor] = useState(false);
+
+  // Load saved thresholds from proctoring settings on mount
+  useEffect(() => {
+    import('@/lib/services/proctoringService').then(({ proctoringService }) => {
+      proctoringService.getSettings().then(s => {
+        setRiskThresholds({
+          low: s.violation_low_threshold ?? DEFAULT_THRESHOLDS.low,
+          medium: s.violation_medium_threshold ?? DEFAULT_THRESHOLDS.medium,
+        });
+      }).catch(() => { /* use defaults */ });
+    });
+  }, []);
   const [identityPhotoUrl, setIdentityPhotoUrl] = useState<string | null>(null);
   const [identityPhotoError, setIdentityPhotoError] = useState(false);
 
@@ -279,11 +292,25 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   // Live activity feed — tracks real-time skill coverage changes and question events
   type LiveEvent =
     | { kind: 'question'; qNum: number; isFollowUp: boolean; ts: number }
-    | { kind: 'covered'; skill: string; ts: number }
-    | { kind: 'medium'; skill: string; ts: number }
-    | { kind: 'low'; skill: string; ts: number };
+    | { kind: 'covered'; skill: string; ts: number; qNum?: number }
+    | { kind: 'medium'; skill: string; ts: number; qNum?: number }
+    | { kind: 'low'; skill: string; ts: number; qNum?: number };
   const [currentQuestion, setCurrentQuestion] = useState<{ qNum: number; isFollowUp: boolean } | null>(null);
   const prevScRef = useRef<typeof liveSession.skill_coverage | null>(null);
+  // Ratchet: tracks the best (highest) skill level ever seen across all rounds (MTH → NTH).
+  // Prevents skills from appearing as "Not Covered" when the backend resets sc for the next round.
+  // Seeded from interview.skill_coverage (DB value) so it works even when the page is opened
+  // mid-interview (e.g. after MTH round ends, before any WS message is received for MTH skills).
+  const skillLevelRatchetRef = useRef<Record<string, 'covered' | 'medium' | 'low'>>((() => {
+    const r: Record<string, 'covered' | 'medium' | 'low'> = {};
+    const sc = interview.skill_coverage;
+    if (sc) {
+      for (const s of sc.covered        || []) r[s.toLowerCase()] = 'covered';
+      for (const s of sc.medium_covered || []) { const k = s.toLowerCase(); if (!(k in r)) r[k] = 'medium'; }
+      for (const s of sc.low_covered    || []) { const k = s.toLowerCase(); if (!(k in r)) r[k] = 'low'; }
+    }
+    return r;
+  })());
 
   // Live events — loaded from DB (coverage_events field on session), saved back on each new event
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>(
@@ -359,6 +386,15 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             setLiveSession(prev => ({ ...prev, skill_coverage: msg }));
 
             // Diff against previous snapshot to detect skill state changes
+            // Update skill level ratchet — never downgrade a skill's best-seen level
+            {
+              const ratchet = skillLevelRatchetRef.current;
+              const pr: Record<string, number> = { covered: 3, medium: 2, low: 1 };
+              for (const s of msg.covered || [])        { const k = s.toLowerCase(); if (!(k in ratchet) || pr[ratchet[k]] < 3) ratchet[k] = 'covered'; }
+              for (const s of msg.medium_covered || []) { const k = s.toLowerCase(); if (!(k in ratchet) || pr[ratchet[k]] < 2) ratchet[k] = 'medium'; }
+              for (const s of msg.low_covered || [])    { const k = s.toLowerCase(); if (!(k in ratchet) || pr[ratchet[k]] < 1) ratchet[k] = 'low'; }
+            }
+
             const prev = prevScRef.current;
             prevScRef.current = msg;
             if (prev) {
@@ -371,12 +407,17 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
               const newEvents: LiveEvent[] = [];
               const ts = Date.now();
+              // Stamp the current question number from msg.questions_asked so we can
+              // reliably map each skill to the exact question that covered it, without
+              // relying on timestamp ordering (which breaks when question_timer_started
+              // fires before the skill_coverage_update for the same answer).
+              const evQNum: number | undefined = msg.questions_asked || undefined;
               // Newly strongly covered
-              for (const s of msg.covered    || []) if (!wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'covered', skill: s, ts });
+              for (const s of msg.covered    || []) if (!wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'covered', skill: s, ts, qNum: evQNum });
               // Newly medium covered (wasn't medium or covered before)
-              for (const s of msg.medium_covered || []) if (!wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'medium', skill: s, ts });
+              for (const s of msg.medium_covered || []) if (!wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'medium', skill: s, ts, qNum: evQNum });
               // Newly low covered (wasn't touched before)
-              for (const s of msg.low_covered || []) if (!wasLow.has(s.toLowerCase()) && !wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'low', skill: s, ts });
+              for (const s of msg.low_covered || []) if (!wasLow.has(s.toLowerCase()) && !wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'low', skill: s, ts, qNum: evQNum });
 
               if (newEvents.length > 0) {
                 setLiveEvents(prev => [...newEvents, ...prev].slice(0, 20));
@@ -650,6 +691,9 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
     { key: 'overview',       label: 'Overview',        icon: <BarChart3 className="w-4 h-4" /> },
+    ...(eval_.capability_score != null && eval_.capability_score > 0
+      ? [{ key: 'evaluation' as TabKey, label: 'Evaluation', icon: <Award className="w-4 h-4" /> }]
+      : []),
     { key: 'skill_coverage', label: 'Skill Coverage',  icon: <Activity className="w-4 h-4" />, live: isInProgress },
     { key: 'clusters',       label: 'Cluster Insights', icon: <Layers className="w-4 h-4" />, live: isInProgress },
     { key: 'sentiment',      label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
@@ -988,10 +1032,25 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   {sc && (() => {
                     // Build cluster + skill data structured by section (MTH first, then NTH)
                     const skillLevel: Record<string, 'covered' | 'medium' | 'low' | 'uncovered'> = {};
-                    for (const s of sc.covered)        skillLevel[s.toLowerCase()] = 'covered';
-                    for (const s of sc.medium_covered)  skillLevel[s.toLowerCase()] = 'medium';
-                    for (const s of sc.low_covered)     skillLevel[s.toLowerCase()] = 'low';
-                    for (const s of sc.uncovered)       skillLevel[s.toLowerCase()] = 'uncovered';
+                    for (const s of sc.covered        || []) skillLevel[s.toLowerCase()] = 'covered';
+                    for (const s of sc.medium_covered || []) skillLevel[s.toLowerCase()] = 'medium';
+                    for (const s of sc.low_covered    || []) skillLevel[s.toLowerCase()] = 'low';
+                    for (const s of sc.uncovered      || []) skillLevel[s.toLowerCase()] = 'uncovered';
+
+                    // Apply ratchet: if a skill was covered in a previous round but the current
+                    // sc snapshot (which may only contain the new round's skills) shows it as
+                    // uncovered, restore the best-ever level so MTH skills don't disappear when
+                    // the interview transitions to the NTH round.
+                    if (isInProgress) {
+                      const ratchet = skillLevelRatchetRef.current;
+                      const pr: Record<string, number> = { covered: 3, medium: 2, low: 1, uncovered: 0 };
+                      for (const [k, bestLevel] of Object.entries(ratchet)) {
+                        const cur = skillLevel[k];
+                        if (!cur || (pr[cur] ?? 0) < pr[bestLevel]) {
+                          skillLevel[k] = bestLevel;
+                        }
+                      }
+                    }
 
                     const levelCfg = {
                       covered:   { label: 'Strong', short: '✓', bar: 'bg-green-500', text: 'text-green-700', chip: 'bg-green-100 text-green-700 border-green-200', pct: 100 },
@@ -999,6 +1058,80 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       low:       { label: 'Low', short: '◷', bar: 'bg-orange-400', text: 'text-orange-600', chip: 'bg-orange-100 text-orange-600 border-orange-200', pct: 30 },
                       uncovered: { label: 'Not Covered', short: '○', bar: 'bg-gray-200', text: 'text-gray-400', chip: 'bg-gray-100 text-gray-400 border-gray-200', pct: 0 },
                     };
+
+                    // Build skill → question-number mapping from coverage_events.
+                    // Strategy A (new events): skill events carry qNum directly — use it.
+                    // Strategy B (old events, no qNum): fall back to timestamp ordering
+                    //   but shift skill events to the PREVIOUS question event, because
+                    //   skill_coverage_update fires AFTER question_timer_started for the
+                    //   next question (so timestamp order would map skills to wrong Q).
+                    const skillToQuestions: Record<string, Array<{qNum: number; isFollowUp: boolean}>> = {};
+                    if (liveEvents.length > 0) {
+                      // Build qNum→isFollowUp from question events for reference
+                      const qFollowUpMap: Record<number, boolean> = {};
+                      for (const ev of liveEvents) {
+                        if (ev.kind === 'question') qFollowUpMap[ev.qNum] = ev.isFollowUp;
+                      }
+
+                      // Check if any skill event already has qNum stamped (new format)
+                      const hasStampedQNum = liveEvents.some(
+                        ev => ev.kind !== 'question' && (ev as any).qNum != null
+                      );
+
+                      if (hasStampedQNum) {
+                        // Strategy A: use qNum directly from each skill event
+                        for (const ev of liveEvents) {
+                          if ((ev.kind === 'covered' || ev.kind === 'medium' || ev.kind === 'low') && ev.qNum) {
+                            const key = ev.skill.toLowerCase();
+                            const qNum = ev.qNum;
+                            const isFollowUp = qFollowUpMap[qNum] ?? false;
+                            if (!skillToQuestions[key]) skillToQuestions[key] = [];
+                            if (!skillToQuestions[key].some(q => q.qNum === qNum)) {
+                              skillToQuestions[key].push({ qNum, isFollowUp });
+                            }
+                          }
+                        }
+                        // Sort each skill's question list ascending
+                        for (const key of Object.keys(skillToQuestions)) {
+                          skillToQuestions[key].sort((a, b) => a.qNum - b.qNum);
+                        }
+                      } else {
+                        // Strategy B: timestamp ordering, but pair each skill batch with
+                        // the question event that PRECEDES the NEXT question event
+                        // (skill update fires after candidate answers, before next Q starts —
+                        // but in practice backend sends question_timer_started first, so
+                        // we look for the previous question, not the next one).
+                        const sorted = [...liveEvents].sort((a, b) => a.ts - b.ts);
+                        // Collect question timestamps
+                        const qEvents = sorted.filter(e => e.kind === 'question') as Array<{ kind: 'question'; qNum: number; isFollowUp: boolean; ts: number }>;
+                        for (const ev of sorted) {
+                          if (ev.kind === 'covered' || ev.kind === 'medium' || ev.kind === 'low') {
+                            // Find the closest question event whose ts <= ev.ts
+                            // If none found (skill fires before first Q), try the first Q
+                            let matched = qEvents.filter(q => q.ts <= ev.ts).pop()
+                              ?? qEvents[0] ?? null;
+                            // If skill fires after the last Q event but belongs to that Q's answer,
+                            // matched is already the last Q — which is correct.
+                            if (matched) {
+                              const key = ev.skill.toLowerCase();
+                              if (!skillToQuestions[key]) skillToQuestions[key] = [];
+                              if (!skillToQuestions[key].some(q => q.qNum === matched!.qNum)) {
+                                skillToQuestions[key].push({ qNum: matched.qNum, isFollowUp: matched.isFollowUp });
+                              }
+                            }
+                          }
+                        }
+                        for (const key of Object.keys(skillToQuestions)) {
+                          skillToQuestions[key].sort((a, b) => a.qNum - b.qNum);
+                        }
+                      }
+                    }
+
+                    const toggleSkill = (name: string) => setExpandedSkills(prev => {
+                      const next = new Set(prev);
+                      next.has(name) ? next.delete(name) : next.add(name);
+                      return next;
+                    });
 
                     // Group by section, sort by priority (high → low)
                     const mthClusters = clusterConfig.mth
@@ -1009,8 +1142,17 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       .sort((a, b) => b.priority - a.priority);
                     const hasClusters = mthClusters.length + nthClusters.length > 0;
 
-                    // Find "currently being asked" — first uncovered skill, or first low if all touched
-                    const currentSkillTarget = sc.uncovered[0]?.toLowerCase() || sc.low_covered[0]?.toLowerCase() || null;
+                    // Find "currently being asked" — reverse-lookup skillToQuestions using currentQuestion.qNum.
+                    // Falls back to first uncovered/low skill only when no question mapping exists yet.
+                    const currentlyAskedSkillSet = new Set<string>();
+                    if (isInProgress && currentQuestion) {
+                      for (const [skill, qs] of Object.entries(skillToQuestions)) {
+                        if (qs.some(q => q.qNum === currentQuestion.qNum)) currentlyAskedSkillSet.add(skill);
+                      }
+                    }
+                    const fallbackTarget = currentlyAskedSkillSet.size === 0
+                      ? (sc.uncovered[0]?.toLowerCase() || sc.low_covered[0]?.toLowerCase() || null)
+                      : null;
 
                     const renderSection = (label: string, color: string, clusters: Array<{ id: string; name: string; priority: number; section: 'mth' | 'nth'; skills: Array<{ name: string; level: keyof typeof levelCfg }> }>) => {
                       if (clusters.length === 0) return null;
@@ -1051,24 +1193,61 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                     </span>
                                   </div>
 
-                                  {/* Skills as rows with bars */}
+                                  {/* Skills as rows with bars + question dropdown */}
                                   <div className="space-y-1.5">
                                     {c.skills.map(({ name, level }) => {
                                       const cfg = levelCfg[level];
-                                      const isCurrent = isInProgress && currentSkillTarget === name.toLowerCase();
+                                      const isCurrent = isInProgress && (currentlyAskedSkillSet.has(name.toLowerCase()) || fallbackTarget === name.toLowerCase());
+                                      const qs = skillToQuestions[name.toLowerCase()] || [];
+                                      const isExpanded = expandedSkills.has(name);
                                       return (
-                                        <div key={name} className={`flex items-center gap-2 px-2 py-1 rounded-lg transition-colors duration-300 ${isCurrent ? 'bg-blue-50 ring-1 ring-blue-300' : ''}`}>
-                                          {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />}
-                                          <span className={`text-[11px] w-28 truncate flex-shrink-0 font-medium ${isCurrent ? 'text-blue-700' : cfg.text}`} title={name}>
-                                            {name}
-                                          </span>
-                                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                            <div
-                                              className={`h-2 rounded-full transition-[width] duration-700 ease-out ${cfg.bar}`}
-                                              style={{ width: `${cfg.pct}%` }}
-                                            />
+                                        <div key={name} className={`rounded-lg border transition-colors duration-300 ${isCurrent ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300' : 'border-gray-100 hover:border-gray-200'}`}>
+                                          {/* Header row */}
+                                          <div className="flex items-center gap-2 px-2 py-1.5">
+                                            {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />}
+                                            {/* Full skill name — no truncation */}
+                                            <span className={`text-[11px] font-medium flex-1 min-w-0 leading-snug ${isCurrent ? 'text-blue-700' : cfg.text}`}>
+                                              {name}
+                                            </span>
+                                            {/* Status chip */}
+                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border flex-shrink-0 ${cfg.chip}`}>
+                                              {cfg.label}
+                                            </span>
+                                            {/* Question toggle button */}
+                                            {qs.length > 0 ? (
+                                              <button
+                                                onClick={() => toggleSkill(name)}
+                                                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0 transition-colors"
+                                                title="Show questions asked for this skill"
+                                              >
+                                                Q{qs[0].qNum}{qs.length > 1 ? ` +${qs.length - 1}` : ''}
+                                                <ChevronDown className={`w-2.5 h-2.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                              </button>
+                                            ) : null}
                                           </div>
-                                          <span className={`text-[10px] font-semibold flex-shrink-0 ${cfg.text}`}>{cfg.label}</span>
+                                          {/* Progress bar */}
+                                          <div className="px-2 pb-1.5">
+                                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                              <div className={`h-1.5 rounded-full transition-[width] duration-700 ease-out ${cfg.bar}`} style={{ width: `${cfg.pct}%` }} />
+                                            </div>
+                                          </div>
+                                          {/* Expanded: question chips */}
+                                          {isExpanded && qs.length > 0 && (
+                                            <div className="px-2 pb-2 flex flex-wrap gap-1 border-t border-gray-100 pt-1.5">
+                                              {qs.map(q => (
+                                                <span
+                                                  key={`${q.qNum}-${q.isFollowUp}`}
+                                                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+                                                    q.isFollowUp
+                                                      ? 'bg-violet-50 text-violet-700 border-violet-200'
+                                                      : 'bg-blue-50 text-blue-700 border-blue-200'
+                                                  }`}
+                                                >
+                                                  Q{q.qNum}{q.isFollowUp ? ' · follow-up' : ''}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     })}
@@ -1096,15 +1275,39 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             {[...sc.covered, ...sc.medium_covered, ...sc.low_covered, ...sc.uncovered].map(skill => {
                               const level = skillLevel[skill.toLowerCase()] || 'uncovered';
                               const cfg = levelCfg[level];
-                              const isCurrent = isInProgress && currentSkillTarget === skill.toLowerCase();
+                              const isCurrent = isInProgress && (currentlyAskedSkillSet.has(skill.toLowerCase()) || fallbackTarget === skill.toLowerCase());
+                              const qs = skillToQuestions[skill.toLowerCase()] || [];
+                              const isExpanded = expandedSkills.has(skill);
                               return (
-                                <div key={skill} className={`flex items-center gap-2 px-2 py-1 rounded-lg ${isCurrent ? 'bg-blue-50 ring-1 ring-blue-300' : ''}`}>
-                                  {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />}
-                                  <span className={`text-[11px] w-28 truncate flex-shrink-0 font-medium ${isCurrent ? 'text-blue-700' : cfg.text}`}>{skill}</span>
-                                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                    <div className={`h-2 rounded-full transition-[width] duration-700 ease-out ${cfg.bar}`} style={{ width: `${cfg.pct}%` }} />
+                                <div key={skill} className={`rounded-lg border transition-colors ${isCurrent ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300' : 'border-gray-100 hover:border-gray-200'}`}>
+                                  <div className="flex items-center gap-2 px-2 py-1.5">
+                                    {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />}
+                                    <span className={`text-[11px] font-medium flex-1 min-w-0 leading-snug ${isCurrent ? 'text-blue-700' : cfg.text}`}>{skill}</span>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border flex-shrink-0 ${cfg.chip}`}>{cfg.label}</span>
+                                    {qs.length > 0 && (
+                                      <button
+                                        onClick={() => toggleSkill(skill)}
+                                        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0 transition-colors"
+                                      >
+                                        Q{qs[0].qNum}{qs.length > 1 ? ` +${qs.length - 1}` : ''}
+                                        <ChevronDown className={`w-2.5 h-2.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                      </button>
+                                    )}
                                   </div>
-                                  <span className={`text-[10px] font-semibold flex-shrink-0 ${cfg.text}`}>{cfg.label}</span>
+                                  <div className="px-2 pb-1.5">
+                                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                      <div className={`h-1.5 rounded-full transition-[width] duration-700 ease-out ${cfg.bar}`} style={{ width: `${cfg.pct}%` }} />
+                                    </div>
+                                  </div>
+                                  {isExpanded && qs.length > 0 && (
+                                    <div className="px-2 pb-2 flex flex-wrap gap-1 border-t border-gray-100 pt-1.5">
+                                      {qs.map(q => (
+                                        <span key={`${q.qNum}-${q.isFollowUp}`} className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${q.isFollowUp ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                          Q{q.qNum}{q.isFollowUp ? ' · follow-up' : ''}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
@@ -1993,6 +2196,192 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 );
               })()
             )}
+            {/* Evaluation Tab */}
+            {activeTab === 'evaluation' && (() => {
+              const evalPlaceholder = getPlaceholderMessage();
+              if (evalPlaceholder) return renderPlaceholder(evalPlaceholder);
+
+              const capScore: number = eval_.capability_score ?? 0;
+              const sectionScores: Record<string, { score: number | null; band: string; section_pct: number; section_name: string }> = eval_.section_scores ?? {};
+              const clusterInsights: Array<{
+                cluster_name: string; priority: number; weight: number;
+                band_score: number | null; band: string;
+                skill_scores: Array<{ skill: string; score: number | null; band: string; note?: string }>;
+                evaluated: number; total: number; cluster_note?: string;
+                category: string; section_name: string; section_pct: number;
+              }> = eval_.cluster_insights ?? [];
+
+              const bandColor = (band: string) => {
+                if (band === 'Strong')     return { bg: 'bg-green-50',  border: 'border-green-200',  text: 'text-green-700',  bar: 'bg-green-500',  dot: 'bg-green-500' };
+                if (band === 'Proficient') return { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-700',   bar: 'bg-blue-500',   dot: 'bg-blue-500' };
+                if (band === 'Developing') return { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', bar: 'bg-yellow-400', dot: 'bg-yellow-400' };
+                if (band === 'Weak')       return { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-700', bar: 'bg-orange-400', dot: 'bg-orange-400' };
+                return                           { bg: 'bg-gray-50',    border: 'border-gray-200',   text: 'text-gray-500',   bar: 'bg-gray-200',   dot: 'bg-gray-300' };
+              };
+
+              const scoreColor = (score: number | null) => {
+                if (score == null) return 'text-gray-400';
+                if (score >= 80) return 'text-green-600';
+                if (score >= 60) return 'text-blue-600';
+                if (score >= 40) return 'text-yellow-600';
+                return 'text-orange-600';
+              };
+
+              // Group clusters by category
+              const mthClusters = clusterInsights.filter(c => c.category === 'mth');
+              const nthClusters = clusterInsights.filter(c => c.category === 'nth');
+              const hrClusters  = clusterInsights.filter(c => c.category === 'hr');
+
+              const sectionOrder: Array<{ key: string; clusters: typeof clusterInsights; color: string; accent: string }> = [
+                { key: 'mth', clusters: mthClusters, color: 'indigo', accent: 'border-indigo-300 bg-indigo-600' },
+                { key: 'nth', clusters: nthClusters, color: 'violet', accent: 'border-violet-300 bg-violet-600' },
+                { key: 'hr',  clusters: hrClusters,  color: 'teal',   accent: 'border-teal-300 bg-teal-600' },
+              ].filter(s => s.clusters.length > 0 || sectionScores[s.key]);
+
+              return (
+                <div className="space-y-6">
+
+                  {/* ── Final Score Banner ── */}
+                  <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm">
+                    <div className="flex items-center justify-between bg-gray-900 text-white px-6 py-5">
+                      <div className="flex items-center gap-3">
+                        <Award className="w-6 h-6 text-yellow-400" />
+                        <div>
+                          <div className="text-base font-semibold">Overall Capability Score</div>
+                          <div className="text-xs text-gray-400 mt-0.5">Final weighted score — MTH + NTH + HR</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-5xl font-bold text-white">{capScore}</div>
+                        <div className="text-xs text-gray-400 mt-1">out of 100</div>
+                      </div>
+                    </div>
+                    {/* Score bar */}
+                    <div className="h-2 bg-gray-100">
+                      <div
+                        className={`h-2 transition-all duration-700 ${capScore >= 80 ? 'bg-green-500' : capScore >= 60 ? 'bg-blue-500' : capScore >= 40 ? 'bg-yellow-400' : 'bg-orange-400'}`}
+                        style={{ width: `${capScore}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* ── Section Score Cards ── */}
+                  {Object.keys(sectionScores).length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {(['mth', 'nth', 'hr'] as const).map(key => {
+                        const sec = sectionScores[key];
+                        if (!sec) return null;
+                        const bc = bandColor(sec.band);
+                        const sectionLabel = sec.section_name || key.toUpperCase();
+                        return (
+                          <div key={key} className={`rounded-xl border ${bc.border} overflow-hidden`}>
+                            <div className={`px-4 py-3 ${bc.bg} border-b ${bc.border}`}>
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{sectionLabel}</span>
+                                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${bc.border} ${bc.bg} ${bc.text}`}>{sec.band}</span>
+                              </div>
+                            </div>
+                            <div className="px-4 py-4 bg-white">
+                              <div className="flex items-end gap-2">
+                                <span className={`text-3xl font-bold ${scoreColor(sec.score)}`}>
+                                  {sec.score != null ? sec.score : '—'}
+                                </span>
+                                <span className="text-sm text-gray-400 mb-1">/ 100</span>
+                                <span className="ml-auto text-xs text-gray-400 mb-1">{sec.section_pct}% weight</span>
+                              </div>
+                              <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div className={`h-1.5 rounded-full ${bc.bar}`} style={{ width: `${sec.score ?? 0}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* ── Cluster Breakdown by Section ── */}
+                  {sectionOrder.map(({ key, clusters, color }) => {
+                    const sec = sectionScores[key];
+                    const sectionLabel = sec?.section_name || (key === 'mth' ? 'Must Have Skills' : key === 'nth' ? 'Nice to Have Skills' : 'HR');
+                    return (
+                      <div key={key} className="space-y-3">
+                        {/* Section header */}
+                        <div className="flex items-center gap-2">
+                          <Target className="w-4 h-4 text-gray-600" />
+                          <h3 className="text-sm font-semibold text-gray-800">{sectionLabel}</h3>
+                          {sec && <span className="text-xs text-gray-400">({sec.section_pct}% of final score)</span>}
+                        </div>
+
+                        {clusters.length === 0 && (
+                          <div className="text-xs text-gray-400 px-2">No clusters evaluated for this section.</div>
+                        )}
+
+                        {clusters.map(cluster => {
+                          const bc = bandColor(cluster.band);
+                          return (
+                            <div key={cluster.cluster_name} className={`rounded-xl border ${bc.border} overflow-hidden`}>
+                              {/* Cluster header */}
+                              <div className={`flex items-center justify-between px-4 py-3 ${bc.bg}`}>
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <TrendingUp className={`w-4 h-4 flex-shrink-0 ${bc.text}`} />
+                                  <span className="text-sm font-semibold text-gray-800 truncate">{cluster.cluster_name}</span>
+                                  <span className="text-[10px] text-gray-400 flex-shrink-0">Priority {cluster.priority} · {cluster.weight}% weight</span>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${bc.border} ${bc.bg} ${bc.text}`}>{cluster.band}</span>
+                                  <span className={`text-lg font-bold ${scoreColor(cluster.band_score)}`}>
+                                    {cluster.band_score != null ? cluster.band_score : '—'}
+                                  </span>
+                                  <span className="text-xs text-gray-400">/100</span>
+                                </div>
+                              </div>
+
+                              {/* Cluster progress bar */}
+                              <div className="h-1 bg-gray-100">
+                                <div className={`h-1 ${bc.bar}`} style={{ width: `${cluster.band_score ?? 0}%` }} />
+                              </div>
+
+                              {/* Skills table */}
+                              {cluster.skill_scores && cluster.skill_scores.length > 0 && (
+                                <div className="divide-y divide-gray-50 bg-white">
+                                  {cluster.skill_scores.map((ss, si) => {
+                                    const sbc = bandColor(ss.band);
+                                    return (
+                                      <div key={si} className="flex items-center gap-3 px-4 py-2.5">
+                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sbc.dot}`} />
+                                        <span className="text-xs text-gray-700 flex-1 min-w-0">{ss.skill}</span>
+                                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${sbc.bg} ${sbc.border} ${sbc.text}`}>{ss.band}</span>
+                                        <span className={`text-sm font-semibold w-10 text-right flex-shrink-0 ${scoreColor(ss.score)}`}>
+                                          {ss.score != null ? ss.score : '—'}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Cluster note */}
+                              {cluster.cluster_note && (
+                                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 text-[11px] text-gray-500 italic">
+                                  {cluster.cluster_note}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+
+                  {/* No data fallback */}
+                  {clusterInsights.length === 0 && Object.keys(sectionScores).length === 0 && (
+                    renderPlaceholder('Detailed evaluation breakdown not available for this session')
+                  )}
+
+                </div>
+              );
+            })()}
+
             {/* Violations Tab */}
             {activeTab === 'violations' && (
               <div className="space-y-6">
@@ -2009,7 +2398,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         <p className="text-xs text-gray-500 mt-0.5">
                           {totalViolations === 0
                             ? 'No violations detected during this interview.'
-                            : `Risk score: ${severityStats.score} pts — Minor×${severityStats.minor} (×1) · Moderate×${severityStats.moderate} (×2) · Severe×${severityStats.severe} (×3)`}
+                            : `Risk score: ${severityStats.score} pts — Low×${severityStats.minor} (×1) · Medium×${severityStats.moderate} (×2) · High×${severityStats.severe} (×3)`}
                         </p>
                       </div>
                     </div>
@@ -2035,17 +2424,17 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                         severityStats.minor > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'
                       }`}>
-                        Minor: {severityStats.minor}
+                        Low: {severityStats.minor}
                       </span>
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                         severityStats.moderate > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-400'
                       }`}>
-                        Moderate: {severityStats.moderate}
+                        Medium: {severityStats.moderate}
                       </span>
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                         severityStats.severe > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-400'
                       }`}>
-                        Severe: {severityStats.severe}
+                        High: {severityStats.severe}
                       </span>
                     </div>
                   )}
@@ -2083,7 +2472,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           Reset defaults
                         </button>
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-1.5">Minor = 1 pt · Moderate = 2 pts · Severe = 3 pts</p>
+                      <p className="text-[10px] text-gray-400 mt-1.5">Low = 1 pt · Medium = 2 pts · High = 3 pts</p>
                     </div>
                   )}
                 </div>

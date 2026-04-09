@@ -36,6 +36,7 @@ interface UseInterviewProctoringMonitorOptions {
   token: string;
   stream: MediaStream | null;
   enabled?: boolean;
+  copyPasteBlocking?: boolean;
   voiceDetectionSensitivity?: number;
   obstructionThreshold?: number;
   reportEvent?: (token: string, event: { event_type: string; timestamp: string; severity: string; details: Record<string, any> }) => Promise<any>;
@@ -223,6 +224,7 @@ export function useInterviewProctoringMonitor({
   token,
   stream,
   enabled = true,
+  copyPasteBlocking = true,
   voiceDetectionSensitivity = 50,
   obstructionThreshold = 30,
   reportEvent,
@@ -239,6 +241,7 @@ export function useInterviewProctoringMonitor({
   const tokenRef = useRef(token);
   const streamRef = useRef(stream);
   const enabledRef = useRef(enabled);
+  const copyPasteBlockingRef = useRef(copyPasteBlocking);
   const reportEventRef = useRef(reportEvent);
   const voiceSensitivityRef = useRef(voiceDetectionSensitivity);
   const obstructionThresholdRef = useRef(obstructionThreshold);
@@ -247,6 +250,7 @@ export function useInterviewProctoringMonitor({
   useEffect(() => { tokenRef.current = token; }, [token]);
   useEffect(() => { streamRef.current = stream; }, [stream]);
   useEffect(() => { enabledRef.current = enabled; }, [enabled]);
+  useEffect(() => { copyPasteBlockingRef.current = copyPasteBlocking; }, [copyPasteBlocking]);
   useEffect(() => { reportEventRef.current = reportEvent; }, [reportEvent]);
   useEffect(() => { voiceSensitivityRef.current = voiceDetectionSensitivity; }, [voiceDetectionSensitivity]);
   useEffect(() => { obstructionThresholdRef.current = obstructionThreshold; }, [obstructionThreshold]);
@@ -705,7 +709,7 @@ export function useInterviewProctoringMonitor({
     const cleanups = [
       unsubIdentity,
       setupTabSwitchDetection(),
-      setupCopyPasteDetection(),
+      copyPasteBlockingRef.current ? setupCopyPasteDetection() : () => {},
       setupScreenshotDetection(),
       setupScreenRecordingDetection(),
       setupFullscreenDetection(),

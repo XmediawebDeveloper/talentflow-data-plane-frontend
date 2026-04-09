@@ -108,8 +108,15 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
-  const [expiryDays, setExpiryDays] = useState(7);
+  const [expiryDays, setExpiryDays] = useState(1);
   const [sendCopy, setSendCopy] = useState(true);
+
+  // Link generation state (for Copy/Social share tracking)
+  const [linkExpiryDays, setLinkExpiryDays] = useState(1);
+  const [generatingLink, setGeneratingLink] = useState<string | null>(null); // which method is generating
+  const [generatedLinks, setGeneratedLinks] = useState<Array<{
+    method: string; link: string; expires_at: string | null; generated_at: string;
+  }>>([]);
 
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -497,6 +504,39 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     toast.success('Interview link copied to clipboard!');
   };
 
+  const handleGenerateAndShare = async (method: string) => {
+    setGeneratingLink(method);
+    try {
+      const result = await aiInterviewService.generateShareLink(config.id, method, linkExpiryDays);
+      const entry = { method, link: result.link, expires_at: result.expires_at, generated_at: new Date().toISOString() };
+      setGeneratedLinks(prev => [entry, ...prev]);
+
+      if (method === 'copy') {
+        await navigator.clipboard.writeText(result.link);
+        toast.success('Tracked link copied! Expires in ' + linkExpiryDays + ' day(s). Shown in Track Invites.');
+      } else {
+        const title = encodeURIComponent(`AI Interview Invitation — ${config.jd_title || config.position}`);
+        const text = encodeURIComponent(`You've been invited to an AI interview for ${config.jd_title || config.position}. Complete it here: ${result.link}`);
+        const shareUrls: Record<string, string> = {
+          whatsapp: `https://wa.me/?text=${text}`,
+          facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(result.link)}`,
+          linkedin: `https://www.linkedin.com/shareArticle?mini=true&url=${encodeURIComponent(result.link)}&title=${title}`,
+          twitter: `https://twitter.com/intent/tweet?text=${text}`,
+          telegram: `https://t.me/share/url?url=${encodeURIComponent(result.link)}&text=${text}`,
+          sms: `sms:?body=${text}`,
+        };
+        if (shareUrls[method]) {
+          window.open(shareUrls[method], '_blank');
+        }
+        toast.success(`Tracked link generated for ${method}. Expires in ${linkExpiryDays} day(s). Shown in Track Invites.`);
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail?.message || err?.message || 'Failed to generate link');
+    } finally {
+      setGeneratingLink(null);
+    }
+  };
+
   const handleSend = async () => {
     setIsSubmitting(true);
     try {
@@ -728,7 +768,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         {/* Header */}
         <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -1167,80 +1207,88 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             )}
           </div>
 
-          {/* Interview Link */}
-          <div className="mb-6">
-            <label className="text-gray-900 font-medium mb-2 block">Interview Link</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={interviewLink}
-                readOnly
-                className="flex-1 px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-600"
-              />
-              <button
-                onClick={handleCopyLink}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
-              >
-                <Copy className="w-4 h-4" />
-                Copy
-              </button>
-              {/* Share buttons */}
-              <div className="flex items-center gap-1.5">
-                {/* WhatsApp */}
-                <button
-                  onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`You've been invited to an AI Interview for ${config.jd_title || config.position}. Complete it here: ${interviewLink}`)}`, '_blank')}
-                  className="p-2 rounded-lg hover:bg-green-50 transition-colors group" title="Share via WhatsApp"
+          {/* Share via Link — Tracked */}
+          <div className="mb-6 border border-gray-200 rounded-xl p-4 bg-gray-50">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Share via Link</p>
+                <p className="text-xs text-gray-500 mt-0.5">Every share creates a tracked session with expiry &amp; AIU lock — visible in Track Invites</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">Expires in</span>
+                <select
+                  value={linkExpiryDays}
+                  onChange={e => setLinkExpiryDays(Number(e.target.value))}
+                  className="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-white text-gray-700 focus:ring-2 focus:ring-gray-500"
                 >
-                  <svg className="w-5 h-5 text-gray-400 group-hover:text-green-500 transition-colors" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                </button>
-                {/* Facebook */}
-                <button
-                  onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(interviewLink)}`, '_blank', 'width=600,height=400')}
-                  className="p-2 rounded-lg hover:bg-blue-50 transition-colors group" title="Share on Facebook"
-                >
-                  <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                </button>
-                {/* LinkedIn */}
-                <button
-                  onClick={() => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(interviewLink)}`, '_blank', 'width=600,height=400')}
-                  className="p-2 rounded-lg hover:bg-blue-50 transition-colors group" title="Share on LinkedIn"
-                >
-                  <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-700 transition-colors" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-                </button>
-                {/* X / Twitter */}
-                <button
-                  onClick={() => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`AI Interview Invitation for ${config.jd_title || config.position}`)}&url=${encodeURIComponent(interviewLink)}`, '_blank', 'width=600,height=400')}
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors group" title="Share on X"
-                >
-                  <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-900 transition-colors" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                </button>
-                {/* Telegram */}
-                <button
-                  onClick={() => window.open(`https://t.me/share/url?url=${encodeURIComponent(interviewLink)}&text=${encodeURIComponent(`AI Interview Invitation for ${config.jd_title || config.position}`)}`, '_blank')}
-                  className="p-2 rounded-lg hover:bg-sky-50 transition-colors group" title="Share via Telegram"
-                >
-                  <svg className="w-5 h-5 text-gray-400 group-hover:text-sky-500 transition-colors" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
-                </button>
-                {/* SMS */}
-                <button
-                  onClick={() => {
-                    const body = encodeURIComponent(`You've been invited to an AI Interview for ${config.jd_title || config.position}. Complete it here: ${interviewLink}`);
-                    // iOS uses sms:&body= ; Android uses sms:?body=
-                    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-                    window.location.href = isIOS ? `sms:&body=${body}` : `sms:?body=${body}`;
-                  }}
-                  className="p-2 rounded-lg hover:bg-green-50 transition-colors group" title="Share via SMS"
-                >
-                  <svg className="w-5 h-5 text-gray-400 group-hover:text-green-600 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    <line x1="9" y1="10" x2="9" y2="10"/>
-                    <line x1="12" y1="10" x2="12" y2="10"/>
-                    <line x1="15" y1="10" x2="15" y2="10"/>
-                  </svg>
-                </button>
+                  <option value={1}>1 day</option>
+                  <option value={3}>3 days</option>
+                  <option value={7}>7 days</option>
+                  <option value={14}>14 days</option>
+                  <option value={30}>30 days</option>
+                </select>
               </div>
             </div>
-            <p className="text-xs text-gray-500 mt-1">This unique link will be included in the email invitation</p>
+            {/* Share buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Copy */}
+              <button
+                onClick={() => handleGenerateAndShare('copy')}
+                disabled={!!generatingLink}
+                className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-white transition-colors disabled:opacity-50"
+              >
+                {generatingLink === 'copy' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4" />}
+                Copy Link
+              </button>
+              {/* WhatsApp */}
+              <button onClick={() => handleGenerateAndShare('whatsapp')} disabled={!!generatingLink} title="Share via WhatsApp"
+                className="p-2 rounded-lg hover:bg-green-50 border border-gray-200 transition-colors disabled:opacity-50 group">
+                {generatingLink === 'whatsapp' ? <Loader2 className="w-5 h-5 animate-spin text-gray-400" /> : <svg className="w-5 h-5 text-gray-400 group-hover:text-green-500" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>}
+              </button>
+              {/* Facebook */}
+              <button onClick={() => handleGenerateAndShare('facebook')} disabled={!!generatingLink} title="Share on Facebook"
+                className="p-2 rounded-lg hover:bg-blue-50 border border-gray-200 transition-colors disabled:opacity-50 group">
+                {generatingLink === 'facebook' ? <Loader2 className="w-5 h-5 animate-spin text-gray-400" /> : <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-600" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>}
+              </button>
+              {/* LinkedIn */}
+              <button onClick={() => handleGenerateAndShare('linkedin')} disabled={!!generatingLink} title="Share on LinkedIn"
+                className="p-2 rounded-lg hover:bg-blue-50 border border-gray-200 transition-colors disabled:opacity-50 group">
+                {generatingLink === 'linkedin' ? <Loader2 className="w-5 h-5 animate-spin text-gray-400" /> : <svg className="w-5 h-5 text-gray-400 group-hover:text-blue-700" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>}
+              </button>
+              {/* X / Twitter */}
+              <button onClick={() => handleGenerateAndShare('twitter')} disabled={!!generatingLink} title="Share on X"
+                className="p-2 rounded-lg hover:bg-gray-100 border border-gray-200 transition-colors disabled:opacity-50 group">
+                {generatingLink === 'twitter' ? <Loader2 className="w-5 h-5 animate-spin text-gray-400" /> : <svg className="w-5 h-5 text-gray-400 group-hover:text-gray-900" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>}
+              </button>
+              {/* Telegram */}
+              <button onClick={() => handleGenerateAndShare('telegram')} disabled={!!generatingLink} title="Share via Telegram"
+                className="p-2 rounded-lg hover:bg-sky-50 border border-gray-200 transition-colors disabled:opacity-50 group">
+                {generatingLink === 'telegram' ? <Loader2 className="w-5 h-5 animate-spin text-gray-400" /> : <svg className="w-5 h-5 text-gray-400 group-hover:text-sky-500" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>}
+              </button>
+              {/* SMS */}
+              <button onClick={() => handleGenerateAndShare('sms')} disabled={!!generatingLink} title="Share via SMS"
+                className="p-2 rounded-lg hover:bg-green-50 border border-gray-200 transition-colors disabled:opacity-50 group">
+                {generatingLink === 'sms' ? <Loader2 className="w-5 h-5 animate-spin text-gray-400" /> : <svg className="w-5 h-5 text-gray-400 group-hover:text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
+              </button>
+            </div>
+            {/* Recently generated links in this session */}
+            {generatedLinks.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                <p className="text-xs font-medium text-gray-600">Generated this session:</p>
+                {generatedLinks.map((entry, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs bg-white border border-gray-200 rounded-lg px-3 py-2">
+                    <span className="capitalize font-medium text-gray-700 w-16 shrink-0">{entry.method}</span>
+                    <span className="text-gray-400 font-mono truncate flex-1">{entry.link.slice(-36)}</span>
+                    <span className="text-gray-400 shrink-0">
+                      {entry.expires_at ? `Expires ${new Date(entry.expires_at).toLocaleDateString()}` : 'No expiry'}
+                    </span>
+                    <button onClick={() => navigator.clipboard.writeText(entry.link)} className="text-gray-400 hover:text-gray-700 shrink-0">
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Custom Message */}

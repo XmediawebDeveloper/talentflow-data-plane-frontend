@@ -99,11 +99,9 @@ function getTimedModePercentages(nthEnabled: boolean, hrEnabled: boolean) {
 }
 
 const PRIORITY_LABELS: Record<number, { label: string; color: string; dot: string }> = {
-  5: { label: 'P5 – Critical',   color: 'bg-red-100 text-red-700 border-red-200',       dot: 'bg-red-500' },
-  4: { label: 'P4 – High',       color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
-  3: { label: 'P3 – Medium',     color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
-  2: { label: 'P2 – Low',        color: 'bg-blue-100 text-blue-700 border-blue-200',     dot: 'bg-blue-500' },
-  1: { label: 'P1 – Optional',   color: 'bg-gray-100 text-gray-600 border-gray-200',     dot: 'bg-gray-400' },
+  3: { label: 'P3 – High',    color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+  2: { label: 'P2 – Medium',  color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
+  1: { label: 'P1 – Low',     color: 'bg-blue-100 text-blue-700 border-blue-200',       dot: 'bg-blue-500'   },
 };
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -361,12 +359,6 @@ export default function AIInterviewPreview() {
             >
               Go to AI Interviews
             </button>
-            <button
-              onClick={() => router.push('/recruitment/ai-interviews/' + id)}
-              className="flex-1 px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
-            >
-              Invite Candidates
-            </button>
           </div>
         </div>
       </div>
@@ -431,10 +423,10 @@ export default function AIInterviewPreview() {
             <h2 className="text-lg font-bold text-white">{position}</h2>
           </div>
           <div className="bg-white px-5 py-4">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <div>
-                <p className="text-xs text-gray-500 mb-0.5">Position</p>
-                <p className="text-sm font-medium text-gray-900">{position}</p>
+                <p className="text-xs text-gray-500 mb-0.5">JD ID</p>
+                <p className="text-sm font-medium text-gray-900">{interview.jd_short_id ?? '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">JD Title</p>
@@ -443,6 +435,10 @@ export default function AIInterviewPreview() {
               <div>
                 <p className="text-xs text-gray-500 mb-0.5">Experience Level</p>
                 <p className="text-sm font-medium text-gray-900">{experienceLevel}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">Industry</p>
+                <p className="text-sm font-medium text-gray-900">{interview.jd_industry_type ?? '—'}</p>
               </div>
             </div>
           </div>
@@ -539,22 +535,24 @@ export default function AIInterviewPreview() {
                     <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
                     <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Weight</th>
                     <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
+                    <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
                     <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {enabledRounds.map(r => {
-                    const roundLabel =
-                      r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical' ? 'Must-To-Have' :
-                      r.type === 'nice_to_have_skills' || r.type === 'nice_to_have' ? 'Nice-To-Have' :
-                      r.type === 'hr' ? 'HR Round' : r.type;
+                    const isMth = r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical';
+                    const isNth = r.type === 'nice_to_have_skills' || r.type === 'nice_to_have';
+                    const roundLabel = isMth ? 'Must-To-Have' : isNth ? 'Nice-To-Have' : r.type === 'hr' ? 'HR Round' : r.type;
                     const previewMin = timedPreviewDurations[r.type] ?? r.duration_minutes;
                     const previewQuestions = timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0;
+                    const clusterCount = isMth ? mthClusters.length : isNth ? nthClusters.length : null;
                     return (
                       <tr key={r.type}>
                         <td className="px-4 py-2.5 text-gray-900">{roundLabel}</td>
                         <td className="px-4 py-2.5 text-gray-700 text-right">{roundPercentage(r)}%</td>
                         <td className="px-4 py-2.5 text-gray-700 text-right">{previewQuestions}</td>
+                        <td className="px-4 py-2.5 text-gray-700 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
                         <td className="px-4 py-2.5 text-gray-700 text-right">{previewMin} min</td>
                       </tr>
                     );
@@ -566,6 +564,9 @@ export default function AIInterviewPreview() {
                     <td className="px-4 py-2.5 text-gray-900 text-right">{totalPercentage}%</td>
                     <td className="px-4 py-2.5 text-gray-900 text-right">
                       {enabledRounds.reduce((s, r) => s + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0)}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-900 text-right">
+                      {mthClusters.length + nthClusters.length}
                     </td>
                     <td className="px-4 py-2.5 text-gray-900 text-right">
                       {enabledRounds.reduce((s, r) => s + (timedPreviewDurations[r.type] ?? r.duration_minutes), 0)} min
@@ -646,23 +647,26 @@ export default function AIInterviewPreview() {
 
         {/* ── HR Round Card ── */}
         <SectionCard title="HR Round" icon={Users}>
-          <div className="flex items-center gap-2">
-            {hrRound && hrRound.enabled ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                Enabled
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
-                Disabled
-              </span>
-            )}
-          </div>
           {mode === 'fixed' && hrRound?.enabled && (
             <div className="mt-4 space-y-0 divide-y divide-gray-100">
               <InfoRow label="Questions" value={`${timedAllocation.hrQuestions}`} />
               <InfoRow label="Time" value={`${timedAllocation.hrMinutes} min`} />
+            </div>
+          )}
+          {hrRound?.enabled && (hrRound as any).hr_questions?.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Selected HR Questions</p>
+              <ol className="space-y-2">
+                {((hrRound as any).hr_questions as { id: string; question_text: string; answer_type: string }[]).map((q, idx) => (
+                  <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gray-50 border border-gray-100">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-200 text-gray-600 text-[10px] font-bold flex items-center justify-center mt-0.5">{idx + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-800">{q.question_text}</p>
+                      <span className="text-[10px] text-gray-400 mt-0.5 inline-block">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
             </div>
           )}
         </SectionCard>
@@ -682,18 +686,24 @@ export default function AIInterviewPreview() {
                 )
               }
             />
-            <InfoRow
-              label="Introduction Video"
-              value={
-                interview.introduction_video_url ? (
-                  <span className="inline-flex items-center gap-1.5 text-sm text-green-700">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Uploaded
-                  </span>
-                ) : (
-                  <span className="text-sm text-gray-400">None</span>
-                )
-              }
-            />
+            {interview.introduction_video_url ? (
+              <div className="py-3 border-b border-gray-100">
+                <p className="text-sm text-gray-500 mb-2">Introduction Video</p>
+                <video
+                  src={interview.introduction_video_url}
+                  controls
+                  className="w-full max-w-md rounded-lg border border-gray-200 bg-black"
+                  style={{ maxHeight: '240px' }}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            ) : (
+              <InfoRow
+                label="Introduction Video"
+                value={<span className="text-sm text-gray-400">None</span>}
+              />
+            )}
             <InfoRow
               label="Languages"
               value={
@@ -715,7 +725,7 @@ export default function AIInterviewPreview() {
       </div>
 
       {/* ── Sticky Footer ── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-40">
+      <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-200 z-40">
         <div className="px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button

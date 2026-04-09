@@ -269,7 +269,7 @@ export function SQLQuestionView({
                       {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
-                  <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm font-mono overflow-x-auto">
+                  <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm font-mono whitespace-pre-wrap break-words break-all">
                     {question.sample_output}
                   </pre>
                 </div>
@@ -293,7 +293,7 @@ export function SQLQuestionView({
                         <XCircle className="w-5 h-5 text-red-600" />
                         <span className="font-medium text-red-800">Query Error</span>
                       </div>
-                      <pre className="bg-red-900 text-red-200 p-4 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                      <pre className="bg-red-900 text-red-200 p-4 rounded-lg text-sm font-mono whitespace-pre-wrap break-words break-all">
                         {queryResult.error}
                       </pre>
                     </div>
@@ -314,14 +314,14 @@ export function SQLQuestionView({
 
                       {/* Results Table */}
                       {queryResult.results && queryResult.results.length > 0 ? (
-                        <div className="overflow-x-auto rounded-lg border border-gray-200">
-                          <table className="min-w-full divide-y divide-gray-200">
+                        <div className="rounded-lg border border-gray-200">
+                          <table className="w-full table-fixed divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                               <tr>
                                 {queryResult.columns?.map((column) => (
                                   <th
                                     key={column}
-                                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                    className="px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-gray-500 break-words"
                                   >
                                     {column}
                                   </th>
@@ -334,7 +334,7 @@ export function SQLQuestionView({
                                   {queryResult.columns?.map((column) => (
                                     <td
                                       key={column}
-                                      className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap"
+                                      className="px-3 py-3 align-top text-sm text-gray-700 break-words"
                                     >
                                       {String(row[column] ?? 'NULL')}
                                     </td>

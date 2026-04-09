@@ -32,6 +32,7 @@ interface StepConsentProps {
   jdJobLevel?: string | null;
   duration?: number;
   interviewType?: string;
+  interviewMode?: string | null;
   totalQuestions?: number;
 }
 
@@ -81,6 +82,7 @@ export default function StepConsent({
   jdJobLevel,
   duration,
   interviewType,
+  interviewMode,
   totalQuestions,
 }: StepConsentProps) {
   const [showFullDesc, setShowFullDesc] = useState(false);
@@ -201,7 +203,20 @@ export default function StepConsent({
       </div>
 
       {/* ── Interview stats cards ── */}
-      {((duration != null && duration > 0) || (totalQuestions != null && totalQuestions > 0)) && (
+      {interviewMode === 'flexible' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">
+              <span className="flex items-center gap-1"><Timer className="w-3 h-3" /> Expected Duration</span>
+            </p>
+            <p className="text-lg font-bold text-gray-900">{duration != null && duration > 0 ? `${duration} min` : '~30 min'}</p>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1.5">Interview Format</p>
+            <p className="text-lg font-bold text-gray-900">Conversational</p>
+          </div>
+        </div>
+      ) : ((duration != null && duration > 0) || (totalQuestions != null && totalQuestions > 0)) ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {duration != null && duration > 0 && (
             <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -218,7 +233,7 @@ export default function StepConsent({
             </div>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* ── JD Description ── */}
       {jdDescription && (

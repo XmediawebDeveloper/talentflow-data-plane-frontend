@@ -210,7 +210,7 @@ export default function ResumeScoringPage({
     getJobProgress,
     hasActiveScoring,
     setOnRestorePanel,
-    setMainPanelOpen
+    setMainPanelOpen,
   } = useScoringProgress();
 
   // Use props directly - data is fetched by the page route
@@ -1316,6 +1316,7 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => setShowProgressModal(false)}
             showJobTitleColumn={showJobTitleColumn}
+            onMinimize={() => { setMainPanelOpen(false); setOnRestorePanel(() => () => setMainPanelOpen(true)); }}
             onRetryFailed={async (item) => {
               try {
                 // Update item status to "Scoring in progress"
@@ -2252,6 +2253,7 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => setShowProgressModal(false)}
             showJobTitleColumn={showJobTitleColumn}
+            onMinimize={() => { setMainPanelOpen(false); setOnRestorePanel(() => () => setMainPanelOpen(true)); }}
             onRetryFailed={async (item) => {
               try {
                 // Update item status to "Scoring in progress"
@@ -2798,6 +2800,7 @@ export default function ResumeScoringPage({
           onClose={() => setShowProgressModal(false)}
           filterByJobId={filterByJobId}
           showJobTitleColumn={showJobTitleColumn}
+          onMinimize={() => { setMainPanelOpen(false); setOnRestorePanel(() => () => setMainPanelOpen(true)); }}
           onRetryFailed={async (item) => {
             try {
               console.log('[Retry] Starting retry for:', item.candidateName, 'resumeId:', item.resumeId, 'jobId:', item.jobId);

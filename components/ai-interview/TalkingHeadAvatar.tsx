@@ -43,9 +43,12 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
     const headRef      = useRef<any>(null);
     const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
 
-    const streamReadyRef = useRef(false);
-    const pendingRef     = useRef<ArrayBuffer[]>([]);
-    const onAudioEndRef  = useRef<(() => void) | null>(null);
+    const streamReadyRef      = useRef(false);
+    const pendingRef          = useRef<ArrayBuffer[]>([]);
+    const onAudioEndRef       = useRef<(() => void) | null>(null);
+    // True when notifyEnd() was called before TalkingHead's streamStart resolved.
+    // Deferred streamNotifyEnd fires after pending audio is flushed.
+    const notifyEndPendingRef = useRef(false);
 
     // ── Fallback Web Audio API player (used when TalkingHead isn't ready) ──
     const fbCtxRef         = useRef<AudioContext | null>(null);
@@ -592,6 +595,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         onAudioEndRef.current = onAudioEnd;
         pendingRef.current = [];
         streamReadyRef.current = false;
+        notifyEndPendingRef.current = false;
         smoothAmpRef.current = 0;
         speechStartRef.current = null;
         currentMorphsRef.current = {};
@@ -663,6 +667,14 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
               for (const buf of queued) {
                 sendAudioChunk(buf);
               }
+              // If notifyEnd() was called before we were ready (e.g. audio_end arrived
+              // before TalkingHead's streamStart resolved), fire streamNotifyEnd now —
+              // AFTER sending all pending audio so TalkingHead waits for it to play.
+              if (notifyEndPendingRef.current) {
+                notifyEndPendingRef.current = false;
+                console.log("[TalkingHead] Deferred streamNotifyEnd — firing after pending flush");
+                headRef.current?.streamNotifyEnd?.();
+              }
             })
             .catch((e: Error) => {
               console.error("[TalkingHead] streamStart failed:", e);
@@ -702,7 +714,16 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           return;
         }
         const head = headRef.current;
-        if (head) head.streamNotifyEnd();
+        if (head) {
+          if (!streamReadyRef.current) {
+            // TalkingHead's streamStart hasn't resolved yet — pending audio hasn't been
+            // sent to TalkingHead. Deferring streamNotifyEnd until after the flush.
+            console.log("[TalkingHead] notifyEnd deferred — stream not ready yet");
+            notifyEndPendingRef.current = true;
+          } else {
+            head.streamNotifyEnd();
+          }
+        }
       },
 
       setText(text: string) {

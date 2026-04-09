@@ -12,6 +12,7 @@ import {
   Eye,
   Users,
   Zap,
+  Radio,
   CheckCircle,
   XCircle,
   Loader2,
@@ -319,6 +320,9 @@ export default function StepSystemCheck({
   const checksCancelledRef = useRef(false);
   const envScanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const envScanRAFRef = useRef<number | null>(null);
+  // Guards concurrent face-api.js / TF.js WebGL calls — only one may run at a time.
+  // handleProceed waits for this to clear before calling onRegisterFace.
+  const faceApiBusyRef = useRef(false);
 
   // ────────────────────────────────────────
   // Phase 1: Browser Check — auto-detect on mount
@@ -365,6 +369,7 @@ export default function StepSystemCheck({
     { id: 'microphone', label: 'Microphone', detail: 'Pending...', icon: <Mic className="w-4 h-4" />, status: 'pending', colorClass: 'text-indigo-600' },
     { id: 'internet', label: 'Internet Connection', detail: `Required: ≥ ${MIN_INTERNET_MBPS} Mbps`, icon: <Wifi className="w-4 h-4" />, status: 'pending', colorClass: 'text-cyan-600' },
     { id: 'ai_engine', label: 'AI Engine', detail: 'Pending...', icon: <Zap className="w-4 h-4" />, status: 'pending', colorClass: 'text-purple-600' },
+    { id: 'websocket', label: 'WebSocket Connection', detail: 'Pending...', icon: <Radio className="w-4 h-4" />, status: 'pending', colorClass: 'text-teal-600' },
     { id: 'lighting', label: 'Lighting Conditions', detail: 'Pending...', icon: <Sun className="w-4 h-4" />, status: 'pending', colorClass: 'text-yellow-600' },
     { id: 'noise', label: 'Background Noise', detail: 'Pending...', icon: <Volume2 className="w-4 h-4" />, status: 'pending', colorClass: 'text-orange-600' },
     { id: 'face', label: 'Face Detection', detail: 'Pending...', icon: <Eye className="w-4 h-4" />, status: 'pending', colorClass: 'text-green-600' },
@@ -627,6 +632,64 @@ export default function StepSystemCheck({
         updateSystemCheck('ai_engine', { status: 'fail', detail: 'AI engine unreachable — check your connection' });
       }
 
+      // 4c. WebSocket connectivity — verify real-time connection support
+      if (cancelled()) return;
+      updateSystemCheck('websocket', { status: 'checking', detail: 'Testing WebSocket connectivity...' });
+      await (async () => {
+        if (typeof WebSocket === 'undefined') {
+          updateSystemCheck('websocket', { status: 'fail', detail: 'WebSocket not supported by this browser' });
+          return;
+        }
+        // Use the same WS endpoint the interview itself uses.
+        // The server will accept or reject (auth/state) — either way it proves
+        // WebSocket traffic reaches the backend (non-1006 close = success).
+        const wsUrl = API_BASE_URL
+          .replace(/^https:\/\//i, 'wss://')
+          .replace(/^http:\/\//i, 'ws://')
+          .replace(/\/api\/v1\/?$/, '') + `/api/v1/ws/ai-interview/${token}`;
+
+        await new Promise<void>((resolve) => {
+          const TIMEOUT_MS = 7000;
+          let settled = false;
+          let ws: WebSocket | null = null;
+
+          const settle = (status: CheckStatus, detail: string) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try { ws?.close(); } catch { /* ignore */ }
+            updateSystemCheck('websocket', { status, detail });
+            resolve();
+          };
+
+          const timer = setTimeout(() => {
+            settle('fail', 'WebSocket connection timed out — check network/firewall settings');
+          }, TIMEOUT_MS);
+
+          try {
+            ws = new WebSocket(wsUrl);
+          } catch {
+            settle('fail', 'WebSocket connection could not be established');
+            return;
+          }
+
+          ws.onopen = () => {
+            settle('pass', 'WebSocket connected successfully');
+          };
+
+          ws.onerror = () => {
+            // onerror fires before onclose — the close code gives us more info
+          };
+
+          ws.onclose = () => {
+            // Any close event (including 1006) means the browser received a response
+            // from the server — WebSocket traffic is reaching the backend.
+            // True network blocks manifest as a timeout (no response at all), not a close event.
+            settle('pass', 'WebSocket connection established');
+          };
+        });
+      })();
+
       // 5. Lighting
       if (cancelled()) return;
       updateSystemCheck('lighting', { status: 'checking', detail: 'Analyzing lighting...' });
@@ -752,8 +815,10 @@ export default function StepSystemCheck({
             setHasFaceDetector(true);
             // Polling with native detector
             faceIntervalRef.current = setInterval(async () => {
-              if (!video || video.readyState < 2) return;
+              if (faceApiBusyRef.current || !video || video.readyState < 2) return;
+              faceApiBusyRef.current = true;
               try { applyFaceCount((await detector.detect(video)).length); } catch { /* skip frame */ }
+              finally { faceApiBusyRef.current = false; }
             }, 2500);
           } catch {
             useFaceApi = true; // native threw — fall through to face-api.js
@@ -769,8 +834,10 @@ export default function StepSystemCheck({
             const opts = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
             // Polling with face-api.js
             faceIntervalRef.current = setInterval(async () => {
-              if (!video || video.readyState < 2) return;
+              if (faceApiBusyRef.current || !video || video.readyState < 2) return;
+              faceApiBusyRef.current = true;
               try { applyFaceCount((await faceapi.detectAllFaces(video, opts)).length); } catch { /* skip frame */ }
+              finally { faceApiBusyRef.current = false; }
             }, 2500);
           } catch {
             // Model load failed — can't verify face; treat as soft warning only
@@ -896,6 +963,9 @@ export default function StepSystemCheck({
     // Frame capture interval — starts after face model is guaranteed to be loaded
     const startFrameCapture = () => {
     envScanTimerRef.current = setInterval(async () => {
+      // Top-level guard: extension-injected promise rejections (e.g. Brave "message channel
+      // closed" from CDN intercept) must not surface as uncaught — they would halt the scan.
+      try {
       framesCapured += 1;
       setEnvScanFrameCount(framesCapured);
 
@@ -916,10 +986,17 @@ export default function StepSystemCheck({
           const avgB = imgData.length > 0 ? totalB / (imgData.length / 4) : 0;
           frameBrightnessValues.push(avgB);
 
-          // Multi-person check — detect from canvas snapshot (not live video) for consistency
-          const faceCount = await detectFaceCount(canvas);
-          if (faceCount !== null) {
-            frameMultiPersonFlags.push(faceCount > 1);
+          // Multi-person check — skip frame if a face-api.js call is already in-flight
+          if (!faceApiBusyRef.current) {
+            faceApiBusyRef.current = true;
+            try {
+              const faceCount = await detectFaceCount(canvas);
+              if (faceCount !== null) {
+                frameMultiPersonFlags.push(faceCount > 1);
+              }
+            } finally {
+              faceApiBusyRef.current = false;
+            }
           }
         }
       }
@@ -968,12 +1045,17 @@ export default function StepSystemCheck({
         });
         setEnvScanPhase('complete');
       }
+      } catch { /* swallow any per-frame error — scan continues on next tick */ }
     }, SCAN_INTERVAL_MS);
     }; // end startFrameCapture
 
     // Wait for the face detection model to be ready before capturing frames.
     // This ensures frame 1 already has face detection available — no false passes from null returns.
-    faceApiLoadPromise.then(startFrameCapture).catch(startFrameCapture);
+    // Wrap both branches in try/catch — Brave's extension layer can reject the CDN fetch with
+    // "message channel closed" which would otherwise surface as an uncaught promise rejection.
+    faceApiLoadPromise
+      .then(() => { try { startFrameCapture(); } catch { /* ignore */ } })
+      .catch(() => { try { startFrameCapture(); } catch { /* ignore */ } });
   }, []);
 
   // Cleanup all resources on unmount
@@ -1005,6 +1087,21 @@ export default function StepSystemCheck({
     const checkStatus = (id: string) =>
       systemChecks.find((c) => c.id === id)?.status === 'pass' ? 'pass' : 'fail';
 
+    // Stop face detection intervals before face registration — concurrent face-api.js /
+    // TF.js calls corrupt the WebGL backend (tensor.backend becomes undefined).
+    if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
+    if (envScanTimerRef.current) { clearInterval(envScanTimerRef.current); envScanTimerRef.current = null; }
+    if (envScanRAFRef.current !== null) { cancelAnimationFrame(envScanRAFRef.current); envScanRAFRef.current = null; }
+
+    // Wait for any in-flight face-api.js / TF.js WebGL call to finish before
+    // calling onRegisterFace. clearInterval does NOT cancel an already-executing
+    // async callback — the detectAllFaces call may still be running and will
+    // corrupt the WebGL backend if onRegisterFace starts concurrently.
+    const deadline = Date.now() + 3000; // max 3s wait
+    while (faceApiBusyRef.current && Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+
     // Run API recording and face registration in parallel — they are independent.
     // Previously sequential, adding ~3s of wait: API call first, then face encoding.
     await Promise.all([
@@ -1014,6 +1111,7 @@ export default function StepSystemCheck({
         microphone: checkStatus('microphone'),
         network: checkStatus('internet'),
         ai_engine: checkStatus('ai_engine'),
+        websocket: checkStatus('websocket'),
         lighting: checkStatus('lighting'),
         noise: checkStatus('noise'),
         face_detection: checkStatus('face'),
@@ -1031,13 +1129,10 @@ export default function StepSystemCheck({
         : Promise.resolve(),
     ]);
 
-    // Stop all streams and intervals
+    // Stop remaining streams and intervals
     if (lightingIntervalRef.current) clearInterval(lightingIntervalRef.current);
     if (noiseIntervalRef.current) clearInterval(noiseIntervalRef.current);
-    if (faceIntervalRef.current) clearInterval(faceIntervalRef.current);
     if (micIntervalRef.current) clearInterval(micIntervalRef.current);
-    if (envScanTimerRef.current) { clearInterval(envScanTimerRef.current); envScanTimerRef.current = null; }
-    if (envScanRAFRef.current !== null) { cancelAnimationFrame(envScanRAFRef.current); envScanRAFRef.current = null; }
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;

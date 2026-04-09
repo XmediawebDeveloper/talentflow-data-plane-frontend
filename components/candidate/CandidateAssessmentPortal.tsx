@@ -371,10 +371,6 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     return () => {
       document.removeEventListener(eventName, handleFullscreenChange);
-      // Exit fullscreen when leaving assessment step
-      if (step === 'assessment' && isFullscreen()) {
-        exitFullscreen().catch(() => {});
-      }
     };
   }, [step]);
 
@@ -1425,7 +1421,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             rounds={assessmentData?.rounds || []}
             startedAt={assessmentData?.started_at || assessmentInfo?.attempt_started_at || new Date().toISOString()}
             durationMinutes={assessmentInfo?.duration_minutes || 30}
-            initialTimeRemainingSeconds={assessmentData?.time_remaining_seconds ?? assessmentInfo?.time_remaining_seconds ?? undefined}
+            initialTimeRemainingSeconds={assessmentInfo?.time_remaining_seconds ?? overlayTimeRemaining ?? assessmentData?.time_remaining_seconds ?? undefined}
             onAnswerSubmit={handleAnswerSubmit}
             onComplete={handleCompleteAssessment}
             onNavigate={handleNavigateToQuestion}

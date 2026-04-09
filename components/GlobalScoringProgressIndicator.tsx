@@ -151,7 +151,7 @@ export default function GlobalScoringProgressIndicator() {
               </span>
             )}
           </div>
-          <span>{totalStats.queued + totalStats.processing} remaining</span>
+          <span>{totalStats.queued + totalStats.processing} Resume{(totalStats.queued + totalStats.processing) !== 1 ? 's' : ''} Remaining</span>
         </div>
       </div>
 

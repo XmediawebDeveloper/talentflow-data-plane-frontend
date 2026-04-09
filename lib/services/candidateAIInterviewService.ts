@@ -75,6 +75,7 @@ export interface CandidateSystemCheckRequest {
   microphone: string;
   network: string;
   ai_engine: string;
+  websocket?: string;
   lighting?: string;
   noise?: string;
   face_detection?: string;

@@ -27,11 +27,12 @@ interface Cluster {
   reason?: string;
 }
 
-/** Map any legacy/AI priority value (1-5) to the new 3-level scale. */
+/** Clamp any priority value to the 3-level scale (1=Low, 2=Medium, 3=High).
+ *  Handles legacy 1-5 AI output AND already-normalised 1-3 values without downgrading them. */
 function normalizePriority(p: number): 1 | 2 | 3 {
-  if (p >= 4) return 3; // Critical/High → High (P3)
-  if (p === 3) return 2; // Medium → Medium (P2)
-  return 1;             // Low/anything else → Low (P1)
+  if (p >= 3) return 3; // 3, 4, 5 → High
+  if (p === 2) return 2; // 2 → Medium
+  return 1;              // 1 or below → Low
 }
 
 interface SkillEntry {
@@ -70,15 +71,15 @@ const DEFAULT_PCT = { mth: 70, nth: 20, hr: 10 } as const;
 
 function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
   if (!nthEnabled && !hrEnabled) {
-    return { mthMinutes: 30, nthMinutes: 0, hrMinutes: 0, mthMaxClusters: 5, nthMaxClusters: 0 };
+    return { mthMinutes: 30, nthMinutes: 0, hrMinutes: 0, mthMaxClusters: 5, nthMaxClusters: 0, mthQuestions: 15, nthQuestions: 0, hrQuestions: 0 };
   }
   if (nthEnabled && !hrEnabled) {
-    return { mthMinutes: 20, nthMinutes: 10, hrMinutes: 0, mthMaxClusters: 3, nthMaxClusters: 2 };
+    return { mthMinutes: 20, nthMinutes: 10, hrMinutes: 0, mthMaxClusters: 3, nthMaxClusters: 2, mthQuestions: 10, nthQuestions: 5, hrQuestions: 0 };
   }
   if (nthEnabled && hrEnabled) {
-    return { mthMinutes: 16, nthMinutes: 8, hrMinutes: 6, mthMaxClusters: 3, nthMaxClusters: 2 };
+    return { mthMinutes: 16, nthMinutes: 8, hrMinutes: 6, mthMaxClusters: 3, nthMaxClusters: 2, mthQuestions: 8, nthQuestions: 4, hrQuestions: 3 };
   }
-  return { mthMinutes: 20, nthMinutes: 0, hrMinutes: 10, mthMaxClusters: 3, nthMaxClusters: 0 };
+  return { mthMinutes: 20, nthMinutes: 0, hrMinutes: 10, mthMaxClusters: 3, nthMaxClusters: 0, mthQuestions: 10, nthQuestions: 0, hrQuestions: 5 };
 }
 
 const PRIORITY_LABELS: Record<number, { label: string; short: string; color: string; dot: string }> = {
@@ -762,6 +763,8 @@ export default function AIInterviewClusters() {
   const [hrEnabled, setHrEnabled] = useState(false);
   const [fixedHrMin, setFixedHrMin] = useState<number>(0);
 
+  const timedAllocation = getTimedModeAllocation(nthEnabled, hrEnabled);
+
   /* UI state */
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [showWeightPanel, setShowWeightPanel] = useState(false);
@@ -873,9 +876,7 @@ export default function AIInterviewClusters() {
         if (si.mth_clusters?.length) {
           const mthMax = fixed ? timedAllocation.mthMaxClusters : 3;
           const mthRaw: any[] = si.mth_clusters;
-          const mthTrimmed = [...mthRaw]
-            .sort((a, b) => (b.priority ?? 2) - (a.priority ?? 2) || (a.name ?? '').localeCompare(b.name ?? ''))
-            .slice(0, mthMax);
+          const mthTrimmed = mthRaw.slice(0, mthMax);
           setMthClusters(mthTrimmed.map((c: any) => ({
             ...c,
             priority: normalizePriority(c.priority),
@@ -887,9 +888,7 @@ export default function AIInterviewClusters() {
           // nthEnabledForTimed=false means NHS is disabled — always clear saved clusters
           const nthTrimmed = !nthEnabledForTimed
             ? []
-            : [...nthRaw]
-                .sort((a, b) => (b.priority ?? 2) - (a.priority ?? 2) || (a.name ?? '').localeCompare(b.name ?? ''))
-                .slice(0, nthMax);
+            : nthRaw.slice(0, nthMax);
           setNthClusters(nthTrimmed.map((c: any) => ({
             ...c,
             priority: normalizePriority(c.priority),
@@ -1219,6 +1218,10 @@ export default function AIInterviewClusters() {
       si.mth_clusters = mthClusters;
       si.nth_clusters = nthEnabled ? nthClusters : []; // don't persist NHS clusters when disabled
       si.skill_weights = skillWeights;
+      // Save skill snapshot so Config step knows which skills were present at last save
+      // and won't falsely trigger cluster regeneration on back navigation
+      si.mth_skills_snapshot = mthSkills.map(s => s.name);
+      si.nth_skills_snapshot = nthEnabled ? nthSkills.map(s => s.name) : [];
       // Flexible mode: always write flexible_finalized from current React state,
       // not from stale config.special_instructions — this ensures handleReopenClusters
       // (which sets isFinalized=false) is not overwritten by a subsequent Back/save.
@@ -1239,8 +1242,9 @@ export default function AIInterviewClusters() {
 
   const handleBack = () => {
     if (!config) return;
+    // Include config_id so Config can load the exact draft directly (avoids jd_id search miss)
     saveAndNavigate(
-      '/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=' + (config.jd_id || '')
+      `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id || ''}&config_id=${id}`
     );
   };
 
@@ -1609,13 +1613,14 @@ export default function AIInterviewClusters() {
               {isFixed && (
                 <div className="border border-gray-100 rounded-lg overflow-hidden mb-4">
                   <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-500">Question Budget</span>
+                    <span className="text-xs font-medium text-gray-500">Question Budget (Total: {timedAllocation.mthQuestions + timedAllocation.nthQuestions + timedAllocation.hrQuestions})</span>
                     <span className="text-xs text-gray-400">{fixedMthMin + fixedNthMin + fixedHrMin} min</span>
                   </div>
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-gray-100">
                         <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
+                        <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
                         <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
                         <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
                       </tr>
@@ -1623,12 +1628,14 @@ export default function AIInterviewClusters() {
                     <tbody>
                       <tr className="border-b border-gray-50">
                         <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthQuestions}</td>
                         <td className="px-3 py-2 text-right font-semibold text-gray-900">{mthMaxClusters}</td>
                         <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
                       </tr>
                       {nthEnabled && (
                         <tr className="border-b border-gray-50">
                           <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthQuestions}</td>
                           <td className="px-3 py-2 text-right font-semibold text-gray-900">{nthMaxClusters}</td>
                           <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
                         </tr>
@@ -1636,6 +1643,7 @@ export default function AIInterviewClusters() {
                       {hrEnabled && (
                         <tr>
                           <td className="px-3 py-2 text-gray-600">HR Round</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.hrQuestions}</td>
                           <td className="px-3 py-2 text-right text-gray-400">—</td>
                           <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
                         </tr>
@@ -1675,7 +1683,7 @@ export default function AIInterviewClusters() {
       </div>{/* closes flex-1 p-4 */}
 
       {/* ── Sticky footer ── */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-10">
+      <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-white border-t border-gray-200 z-10">
         <div className="px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button

@@ -39,46 +39,59 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
   const baselineDescriptorRef = useRef<Float32Array | null>(null);
   const verificationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isLoadedRef = useRef(false);
+  const loadPromiseRef = useRef<Promise<boolean> | null>(null);
   const videoElementRef = useRef<HTMLVideoElement | null>(null);
+  const isDetectingRef = useRef(false); // guard against concurrent TF.js calls
 
   /**
    * Load face-api.js models (lazy — only when face verification is needed).
    */
   const loadModels = useCallback(async (): Promise<boolean> => {
     if (isLoadedRef.current && faceApiRef.current) return true;
+    if (loadPromiseRef.current) return loadPromiseRef.current;
 
-    try {
-      const faceapi = await import('face-api.js');
-      faceApiRef.current = faceapi;
+    loadPromiseRef.current = (async () => {
+      try {
+        const faceapi = await import('face-api.js');
+        faceApiRef.current = faceapi;
 
-      // Timeout after 15s to prevent indefinite hang
-      const loadPromise = Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_URL),
-        faceapi.nets.faceLandmark68Net.loadFromUri(MODELS_URL),
-        faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_URL),
-      ]);
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Model loading timed out')), 15000)
-      );
-      await Promise.race([loadPromise, timeoutPromise]);
+        // Timeout after 15s to prevent indefinite hang
+        const loadPromise = Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODELS_URL),
+          faceapi.nets.faceLandmark68Net.loadFromUri(MODELS_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODELS_URL),
+        ]);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Model loading timed out')), 15000)
+        );
+        await Promise.race([loadPromise, timeoutPromise]);
 
-      isLoadedRef.current = true;
-      console.log('[FaceVerification] Models loaded successfully');
-      return true;
-    } catch (err) {
-      console.error('[FaceVerification] Failed to load models:', err);
-      return false;
-    }
+        isLoadedRef.current = true;
+        console.log('[FaceVerification] Models loaded successfully');
+        return true;
+      } catch (err) {
+        faceApiRef.current = null;
+        isLoadedRef.current = false;
+        console.error('[FaceVerification] Failed to load models:', err);
+        return false;
+      } finally {
+        loadPromiseRef.current = null;
+      }
+    })();
+
+    return loadPromiseRef.current;
   }, []);
 
   /**
    * Extract a face descriptor from the current video frame.
    */
   const extractDescriptor = useCallback(async (): Promise<Float32Array | null> => {
+    if (isDetectingRef.current) return null; // skip if a detection is already in flight
     const faceapi = faceApiRef.current;
     const video = videoElementRef.current;
     if (!faceapi || !video || video.paused || video.videoWidth === 0) return null;
 
+    isDetectingRef.current = true;
     try {
       const detection = await faceapi
         .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
@@ -88,6 +101,8 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
       return detection?.descriptor || null;
     } catch {
       return null;
+    } finally {
+      isDetectingRef.current = false;
     }
   }, []);
 

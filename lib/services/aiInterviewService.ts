@@ -162,6 +162,8 @@ export interface AIInterviewResponse {
   screen_recording_url?: string;
   invitation_sent: boolean;
   invitations_count?: number;
+  jd_short_id?: string;  // JD's short display ID e.g. "JD-003", injected by list endpoint
+  jd_industry_type?: string;
   created_by: string;
   created_by_name?: string;
   scheduled_at?: string;
@@ -731,7 +733,24 @@ export const aiInterviewService = {
       const response = await api.get('/ai-interview/invitation-stats');
       return response.data;
     } catch {
-      return null; // Gracefully degrade if endpoint not available
+      return null;
     }
+  },
+
+  /**
+   * Generate a tracked share link for any share method (copy, whatsapp, linkedin, etc.)
+   * Creates a session with expiry and AIU unit lock.
+   */
+  async generateShareLink(configId: string, shareMethod: string, expiryDays: number = 1): Promise<{
+    session_id: string;
+    link: string;
+    expires_at: string | null;
+    share_method: string;
+  }> {
+    const response = await api.post(`/ai-interview/${configId}/generate-link`, {
+      expiry_days: expiryDays,
+      share_method: shareMethod,
+    });
+    return response.data;
   },
 };

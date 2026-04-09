@@ -340,10 +340,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       setInterview(result);
       // Mark this browser session as OTP-authenticated so re-opens don't need re-auth
       sessionStorage.setItem(SESSION_AUTH_KEY, '1');
-      // Register face baseline from identity photo — so system check & interview can compare against it.
-      // Fire-and-forget: models load in background while user sees system check UI.
+      // Register face baseline from the verified identity photo before entering system
+      // check so later face-api/TensorFlow work does not race with the environment scan.
       if (data.photo) {
-        faceVerification.registerFaceFromBlob(data.photo).catch(() => {});
+        try {
+          await faceVerification.registerFaceFromBlob(data.photo);
+        } catch {
+          // Non-blocking fallback: system check can still register from live video.
+        }
       }
       setStep('system_check');
     } catch (err: any) {
@@ -983,6 +987,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           jdJobLevel={interview.jd_job_level}
           duration={interview.duration_minutes}
           interviewType={interview.interview_type}
+          interviewMode={interview.interview_mode}
           totalQuestions={interview.total_questions}
         />
       </PreInterviewLayout>

@@ -1457,7 +1457,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
               <Send className="w-5 h-5 text-white" />
             </div>
             <div>

@@ -37,7 +37,7 @@ export default function SelectSourceModal({
 }: SelectSourceModalProps) {
   const router = useRouter();
   const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
-  const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
+  const { startScoringJob, updateItemStatus, setMainPanelOpen, setOnRestorePanel } = useScoringProgress();
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
@@ -1166,6 +1166,10 @@ export default function SelectSourceModal({
           showJobTitleColumn={false}
           onRetryFailed={async (scoringItem) => {
             await handleRetryFailed(scoringItem.resumeId);
+          }}
+          onMinimize={() => {
+            setMainPanelOpen(false);
+            setOnRestorePanel(() => () => setMainPanelOpen(true));
           }}
         />
       )}

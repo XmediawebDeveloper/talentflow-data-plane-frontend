@@ -221,6 +221,7 @@ export function AssessmentInterface({
   const isTimerPausedRef = useRef(false);
   const immediateNetworkPauseRef = useRef(false);
   const globalTimeRemainingRef = useRef(0);
+  const lastAcceptedAuthoritativeRemainingRef = useRef<number | null>(null);
   // Records the wall-clock ms when the timer was paused due to network loss.
   // Used to shift assessmentStartTimeRef forward on resume so offline time is excluded.
   const pauseStartWallTimeRef = useRef<number | null>(null);
@@ -581,10 +582,29 @@ export function AssessmentInterface({
 
     if (typeof authoritativeRemaining === 'number' && authoritativeRemaining >= 0) {
       const normalizedRemaining = Math.max(0, Math.min(totalDurationSecsRef.current, authoritativeRemaining));
-      assessmentStartTimeRef.current = Date.now() - ((totalDurationSecsRef.current - normalizedRemaining) * 1000);
-      globalTimeRemainingRef.current = normalizedRemaining;
-      setGlobalTimeRemaining(normalizedRemaining);
-      onTimeUpdate?.(normalizedRemaining);
+      const currentRemaining = globalTimeRemainingRef.current;
+      const allowIncrease =
+        lastAcceptedAuthoritativeRemainingRef.current === null ||
+        serverPaused ||
+        !isOnline ||
+        immediateNetworkPauseRef.current;
+
+      // Ignore stale values that would incorrectly add time during question navigation
+      // or delayed parent rerenders while the assessment is actively running.
+      if (!(normalizedRemaining > currentRemaining + 1 && !allowIncrease)) {
+        assessmentStartTimeRef.current = Date.now() - ((totalDurationSecsRef.current - normalizedRemaining) * 1000);
+        globalTimeRemainingRef.current = normalizedRemaining;
+        lastAcceptedAuthoritativeRemainingRef.current = normalizedRemaining;
+        setGlobalTimeRemaining(normalizedRemaining);
+        onTimeUpdate?.(normalizedRemaining);
+      } else {
+        console.warn('[TIMER] Ignored stale authoritative timer increase', {
+          normalizedRemaining,
+          currentRemaining,
+          serverPaused,
+          isOnline,
+        });
+      }
     }
 
     if (!shouldPauseTimer) {
@@ -906,6 +926,7 @@ export function AssessmentInterface({
 
       setGlobalTimeRemaining(remaining);
       globalTimeRemainingRef.current = remaining;
+      lastAcceptedAuthoritativeRemainingRef.current = remaining;
       onTimeUpdate?.(remaining);
 
       // Keep sessionStorage in sync for crash/error recovery

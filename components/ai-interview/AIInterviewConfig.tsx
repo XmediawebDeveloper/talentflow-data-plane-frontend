@@ -666,7 +666,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
     }
     setSavingQ(true);
     try {
-      const res = await api.post('/hr-question-bank', { question_text: text, answer_type: newQType });
+      const res = await api.post('/hr-question-bank', { question_text: text, answer_type: 'text' });
       const newQ: HRBankQuestion = { id: res.data.id, question_text: res.data.question_text, answer_type: res.data.answer_type, is_default: false };
       onBankAdd(newQ);
       // Auto-select only if within limit
@@ -828,14 +828,6 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                 <p className="text-[11px] text-red-500">{questionError}</p>
               )}
               <div className="flex items-center gap-2">
-                <select
-                  value={newQType}
-                  onChange={e => setNewQType(e.target.value as 'text' | 'yes_no')}
-                  className="text-xs border border-gray-200 rounded-md px-2 py-1 focus:outline-none bg-white"
-                >
-                  <option value="text">Text answer</option>
-                  <option value="yes_no">Yes / No</option>
-                </select>
                 <div className="flex-1" />
                 <button
                   onClick={() => {
@@ -896,9 +888,12 @@ export default function AIInterviewConfig() {
   const [loadingJd, setLoadingJd] = useState(true);
   const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadedSiRef = useRef<Record<string, any>>({}); // parsed special_instructions snapshot from last load
 
   /* Interview mode */
   const [mode, setMode] = useState<InterviewMode>('fixed');
+  /* Buffer time toggle (flexible mode only): adds 5 min to 30 min base */
+  const [bufferEnabled, setBufferEnabled] = useState(false);
   /* Per-question time limit (timed mode only), in seconds */
   const [perQuestionSeconds, setPerQuestionSeconds] = useState<number>(120);
 
@@ -1127,6 +1122,7 @@ export default function AIInterviewConfig() {
             const si = (existingDraft as any).special_instructions;
             if (si) {
               const parsed = JSON.parse(si);
+              loadedSiRef.current = parsed; // store for skill snapshot comparison
               const mthComments: Record<string, string> = parsed.skill_comments?.mth || {};
               const nthComments: Record<string, string> = parsed.skill_comments?.nth || {};
               const mthTypes: Record<string, string> = parsed.skill_types?.mth || {};
@@ -1135,6 +1131,11 @@ export default function AIInterviewConfig() {
               // Restore per-question time limit
               if (parsed.per_question_seconds) {
                 setPerQuestionSeconds(Number(parsed.per_question_seconds));
+              }
+
+              // Restore buffer time toggle
+              if (parsed.buffer_enabled !== undefined) {
+                setBufferEnabled(Boolean(parsed.buffer_enabled));
               }
 
               // Restore clusters (only restore NHS clusters if NHS round is present/enabled)
@@ -1582,8 +1583,12 @@ export default function AIInterviewConfig() {
     per_question_seconds: mode === 'fixed' ? perQuestionSeconds : undefined,
     // Flexible mode: persist JD description so the Clusters page can send it to AI on re-generate
     jd_description: mode === 'flexible' ? (selectedJd?.description ?? '') : undefined,
+    buffer_enabled: mode === 'flexible' ? bufferEnabled : undefined,
     mth_clusters: mth.clusters,
     nth_clusters: nth.enabled ? nth.clusters : [], // don't persist NHS clusters when NHS is disabled
+    // Preserve skill snapshots (only updated on cluster generation — don't overwrite here)
+    ...(loadedSiRef.current.mth_skills_snapshot !== undefined && { mth_skills_snapshot: loadedSiRef.current.mth_skills_snapshot }),
+    ...(loadedSiRef.current.nth_skills_snapshot !== undefined && { nth_skills_snapshot: loadedSiRef.current.nth_skills_snapshot }),
     skill_comments: {
       mth: Object.fromEntries(mth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
       nth: Object.fromEntries(nth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
@@ -1675,36 +1680,53 @@ export default function AIInterviewConfig() {
       return;
     }
 
-    // 2. Generate clusters via API when skill lists don't fully match existing clusters.
-    // Always regenerate when: (a) no clusters yet, (b) user added/removed/renamed skills,
-    // (c) scenario changed (NHS toggled, HR toggled) — any of these leave skills unassigned.
+    // 2. Determine if clusters need regeneration.
+    // Rule: only regenerate when skills ACTUALLY changed since last save, or when no clusters exist yet.
+    // Never regenerate just because the user navigated back without making changes.
     const currentMthSet = new Set(
       mth.skills.map(s => s.name.toLowerCase().trim()).filter(Boolean)
     );
     const currentNthSet = new Set(
       nth.enabled ? nth.skills.map(s => s.name.toLowerCase().trim()).filter(Boolean) : []
     );
-    const clusteredMthSet = new Set(
-      (mth.clusters ?? []).flatMap(c => (c.skills ?? []).map((s: string) => s.toLowerCase().trim()))
-    );
-    const clusteredNthSet = new Set(
-      nth.enabled
-        ? (nth.clusters ?? []).flatMap(c => (c.skills ?? []).map((s: string) => s.toLowerCase().trim()))
-        : []
-    );
-    // Clusters match config when every current skill is covered AND counts are within limits
+
+    // Snapshot = skills at the time clusters were last generated or saved from the Clusters page.
+    // If no snapshot exists yet (old config), treat existing clusters as valid (no false regeneration).
+    const mthSnapshot: string[] = loadedSiRef.current.mth_skills_snapshot ?? [];
+    const nthSnapshot: string[] = loadedSiRef.current.nth_skills_snapshot ?? [];
+    const mthSnapshotSet = new Set(mthSnapshot.map(s => s.toLowerCase().trim()));
+    const nthSnapshotSet = new Set(nthSnapshot.map(s => s.toLowerCase().trim()));
+    const hasSnapshot = mthSnapshotSet.size > 0;
+
+    const mthSkillsChanged = hasSnapshot
+      ? currentMthSet.size !== mthSnapshotSet.size || [...currentMthSet].some(s => !mthSnapshotSet.has(s))
+      : false; // no snapshot → assume no change, user can always regenerate manually
+
+    const nthSkillsChanged = nth.enabled && hasSnapshot
+      ? currentNthSet.size !== nthSnapshotSet.size || [...currentNthSet].some(s => !nthSnapshotSet.has(s))
+      : false;
+
     const mthClustersMatch =
       mth.clusters.length > 0 &&
       mth.clusters.length <= effectiveMthMax &&
-      currentMthSet.size > 0 &&
-      [...currentMthSet].every(s => clusteredMthSet.has(s));
+      !mthSkillsChanged;
     const nthClustersMatch =
       !nth.enabled ||
       (nth.clusters.length > 0 &&
         nth.clusters.length <= effectiveNthMax &&
-        currentNthSet.size > 0 &&
-        [...currentNthSet].every(s => clusteredNthSet.has(s)));
+        !nthSkillsChanged);
     const needsRegeneration = !mthClustersMatch || !nthClustersMatch;
+
+    // If no snapshot yet, backfill it now (non-blocking) so future visits use snapshot comparison
+    if (!hasSnapshot && !needsRegeneration && existingDraftIdRef.current) {
+      const siBackfill = JSON.parse(buildClusterJson());
+      siBackfill.mth_skills_snapshot = mth.skills.map(s => s.name);
+      siBackfill.nth_skills_snapshot = nth.enabled ? nth.skills.map(s => s.name) : [];
+      loadedSiRef.current = { ...loadedSiRef.current, ...siBackfill };
+      aiInterviewService.update(existingDraftIdRef.current, {
+        special_instructions: JSON.stringify(siBackfill),
+      }).catch(() => {});
+    }
 
     if (needsRegeneration) {
       setGeneratingClusters(true);
@@ -1745,6 +1767,10 @@ export default function AIInterviewConfig() {
             priority: c.priority as Cluster['priority'],
             reason: c.reason || '',
           }));
+          // Save skill snapshot so future visits don't trigger false regeneration
+          siObj.mth_skills_snapshot = mth.skills.map(s => s.name);
+          siObj.nth_skills_snapshot = nth.enabled ? nth.skills.map(s => s.name) : [];
+          loadedSiRef.current = { ...loadedSiRef.current, ...siObj };
           await aiInterviewService.update(existingDraftIdRef.current, {
             special_instructions: JSON.stringify(siObj),
           });
@@ -1879,7 +1905,7 @@ export default function AIInterviewConfig() {
                 <div className="grid grid-cols-2 gap-3">
                   {/* Fixed */}
                   <button
-                    onClick={() => setMode('fixed')}
+                    onClick={() => { setMode('fixed'); setBufferEnabled(false); }}
                     className={`relative flex flex-col gap-1 p-4 rounded-lg border-2 text-left transition-all ${
                       mode === 'fixed' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 hover:border-gray-300'
                     }`}
@@ -1919,6 +1945,38 @@ export default function AIInterviewConfig() {
                     </div>
                   </button>
                 </div>
+
+                {/* Buffer Time toggle — only in conversational mode */}
+                {mode === 'flexible' && (
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">Buffer Time</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">+5 min</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {bufferEnabled
+                          ? 'Total interview time: 35 min (30 min + 5 min buffer)'
+                          : 'Total interview time: 30 min — hard stop at limit'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBufferEnabled(prev => !prev)}
+                      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        bufferEnabled ? 'bg-gray-900' : 'bg-gray-200'
+                      }`}
+                      role="switch"
+                      aria-checked={bufferEnabled}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          bufferEnabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
 
               </div>
             </div>
@@ -2009,17 +2067,6 @@ export default function AIInterviewConfig() {
               onBankAdd={q => setHrBankQuestions(prev => [...prev, q])}
             />
 
-
-            {/* Recording */}
-            <label className="flex items-center gap-3 cursor-pointer px-1">
-              <input
-                type="checkbox"
-                checked={recordingEnabled}
-                onChange={e => setRecordingEnabled(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-500"
-              />
-              <span className="text-sm text-gray-700">Auto-record interview sessions</span>
-            </label>
 
             {/* Introduction Video (Optional) */}
             <div className="px-1 space-y-2">
@@ -2313,6 +2360,28 @@ export default function AIInterviewConfig() {
                       </div>
                     </div>
                   )}
+                  <div className="px-3 py-2 flex items-center justify-between gap-2">
+                    <span className="text-xs text-gray-500 flex-shrink-0">Interview Mode</span>
+                    <span className="text-xs font-semibold text-gray-900 text-right">
+                      {mode === 'flexible' ? 'Conversational' : 'Timed'}
+                    </span>
+                  </div>
+                  {mode === 'flexible' && (
+                    <div className="px-3 py-2 flex items-center justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-shrink-0">Buffer Time</span>
+                      <span className={`text-xs font-semibold text-right ${bufferEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
+                        {bufferEnabled ? 'Enabled (+5 min)' : 'Disabled'}
+                      </span>
+                    </div>
+                  )}
+                  <div className="px-3 py-2 flex items-center justify-between gap-2">
+                    <span className="text-xs text-gray-500 flex-shrink-0">Total Duration</span>
+                    <span className="text-xs font-semibold text-gray-900 text-right">
+                      {mode === 'flexible'
+                        ? bufferEnabled ? '35 min' : '30 min'
+                        : `${totalFixed} min`}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -2396,25 +2465,52 @@ export default function AIInterviewConfig() {
                   )}
                   {pctValid && (
                     <div className="border border-gray-100 rounded-lg overflow-hidden">
-                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
-                        <span className="text-xs font-medium text-gray-500">Time Allocation (30 min total)</span>
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-500">Time Allocation</span>
+                        <span className="text-xs font-semibold text-gray-700">
+                          {bufferEnabled ? '35 min total' : '30 min total'}
+                        </span>
                       </div>
                       <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-gray-100">
+                            <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
+                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
+                            <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                          </tr>
+                        </thead>
                         <tbody>
                           <tr className="border-b border-gray-50">
                             <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
+                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveMthMax}</td>
                             <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexMthMin} min</td>
                           </tr>
                           {nth.enabled && (
                             <tr className="border-b border-gray-50">
                               <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveNthMax}</td>
                               <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexNthMin} min</td>
                             </tr>
                           )}
                           {hrEnabled && (
-                            <tr>
+                            <tr className={bufferEnabled ? 'border-b border-gray-50' : ''}>
                               <td className="px-3 py-2 text-gray-600">HR Round</td>
+                              <td className="px-3 py-2 text-right text-gray-400">—</td>
                               <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexHrMin} min</td>
+                            </tr>
+                          )}
+                          {bufferEnabled && (
+                            <tr className="border-b border-gray-50 bg-blue-50">
+                              <td className="px-3 py-2 text-blue-600 font-medium">Buffer Time</td>
+                              <td className="px-3 py-2 text-right text-gray-400">—</td>
+                              <td className="px-3 py-2 text-right font-semibold text-blue-600">+5 min</td>
+                            </tr>
+                          )}
+                          {bufferEnabled && (
+                            <tr className="bg-gray-50">
+                              <td className="px-3 py-2 text-gray-700 font-semibold">Total</td>
+                              <td className="px-3 py-2 text-right text-gray-400">—</td>
+                              <td className="px-3 py-2 text-right font-bold text-gray-900">35 min</td>
                             </tr>
                           )}
                         </tbody>
