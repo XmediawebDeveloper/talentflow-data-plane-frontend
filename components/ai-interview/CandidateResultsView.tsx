@@ -691,7 +691,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
     { key: 'overview',       label: 'Overview',        icon: <BarChart3 className="w-4 h-4" /> },
-    ...(eval_.capability_score != null && eval_.capability_score > 0
+    ...((isCompleted || isPartial)
       ? [{ key: 'evaluation' as TabKey, label: 'Evaluation', icon: <Award className="w-4 h-4" /> }]
       : []),
     { key: 'skill_coverage', label: 'Skill Coverage',  icon: <Activity className="w-4 h-4" />, live: isInProgress },
@@ -2200,6 +2200,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             {activeTab === 'evaluation' && (() => {
               const evalPlaceholder = getPlaceholderMessage();
               if (evalPlaceholder) return renderPlaceholder(evalPlaceholder);
+
+              // No evaluation data at all
+              if (!eval_.capability_score && !eval_.cluster_insights?.length && !eval_.section_scores) {
+                return renderPlaceholder('Evaluation data not yet available — the AI evaluator may still be processing this interview');
+              }
 
               const capScore: number = eval_.capability_score ?? 0;
               const sectionScores: Record<string, { score: number | null; band: string; section_pct: number; section_name: string }> = eval_.section_scores ?? {};

@@ -34,31 +34,6 @@ type Step =
   | 'completed'
   | 'error';
 
-// Static fallbacks (used before interview data loads)
-const STEP_NUMBER_WITH_VIDEO: Record<string, number> = {
-  consent: 1, identity: 2, system_check: 3,
-  intro_video: 4, language_select: 5, sample_practice: 6,
-};
-const STEP_NUMBER_WITHOUT_VIDEO: Record<string, number> = {
-  consent: 1, identity: 2, system_check: 3,
-  language_select: 4, sample_practice: 5,
-};
-
-const STEP_LABELS_WITH_VIDEO = [
-  'Job Details & Consent', 'Identity', 'System Check',
-  'Intro Video', 'Language', 'Practice', 'Interview',
-];
-const STEP_LABELS_WITHOUT_VIDEO = [
-  'Job Details & Consent', 'Identity', 'System Check',
-  'Language', 'Practice', 'Interview',
-];
-
-const PRE_STEPS_WITH_VIDEO: Step[] = [
-  'consent', 'identity', 'system_check', 'intro_video', 'language_select', 'sample_practice',
-];
-const PRE_STEPS_WITHOUT_VIDEO: Step[] = [
-  'consent', 'identity', 'system_check', 'language_select', 'sample_practice',
-];
 
 interface Props {
   token: string;
@@ -368,8 +343,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     // Skip intro_video step entirely if no video is configured
     if (interview?.introduction_video_url) {
       setStep('intro_video');
-    } else {
+    } else if (availableLanguages.length > 1 && !interview?.selected_language) {
       setStep('language_select');
+    } else {
+      setStep('sample_practice');
     }
   };
 
@@ -378,17 +355,22 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     setLanguageSubmitting(true);
     try {
       await candidateAIInterviewService.selectLanguage(token, selectedLanguage);
-      setStep('sample_practice');
     } catch {
-      // Non-blocking — default to English
-      setStep('sample_practice');
+      // Non-blocking — proceed regardless
     } finally {
       setLanguageSubmitting(false);
     }
+    // Update local state so hasLanguageSelect recalculates to false, keeping goBack correct
+    setInterview(prev => prev ? { ...prev, selected_language: selectedLanguage } : prev);
+    setStep('sample_practice');
   };
 
   const handleIntroVideoSkip = () => {
-    setStep('language_select');
+    if (availableLanguages.length > 1 && !interview?.selected_language) {
+      setStep('language_select');
+    } else {
+      setStep('sample_practice');
+    }
   };
 
   const handleLanguageContinue = async () => {
@@ -396,12 +378,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     setLanguageSubmitting(true);
     try {
       await candidateAIInterviewService.selectLanguage(token, selectedLanguage);
-      setStep('sample_practice');
     } catch {
-      setStep('sample_practice');
+      // Non-blocking — proceed regardless
     } finally {
       setLanguageSubmitting(false);
     }
+    // Update local state so hasLanguageSelect recalculates to false, keeping goBack correct
+    setInterview(prev => prev ? { ...prev, selected_language: selectedLanguage } : prev);
+    setStep('sample_practice');
   };
 
   // Called from StepSamplePractice "Start Interview" button — goes to fullscreen prompt first
@@ -934,23 +918,37 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     );
   }
 
-  // ========== PRE-INTERVIEW STEPS (dynamic based on intro video) ==========
+  // ========== PRE-INTERVIEW STEPS (dynamic — reflects only the steps this candidate will visit) ==========
   const hasIntroVideo = !!interview?.introduction_video_url;
-  const STEP_NUMBER   = hasIntroVideo ? STEP_NUMBER_WITH_VIDEO   : STEP_NUMBER_WITHOUT_VIDEO;
-  const PRE_STEPS     = hasIntroVideo ? PRE_STEPS_WITH_VIDEO      : PRE_STEPS_WITHOUT_VIDEO;
-  const stepLabels    = hasIntroVideo ? STEP_LABELS_WITH_VIDEO    : STEP_LABELS_WITHOUT_VIDEO;
-  const totalSteps    = stepLabels.length;
+  // language_select is only shown when there are multiple languages AND none has been confirmed yet
+  const hasLanguageSelect = availableLanguages.length > 1 && !interview?.selected_language;
 
-  const currentStepNumber = STEP_NUMBER[step] || 1;
+  const PRE_STEPS: Step[] = [
+    'consent', 'identity', 'system_check',
+    ...(hasIntroVideo ? ['intro_video' as Step] : []),
+    ...(hasLanguageSelect ? ['language_select' as Step] : []),
+    'sample_practice',
+  ];
 
-  // Navigation helpers
+  // stepLabels drives the stepper progress bar (last entry is always "Interview")
+  const stepLabels = [
+    'Job Details & Consent', 'Identity', 'System Check',
+    ...(hasIntroVideo ? ['Intro Video'] : []),
+    ...(hasLanguageSelect ? ['Language'] : []),
+    'Practice', 'Interview',
+  ];
+
+  const totalSteps = stepLabels.length;
+  const currentStepNumber = (PRE_STEPS.indexOf(step as Step) + 1) || 1;
+
+  // Navigation helpers (used by PreInterviewLayout back/next buttons when shown)
   const goBack = () => {
-    const idx = PRE_STEPS.indexOf(step);
+    const idx = PRE_STEPS.indexOf(step as Step);
     if (idx > 0) setStep(PRE_STEPS[idx - 1]);
   };
 
   const goNext = () => {
-    const idx = PRE_STEPS.indexOf(step);
+    const idx = PRE_STEPS.indexOf(step as Step);
     if (idx < PRE_STEPS.length - 1) setStep(PRE_STEPS[idx + 1]);
   };
 
