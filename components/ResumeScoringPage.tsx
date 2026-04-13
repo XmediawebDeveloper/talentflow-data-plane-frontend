@@ -211,6 +211,7 @@ export default function ResumeScoringPage({
     hasActiveScoring,
     setOnRestorePanel,
     setMainPanelOpen,
+    setMinimized: setContextMinimized,
   } = useScoringProgress();
 
   // Use props directly - data is fetched by the page route
@@ -265,13 +266,14 @@ export default function ResumeScoringPage({
   const [progressData, setProgressData] = useState<ScoringProgressItem[]>([]);
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
+  const [isBulkProgressMinimized, setIsBulkProgressMinimized] = useState(false);
 
-
-  // Hide global floating widget when BulkScoringProgressModal is open
+  // Hide global floating widget when BulkScoringProgressModal is open and NOT minimized
+  // When minimized, setMainPanelOpen(false) lets GlobalScoringProgressIndicator show
   useEffect(() => {
-    setMainPanelOpen(showProgressModal);
+    setMainPanelOpen(showProgressModal && !isBulkProgressMinimized);
     return () => { setMainPanelOpen(false); };
-  }, [showProgressModal, setMainPanelOpen]);
+  }, [showProgressModal, isBulkProgressMinimized, setMainPanelOpen]);
 
   // Helper: Convert job progress items to ScoringProgressItem[] for BulkScoringProgressModal
   const showBulkProgressFromJob = (jobId: string, jobTitle: string, items: any[]) => {
@@ -1316,7 +1318,15 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => setShowProgressModal(false)}
             showJobTitleColumn={showJobTitleColumn}
-            onMinimize={() => { setMainPanelOpen(false); setOnRestorePanel(() => () => setMainPanelOpen(true)); }}
+            minimized={isBulkProgressMinimized}
+            onMinimize={() => {
+              setIsBulkProgressMinimized(true);
+              setContextMinimized(true);
+              setOnRestorePanel(() => () => {
+                setIsBulkProgressMinimized(false);
+                setContextMinimized(false);
+              });
+            }}
             onRetryFailed={async (item) => {
               try {
                 // Update item status to "Scoring in progress"
@@ -2253,7 +2263,15 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => setShowProgressModal(false)}
             showJobTitleColumn={showJobTitleColumn}
-            onMinimize={() => { setMainPanelOpen(false); setOnRestorePanel(() => () => setMainPanelOpen(true)); }}
+            minimized={isBulkProgressMinimized}
+            onMinimize={() => {
+              setIsBulkProgressMinimized(true);
+              setContextMinimized(true);
+              setOnRestorePanel(() => () => {
+                setIsBulkProgressMinimized(false);
+                setContextMinimized(false);
+              });
+            }}
             onRetryFailed={async (item) => {
               try {
                 // Update item status to "Scoring in progress"
@@ -2800,7 +2818,15 @@ export default function ResumeScoringPage({
           onClose={() => setShowProgressModal(false)}
           filterByJobId={filterByJobId}
           showJobTitleColumn={showJobTitleColumn}
-          onMinimize={() => { setMainPanelOpen(false); setOnRestorePanel(() => () => setMainPanelOpen(true)); }}
+          minimized={isBulkProgressMinimized}
+          onMinimize={() => {
+            setIsBulkProgressMinimized(true);
+            setContextMinimized(true);
+            setOnRestorePanel(() => () => {
+              setIsBulkProgressMinimized(false);
+              setContextMinimized(false);
+            });
+          }}
           onRetryFailed={async (item) => {
             try {
               console.log('[Retry] Starting retry for:', item.candidateName, 'resumeId:', item.resumeId, 'jobId:', item.jobId);

@@ -153,6 +153,9 @@ export interface AIInterviewResponse {
   proctoring_violations?: { event_type: string; severity: string; timestamp?: string; details?: Record<string, any> }[];
   tab_switch_count?: number;
   copy_paste_count?: number;
+  // Computed at interview completion (AIU-82)
+  proctoring_score?: number;
+  risk_level?: string;  // "none" | "low" | "medium" | "high"
   recording_url?: string;
   introduction_video_url?: string;
   identity_name?: string;
@@ -739,7 +742,7 @@ export const aiInterviewService = {
 
   /**
    * Generate a tracked share link for any share method (copy, whatsapp, linkedin, etc.)
-   * Creates a session with expiry and AIU unit lock.
+   * Creates an anonymous session with expiry and AIU unit lock.
    */
   async generateShareLink(configId: string, shareMethod: string, expiryDays: number = 1): Promise<{
     session_id: string;
@@ -751,6 +754,64 @@ export const aiInterviewService = {
       expiry_days: expiryDays,
       share_method: shareMethod,
     });
+    return response.data;
+  },
+
+  /**
+   * Create a named session for a specific candidate WITHOUT sending an email.
+   * Returns the interview link so the caller can copy/share it manually.
+   * Quota unit is locked immediately.
+   */
+  async createInviteLink(configId: string, data: {
+    candidate_name: string;
+    candidate_email: string;
+    expiry_days?: number;
+  }): Promise<{ session_id: string; link: string; expires_at: string | null }> {
+    const response = await api.post(`/ai-interview/${configId}/create-invite-link`, {
+      ...data,
+      base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+    });
+    dispatchUnitsConsumed();
+    return response.data;
+  },
+
+  /**
+   * Send the invitation email for an already-created session.
+   * Used when Copy Link was clicked first and user also wants to send via email.
+   * Does NOT create a new session or deduct additional quota.
+   */
+  async sendSessionEmail(sessionId: string, data: {
+    custom_message?: string;
+    base_url?: string;
+  }): Promise<{ message: string; session_id: string }> {
+    const response = await api.post(`/ai-interview/session/${sessionId}/send-invite-email`, data);
+    return response.data;
+  },
+
+  /**
+   * Log a proctoring violation event (AIU81)
+   */
+  async logViolationEvent(sessionId: string, data: {
+    event_type: string;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    metadata?: Record<string, any>;
+  }): Promise<void> {
+    await api.post(`/ai-interviews/${sessionId}/violation-events`, data);
+  },
+
+  /**
+   * Get the full skill coverage map for a session (AIU52)
+   */
+  async getCoverageMap(sessionId: string): Promise<any> {
+    const response = await api.get(`/ai-interviews/${sessionId}/coverage-map`);
+    return response.data;
+  },
+
+  /**
+   * Trigger AI evaluation for a completed session (AIU53)
+   */
+  async triggerEvaluation(sessionId: string): Promise<any> {
+    const response = await api.post(`/ai-interviews/${sessionId}/evaluate`, {});
     return response.data;
   },
 };

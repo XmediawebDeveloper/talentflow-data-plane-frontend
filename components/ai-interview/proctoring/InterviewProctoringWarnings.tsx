@@ -43,6 +43,8 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   face_identity_changed: <ShieldAlert className="w-6 h-6" />,
   voice_mismatch: <AudioLines className="w-6 h-6" />,
   voice_identity_changed: <AudioLines className="w-6 h-6" />,
+  screen_share_stopped: <Monitor className="w-6 h-6" />,
+  background_noise: <AudioLines className="w-6 h-6" />,
 };
 
 const EVENT_NAMES: Record<ProctoringEventType, string> = {
@@ -65,6 +67,8 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   face_identity_changed: 'Identity Changed',
   voice_mismatch: 'Voice Verification Warning',
   voice_identity_changed: 'Speaker Changed',
+  screen_share_stopped: 'Screen Sharing Stopped',
+  background_noise: 'Background Noise Detected',
 };
 
 const SEVERITY_COLORS: Record<'minor' | 'moderate' | 'severe', { bg: string; border: string; text: string; icon: string }> = {

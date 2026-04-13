@@ -35,6 +35,7 @@ interface BulkScoringProgressModalProps {
   showJobTitleColumn?: boolean; // Added: Explicitly control job title column visibility
   onRetryFailed?: (item: ScoringProgressItem) => Promise<void>; // Added: Retry failed individual
   onMinimize?: () => void; // Called when user minimizes — parent should call setMainPanelOpen(false)
+  minimized?: boolean; // Allow parent to control minimized state (for restore)
 }
 
 export default function BulkScoringProgressModal({
@@ -44,6 +45,7 @@ export default function BulkScoringProgressModal({
   showJobTitleColumn = true,
   onRetryFailed,
   onMinimize,
+  minimized = false,
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -51,7 +53,7 @@ export default function BulkScoringProgressModal({
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
   const [bulkRetrying, setBulkRetrying] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimizedInternal, setIsMinimizedInternal] = useState(false);
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [completedTimes, setCompletedTimes] = useState<number[]>([]);
 
@@ -274,7 +276,7 @@ export default function BulkScoringProgressModal({
   };
 
   // Minimized — hand off to the persistent GlobalScoringProgressIndicator in layout.tsx
-  if (isMinimized) {
+  if (isMinimizedInternal || minimized) {
     return null;
   }
 
@@ -308,7 +310,7 @@ export default function BulkScoringProgressModal({
                 </div>
               )}
               <button
-                onClick={() => { setIsMinimized(true); onMinimize?.(); }}
+                onClick={() => { setIsMinimizedInternal(true); onMinimize?.(); }}
                 className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 aria-label="Minimize to background"
                 title="Run in background"

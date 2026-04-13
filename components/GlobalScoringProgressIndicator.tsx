@@ -49,35 +49,37 @@ export default function GlobalScoringProgressIndicator() {
   if (isMinimized) {
     return (
       <div
-        className="fixed bottom-6 right-6 z-50 cursor-pointer"
+        className="fixed bottom-4 right-4 z-50 bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl hover:bg-gray-800 transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300 border border-gray-700 max-w-xs"
         onClick={() => {
-          // If there's a restore callback (panel is minimized), restore it
           if (onRestorePanel) {
             onRestorePanel();
           } else {
-            // Otherwise expand the floating indicator
             setMinimized(false);
           }
         }}
       >
-        <div className={`flex items-center gap-3 px-4 py-3 rounded-full shadow-lg transition-all hover:scale-105 ${
-          isAllComplete
-            ? 'bg-green-600 text-white'
-            : 'bg-gray-800 text-white'
-        }`}>
-          {hasActiveScoring ? (
-            <Loader className="w-5 h-5 animate-spin" />
-          ) : (
-            <CheckCircle2 className="w-5 h-5" />
+        <div className="relative flex-shrink-0">
+          <Target className="w-5 h-5" />
+          {hasActiveScoring && (
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse" />
           )}
-          <div className="text-sm font-medium">
-            {hasActiveScoring ? (
-              <>Scoring {totalStats.processing + totalStats.queued} resumes...</>
-            ) : (
-              <>Scoring Complete ({totalStats.completed}/{totalStats.total})</>
-            )}
-          </div>
         </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold truncate">Scoring Progress</p>
+          <p className="text-xs text-gray-400">
+            {isAllComplete
+              ? `Complete: ${totalStats.completed} scored`
+              : `${totalStats.completed}/${totalStats.total} (${overallProgress}%)`
+            }
+          </p>
+        </div>
+        <div className="w-12 h-1.5 bg-gray-700 rounded-full overflow-hidden flex-shrink-0">
+          <div
+            className={`h-full transition-[width] duration-300 ease-out ${isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+            style={{ width: `${overallProgress}%` }}
+          />
+        </div>
+        <Maximize2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
       </div>
     );
   }

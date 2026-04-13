@@ -29,7 +29,8 @@ export type ProctoringEventType =
   | 'face_identity_changed'
   | 'voice_mismatch'
   | 'voice_identity_changed'
-  | 'screen_share_stopped';
+  | 'screen_share_stopped'
+  | 'background_noise';
 
 export interface ProctoringEvent {
   id: string;
@@ -62,6 +63,7 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   voice_mismatch: 'Voice verification warning. Voice pattern does not match the registered speaker.',
   voice_identity_changed: 'A different speaker has been detected. Voice verification failed.',
   screen_share_stopped: 'Screen sharing was stopped. Screen sharing is mandatory throughout the interview.',
+  background_noise: 'Excessive background noise detected. Please move to a quieter environment for a better experience.',
 };
 
 // Severity mapping — Minor / Moderate / Severe
@@ -89,6 +91,8 @@ const EVENT_SEVERITY: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe
   face_identity_changed:    'severe',
   voice_identity_changed:   'severe',
   screen_share_stopped:     'severe',
+  // Advisory — not a proctoring violation, just a UX nudge (AIU-67)
+  background_noise:         'minor',
 };
 
 type Listener = (event: ProctoringEvent) => void;

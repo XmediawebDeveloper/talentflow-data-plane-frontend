@@ -118,7 +118,7 @@ function detectBrowser(ua: string): BrowserInfo {
     const match = ua.match(/Chrome\/([\d.]+)/);
     const version = match?.[1] ?? 'unknown';
     const major = parseInt(version.split('.')[0], 10) || 0;
-    return { name: 'Brave', version, majorVersion: major, supported: major >= 85 };
+    return { name: 'Brave', version, majorVersion: major, supported: false };
   }
   if (/Chrome\//i.test(ua) && !/Chromium/i.test(ua)) {
     const match = ua.match(/Chrome\/([\d.]+)/);
@@ -130,7 +130,7 @@ function detectBrowser(ua: string): BrowserInfo {
     const match = ua.match(/Firefox\/([\d.]+)/);
     const version = match?.[1] ?? 'unknown';
     const major = parseInt(version.split('.')[0], 10) || 0;
-    return { name: 'Firefox', version, majorVersion: major, supported: major >= 85 };
+    return { name: 'Firefox', version, majorVersion: major, supported: false };
   }
   if (/Safari\//i.test(ua) && !/Chrome/i.test(ua)) {
     const match = ua.match(/Version\/([\d.]+)/);
@@ -175,13 +175,12 @@ function detectDevice(): DeviceInfo {
 
 const SUPPORTED_BROWSERS = [
   { name: 'Chrome', minVersion: 'v85+' },
-  { name: 'Brave', minVersion: 'v85+' },
   { name: 'Edge', minVersion: 'v85+' },
-  { name: 'Firefox', minVersion: 'v85+' },
   { name: 'Safari', minVersion: 'v14+' },
 ];
 
-const MIN_INTERNET_MBPS = 1.5;
+const MIN_INTERNET_MBPS = 1.0;
+const FACE_REGISTRATION_TIMEOUT_MS = 3000;
 
 const SYSTEM_REQUIREMENTS = [
   {
@@ -191,7 +190,7 @@ const SYSTEM_REQUIREMENTS = [
   },
   {
     label: 'Supported Browser',
-    note: 'Chrome, Brave, Edge, Firefox, or Safari',
+    note: 'Chrome, Edge, or Safari',
     check: (d: DeviceInfo) => d.browser.supported,
   },
   {
@@ -1102,54 +1101,61 @@ export default function StepSystemCheck({
       await new Promise(r => setTimeout(r, 50));
     }
 
-    // Run API recording and face registration in parallel — they are independent.
-    // Previously sequential, adding ~3s of wait: API call first, then face encoding.
-    await Promise.all([
-      // 1. Record system check results to backend (fire-and-forget on error)
-      candidateAIInterviewService.recordSystemCheck(token, {
-        camera: checkStatus('webcam'),
-        microphone: checkStatus('microphone'),
-        network: checkStatus('internet'),
-        ai_engine: checkStatus('ai_engine'),
-        websocket: checkStatus('websocket'),
-        lighting: checkStatus('lighting'),
-        noise: checkStatus('noise'),
-        face_detection: checkStatus('face'),
-        face_count: systemChecks.find((c) => c.id === 'multiple')?.status === 'pass' ? 1 : 0,
-        network_latency_ms: networkLatencyMsRef.current ?? undefined,
-        internet_speed_mbps: networkSpeedMbpsRef.current ?? undefined,
-        video_brightness: videoBrightnessRef.current ?? undefined,
-        ai_engine_latency_ms: aiEngineLatencyMsRef.current ?? undefined,
-      }).catch(() => {}),
+    try {
+      // Run API recording and face registration in parallel — they are independent.
+      // Face registration is best-effort only and must never block progression.
+      await Promise.all([
+        // 1. Record system check results to backend (fire-and-forget on error)
+        candidateAIInterviewService.recordSystemCheck(token, {
+          camera: checkStatus('webcam'),
+          microphone: checkStatus('microphone'),
+          network: checkStatus('internet'),
+          ai_engine: checkStatus('ai_engine'),
+          websocket: checkStatus('websocket'),
+          lighting: checkStatus('lighting'),
+          noise: checkStatus('noise'),
+          face_detection: checkStatus('face'),
+          face_count: systemChecks.find((c) => c.id === 'multiple')?.status === 'pass' ? 1 : 0,
+          network_latency_ms: networkLatencyMsRef.current ?? undefined,
+          internet_speed_mbps: networkSpeedMbpsRef.current ?? undefined,
+          video_brightness: videoBrightnessRef.current ?? undefined,
+          ai_engine_latency_ms: aiEngineLatencyMsRef.current ?? undefined,
+        }).catch(() => {}),
 
-      // 2. Register face baseline for proctoring (face-api.js NN encoding — must run
-      //    before stream is stopped while video element still has live frames)
-      onRegisterFace && videoRef.current
-        ? onRegisterFace(videoRef.current).catch(() => {})
-        : Promise.resolve(),
-    ]);
+        // 2. Register face baseline for proctoring (best-effort with timeout).
+        onRegisterFace && videoRef.current
+          ? Promise.race([
+              onRegisterFace(videoRef.current).catch(() => false),
+              new Promise<boolean>((resolve) => setTimeout(() => resolve(false), FACE_REGISTRATION_TIMEOUT_MS)),
+            ])
+          : Promise.resolve(true),
+      ]);
 
-    // Stop remaining streams and intervals
-    if (lightingIntervalRef.current) clearInterval(lightingIntervalRef.current);
-    if (noiseIntervalRef.current) clearInterval(noiseIntervalRef.current);
-    if (micIntervalRef.current) clearInterval(micIntervalRef.current);
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
+      // Stop remaining streams and intervals
+      if (lightingIntervalRef.current) clearInterval(lightingIntervalRef.current);
+      if (noiseIntervalRef.current) clearInterval(noiseIntervalRef.current);
+      if (micIntervalRef.current) clearInterval(micIntervalRef.current);
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+        audioContextRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+
+      onAllPassed();
+    } finally {
+      if (mountedRef.current) setIsProceedLoading(false);
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-
-    onAllPassed();
   }, [token, systemChecks, onAllPassed, isProceedLoading, onRegisterFace]);
 
   // ────────────────────────────────────────
   // Render helpers
   // ────────────────────────────────────────
 
-  const deviceAllPass = deviceInfo ? !deviceInfo.isMobile && deviceInfo.browser.supported : false;
+  const blockedBrowserName = deviceInfo?.browser.name === 'Brave' || deviceInfo?.browser.name === 'Firefox' ? deviceInfo.browser.name : null;
+  const deviceAllPass = deviceInfo ? !deviceInfo.isMobile && deviceInfo.browser.supported && !blockedBrowserName : false;
 
   // ────────────────────────────────────────
   // Phase 1: browser_check (loading)
@@ -1261,6 +1267,18 @@ export default function StepSystemCheck({
               </div>
             )}
 
+            {blockedBrowserName && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+                <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-amber-900">{blockedBrowserName} is not a compatible browser</p>
+                  <p className="text-sm text-amber-800 mt-1">
+                    Use Chrome, Edge, or Safari to continue the interview. You cannot proceed while this interview is opened in {blockedBrowserName}.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Device Type card */}
             <div className="bg-white border border-gray-200 rounded-xl p-4">
               <div className="flex items-center gap-3 mb-3">
@@ -1341,6 +1359,14 @@ export default function StepSystemCheck({
                     })}
                   </div>
                 </div>
+                {blockedBrowserName === 'Brave' && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-sm text-amber-800 font-medium">Brave browser is blocked for AI interviews.</p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Please open this interview link in Chrome, Edge, or Safari.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1392,7 +1418,12 @@ export default function StepSystemCheck({
             <button
               type="button"
               onClick={() => setPhase('system_checks')}
-              className="w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg hover:bg-gray-800 transition-all text-sm"
+              disabled={!deviceAllPass}
+              className={`w-full inline-flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-lg transition-all text-sm ${
+                deviceAllPass
+                  ? 'bg-gray-900 text-white hover:bg-gray-800'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
             >
               Continue to System Checks
               <ArrowRight className="w-4 h-4" />

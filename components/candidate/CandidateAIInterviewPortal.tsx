@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import type { CandidateInterviewInfo } from '@/lib/services/candidateAIInterviewService';
 import { InterviewUI } from '@/components/ai-interview/InterviewUI';
+import type { InterviewTimerSnapshot } from '@/components/ai-interview/InterviewUI';
 import { useInterviewFaceVerification } from '@/components/ai-interview/proctoring/InterviewFaceVerification';
 import { useInterviewVoiceVerification } from '@/components/ai-interview/proctoring/InterviewVoiceVerification';
 import { InterviewEventBus } from '@/components/ai-interview/proctoring/InterviewEventBus';
@@ -39,6 +40,19 @@ interface Props {
   token: string;
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 export function CandidateAIInterviewPortal({ token }: Props) {
   const [step, setStep] = useState<Step>('loading');
   const stepRef = useRef<Step>('loading');
@@ -63,11 +77,19 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
   // Fullscreen state — tracked during interview for exit-detection overlay
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
+  const [timerSnapshot, setTimerSnapshot] = useState<InterviewTimerSnapshot | null>(null);
+
+  // Identity photo blob — stored here so onRegisterFace can use it AFTER system-check
+  // face polling is stopped (avoids concurrent TF.js/WebGL calls that corrupt the backend).
+  const identityPhotoRef = useRef<Blob | null>(null);
 
   // Screen recording
   const screenRecorderRef = useRef<MediaRecorder | null>(null);
   const screenChunksRef = useRef<Blob[]>([]);
   const screenStreamRef = useRef<MediaStream | null>(null);
+  // Audio mixing for screen recording (tab audio + mic)
+  const recordingAudioCtxRef = useRef<AudioContext | null>(null);
+  const recordingMicStreamRef = useRef<MediaStream | null>(null);
 
   // Face & voice verification — callbacks emit events via InterviewEventBus
   const faceVerification = useInterviewFaceVerification({
@@ -269,6 +291,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         screenStreamRef.current?.getTracks().forEach(t => t.stop());
         screenStreamRef.current = null;
         screenRecorderRef.current = null;
+        recordingMicStreamRef.current?.getTracks().forEach(t => t.stop());
+        recordingMicStreamRef.current = null;
+        recordingAudioCtxRef.current?.close().catch(() => {});
+        recordingAudioCtxRef.current = null;
+        (window as any).__interviewRecordingDest = null;
       }
     };
 
@@ -279,6 +306,84 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       try { recorder.stop(); } catch { doUpload(); }
     }
   }, [token]);
+
+  // ========== RECORDING AUDIO HELPERS ==========
+
+  /**
+   * Mix Linda's voice (TalkingHead AudioContext tap) + candidate mic + optional tab audio
+   * into one audio track for the MediaRecorder.
+   *
+   * Linda's voice is captured by routing TalkingHead's audioReverbNode (and fallback
+   * BufferSources) to window.__interviewRecordingDest — a MediaStreamDestination created
+   * on the same AudioContext. TalkingHeadAvatar checks for this global when it builds
+   * its audio graph so no polling or retries are needed.
+   *
+   * Must be called AFTER window.__interviewAudioContext is created (in handleFullscreenReady)
+   * and BEFORE setStep('interview') so the dest is in place before TalkingHead mounts.
+   */
+  const buildRecordingStreamWithAudio = async (screenStream: MediaStream): Promise<MediaStream> => {
+    // Tear down mix context from a previous recording or re-share (keeps Linda's dest alive)
+    recordingMicStreamRef.current?.getTracks().forEach(t => t.stop());
+    recordingMicStreamRef.current = null;
+    recordingAudioCtxRef.current?.close().catch(() => {});
+    recordingAudioCtxRef.current = null;
+
+    try {
+      // ── 1. Linda's voice: tap the TalkingHead AudioContext at source ──
+      // Reuse across re-shares — TalkingHead's audioReverbNode stays connected to it.
+      if (!(window as any).__interviewRecordingDest) {
+        const ttsCtx = (window as any).__interviewAudioContext as AudioContext | null;
+        if (ttsCtx && ttsCtx.state !== 'closed') {
+          (window as any).__interviewRecordingDest = ttsCtx.createMediaStreamDestination();
+        }
+      }
+      const lindaDest: MediaStreamAudioDestinationNode | null =
+        (window as any).__interviewRecordingDest ?? null;
+
+      // ── 2. Mix: Linda + mic + tab audio → one track for MediaRecorder ──
+      const mixCtx = new AudioContext({ sampleRate: 48000 });
+      recordingAudioCtxRef.current = mixCtx;
+      const mixDest = mixCtx.createMediaStreamDestination();
+
+      // Linda's TTS voice (guaranteed path — no dependency on getDisplayMedia "Share audio")
+      if (lindaDest && lindaDest.stream.getAudioTracks().length > 0) {
+        mixCtx.createMediaStreamSource(lindaDest.stream).connect(mixDest);
+      }
+
+      // Tab audio (AI voice backup — only if user checked "Share audio" in screen picker)
+      if (screenStream.getAudioTracks().length > 0) {
+        mixCtx.createMediaStreamSource(
+          new MediaStream(screenStream.getAudioTracks()),
+        ).connect(mixDest);
+      }
+
+      // Candidate microphone
+      try {
+        const micStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false },
+        });
+        recordingMicStreamRef.current = micStream;
+        mixCtx.createMediaStreamSource(micStream).connect(mixDest);
+      } catch {
+        // Mic unavailable — record Linda's voice only
+      }
+
+      return new MediaStream([
+        ...screenStream.getVideoTracks(),
+        ...mixDest.stream.getAudioTracks(),
+      ]);
+    } catch {
+      // AudioContext not supported — fall back to screen-only stream (no audio)
+      return screenStream;
+    }
+  };
+
+  /** Preferred audio-aware mimeTypes — vp9/vp8 + opus gives the best results in Chrome/Edge. */
+  const SCREEN_MIME_TYPES = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
 
   // ========== HANDLERS ==========
 
@@ -315,15 +420,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       setInterview(result);
       // Mark this browser session as OTP-authenticated so re-opens don't need re-auth
       sessionStorage.setItem(SESSION_AUTH_KEY, '1');
-      // Register face baseline from the verified identity photo before entering system
-      // check so later face-api/TensorFlow work does not race with the environment scan.
+      // Store the identity photo so onRegisterFace can use it after system-check face
+      // polling is fully stopped — registering here concurrently with StepSystemCheck's
+      // face-api.js polling corrupts the shared TF.js WebGL backend.
       if (data.photo) {
-        try {
-          await faceVerification.registerFaceFromBlob(data.photo);
-        } catch {
-          // Non-blocking fallback: system check can still register from live video.
-        }
+        identityPhotoRef.current = data.photo;
       }
+
+      // Advance immediately once backend identity verification succeeds.
       setStep('system_check');
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || 'Failed to verify identity. Please try again.');
@@ -413,12 +517,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     try {
       const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
         video: { frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
+        audio: true, // capture tab audio (AI TTS voice); user sees "Share audio" checkbox in picker
       });
       screenStreamRef.current = screenStream;
-      const screenMime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+      // Build a combined stream: screen video + mixed audio (tab + mic)
+      const recordingStream = await buildRecordingStreamWithAudio(screenStream);
+      const screenMime = SCREEN_MIME_TYPES
         .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
-      const sr = new MediaRecorder(screenStream, {
+      const sr = new MediaRecorder(recordingStream, {
         ...(screenMime ? { mimeType: screenMime } : {}),
         videoBitsPerSecond: 300_000, // 300 Kbps — sufficient for screen capture
       });
@@ -769,12 +875,13 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       try {
         const screenStream = await (navigator.mediaDevices as any).getDisplayMedia({
           video: { frameRate: 15, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
+          audio: true,
         });
         screenStreamRef.current = screenStream;
-        const screenMime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+        const recordingStream = await buildRecordingStreamWithAudio(screenStream);
+        const screenMime = SCREEN_MIME_TYPES
           .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
-        const sr = new MediaRecorder(screenStream, {
+        const sr = new MediaRecorder(recordingStream, {
           ...(screenMime ? { mimeType: screenMime } : {}),
           videoBitsPerSecond: 300_000,
         });
@@ -829,6 +936,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           faceVerification={faceVerification.hasBaseline() ? faceVerification : undefined}
           voiceVerification={voiceVerification.hasBaseline() ? voiceVerification : undefined}
           copyPasteBlocking={interview?.copy_paste_blocking ?? true}
+          onTimerChange={setTimerSnapshot}
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
@@ -867,9 +975,23 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             <div className="bg-white border-2 border-yellow-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
-              <p className="text-gray-600 mb-6 text-sm">
+              <p className="text-gray-600 mb-4 text-sm">
                 Please return to fullscreen mode to continue your AI interview.
               </p>
+
+              {/* Timer display */}
+              {timerSnapshot && (
+                <div className="mb-6">
+                  <div className="flex flex-col items-center gap-1 rounded-xl bg-gray-50 border border-gray-200 px-3 py-3">
+                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Interview Time</span>
+                    <span className={`font-mono font-bold text-xl tabular-nums ${timerSnapshot.remainingSeconds <= 60 ? 'text-red-500' : 'text-gray-900'}`}>
+                      {formatTime(timerSnapshot.remainingSeconds)}
+                    </span>
+                    <span className="text-[9px] text-gray-400 font-medium">remaining</span>
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={() => requestFullscreen().catch(() => {})}
                 className="w-full px-6 py-3 bg-yellow-500 hover:bg-yellow-600 rounded-xl font-bold text-white transition-colors"
@@ -1017,8 +1139,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           position={interview.position}
           onAllPassed={handleSystemCheckPassed}
           onRegisterFace={async (video) => {
-            // Only register from live video if no baseline was set from the identity photo.
-            // This covers the reauth case (browser was closed — identity photo is gone).
+            // Prefer the identity photo blob (better quality than live video).
+            // Called here — after StepSystemCheck stops all face polling — so there
+            // is no concurrent TF.js/WebGL call that could corrupt the backend.
+            if (identityPhotoRef.current && !faceVerification.hasBaseline()) {
+              const ok = await withTimeout(faceVerification.registerFaceFromBlob(identityPhotoRef.current), 5000);
+              if (ok) return true;
+              // Blob registration failed — fall through to live video.
+            }
             if (faceVerification.hasBaseline()) return true;
             return faceVerification.registerFace(video);
           }}

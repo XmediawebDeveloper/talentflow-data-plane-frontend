@@ -120,6 +120,15 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     const faceapi = faceApiRef.current;
     if (!faceapi) return false;
 
+    // Wait for any in-flight TF.js detection to finish, then claim the lock.
+    // Concurrent WebGL calls corrupt the shared TF.js backend (tensor.backend → undefined → moveData crash).
+    const deadline = Date.now() + 3000;
+    while (isDetectingRef.current && Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 50));
+    }
+    if (isDetectingRef.current) return false; // still busy after timeout — skip
+
+    isDetectingRef.current = true; // claim lock so extractDescriptor/startVerification waits
     try {
       const url = URL.createObjectURL(blob);
       const img = new Image();
@@ -147,6 +156,8 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     } catch (err) {
       console.error('[FaceVerification] registerFaceFromBlob failed:', err);
       return false;
+    } finally {
+      isDetectingRef.current = false; // release lock
     }
   }, [loadModels]);
 
@@ -245,20 +256,26 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
     if (!faceapi) return;
 
     verificationIntervalRef.current = setInterval(async () => {
-      const descriptor = await extractDescriptor();
-      if (!descriptor || !baselineDescriptorRef.current) return;
+      try {
+        const descriptor = await extractDescriptor();
+        if (!descriptor || !baselineDescriptorRef.current) return;
 
-      const distance = faceapi.euclideanDistance(
-        Array.from(baselineDescriptorRef.current),
-        Array.from(descriptor),
-      );
+        const distance = faceapi.euclideanDistance(
+          Array.from(baselineDescriptorRef.current),
+          Array.from(descriptor),
+        );
 
-      if (distance > IDENTITY_CHANGED_THRESHOLD) {
-        console.warn(`[FaceVerification] IDENTITY CHANGED — distance: ${distance.toFixed(3)}`);
-        callbacks?.onFaceIdentityChanged?.(distance);
-      } else if (distance > MISMATCH_THRESHOLD) {
-        console.warn(`[FaceVerification] MISMATCH — distance: ${distance.toFixed(3)}`);
-        callbacks?.onFaceMismatch?.(distance);
+        if (distance > IDENTITY_CHANGED_THRESHOLD) {
+          console.warn(`[FaceVerification] IDENTITY CHANGED — distance: ${distance.toFixed(3)}`);
+          callbacks?.onFaceIdentityChanged?.(distance);
+        } else if (distance > MISMATCH_THRESHOLD) {
+          console.warn(`[FaceVerification] MISMATCH — distance: ${distance.toFixed(3)}`);
+          callbacks?.onFaceMismatch?.(distance);
+        }
+      } catch (err) {
+        // Swallow TF.js backend errors (tensor disposal, WebGL context loss) so
+        // a single bad frame does not halt continuous verification.
+        console.warn('[FaceVerification] Verification frame skipped:', err);
       }
     }, VERIFICATION_INTERVAL_MS);
 

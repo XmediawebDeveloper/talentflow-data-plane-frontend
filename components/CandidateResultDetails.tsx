@@ -93,6 +93,19 @@ function getCandidateCodingOutput(q: QuestionEvaluation) {
     return q.candidate_code_execution_output;
   }
 
+  const visibleJudgedDetail = q.candidate_test_results?.details?.find(detail =>
+    !detail.is_hidden && (
+      (detail.error && detail.error.trim()) ||
+      (detail.actual_output && detail.actual_output.trim())
+    )
+  );
+  if (visibleJudgedDetail?.error?.trim()) {
+    return visibleJudgedDetail.error;
+  }
+  if (visibleJudgedDetail?.actual_output?.trim()) {
+    return visibleJudgedDetail.actual_output;
+  }
+
   if (q.candidate_code_execution_status === 'success') {
     return 'Executed successfully without output.';
   }

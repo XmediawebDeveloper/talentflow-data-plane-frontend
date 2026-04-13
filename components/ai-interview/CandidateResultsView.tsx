@@ -78,6 +78,7 @@ const EVENT_CONFIG: Record<string, { label: string; icon: React.ReactNode; color
   face_identity_changed:    { label: 'Identity Changed',     icon: <UserX className="w-4 h-4" />,         color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
   voice_mismatch:           { label: 'Voice Mismatch',       icon: <Mic className="w-4 h-4" />,           color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' },
   voice_identity_changed:   { label: 'Voice ID Changed',     icon: <Mic className="w-4 h-4" />,           color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
+  screen_share_stopped:     { label: 'Screen Share Stopped', icon: <Monitor className="w-4 h-4" />,       color: 'text-red-700',    bg: 'bg-red-50',    border: 'border-red-200'    },
 };
 
 function formatTs(ts?: string) {
@@ -235,12 +236,22 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const [identityPhotoUrl, setIdentityPhotoUrl] = useState<string | null>(null);
   const [identityPhotoError, setIdentityPhotoError] = useState(false);
 
-  // Fetch recording with auth headers and create blob URL
+  // liveSession must be declared before any useEffect that references it in its
+  // dependency array, because dependency arrays are evaluated immediately during render.
+  const [liveSession, setLiveSession] = useState(interview);
+  const [liveWsConnected, setLiveWsConnected] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  useEffect(() => { setLiveSession(interview); }, [interview]);
+
+  // Fetch recording with auth headers and create blob URL.
+  // Uses liveSession (not the initial interview prop) so that when evaluation_ready
+  // fires and liveSession is refreshed via REST, a newly-uploaded recording_file_path
+  // triggers this effect and the video becomes playable without a manual page reload.
   useEffect(() => {
-    if (activeTab !== 'recording' || !interview.recording_file_path || videoBlobUrl) return;
+    if (activeTab !== 'recording' || !liveSession.recording_file_path || videoBlobUrl) return;
     let cancelled = false;
     setVideoLoading(true);
-    api.get(`/ai-interview/${interview.id}/recording`, { responseType: 'blob' })
+    api.get(`/ai-interview/${liveSession.id}/recording`, { responseType: 'blob' })
       .then((res) => {
         if (cancelled) return;
         const url = URL.createObjectURL(res.data);
@@ -253,14 +264,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
         if (!cancelled) setVideoLoading(false);
       });
     return () => { cancelled = true; };
-  }, [activeTab, interview.recording_file_path, interview.id, videoBlobUrl]);
+  }, [activeTab, liveSession.recording_file_path, liveSession.id, videoBlobUrl]);
 
   // Fetch screen recording when recording tab is active
   useEffect(() => {
-    if (activeTab !== 'recording' || !interview.screen_recording_file_path || screenBlobUrl || screenError) return;
+    if (activeTab !== 'recording' || !liveSession.screen_recording_file_path || screenBlobUrl || screenError) return;
     let cancelled = false;
     setScreenLoading(true);
-    api.get(`/ai-interview/${interview.id}/screen-recording`, { responseType: 'blob' })
+    api.get(`/ai-interview/${liveSession.id}/screen-recording`, { responseType: 'blob' })
       .then((res) => {
         if (cancelled) return;
         setScreenBlobUrl(URL.createObjectURL(res.data));
@@ -268,7 +279,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
       .catch(() => { if (!cancelled) setScreenError(true); })
       .finally(() => { if (!cancelled) setScreenLoading(false); });
     return () => { cancelled = true; };
-  }, [activeTab, interview.screen_recording_file_path, interview.id, screenBlobUrl, screenError]);
+  }, [activeTab, liveSession.screen_recording_file_path, liveSession.id, screenBlobUrl, screenError]);
 
   // Fetch identity photo if available
   useEffect(() => {
@@ -283,25 +294,23 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     return () => { cancelled = true; };
   }, [interview.identity_photo_path, interview.id, identityPhotoUrl, identityPhotoError]);
 
-  // Live skill coverage — WebSocket monitor for in_progress sessions
-  const [liveSession, setLiveSession] = useState(interview);
-  const [liveWsConnected, setLiveWsConnected] = useState(false);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  useEffect(() => { setLiveSession(interview); }, [interview]);
-
   // Live activity feed — tracks real-time skill coverage changes and question events
   type LiveEvent =
-    | { kind: 'question'; qNum: number; isFollowUp: boolean; ts: number }
-    | { kind: 'covered'; skill: string; ts: number; qNum?: number }
-    | { kind: 'medium'; skill: string; ts: number; qNum?: number }
-    | { kind: 'low'; skill: string; ts: number; qNum?: number };
+    | { kind: 'question';  qNum: number; isFollowUp: boolean; ts: number }
+    // Direct skill→question assignment from question_timer_started.current_skill (ground truth)
+    | { kind: 'assigned';  skill: string; qNum: number; isFollowUp: boolean; ts: number }
+    | { kind: 'covered';   skill: string; ts: number; qNum?: number; isFollowUp?: boolean }
+    | { kind: 'medium';    skill: string; ts: number; qNum?: number; isFollowUp?: boolean }
+    | { kind: 'low';       skill: string; ts: number; qNum?: number; isFollowUp?: boolean };
   const [currentQuestion, setCurrentQuestion] = useState<{ qNum: number; isFollowUp: boolean } | null>(null);
+  // Ref mirrors currentQuestion for synchronous access inside WebSocket closure
+  const currentQuestionRef = useRef<{ qNum: number; isFollowUp: boolean } | null>(null);
   const prevScRef = useRef<typeof liveSession.skill_coverage | null>(null);
   // Ratchet: tracks the best (highest) skill level ever seen across all rounds (MTH → NTH).
   // Prevents skills from appearing as "Not Covered" when the backend resets sc for the next round.
   // Seeded from interview.skill_coverage (DB value) so it works even when the page is opened
   // mid-interview (e.g. after MTH round ends, before any WS message is received for MTH skills).
-  const skillLevelRatchetRef = useRef<Record<string, 'covered' | 'medium' | 'low'>>((() => {
+  const skillLevelRatchetRef = useRef<Record<string, 'covered' | 'medium' | 'low' | 'skipped'>>((() => {
     const r: Record<string, 'covered' | 'medium' | 'low'> = {};
     const sc = interview.skill_coverage;
     if (sc) {
@@ -389,10 +398,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             // Update skill level ratchet — never downgrade a skill's best-seen level
             {
               const ratchet = skillLevelRatchetRef.current;
-              const pr: Record<string, number> = { covered: 3, medium: 2, low: 1 };
+              const pr: Record<string, number> = { covered: 3, medium: 2, low: 1, skipped: 1 };
               for (const s of msg.covered || [])        { const k = s.toLowerCase(); if (!(k in ratchet) || pr[ratchet[k]] < 3) ratchet[k] = 'covered'; }
               for (const s of msg.medium_covered || []) { const k = s.toLowerCase(); if (!(k in ratchet) || pr[ratchet[k]] < 2) ratchet[k] = 'medium'; }
               for (const s of msg.low_covered || [])    { const k = s.toLowerCase(); if (!(k in ratchet) || pr[ratchet[k]] < 1) ratchet[k] = 'low'; }
+              for (const s of msg.skipped || [])        { const k = s.toLowerCase(); if (!(k in ratchet)) ratchet[k] = 'skipped'; }
             }
 
             const prev = prevScRef.current;
@@ -404,23 +414,28 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               const wasCovered   = new Set<string>((prev.covered        || []).map((s: string) => s.toLowerCase()));
               const wasMedium    = new Set<string>((prev.medium_covered || []).map((s: string) => s.toLowerCase()));
               const wasLow       = new Set<string>((prev.low_covered    || []).map((s: string) => s.toLowerCase()));
+              const wasSkipped   = new Set<string>(((prev as any).skipped || []).map((s: string) => s.toLowerCase()));
 
               const newEvents: LiveEvent[] = [];
               const ts = Date.now();
               // Stamp the current question number from msg.questions_asked so we can
-              // reliably map each skill to the exact question that covered it, without
-              // relying on timestamp ordering (which breaks when question_timer_started
-              // fires before the skill_coverage_update for the same answer).
+              // reliably map each skill to the exact question that covered it.
               const evQNum: number | undefined = msg.questions_asked || undefined;
+              // Stamp isFollowUp from the ref (synchronously up-to-date) rather than
+              // looking it up later from qFollowUpMap, which gets overwritten when a
+              // follow-up fires for the same qNum as the main question.
+              const evIsFollowUp: boolean = currentQuestionRef.current?.isFollowUp ?? false;
               // Newly strongly covered
-              for (const s of msg.covered    || []) if (!wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'covered', skill: s, ts, qNum: evQNum });
+              for (const s of msg.covered    || []) if (!wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'covered', skill: s, ts, qNum: evQNum, isFollowUp: evIsFollowUp });
               // Newly medium covered (wasn't medium or covered before)
-              for (const s of msg.medium_covered || []) if (!wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'medium', skill: s, ts, qNum: evQNum });
+              for (const s of msg.medium_covered || []) if (!wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'medium', skill: s, ts, qNum: evQNum, isFollowUp: evIsFollowUp });
               // Newly low covered (wasn't touched before)
-              for (const s of msg.low_covered || []) if (!wasLow.has(s.toLowerCase()) && !wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'low', skill: s, ts, qNum: evQNum });
+              for (const s of msg.low_covered || []) if (!wasLow.has(s.toLowerCase()) && !wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'low', skill: s, ts, qNum: evQNum, isFollowUp: evIsFollowUp });
+              // Newly skipped (IDK / silence — counts as low coverage, no follow-up)
+              for (const s of msg.skipped || []) if (!wasSkipped.has(s.toLowerCase()) && !wasLow.has(s.toLowerCase()) && !wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'low', skill: s, ts, qNum: evQNum, isFollowUp: evIsFollowUp });
 
               if (newEvents.length > 0) {
-                setLiveEvents(prev => [...newEvents, ...prev].slice(0, 20));
+                setLiveEvents(prev => [...newEvents, ...prev].slice(0, 50));
                 pendingEventsRef.current.push(...newEvents);
                 scheduleFlush(liveSession.id);
               }
@@ -430,16 +445,38 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
           } else if (msg.type === 'question_timer_started') {
             const qNum = msg.question_number ?? 0;
             const isFollowUp = !!msg.is_follow_up;
+            currentQuestionRef.current = { qNum, isFollowUp };
             setCurrentQuestion({ qNum, isFollowUp });
             const qEvent: LiveEvent = { kind: 'question' as const, qNum, isFollowUp, ts: Date.now() };
-            setLiveEvents(prev => [qEvent, ...prev].slice(0, 20));
-            pendingEventsRef.current.push(qEvent);
+            const newTimerEvts: LiveEvent[] = [qEvent];
+            // If backend says which skill is being asked, stamp it directly (ground-truth mapping)
+            if (msg.current_skill) {
+              const assignEv: LiveEvent = {
+                kind: 'assigned' as const,
+                skill: (msg.current_skill as string).toLowerCase(),
+                qNum,
+                isFollowUp,
+                ts: Date.now(),
+              };
+              newTimerEvts.push(assignEv);
+            }
+            setLiveEvents(prev => [...newTimerEvts, ...prev].slice(0, 50));
+            pendingEventsRef.current.push(...newTimerEvts);
             scheduleFlush(liveSession.id);
           } else if (msg.type === 'interview_closing' || msg.type === 'interview_complete' || msg.type === 'interview_ended') {
             // Flush any pending events before fetching final state
             if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
             flushEvents(liveSession.id);
-            // Interview finished — refresh from REST to get final ai_evaluation
+            // Interview finished — refresh from REST to update status display.
+            // NOTE: ai_evaluation may not be saved yet (backend saves after this event).
+            // The evaluation_ready event below triggers the definitive refresh once saved.
+            aiInterviewService.get(liveSession.id)
+              .then(updated => setLiveSession(updated))
+              .catch(() => {});
+          } else if (msg.type === 'evaluation_ready') {
+            // Backend has finished saving ai_evaluation to DB — fetch the complete data.
+            // This fires AFTER _save_interview_results() completes, so the REST response
+            // will contain the full evaluation (unlike the earlier interview_ended refresh).
             aiInterviewService.get(liveSession.id)
               .then(updated => setLiveSession(updated))
               .catch(() => {});
@@ -567,11 +604,23 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   // which is generated only for flexible mode interviews (AC — Mode Indicator).
   const isFlexibleMode = !!eval_.capability_score_reasoning;
 
-  // Convert raw 1-5 evaluator score → 0-100 performance percentage for display
+  // Build round performance data for display (0-100 scale)
+  // Prefer section_scores (cluster-weighted, already 0-100) over legacy round_scores (1-5 scale)
   const roundScores: { name: string; score: number; percentage: number; weight: number }[] = useMemo(() => {
+    if (eval_.section_scores && Object.keys(eval_.section_scores).length > 0) {
+      return Object.entries(eval_.section_scores).map(([cat, s]: [string, any]) => {
+        const pct = Math.round(s.score ?? 0);
+        return {
+          name: s.section_name || cat.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+          score: s.score ?? 0,
+          percentage: pct,
+          weight: s.section_pct ?? 0,
+        };
+      });
+    }
+    // Fallback: legacy round_scores on 1-5 scale
     return (eval_.round_scores || []).map((r: any) => {
       const raw = r.score ?? 0;
-      // raw is on 1-5 scale; convert to 0-100
       const pct = raw > 0 ? Math.round((raw / 5) * 100) : 0;
       return {
         name: r.type?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'Unknown',
@@ -580,7 +629,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
         weight: r.percentage ?? 0,
       };
     });
-  }, [eval_.round_scores]);
+  }, [eval_.round_scores, eval_.section_scores]);
 
   const sentimentTimeline: any[] = useMemo(() => {
     return (eval_.sentiment_timeline || []).map((t: any) => ({
@@ -643,10 +692,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     return `${mins} min`;
   };
 
-  // Proctoring violations from the interview object
+  // Proctoring violations — use liveSession so real-time flushed violations
+  // and the final post-completion refresh both populate this list.
   const violations: ViolationRecord[] = useMemo(
-    () => interview.proctoring_violations ?? [],
-    [interview],
+    () => liveSession.proctoring_violations ?? [],
+    [liveSession],
   );
   const totalViolations = violations.length;
 
@@ -840,13 +890,6 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
           <div className="p-6">
             {/* Skill Coverage Tab */}
             {activeTab === 'skill_coverage' && (() => {
-              // questions_asked: use the transcript as the source of truth.
-              // The backend's skill_coverage.questions_asked can be 0 (stale initial state).
-              // Count assistant messages from the transcript — each is a question Linda asked.
-              const transcriptQCount = (liveSession.conversation_transcript ?? [])
-                .filter((t: any) => (t.role === 'assistant' || t.speaker === 'linda') && t.content?.trim())
-                .length;
-
               // Derive skill coverage from ai_evaluation.skill_coverage_map when:
               //   a) live field is absent, OR
               //   b) live field has questions_asked=0 (stale initial state) on a completed session
@@ -857,11 +900,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     return {
                       covered:             allSkills.filter(s => rawMap[s] === 'covered'),
                       medium_covered:      allSkills.filter(s => rawMap[s] === 'medium'),
-                      low_covered:         allSkills.filter(s => rawMap[s] === 'low'),
+                      low_covered:         allSkills.filter(s => rawMap[s] === 'low' || rawMap[s] === 'skipped'),
                       uncovered:           allSkills.filter(s => !rawMap[s] || rawMap[s] === 'not_started'),
                       nice_to_have_skills: (eval_.nice_to_have_skills as string[] | undefined) || [],
                       total_questions:     (eval_.total_questions as number | undefined) || liveSession.total_questions || 0,
-                      questions_asked:     transcriptQCount,
+                      questions_asked:     (liveSession.skill_coverage as any)?.questions_asked || (eval_.questions_asked as number | undefined) || 0,
                       hr_topics:           (eval_.hr_topics as Record<string, string> | undefined) || undefined,
                       round_name:          undefined as string | undefined,
                     };
@@ -898,11 +941,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   }
                 : null;
 
-              // Always patch questions_asked from transcript when we have transcript data
               const scBase = rawSc || initialFromClusters;
-              const sc = scBase && transcriptQCount > 0
-                ? { ...scBase, questions_asked: transcriptQCount }
-                : scBase;
+              const sc = scBase;
               const allSkills = [
                 ...(sc?.covered || []),
                 ...(sc?.medium_covered || []),
@@ -963,7 +1003,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       )}
                       {sc && (
                         <span className="text-sm text-gray-500">
-                          <span className="font-semibold text-gray-800">{sc.questions_asked}</span> / {sc.total_questions} questions asked
+                          <span className="font-semibold text-gray-800">
+                            {/* During live interview, show max of answered count and current Q number
+                                so the display updates immediately when a new question starts,
+                                not only after the candidate's answer is evaluated. */}
+                            {isInProgress && currentQuestion
+                              ? Math.max(sc.questions_asked || 0, currentQuestion.qNum)
+                              : (sc.questions_asked || 0)}
+                          </span> / {sc.total_questions} questions asked
                         </span>
                       )}
                     </div>
@@ -1043,11 +1090,13 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     // the interview transitions to the NTH round.
                     if (isInProgress) {
                       const ratchet = skillLevelRatchetRef.current;
-                      const pr: Record<string, number> = { covered: 3, medium: 2, low: 1, uncovered: 0 };
+                      const pr: Record<string, number> = { covered: 3, medium: 2, low: 1, skipped: 1, uncovered: 0 };
                       for (const [k, bestLevel] of Object.entries(ratchet)) {
                         const cur = skillLevel[k];
+                        // Map 'skipped' to 'low' for display purposes (both = low coverage tier)
+                        const displayLevel = bestLevel === 'skipped' ? 'low' : bestLevel;
                         if (!cur || (pr[cur] ?? 0) < pr[bestLevel]) {
-                          skillLevel[k] = bestLevel;
+                          skillLevel[k] = displayLevel;
                         }
                       }
                     }
@@ -1060,58 +1109,77 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     };
 
                     // Build skill → question-number mapping from coverage_events.
-                    // Strategy A (new events): skill events carry qNum directly — use it.
-                    // Strategy B (old events, no qNum): fall back to timestamp ordering
-                    //   but shift skill events to the PREVIOUS question event, because
-                    //   skill_coverage_update fires AFTER question_timer_started for the
-                    //   next question (so timestamp order would map skills to wrong Q).
+                    //
+                    // Strategy A+ (newest): 'assigned' events from question_timer_started.current_skill
+                    //   — ground truth: backend explicitly says which skill Linda is asking.
+                    //   isFollowUp is stamped directly at event creation.
+                    // Strategy A  (intermediate): coverage events with qNum stamped at creation,
+                    //   and isFollowUp stamped from currentQuestionRef (no assigned events present).
+                    // Strategy B  (legacy): timestamp ordering (no qNum stamps at all).
                     const skillToQuestions: Record<string, Array<{qNum: number; isFollowUp: boolean}>> = {};
                     if (liveEvents.length > 0) {
-                      // Build qNum→isFollowUp from question events for reference
-                      const qFollowUpMap: Record<number, boolean> = {};
-                      for (const ev of liveEvents) {
-                        if (ev.kind === 'question') qFollowUpMap[ev.qNum] = ev.isFollowUp;
-                      }
+                      // Strategy A+: 'assigned' events (question_timer_started.current_skill)
+                      const hasAssignedEvents = liveEvents.some(ev => ev.kind === 'assigned');
 
-                      // Check if any skill event already has qNum stamped (new format)
+                      // Strategy A: coverage events with qNum stamped at creation time
                       const hasStampedQNum = liveEvents.some(
-                        ev => ev.kind !== 'question' && (ev as any).qNum != null
+                        ev => (ev.kind === 'covered' || ev.kind === 'medium' || ev.kind === 'low') && ev.qNum != null
                       );
 
-                      if (hasStampedQNum) {
-                        // Strategy A: use qNum directly from each skill event
+                      if (hasAssignedEvents) {
+                        // Primary: use assigned events (exact skill Linda was targeting each Q)
+                        for (const ev of liveEvents) {
+                          if (ev.kind === 'assigned') {
+                            const key = ev.skill;  // already lowercased at creation
+                            if (!skillToQuestions[key]) skillToQuestions[key] = [];
+                            // Each {qNum, isFollowUp} combo is a distinct entry
+                            if (!skillToQuestions[key].some(q => q.qNum === ev.qNum && q.isFollowUp === ev.isFollowUp)) {
+                              skillToQuestions[key].push({ qNum: ev.qNum, isFollowUp: ev.isFollowUp });
+                            }
+                          }
+                        }
+                        // Supplemental: coverage events for skills not captured by assigned
+                        // (e.g. second skill in a combined question that evaluator detected)
                         for (const ev of liveEvents) {
                           if ((ev.kind === 'covered' || ev.kind === 'medium' || ev.kind === 'low') && ev.qNum) {
                             const key = ev.skill.toLowerCase();
                             const qNum = ev.qNum;
-                            const isFollowUp = qFollowUpMap[qNum] ?? false;
+                            // Only add if this qNum isn't already recorded for this skill via assigned
+                            if (!skillToQuestions[key]?.some(q => q.qNum === qNum)) {
+                              const isFollowUp = ev.isFollowUp ?? false;
+                              if (!skillToQuestions[key]) skillToQuestions[key] = [];
+                              skillToQuestions[key].push({ qNum, isFollowUp });
+                            }
+                          }
+                        }
+                        for (const key of Object.keys(skillToQuestions)) {
+                          skillToQuestions[key].sort((a, b) => a.qNum - b.qNum);
+                        }
+                      } else if (hasStampedQNum) {
+                        // Strategy A: use qNum + isFollowUp stamped directly on each skill event
+                        for (const ev of liveEvents) {
+                          if ((ev.kind === 'covered' || ev.kind === 'medium' || ev.kind === 'low') && ev.qNum) {
+                            const key = ev.skill.toLowerCase();
+                            const qNum = ev.qNum;
+                            // isFollowUp was stamped at event creation — trust it directly
+                            const isFollowUp = ev.isFollowUp ?? false;
                             if (!skillToQuestions[key]) skillToQuestions[key] = [];
                             if (!skillToQuestions[key].some(q => q.qNum === qNum)) {
                               skillToQuestions[key].push({ qNum, isFollowUp });
                             }
                           }
                         }
-                        // Sort each skill's question list ascending
                         for (const key of Object.keys(skillToQuestions)) {
                           skillToQuestions[key].sort((a, b) => a.qNum - b.qNum);
                         }
                       } else {
-                        // Strategy B: timestamp ordering, but pair each skill batch with
-                        // the question event that PRECEDES the NEXT question event
-                        // (skill update fires after candidate answers, before next Q starts —
-                        // but in practice backend sends question_timer_started first, so
-                        // we look for the previous question, not the next one).
+                        // Strategy B: legacy — timestamp ordering, pair each skill with the
+                        // question event that immediately precedes it.
                         const sorted = [...liveEvents].sort((a, b) => a.ts - b.ts);
-                        // Collect question timestamps
                         const qEvents = sorted.filter(e => e.kind === 'question') as Array<{ kind: 'question'; qNum: number; isFollowUp: boolean; ts: number }>;
                         for (const ev of sorted) {
                           if (ev.kind === 'covered' || ev.kind === 'medium' || ev.kind === 'low') {
-                            // Find the closest question event whose ts <= ev.ts
-                            // If none found (skill fires before first Q), try the first Q
-                            let matched = qEvents.filter(q => q.ts <= ev.ts).pop()
-                              ?? qEvents[0] ?? null;
-                            // If skill fires after the last Q event but belongs to that Q's answer,
-                            // matched is already the last Q — which is correct.
+                            let matched = qEvents.filter(q => q.ts <= ev.ts).pop() ?? qEvents[0] ?? null;
                             if (matched) {
                               const key = ev.skill.toLowerCase();
                               if (!skillToQuestions[key]) skillToQuestions[key] = [];
@@ -1200,6 +1268,16 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                       const isCurrent = isInProgress && (currentlyAskedSkillSet.has(name.toLowerCase()) || fallbackTarget === name.toLowerCase());
                                       const qs = skillToQuestions[name.toLowerCase()] || [];
                                       const isExpanded = expandedSkills.has(name);
+
+                                      // Split into main questions and follow-ups for separate counts
+                                      const mainQs = qs.filter(q => !q.isFollowUp);
+                                      const fuQs   = qs.filter(q => q.isFollowUp);
+
+                                      // Collapsed button label: "Q3" or "Q3, Q5" + "+2 FU" separately
+                                      const mainLabel = mainQs.length > 0
+                                        ? mainQs.map(q => `Q${q.qNum}`).join(', ')
+                                        : null;
+
                                       return (
                                         <div key={name} className={`rounded-lg border transition-colors duration-300 ${isCurrent ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300' : 'border-gray-100 hover:border-gray-200'}`}>
                                           {/* Header row */}
@@ -1213,17 +1291,26 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border flex-shrink-0 ${cfg.chip}`}>
                                               {cfg.label}
                                             </span>
-                                            {/* Question toggle button */}
-                                            {qs.length > 0 ? (
+                                            {/* Question badges — main Q in blue, follow-up in violet */}
+                                            {qs.length > 0 && (
                                               <button
                                                 onClick={() => toggleSkill(name)}
-                                                className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0 transition-colors"
+                                                className="flex items-center gap-1 flex-shrink-0"
                                                 title="Show questions asked for this skill"
                                               >
-                                                Q{qs[0].qNum}{qs.length > 1 ? ` +${qs.length - 1}` : ''}
-                                                <ChevronDown className={`w-2.5 h-2.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                                {mainQs.map(q => (
+                                                  <span key={q.qNum} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                                                    Q{q.qNum}
+                                                  </span>
+                                                ))}
+                                                {fuQs.map(q => (
+                                                  <span key={`fu-${q.qNum}`} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
+                                                    Q{q.qNum} ↩
+                                                  </span>
+                                                ))}
+                                                <ChevronDown className={`w-2.5 h-2.5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                               </button>
-                                            ) : null}
+                                            )}
                                           </div>
                                           {/* Progress bar */}
                                           <div className="px-2 pb-1.5">
@@ -1231,21 +1318,28 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                               <div className={`h-1.5 rounded-full transition-[width] duration-700 ease-out ${cfg.bar}`} style={{ width: `${cfg.pct}%` }} />
                                             </div>
                                           </div>
-                                          {/* Expanded: question chips */}
+                                          {/* Expanded: all Qs in order — main (blue) and follow-ups (violet) */}
                                           {isExpanded && qs.length > 0 && (
-                                            <div className="px-2 pb-2 flex flex-wrap gap-1 border-t border-gray-100 pt-1.5">
-                                              {qs.map(q => (
-                                                <span
-                                                  key={`${q.qNum}-${q.isFollowUp}`}
-                                                  className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                                                    q.isFollowUp
-                                                      ? 'bg-violet-50 text-violet-700 border-violet-200'
-                                                      : 'bg-blue-50 text-blue-700 border-blue-200'
-                                                  }`}
-                                                >
-                                                  Q{q.qNum}{q.isFollowUp ? ' · follow-up' : ''}
-                                                </span>
-                                              ))}
+                                            <div className="px-2 pb-2 border-t border-gray-100 pt-1.5">
+                                              <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span className="text-[9px] text-gray-400 font-medium flex-shrink-0">Asked at:</span>
+                                                {[...qs].sort((a, b) => a.qNum - b.qNum).map(q => (
+                                                  <span
+                                                    key={`${q.qNum}-${q.isFollowUp}`}
+                                                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                                                      q.isFollowUp
+                                                        ? 'bg-violet-50 text-violet-700 border-violet-200'
+                                                        : 'bg-blue-50 text-blue-700 border-blue-200'
+                                                    }`}
+                                                    title={q.isFollowUp ? `Q${q.qNum} — follow-up question` : `Q${q.qNum} — main question`}
+                                                  >
+                                                    Q{q.qNum}{q.isFollowUp ? ' ↩' : ''}
+                                                  </span>
+                                                ))}
+                                              </div>
+                                              {fuQs.length > 0 && (
+                                                <p className="text-[9px] text-violet-500 mt-1">↩ = follow-up question</p>
+                                              )}
                                             </div>
                                           )}
                                         </div>
@@ -1287,10 +1381,20 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                     {qs.length > 0 && (
                                       <button
                                         onClick={() => toggleSkill(skill)}
-                                        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-100 hover:bg-gray-200 text-gray-600 flex-shrink-0 transition-colors"
+                                        className="flex items-center gap-1 flex-shrink-0"
+                                        title="Show questions asked for this skill"
                                       >
-                                        Q{qs[0].qNum}{qs.length > 1 ? ` +${qs.length - 1}` : ''}
-                                        <ChevronDown className={`w-2.5 h-2.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                        {qs.filter(q => !q.isFollowUp).map(q => (
+                                          <span key={q.qNum} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                                            Q{q.qNum}
+                                          </span>
+                                        ))}
+                                        {qs.filter(q => q.isFollowUp).map(q => (
+                                          <span key={`fu-${q.qNum}`} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
+                                            Q{q.qNum} ↩
+                                          </span>
+                                        ))}
+                                        <ChevronDown className={`w-2.5 h-2.5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                       </button>
                                     )}
                                   </div>
@@ -1300,12 +1404,15 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                     </div>
                                   </div>
                                   {isExpanded && qs.length > 0 && (
-                                    <div className="px-2 pb-2 flex flex-wrap gap-1 border-t border-gray-100 pt-1.5">
-                                      {qs.map(q => (
-                                        <span key={`${q.qNum}-${q.isFollowUp}`} className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${q.isFollowUp ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                          Q{q.qNum}{q.isFollowUp ? ' · follow-up' : ''}
-                                        </span>
-                                      ))}
+                                    <div className="px-2 pb-2 border-t border-gray-100 pt-1.5">
+                                      <div className="flex flex-wrap gap-1">
+                                        {[...qs].sort((a, b) => a.qNum - b.qNum).map(q => (
+                                          <span key={`${q.qNum}-${q.isFollowUp}`} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${q.isFollowUp ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                            Q{q.qNum}{q.isFollowUp ? ' ↩' : ''}
+                                          </span>
+                                        ))}
+                                      </div>
+                                      {qs.some(q => q.isFollowUp) && <p className="text-[9px] text-violet-500 mt-1">↩ = follow-up question</p>}
                                     </div>
                                   )}
                                 </div>
@@ -1779,9 +1886,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
                 const totalSkills = (sc?.covered.length ?? 0) + (sc?.medium_covered.length ?? 0) + (sc?.low_covered.length ?? 0) + (sc?.uncovered.length ?? 0);
                 const overallPct = totalSkills > 0 ? Math.round(((sc?.covered.length ?? 0) + (sc?.medium_covered.length ?? 0)) / totalSkills * 100) : 0;
-                const transcriptQCount = (liveSession.conversation_transcript ?? [])
-                  .filter((t: any) => (t.role === 'assistant' || t.speaker === 'linda') && t.content?.trim())
-                  .length;
+                const questionsAsked = sc?.questions_asked ?? 0;
 
                 return (
                   <div className="space-y-4">
@@ -1808,7 +1913,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     {/* Stats row */}
                     <div className="grid grid-cols-3 gap-3">
                       <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-                        <p className="text-2xl font-bold text-gray-900">{transcriptQCount}</p>
+                        <p className="text-2xl font-bold text-gray-900">{questionsAsked}</p>
                         <p className="text-xs text-gray-500 mt-0.5">Questions Asked</p>
                       </div>
                       <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
@@ -1932,7 +2037,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       </div>
                     )}
 
-                    <p className="text-xs text-gray-400 text-center">{transcriptQCount}/{sc?.total_questions ?? 0} questions asked · {overallPct}% overall skill coverage</p>
+                    <p className="text-xs text-gray-400 text-center">{questionsAsked}/{sc?.total_questions ?? 0} questions asked · {overallPct}% overall skill coverage</p>
                   </div>
                 );
               }
@@ -2104,11 +2209,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               })()
             )}
 
-            {/* Recording Tab */}
+            {/* Recording Tab — pass liveSession so hasFile reflects the latest
+                recording_file_path even when it was set after the initial prop fetch */}
             {activeTab === 'recording' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (
                 <RecordingTabContent
-                  interview={interview}
+                  interview={liveSession}
                   videoBlobUrl={videoBlobUrl}
                   videoLoading={videoLoading}
                   videoError={videoError}
@@ -2120,10 +2226,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               )
             )}
 
-            {/* Transcript Tab */}
+            {/* Transcript Tab — use liveSession so evaluation_ready refresh populates
+                the transcript even when the recruiter opened the view mid-interview */}
             {activeTab === 'transcript' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
-                const messages = (interview.conversation_transcript || [])
+                const messages = (liveSession.conversation_transcript || interview.conversation_transcript || [])
                   .filter((msg: any) => msg.role !== 'system' && msg.content?.trim());
 
                 if (messages.length === 0) return renderPlaceholder('No transcript available');
@@ -2163,6 +2270,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         const isAssistant = msg.role === 'assistant';
                         const ts = formatTs(msg.timestamp);
                         const content = msg.content as string;
+                        // AIU71: candidate-only metadata
+                        const rawContent: string | undefined = !isAssistant ? msg.raw_content : undefined;
+                        const questionId: string | undefined = !isAssistant ? msg.question_id : undefined;
+                        const language: string | undefined = !isAssistant ? msg.language : undefined;
+                        const hasCorrection = !isAssistant && rawContent && rawContent !== content;
 
                         return (
                           <div key={idx} className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'}`}>
@@ -2173,8 +2285,24 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               {isAssistant ? <Bot className="w-3.5 h-3.5" /> : candidateName[0].toUpperCase()}
                             </div>
 
-                            {/* Bubble */}
+                            {/* Bubble + metadata */}
                             <div className={`max-w-[75%] ${isAssistant ? '' : 'items-end flex flex-col'}`}>
+                              {/* AIU71: question-id + language badges for candidate turns */}
+                              {!isAssistant && (questionId || language) && (
+                                <div className="flex items-center gap-1.5 mb-1 flex-row-reverse">
+                                  {questionId && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 leading-none">
+                                      {questionId}
+                                    </span>
+                                  )}
+                                  {language && (
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 leading-none">
+                                      {language}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
                               <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
                                 isAssistant
                                   ? 'bg-gray-100 text-gray-800 rounded-tl-sm'
@@ -2182,6 +2310,15 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               }`}>
                                 {content}
                               </div>
+
+                              {/* AIU71: raw transcript shown when it differs from corrected */}
+                              {hasCorrection && (
+                                <div className="mt-1.5 max-w-full px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-right">
+                                  <p className="text-[10px] font-medium text-amber-600 mb-0.5">ASR (original)</p>
+                                  <p className="text-xs text-amber-800 leading-snug">{rawContent}</p>
+                                </div>
+                              )}
+
                               {ts && (
                                 <div className={`text-[10px] text-gray-400 mt-1 ${isAssistant ? 'pl-1' : 'pr-1 text-right'}`}>
                                   {ts}
@@ -2492,7 +2629,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     'voice_detected', 'multiple_voices',
                     'face_mismatch', 'face_identity_changed',
                     'voice_mismatch', 'voice_identity_changed',
-                    'screenshot_attempt', 'screen_recording_attempt',
+                    'screenshot_attempt', 'screen_recording_attempt', 'screen_share_stopped',
                   ].filter(type => (violationCounts[type] ?? 0) > 0);
                   return (
                 <div>

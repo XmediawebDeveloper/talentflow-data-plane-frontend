@@ -37,7 +37,7 @@ export default function SelectSourceModal({
 }: SelectSourceModalProps) {
   const router = useRouter();
   const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
-  const { startScoringJob, updateItemStatus, setMainPanelOpen, setOnRestorePanel } = useScoringProgress();
+  const { startScoringJob, updateItemStatus, setMainPanelOpen, setOnRestorePanel, setMinimized } = useScoringProgress();
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
@@ -63,11 +63,10 @@ export default function SelectSourceModal({
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressItems, setProgressItems] = useState<ProgressItem[]>([]);
   const [scoringStats, setScoringStats] = useState({ queued: 0, processing: 0, completed: 0, failed: 0 });
-
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
 
-  // Hide global floating widget while progress modal is open here; show it when modal closes or user navigates
+  // Hide global floating widget while this modal is open (overlay covers everything)
   useEffect(() => {
     setMainPanelOpen(showProgressModal);
     return () => { setMainPanelOpen(false); };
@@ -280,9 +279,19 @@ export default function SelectSourceModal({
       setScoringStats({ queued: initialItems.length, processing: 0, completed: 0, failed: 0 });
       setShowProgressModal(true);
 
+      // Register in persistent scoring context so GlobalScoringProgressIndicator works when minimized
+      const contextItems = resumeItems.map(item => ({
+        id: `${jobId}-${item.resumeId}`,
+        resumeId: item.resumeId,
+        candidateName: item.candidateName,
+        jobTitle: jobTitle,
+        jobId: jobId,
+        source: (activeTab === 'my-resumes' ? 'My Resumes' : 'Internal DB') as 'My Resumes' | 'Internal DB',
+      }));
+      startScoringJob(jobId, jobTitle, contextItems, typeof window !== 'undefined' ? window.location.pathname + window.location.search : undefined);
+
       // Poll batch status until all items are done
       const batchId = response.batch_id;
-      const completedJobIds = new Set<string>();
       const poll = async () => {
         try {
           const batchStatus = await scoringService.getBatchStatus(batchId);
@@ -304,6 +313,18 @@ export default function SelectSourceModal({
             completed: batchStatus.completed,
             failed: batchStatus.failed,
           });
+
+          // Sync status updates into the persistent context (drives GlobalScoringProgressIndicator)
+          for (const batchItem of (batchStatus.items || [])) {
+            const itemId = `${jobId}-${batchItem.resume_id}`;
+            if (batchItem.status === 'completed') {
+              updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score });
+            } else if (batchItem.status === 'failed') {
+              updateItemStatus(jobId, itemId, 'Failed', { errorReason: batchItem.error_message || 'Scoring failed' });
+            } else if (batchItem.status === 'processing') {
+              updateItemStatus(jobId, itemId, 'Scoring in progress');
+            }
+          }
 
           const allDone = batchStatus.status === 'completed' || batchStatus.status === 'failed' ||
             (batchStatus.queued === 0 && batchStatus.processing === 0);
@@ -1168,8 +1189,12 @@ export default function SelectSourceModal({
             await handleRetryFailed(scoringItem.resumeId);
           }}
           onMinimize={() => {
-            setMainPanelOpen(false);
-            setOnRestorePanel(() => () => setMainPanelOpen(true));
+            // Close the full-screen overlay so the user can navigate freely.
+            // The context keeps the job alive and GlobalScoringProgressIndicator
+            // shows the small floating button in the bottom-right corner.
+            setMinimized(true);
+            setOnRestorePanel(undefined);
+            onClose();
           }}
         />
       )}

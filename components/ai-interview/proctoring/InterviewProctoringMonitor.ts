@@ -47,6 +47,7 @@ interface ProctoringState {
   isCameraObstructed: boolean;
   isMicrophoneActive: boolean;
   isCameraActive: boolean;
+  isHighBackgroundNoise: boolean;
 }
 
 // ==================== CONSTANTS ====================
@@ -72,6 +73,8 @@ const UI_COOLDOWN_PER_TYPE: Record<ProctoringEventType, number> = {
   face_identity_changed: 15000,
   voice_mismatch: 10000,
   voice_identity_changed: 15000,
+  screen_share_stopped: 10000,
+  background_noise: 30000,
 };
 
 // Backend batch flush interval
@@ -80,6 +83,12 @@ const BACKEND_FLUSH_INTERVAL = 5000; // Flush every 5 seconds
 // Worker check intervals
 const VIDEO_CHECK_INTERVAL = 500;    // Sample video at 2 FPS (main thread capture)
 const VOICE_CHECK_INTERVAL = 3000;   // Check voice every 3 seconds
+
+// Background noise detection (AIU-67)
+// Threshold matches StepSystemCheck.tsx: avgFrequency >= 80 out of 0–255 → noisy
+const NOISE_THRESHOLD = 80;
+// Minimum gap between noise warning toasts — advisory only, don't spam candidate
+const NOISE_WARNING_COOLDOWN = 30000; // 30 seconds
 
 // ==================== WORKER CODE ====================
 
@@ -168,6 +177,13 @@ const getAudioWorkerCode = () => `
   const VOICE_THRESHOLD_FRAMES = 2;   // 2 consecutive checks to confirm voice
   const SILENCE_THRESHOLD_FRAMES = 3; // 3 consecutive checks to confirm silence
 
+  // Background noise detection (AIU-67) — full-spectrum analysis, separate from voice band
+  let isNoisy = false;
+  let consecutiveNoisy = 0;
+  let consecutiveQuiet = 0;
+  const NOISE_CONFIRM_FRAMES = 3;  // require 3 consecutive noisy frames before alerting
+  const QUIET_CONFIRM_FRAMES = 5;  // require 5 quiet frames to clear noise state
+
   function analyzeVoice(frequencyData, threshold, sampleRate) {
     const bufferLength = frequencyData.length;
     const binSize = sampleRate / (bufferLength * 2);
@@ -181,14 +197,18 @@ const getAudioWorkerCode = () => `
     return sum / (speechEndBin - speechStartBin);
   }
 
+  function analyzeFullSpectrum(frequencyData) {
+    let sum = 0;
+    for (let i = 0; i < frequencyData.length; i++) sum += frequencyData[i];
+    return frequencyData.length > 0 ? sum / frequencyData.length : 0;
+  }
+
   self.onmessage = function(e) {
     const { type, data } = e.data;
 
     if (type === 'ANALYZE_VOICE') {
-      const avg = analyzeVoice(
-        new Uint8Array(data.frequencyData),
-        data.threshold, data.sampleRate
-      );
+      const freqData = new Uint8Array(data.frequencyData);
+      const avg = analyzeVoice(freqData, data.threshold, data.sampleRate);
       const detected = avg > data.threshold;
 
       if (detected) {
@@ -196,6 +216,9 @@ const getAudioWorkerCode = () => `
         consecutiveSilent = 0;
         if (!isVoiceActive && consecutiveVoice >= VOICE_THRESHOLD_FRAMES) {
           isVoiceActive = true;
+          // Reset noise counters — don't carry stale state into post-speech period
+          consecutiveNoisy = 0;
+          consecutiveQuiet = 0;
           self.postMessage({
             type: 'STATE_CHANGE',
             data: { voiceDetected: true, averageVolume: avg, threshold: data.threshold }
@@ -208,11 +231,41 @@ const getAudioWorkerCode = () => `
           isVoiceActive = false;
           // Don't post silence — we only care about voice presence
         }
+
+        // Background noise: only measure when candidate is NOT speaking
+        // Uses a second view of the same buffer — safe, ArrayBuffer is not consumed by Uint8Array
+        const noiseLevel = analyzeFullSpectrum(freqData);
+        const noisyFrame = noiseLevel >= (data.noiseThreshold || 80);
+
+        if (noisyFrame) {
+          consecutiveNoisy++;
+          consecutiveQuiet = 0;
+          if (!isNoisy && consecutiveNoisy >= NOISE_CONFIRM_FRAMES) {
+            isNoisy = true;
+            self.postMessage({
+              type: 'NOISE_STATE_CHANGE',
+              data: { noisy: true, avgNoise: noiseLevel }
+            });
+          }
+        } else {
+          consecutiveQuiet++;
+          consecutiveNoisy = 0;
+          if (isNoisy && consecutiveQuiet >= QUIET_CONFIRM_FRAMES) {
+            isNoisy = false;
+            self.postMessage({
+              type: 'NOISE_STATE_CHANGE',
+              data: { noisy: false, avgNoise: noiseLevel }
+            });
+          }
+        }
       }
     } else if (type === 'RESET') {
       isVoiceActive = false;
       consecutiveVoice = 0;
       consecutiveSilent = 0;
+      isNoisy = false;
+      consecutiveNoisy = 0;
+      consecutiveQuiet = 0;
     }
   };
   self.postMessage({ type: 'READY' });
@@ -235,6 +288,7 @@ export function useInterviewProctoringMonitor({
     isCameraObstructed: false,
     isMicrophoneActive: true,
     isCameraActive: true,
+    isHighBackgroundNoise: false,
   });
 
   // Refs for props (prevent re-render cascades)
@@ -280,6 +334,8 @@ export function useInterviewProctoringMonitor({
 
   // UI warning cooldown per event type
   const lastUiWarningTimeRef = useRef<Record<string, number>>({});
+  // Separate cooldown ref for background_noise advisory (not sent to backend)
+  const lastNoiseWarningRef = useRef<number>(0);
 
   // ==================== CORE: emitEvent ====================
   // 1. Always queues event for backend (every event recorded)
@@ -414,7 +470,7 @@ export function useInterviewProctoringMonitor({
               height: 120,
               threshold: obstructionThresholdRef.current,
             },
-          }, [dataToSend.buffer]);
+          }, [dataToSend.buffer] as Transferable[]);
         }, VIDEO_CHECK_INTERVAL);
 
         console.log(`[INTERVIEW_PROCTORING] Video worker started (${VIDEO_CHECK_INTERVAL}ms interval)`);
@@ -447,6 +503,24 @@ export function useInterviewProctoringMonitor({
             averageVolume: data.averageVolume,
             threshold: data.threshold,
           });
+        } else if (type === 'NOISE_STATE_CHANGE') {
+          setState(prev =>
+            prev.isHighBackgroundNoise === data.noisy
+              ? prev
+              : { ...prev, isHighBackgroundNoise: data.noisy }
+          );
+          if (data.noisy) {
+            // Advisory warning — emitted directly to bus, NOT via emitEvent,
+            // so it never reaches the backend as a proctoring violation (AIU-67).
+            const now = Date.now();
+            if (now - lastNoiseWarningRef.current >= NOISE_WARNING_COOLDOWN) {
+              lastNoiseWarningRef.current = now;
+              InterviewEventBus.emit('background_noise', {
+                avgNoise: Math.round(data.avgNoise),
+              });
+              console.log(`[INTERVIEW_PROCTORING] Background noise advisory: avg=${Math.round(data.avgNoise)}`);
+            }
+          }
         }
       };
 
@@ -487,8 +561,9 @@ export function useInterviewProctoringMonitor({
             frequencyData: dataToSend.buffer,
             threshold,
             sampleRate,
+            noiseThreshold: NOISE_THRESHOLD,
           },
-        }, [dataToSend.buffer]);
+        }, [dataToSend.buffer] as Transferable[]);
       }, VOICE_CHECK_INTERVAL);
 
       console.log(`[INTERVIEW_PROCTORING] Audio worker started (${VOICE_CHECK_INTERVAL}ms interval)`);
@@ -801,6 +876,9 @@ function getSeverity(type: ProctoringEventType): 'minor' | 'moderate' | 'severe'
     multiple_faces:           'severe',
     face_identity_changed:    'severe',
     voice_identity_changed:   'severe',
+    screen_share_stopped:     'severe',
+    // Advisory — not a proctoring violation (AIU-67)
+    background_noise:         'minor',
   };
   return map[type] ?? 'minor';
 }

@@ -118,6 +118,7 @@ export default function StepSamplePractice({
   const hasAutoSpokeRef = useRef(false);
   const startRecordingRef = useRef<() => void>(() => {});
   const periodicTranscriptionRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const periodicTranscriptionInFlightRef = useRef(false);
   const recordingStartTimeRef = useRef<number | null>(null);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -338,32 +339,42 @@ export default function StepSamplePractice({
     }
   }, []);
 
-  const startPeriodicTranscription = useCallback(() => {
-    if (periodicTranscriptionRef.current) return; // already running
-    periodicTranscriptionRef.current = setInterval(async () => {
-      // Need at least ~2s of audio (4 chunks at 500ms timeslice) before sending
-      const chunks = audioChunksRef.current;
-      if (chunks.length < 4) return;
-      // Only run while actively recording
-      if (mediaRecorderRef.current?.state !== 'recording') return;
+  const requestPeriodicTranscript = useCallback(async () => {
+    if (periodicTranscriptionInFlightRef.current) return;
+    const chunks = audioChunksRef.current;
+    // Send an earlier first sample so short practice answers still get live text.
+    if (chunks.length < 2) return;
+    if (mediaRecorderRef.current?.state !== 'recording') return;
 
-      const mimeType = audioMimeTypeUsedRef.current || 'audio/webm';
-      // Create a snapshot of chunks so far (copy the array — don't slice the ref)
-      const snapshot = chunks.slice();
-      const blob = new Blob(snapshot, { type: mimeType });
-      const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
-      const file = new File([blob], `live.${ext}`, { type: mimeType });
+    periodicTranscriptionInFlightRef.current = true;
+    const mimeType = audioMimeTypeUsedRef.current || 'audio/webm';
+    const snapshot = chunks.slice();
+    const blob = new Blob(snapshot, { type: mimeType });
+    const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm';
+    const file = new File([blob], `live.${ext}`, { type: mimeType });
 
-      try {
-        const text = await candidateAIInterviewService.transcribePracticeAudio(token, file);
-        // Only update if still recording (don't overwrite final transcript)
-        if (text.trim() && mediaRecorderRef.current?.state === 'recording') {
-          setLiveTranscript(text.trim());
-          setHasLiveTranscript(true); // show the live transcript area on first result
-        }
-      } catch { /* ignore — best-effort, final transcription happens on stop */ }
-    }, 5000); // every 5 seconds
+    try {
+      const text = await candidateAIInterviewService.transcribePracticeAudio(token, file);
+      if (text.trim() && mediaRecorderRef.current?.state === 'recording') {
+        setLiveTranscript(text.trim());
+        setHasLiveTranscript(true);
+      }
+    } catch {
+      // Best-effort only — final transcription still runs on stop.
+    } finally {
+      periodicTranscriptionInFlightRef.current = false;
+    }
   }, [token]);
+
+  const startPeriodicTranscription = useCallback(() => {
+    if (periodicTranscriptionRef.current) return;
+    const kickOff = () => {
+      void requestPeriodicTranscript();
+    };
+    // Fire an early first attempt so the candidate sees live text quickly.
+    window.setTimeout(kickOff, 1500);
+    periodicTranscriptionRef.current = setInterval(kickOff, 2500);
+  }, [requestPeriodicTranscript]);
 
   // ── Live transcription (Web Speech API) ──────────────────────────────────
 
@@ -373,12 +384,15 @@ export default function StepSamplePractice({
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition || isBrave) {
-      // No Web Speech API (Firefox) or Brave — use periodic backend transcription
+      // No Web Speech API (Firefox/Brave) — use periodic backend transcription.
       setHasLiveTranscript(false);
       startPeriodicTranscription();
       return;
     }
     setHasLiveTranscript(true);
+    // Some browsers expose SpeechRecognition but do not yield timely interim results.
+    // Keep backend near-live transcription running as a safety net.
+    startPeriodicTranscription();
 
     webSpeechFinalRef.current = '';
     setLiveTranscript('');

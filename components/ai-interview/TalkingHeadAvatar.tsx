@@ -148,6 +148,11 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
               head.audioSpeechGainNode.connect(head.audioReverbNode);
               head.audioStreamGainNode.connect(head.audioReverbNode);
               head.audioReverbNode.connect(preCreated.destination);
+              // Also route Linda's voice to the screen recording mix (if active)
+              const recordingDest = (window as any).__interviewRecordingDest as AudioNode | null;
+              if (recordingDest) {
+                try { head.audioReverbNode.connect(recordingDest); } catch {}
+              }
               // Dry impulse so reverb is a pass-through
               const impulse = preCreated.createBuffer(2, preCreated.sampleRate, preCreated.sampleRate);
               impulse.getChannelData(0)[0] = 1;
@@ -570,6 +575,9 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       const src = ctx.createBufferSource();
       src.buffer = buf;
       src.connect(ctx.destination);
+      // Also route to screen recording mix (if active)
+      const recordingDest = (window as any).__interviewRecordingDest as AudioNode | null;
+      if (recordingDest) { try { src.connect(recordingDest); } catch {} }
       // Gapless scheduling
       const now = ctx.currentTime;
       const startAt = Math.max(now, fbNextTimeRef.current);

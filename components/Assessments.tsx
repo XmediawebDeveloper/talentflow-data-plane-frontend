@@ -25,6 +25,9 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
 
 
+const ASSESSMENTS_PAGE_SIZE = 12;
+const INVITATIONS_PAGE_SIZE = 10;
+
 interface AssessmentsProps {
   jobs: Job[];
   onOpenCandidateView?: () => void;
@@ -77,11 +80,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [isSendingChangeEmail, setIsSendingChangeEmail] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
+  const [assessmentCurrentPage, setAssessmentCurrentPage] = useState(1);
+  const [assessmentTotalItems, setAssessmentTotalItems] = useState(0);
+  const [assessmentTotalPages, setAssessmentTotalPages] = useState(1);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
   const [totalUnits, setTotalUnits] = useState<number>(10); // Total subscription limit
   const [isUnlimited, setIsUnlimited] = useState<boolean>(false); // Track if quota is unlimited
   const [quotaPercentage, setQuotaPercentage] = useState<number>(0); // Percentage of quota used
+  const [trackingCurrentPage, setTrackingCurrentPage] = useState(1);
+  const [trackingTotalItems, setTrackingTotalItems] = useState(0);
+  const [trackingTotalPages, setTrackingTotalPages] = useState(1);
 
   // Proctoring settings from API
   const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings | null>(null);
@@ -128,6 +137,152 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
+  const getAssessmentStatusFilter = (tab: typeof activeTab) => {
+    if (tab === 'active') return 'published';
+    if (tab === 'draft') return 'draft';
+    if (tab === 'completed') return 'closed';
+    if (tab === 'archived') return 'archived';
+    return undefined;
+  };
+
+  const mapAssessmentFromApi = (a: any, index: number) => {
+    const rawStatus = (a.status || 'draft').toLowerCase();
+    const shortId = a.short_id || `AS-${String(a.sequence_number || index + 1).padStart(3, '0')}`;
+    return {
+      id: a.id,
+      short_id: shortId,
+      sequence_number: a.sequence_number,
+      title: a.title,
+      description: a.description,
+      type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
+      duration: `${a.duration_minutes} min`,
+      duration_minutes: a.duration_minutes,
+      questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
+      candidates: a.invitations_count || 0,
+      invitations_count: a.invitations_count || 0,
+      completed_count: a.completed_count || 0,
+      passed_count: a.passed_count || 0,
+      average_score: a.average_score,
+      pass_rate: a.pass_rate,
+      status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
+      passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
+      created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+      created_at: a.created_at,
+      updated_at: a.updated_at,
+      created_by_name: a.created_by_name || 'System',
+      version: a.version || 1,
+      jd_id: a.jd_id,
+      jd_short_id: a.jd_short_id,
+      jd_version: a.jd_version,
+      job: { title: a.jd_title || 'General Assessment', department: 'Engineering', version: a.jd_version },
+      hr_enabled: a.hr_enabled,
+      hr_percentage: a.hr_percentage,
+      hr_topics: a.hr_topics,
+      technical_enabled: a.technical_enabled,
+      technical_percentage: a.technical_percentage,
+      technical_topics: a.technical_topics,
+      coding_enabled: a.coding_enabled,
+      coding_percentage: a.coding_percentage,
+      coding_topics: a.coding_topics,
+      coding_languages: a.coding_languages,
+      proctoring_enabled: a.proctoring_enabled,
+      average_time_seconds: a.average_time_seconds,
+      hr_score: a.hr_score,
+      technical_score: a.technical_score,
+      coding_score: a.coding_score,
+    };
+  };
+
+  const closeTrackInvitesModal = () => {
+    setShowTrackInvitesModal(false);
+    setSelectedAssessmentForTracking(null);
+    setTrackingInvitations([]);
+    setTrackingCurrentPage(1);
+    setTrackingTotalItems(0);
+    setTrackingTotalPages(1);
+    setEditingEmailId(null);
+    setNewEmailValue('');
+  };
+
+  const loadAssessmentsPage = async (page: number) => {
+    setIsLoading(true);
+    try {
+      const filters: any = {
+        page,
+        page_size: ASSESSMENTS_PAGE_SIZE,
+      };
+      if (preSelectedJdId) {
+        filters.jd_id = preSelectedJdId;
+      }
+      const status = getAssessmentStatusFilter(activeTab);
+      if (status) {
+        filters.status = status;
+      }
+
+      const response = await assessmentService.list(filters);
+      const mapped = (response.items || []).map((a: any, index: number) =>
+        mapAssessmentFromApi(a, (page - 1) * ASSESSMENTS_PAGE_SIZE + index)
+      );
+
+      setApiAssessments(mapped);
+      setAssessmentTotalItems(response.total || 0);
+      setAssessmentTotalPages(response.total_pages || 1);
+
+      if ((response.items?.length || 0) === 0 && response.total > 0 && page > 1) {
+        setAssessmentCurrentPage(Math.min(page - 1, response.total_pages || 1));
+      }
+    } catch (error) {
+      console.log('[TalentFlow] Failed to load assessments:', error);
+      setApiAssessments([]);
+      setAssessmentTotalItems(0);
+      setAssessmentTotalPages(1);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadTrackingInvitations = async (assessment: any, page: number) => {
+    setIsLoadingInvitations(true);
+    try {
+      const response = await assessmentService.listInvitations(assessment.id, {
+        page,
+        page_size: INVITATIONS_PAGE_SIZE,
+      });
+      const invitations = response.items || [];
+      setTrackingInvitations(invitations);
+      setTrackingTotalItems(response.total || 0);
+      const totalPages = Math.max(1, Math.ceil((response.total || 0) / INVITATIONS_PAGE_SIZE));
+      setTrackingTotalPages(totalPages);
+
+      const stats = {
+        total: response.total || invitations.length,
+        sent: invitations.filter((inv: any) => inv.status === 'sent' || inv.status === 'pending' || inv.status === 'opened').length,
+        started: invitations.filter((inv: any) => inv.status === 'started' || (inv.started_at && inv.status !== 'completed')).length,
+        completed: invitations.filter((inv: any) => inv.status === 'completed' || inv.completed_at).length,
+        failed: invitations.filter((inv: any) => ['expired', 'failed', 'bounced', 'abandoned'].includes(inv.status)).length,
+      };
+      setInvitationStats(stats);
+
+      if (invitations.length === 0 && (response.total || 0) > 0 && page > 1) {
+        setTrackingCurrentPage(Math.min(page - 1, totalPages));
+      }
+    } catch (error) {
+      console.error('Failed to load invitations:', error);
+      setTrackingInvitations([]);
+      setTrackingTotalItems(0);
+      setTrackingTotalPages(1);
+      setInvitationStats({
+        total: 0,
+        sent: 0,
+        started: 0,
+        completed: 0,
+        failed: 0,
+      });
+    } finally {
+      setIsLoadingInvitations(false);
+    }
+  };
+
   // FIX-004: Auto-open creation view inline if requested via props
   useEffect(() => {
     if (autoOpenCreate) {
@@ -140,74 +295,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Load all data in parallel on mount (faster than 3 separate useEffects)
   useEffect(() => {
     const loadAllData = async () => {
-      setIsLoading(true);
       setIsLoadingStats(true);
 
       // Run all API calls in parallel for faster loading
-      const [assessmentsResult, statsResult, quotaResult, topicsResult] = await Promise.allSettled([
-        assessmentService.list({ page_size: 100 }),
+      const [statsResult, quotaResult, topicsResult] = await Promise.allSettled([
         assessmentService.getStats(),
         api.get('/usage/quota-status'),
         api.get('/assessments/settings/topics'),
       ]);
-
-      // Process assessments
-      if (assessmentsResult.status === 'fulfilled' && assessmentsResult.value?.items?.length > 0) {
-        const mapped = assessmentsResult.value.items.map((a: any, index: number) => {
-          // Normalize status to lowercase for consistent comparison
-          const rawStatus = (a.status || 'draft').toLowerCase();
-          // Use short_id from backend (persistent) or generate fallback
-          const shortId = a.short_id || `AS-${String(a.sequence_number || index + 1).padStart(3, '0')}`;
-          return {
-          id: a.id,
-          short_id: shortId,
-          sequence_number: a.sequence_number,
-          title: a.title,
-          description: a.description,
-          type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
-          duration: `${a.duration_minutes} min`,
-          duration_minutes: a.duration_minutes,
-          questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
-          candidates: a.invitations_count || 0,
-          invitations_count: a.invitations_count || 0,
-          completed_count: a.completed_count || 0,
-          passed_count: a.passed_count || 0,
-          average_score: a.average_score,
-          pass_rate: a.pass_rate,
-          status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
-          passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
-          created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-          created_at: a.created_at,
-          created_by_name: a.created_by_name || 'System',
-          version: a.version || 1,
-          jd_id: a.jd_id,
-          jd_short_id: a.jd_short_id,
-          jd_version: a.jd_version,
-          job: { title: a.jd_title || 'General Assessment', department: 'Engineering', version: a.jd_version },
-          // Section configuration for detail view
-          hr_enabled: a.hr_enabled,
-          hr_percentage: a.hr_percentage,
-          hr_topics: a.hr_topics,
-          technical_enabled: a.technical_enabled,
-          technical_percentage: a.technical_percentage,
-          technical_topics: a.technical_topics,
-          coding_enabled: a.coding_enabled,
-          coding_percentage: a.coding_percentage,
-          coding_topics: a.coding_topics,
-          coding_languages: a.coding_languages,
-          proctoring_enabled: a.proctoring_enabled,
-          // Analytics data
-          average_time_seconds: a.average_time_seconds,
-          hr_score: a.hr_score,
-          technical_score: a.technical_score,
-          coding_score: a.coding_score,
-        };
-        });
-        setApiAssessments(mapped);
-        console.log('[TalentFlow] Loaded', mapped.length, 'assessments from API');
-      } else if (assessmentsResult.status === 'rejected') {
-        console.log('[TalentFlow] Failed to load assessments:', assessmentsResult.reason);
-      }
 
       // Process stats
       if (statsResult.status === 'fulfilled') {
@@ -305,12 +400,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         console.log('[TalentFlow] Failed to load topic settings:', topicsResult.reason);
       }
 
-      setIsLoading(false);
       setIsLoadingStats(false);
     };
 
     loadAllData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'audit' || activeTab === 'consent' || activeTab === 'settings') {
+      return;
+    }
+    loadAssessmentsPage(assessmentCurrentPage);
+  }, [activeTab, preSelectedJdId, assessmentCurrentPage]);
+
+  useEffect(() => {
+    setAssessmentCurrentPage(1);
+  }, [activeTab, preSelectedJdId]);
+
+  useEffect(() => {
+    if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
+    loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage);
+  }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingCurrentPage]);
 
   // Load settings data when settings tab is active
   useEffect(() => {
@@ -515,66 +625,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Reload assessments from API
   const reloadAssessments = async () => {
-    setIsLoading(true);
     try {
-      // Filter by JD if preSelectedJdId is provided
-      const filters: any = { page_size: 100 };
-      if (preSelectedJdId) {
-        filters.jd_id = preSelectedJdId;
-      }
-      const response = await assessmentService.list(filters);
-      if (response?.items?.length >= 0) {
-        const mapped = response.items.map((a: any) => {
-          // Normalize status to lowercase for consistent comparison
-          const rawStatus = (a.status || 'draft').toLowerCase();
-          return {
-          id: a.id,
-          title: a.title,
-          description: a.description,
-          type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
-          duration: `${a.duration_minutes} min`,
-          duration_minutes: a.duration_minutes,
-          questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
-          candidates: a.invitations_count || 0,
-          invitations_count: a.invitations_count || 0,
-          completed_count: a.completed_count || 0,
-          passed_count: a.passed_count || 0,
-          average_score: a.average_score,
-          pass_rate: a.pass_rate,
-          status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
-          passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
-          created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-          jd_version: a.jd_version,
-          job: { title: a.jd_title || 'General Assessment', department: 'Engineering', version: a.jd_version },
-          // Section configuration for detail view
-          hr_enabled: a.hr_enabled,
-          hr_percentage: a.hr_percentage,
-          hr_topics: a.hr_topics,
-          technical_enabled: a.technical_enabled,
-          technical_percentage: a.technical_percentage,
-          technical_topics: a.technical_topics,
-          coding_enabled: a.coding_enabled,
-          coding_percentage: a.coding_percentage,
-          coding_topics: a.coding_topics,
-          coding_languages: a.coding_languages,
-          proctoring_enabled: a.proctoring_enabled,
-          // Analytics data
-          average_time_seconds: a.average_time_seconds,
-          hr_score: a.hr_score,
-          technical_score: a.technical_score,
-          coding_score: a.coding_score,
-        };
-        });
-        setApiAssessments(mapped);
-      } else {
-        setApiAssessments([]);
-      }
+      await loadAssessmentsPage(assessmentCurrentPage);
       // Also reload stats and quota
       await Promise.all([reloadStats(), reloadQuota()]);
     } catch (error) {
       console.log('[TalentFlow] Failed to reload assessments:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -696,28 +752,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const handleTrackInvites = async (assessment: any) => {
     setSelectedAssessmentForTracking(assessment);
     setShowTrackInvitesModal(true);
-    setIsLoadingInvitations(true);
-
-    try {
-      const response = await assessmentService.listInvitations(assessment.id, { page_size: 100 });
-      const invitations = response.items || [];
-      setTrackingInvitations(invitations);
-
-      // Calculate stats
-      const stats = {
-        total: invitations.length,
-        sent: invitations.filter((inv: any) => inv.status === 'sent' || inv.status === 'pending' || inv.status === 'opened').length,
-        started: invitations.filter((inv: any) => inv.status === 'started' || (inv.started_at && inv.status !== 'completed')).length,
-        completed: invitations.filter((inv: any) => inv.status === 'completed' || inv.completed_at).length,
-        failed: invitations.filter((inv: any) => ['expired', 'failed', 'bounced', 'abandoned'].includes(inv.status)).length,
-      };
-      setInvitationStats(stats);
-    } catch (error) {
-      console.error('Failed to load invitations:', error);
-      setTrackingInvitations([]);
-    } finally {
-      setIsLoadingInvitations(false);
-    }
+    setTrackingCurrentPage(1);
   };
 
   const isValidInviteEmail = (email: string) =>
@@ -730,7 +765,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         `/assessments/${selectedAssessmentForTracking.id}/invitations/${invitation.id}/resend`
       );
       toast.success('Invitation resent successfully!');
-      handleTrackInvites(selectedAssessmentForTracking);
+      await loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage);
     } catch (error) {
       console.error('Failed to resend invitation:', error);
       toast.error('Failed to resend invitation. Please try again.');
@@ -749,7 +784,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setEditingEmailId(null);
       setNewEmailValue('');
       toast.success('Email updated and invitation resent!');
-      handleTrackInvites(selectedAssessmentForTracking);
+      await loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage);
     } catch (error: any) {
       console.error('Failed to update email:', error);
       const msg =
@@ -867,15 +902,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             onSave={async (updatedAssessment) => {
               await reloadAssessments();
               // Update the selected assessment for details view with fresh data
-              const freshAssessments = await assessmentService.list({ page_size: 100 });
-              const updated = freshAssessments.items.find((a: any) => a.id === selectedAssessmentForDetails.id);
-              if (updated) {
-                const rawStatus = (updated.status || 'draft').toLowerCase();
-                setSelectedAssessmentForDetails({
-                  ...updated,
-                  status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
-                });
-              }
+              const updated = await assessmentService.get(selectedAssessmentForDetails.id);
+              setSelectedAssessmentForDetails(mapAssessmentFromApi(updated, 0));
             }}
           />
         )}
@@ -891,6 +919,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (activeTab === 'archived') return assessment.status === 'Archived';
     return true;
   });
+  const assessmentPaginationVisible = !['audit', 'consent', 'settings'].includes(activeTab) && assessmentTotalPages > 1;
+  const assessmentStartIndex = assessmentTotalItems === 0 ? 0 : (assessmentCurrentPage - 1) * ASSESSMENTS_PAGE_SIZE + 1;
+  const assessmentEndIndex = Math.min(assessmentCurrentPage * ASSESSMENTS_PAGE_SIZE, assessmentTotalItems);
+  const trackingPaginationVisible = trackingTotalPages > 1;
+  const trackingStartIndex = trackingTotalItems === 0 ? 0 : (trackingCurrentPage - 1) * INVITATIONS_PAGE_SIZE + 1;
+  const trackingEndIndex = Math.min(trackingCurrentPage * INVITATIONS_PAGE_SIZE, trackingTotalItems);
 
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
@@ -2481,6 +2515,47 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 ))}
               </div>
             )}
+
+            {assessmentPaginationVisible && (
+              <div className="mt-6 flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-gray-500">
+                  Showing <strong>{assessmentStartIndex}</strong> to <strong>{assessmentEndIndex}</strong> of <strong>{assessmentTotalItems}</strong> assessments
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setAssessmentCurrentPage(1)}
+                    disabled={assessmentCurrentPage === 1}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    First
+                  </button>
+                  <button
+                    onClick={() => setAssessmentCurrentPage(assessmentCurrentPage - 1)}
+                    disabled={assessmentCurrentPage === 1}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Prev
+                  </button>
+                  <span className="px-3 py-1.5 text-sm text-gray-600">
+                    Page {assessmentCurrentPage} of {assessmentTotalPages}
+                  </span>
+                  <button
+                    onClick={() => setAssessmentCurrentPage(assessmentCurrentPage + 1)}
+                    disabled={assessmentCurrentPage === assessmentTotalPages}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                  <button
+                    onClick={() => setAssessmentCurrentPage(assessmentTotalPages)}
+                    disabled={assessmentCurrentPage === assessmentTotalPages}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Last
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -2542,13 +2617,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <p className="text-sm text-gray-500 mt-0.5">{selectedAssessmentForTracking.title}</p>
               </div>
               <button
-                onClick={() => {
-                  setShowTrackInvitesModal(false);
-                  setSelectedAssessmentForTracking(null);
-                  setTrackingInvitations([]);
-                  setEditingEmailId(null);
-                  setNewEmailValue('');
-                }}
+                onClick={closeTrackInvitesModal}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -2841,20 +2910,51 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {/* Modal Footer */}
             <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
               <p className="text-sm text-gray-500">
-                Showing <strong>{trackingInvitations.length}</strong> of <strong>{invitationStats.total}</strong> invites
+                Showing <strong>{trackingStartIndex}</strong> to <strong>{trackingEndIndex}</strong> of <strong>{trackingTotalItems}</strong> invites
               </p>
-              <button
-                onClick={() => {
-                  setShowTrackInvitesModal(false);
-                  setSelectedAssessmentForTracking(null);
-                  setTrackingInvitations([]);
-                  setEditingEmailId(null);
-                  setNewEmailValue('');
-                }}
-                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                {trackingPaginationVisible && (
+                  <>
+                    <button
+                      onClick={() => setTrackingCurrentPage(1)}
+                      disabled={trackingCurrentPage === 1}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
+                    >
+                      First
+                    </button>
+                    <button
+                      onClick={() => setTrackingCurrentPage(trackingCurrentPage - 1)}
+                      disabled={trackingCurrentPage === 1}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
+                    >
+                      Prev
+                    </button>
+                    <span className="px-2 text-sm text-gray-600">
+                      Page {trackingCurrentPage} of {trackingTotalPages}
+                    </span>
+                    <button
+                      onClick={() => setTrackingCurrentPage(trackingCurrentPage + 1)}
+                      disabled={trackingCurrentPage === trackingTotalPages}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
+                    >
+                      Next
+                    </button>
+                    <button
+                      onClick={() => setTrackingCurrentPage(trackingTotalPages)}
+                      disabled={trackingCurrentPage === trackingTotalPages}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
+                    >
+                      Last
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={closeTrackInvitesModal}
+                  className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

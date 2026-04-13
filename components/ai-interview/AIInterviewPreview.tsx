@@ -156,7 +156,6 @@ export default function AIInterviewPreview() {
   const [skillWeights, setSkillWeights] = useState<Record<string, 'high' | 'medium' | 'low'>>({});
   const [interviewMode, setInterviewMode] = useState<'fixed' | 'flexible'>('fixed');
   const [publishing, setPublishing] = useState(false);
-  const [published, setPublished] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   /* Load data */
@@ -242,8 +241,13 @@ export default function AIInterviewPreview() {
     setPublishing(true);
     try {
       await aiInterviewService.publishConfig(id);
-      setPublished(true);
+      setShowConfirm(false);
       toast.success('AI Interview published!');
+      const params = new URLSearchParams({
+        published: '1',
+        title: position,
+      });
+      router.push(`/recruitment/ai-interviews?${params.toString()}`);
     } catch {
       toast.error('Failed to publish');
     } finally {
@@ -295,71 +299,6 @@ export default function AIInterviewPreview() {
           >
             Go to AI Interviews
           </button>
-        </div>
-      </div>
-    );
-  }
-
-  /* ───────────── Success screen ───────────── */
-  if (published) {
-    return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <div className="max-w-md w-full text-center">
-          {/* Animated check icon with confetti dots */}
-          <div className="relative inline-flex items-center justify-center mb-6">
-            {/* Confetti dots */}
-            <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
-            <span className="absolute w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
-            <span className="absolute w-2 h-2 rounded-full bg-gray-400 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
-            <span className="absolute w-1.5 h-1.5 rounded-full bg-yellow-400 animate-ping" style={{ bottom: 8, right: 6, animationDelay: '0.6s' }} />
-            <span className="absolute w-1 h-1 rounded-full bg-pink-400 animate-ping" style={{ top: 2, right: 14, animationDelay: '0.3s' }} />
-
-            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center animate-bounce">
-              <CheckCircle className="w-10 h-10 text-green-600" />
-            </div>
-          </div>
-
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">AI Interview Published!</h1>
-          <p className="text-gray-500 mb-8">
-            Your interview configuration is now live and ready for candidates.
-          </p>
-
-          {/* Summary card */}
-          <div className="bg-gray-50 rounded-xl border border-gray-200 p-5 mb-8 text-left">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Position</span>
-                <span className="text-sm font-medium text-gray-900">{position}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Mode</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {mode === 'fixed' ? `Fixed ${duration}min` : 'Flexible'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Duration</span>
-                <span className="text-sm font-medium text-gray-900">{duration} minutes</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Status</span>
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                  Published
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Action buttons */}
-          <div className="flex gap-3">
-            <button
-              onClick={() => router.push('/recruitment/ai-interviews')}
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
-            >
-              Go to AI Interviews
-            </button>
-          </div>
         </div>
       </div>
     );
@@ -781,6 +720,7 @@ export default function AIInterviewPreview() {
         cancelText="Cancel"
         variant="info"
       />
+
     </div>
     </div>
   );

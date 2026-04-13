@@ -80,19 +80,20 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
 
 function getTimedModePercentages(nthEnabled: boolean, hrEnabled: boolean) {
   const allocation = getTimedModeAllocation(nthEnabled, hrEnabled);
-  const scoringQuestionTotal = allocation.mthQuestions + allocation.nthQuestions;
+  const total = allocation.mthQuestions + allocation.nthQuestions + allocation.hrQuestions;
 
-  if (scoringQuestionTotal <= 0) {
+  if (total <= 0) {
     return { mth: 0, nth: 0, hr: 0 };
   }
 
-  const mth = Math.round((allocation.mthQuestions / scoringQuestionTotal) * 100);
-  const nth = nthEnabled ? 100 - mth : 0;
+  const mth = Math.round((allocation.mthQuestions / total) * 100);
+  const nth = nthEnabled ? Math.round((allocation.nthQuestions / total) * 100) : 0;
+  const hr = hrEnabled ? 100 - mth - nth : 0;
 
   return {
     mth,
     nth,
-    hr: 0,
+    hr,
   };
 }
 

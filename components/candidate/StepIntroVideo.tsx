@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   Play,
   Globe,
   CheckCircle,
   ChevronRight,
-  SkipForward,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
 interface StepIntroVideoProps {
@@ -47,16 +48,30 @@ export default function StepIntroVideo({
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoError, setVideoError] = useState(false);
+  // Browser autoplay policy blocks audio on programmatic play() — start muted,
+  // then unmute via explicit user gesture so sound always works.
+  const [isMuted, setIsMuted] = useState(true);
 
-  // Auto-play the intro video when the step mounts.
-  // The user just clicked "Continue" (system check), so a recent user gesture
-  // is in scope and play() will be allowed by the browser without muting.
+  // Autoplay muted (always permitted by browsers). We show a prominent unmute
+  // button so the user can enable audio with a single click.
   useEffect(() => {
     if (!videoRef.current || !videoSrc) return;
+    videoRef.current.muted = true;
     videoRef.current.play().catch(() => {
-      // Autoplay blocked (no recent gesture) — video stays paused with controls visible
+      // Even muted autoplay blocked — controls let the user start manually.
     });
   }, [videoSrc]);
+
+  const toggleMute = useCallback(() => {
+    if (!videoRef.current) return;
+    const next = !videoRef.current.muted;
+    videoRef.current.muted = next;
+    setIsMuted(next);
+    // If the video was paused (autoplay blocked), start it now that user is interacting.
+    if (videoRef.current.paused) {
+      videoRef.current.play().catch(() => {});
+    }
+  }, []);
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6" style={{ colorScheme: 'light' }}>
@@ -82,14 +97,36 @@ export default function StepIntroVideo({
                 <p className="text-red-500 text-sm mt-1">Please check your connection and refresh the page, or skip and continue.</p>
               </div>
             ) : (
-              <video
-                ref={videoRef}
-                src={videoSrc}
-                controls
-                playsInline
-                className="w-full max-w-2xl rounded-xl border border-gray-200 shadow-sm"
-                onError={() => setVideoError(true)}
-              />
+              <div className="relative w-full max-w-2xl">
+                <video
+                  ref={videoRef}
+                  src={videoSrc}
+                  controls
+                  playsInline
+                  muted={isMuted}
+                  className="w-full rounded-xl border border-gray-200 shadow-sm"
+                  onError={() => setVideoError(true)}
+                />
+                {/* Unmute overlay — shown until user enables audio */}
+                {isMuted && (
+                  <button
+                    onClick={toggleMute}
+                    className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/70 hover:bg-black/90 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+                  >
+                    <VolumeX className="w-3.5 h-3.5" />
+                    Click to unmute
+                  </button>
+                )}
+                {!isMuted && (
+                  <button
+                    onClick={toggleMute}
+                    className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/40 hover:bg-black/70 text-white text-xs font-semibold px-3 py-1.5 rounded-full transition-colors"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    Mute
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -178,14 +215,6 @@ export default function StepIntroVideo({
       {/* Footer actions */}
       <div className="flex items-center justify-end pt-2 border-t border-gray-100">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="px-5 py-2.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-          >
-            Skip Introduction
-            <SkipForward className="w-4 h-4" />
-          </button>
           <button
             type="button"
             onClick={onContinue}

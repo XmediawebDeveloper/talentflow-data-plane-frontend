@@ -62,12 +62,21 @@ function getStatusIcon(status: string) {
 }
 
 function getProctoringRisk(session: AIInterviewResponse): { level: string; badge: string } {
+  // Prefer server-computed risk_level (persisted at completion time, AIU-82)
+  const stored = session.risk_level;
+  if (stored) {
+    if (stored === 'high')   return { level: 'High',   badge: 'bg-red-100 text-red-700' };
+    if (stored === 'medium') return { level: 'Medium', badge: 'bg-yellow-100 text-yellow-700' };
+    if (stored === 'low')    return { level: 'Low',    badge: 'bg-blue-100 text-blue-700' };
+    return { level: 'None', badge: 'bg-green-100 text-green-700' };
+  }
+  // Fallback: heuristic from raw violations (pre-AIU-82 sessions or incomplete data)
   const violations = session.proctoring_violations || [];
   const severe = violations.filter((v) => v.severity === 'high' || v.severity === 'critical').length;
   const medium = violations.filter((v) => v.severity === 'medium').length;
-  if (severe >= 3 || (severe >= 1 && medium >= 2)) return { level: 'High', badge: 'bg-red-100 text-red-700' };
-  if (severe >= 1 || medium >= 2) return { level: 'Medium', badge: 'bg-yellow-100 text-yellow-700' };
-  if (violations.length > 0) return { level: 'Low', badge: 'bg-blue-100 text-blue-700' };
+  if (severe >= 3 || (severe >= 1 && medium >= 2)) return { level: 'High',   badge: 'bg-red-100 text-red-700' };
+  if (severe >= 1 || medium >= 2)                  return { level: 'Medium', badge: 'bg-yellow-100 text-yellow-700' };
+  if (violations.length > 0)                       return { level: 'Low',    badge: 'bg-blue-100 text-blue-700' };
   return { level: 'None', badge: 'bg-green-100 text-green-700' };
 }
 

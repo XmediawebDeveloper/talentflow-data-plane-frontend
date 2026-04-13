@@ -2,7 +2,7 @@
 
 import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -42,6 +42,7 @@ type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'proces
 
 export default function AIInterview() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isTenantAdmin } = useAuth();
   const canViewAIInterviews = isTenantAdmin || (user?.permissions?.canViewAIInterviews ?? user?.permissions?.canRunAiInterviews ?? false);
   const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
@@ -69,6 +70,7 @@ export default function AIInterview() {
   const [viewInvitationsConfig, setViewInvitationsConfig] = useState<AIInterviewResponse | null>(null);
   const [invitations, setInvitations] = useState<AIInterviewResponse[]>([]);
   const [loadingInvitations, setLoadingInvitations] = useState(false);
+  const [resendingEmailFor, setResendingEmailFor] = useState<string | null>(null); // session id
 
   // Candidate detail view (from Track Invites modal)
   const [candidateDetailFromModal, setCandidateDetailFromModal] = useState<AIInterviewResponse | null>(null);
@@ -121,6 +123,8 @@ export default function AIInterview() {
 
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null);
+  const [showPublishedModal, setShowPublishedModal] = useState(false);
+  const [publishedTitle, setPublishedTitle] = useState('');
 
   // Sync quota from shared QuotaContext (AIU = AI Interview Units)
   useEffect(() => {
@@ -250,6 +254,21 @@ export default function AIInterview() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    const wasPublished = searchParams.get('published') === '1';
+    if (!wasPublished) return;
+
+    setPublishedTitle(searchParams.get('title') || 'AI Interview');
+    setShowPublishedModal(true);
+
+    const timer = window.setTimeout(() => {
+      setShowPublishedModal(false);
+      router.replace('/recruitment/ai-interviews');
+    }, 3000);
+
+    return () => window.clearTimeout(timer);
+  }, [searchParams, router]);
 
   useEffect(() => {
     if (activeTab === 'settings') {
@@ -425,6 +444,12 @@ export default function AIInterview() {
     }
   };
 
+  // Candidate-flow statuses should never appear on config cards; treat them as 'published'
+  const normalizeConfigStatus = (status: string) => {
+    const candidateFlowStatuses = ['invited', 'consent_pending', 'system_check', 'in_progress', 'scheduled'];
+    return candidateFlowStatuses.includes(status) ? 'published' : status;
+  };
+
   // Filter configs by tab + mode
   const filteredConfigs = (() => {
     const base = activeTab === 'archived' ? archivedConfigs : configs.filter((config) => {
@@ -440,12 +465,6 @@ export default function AIInterview() {
       return modeFilter === 'timed' ? isTimed : !isTimed;
     });
   })();
-
-  // Candidate-flow statuses should never appear on config cards; treat them as 'published'
-  const normalizeConfigStatus = (status: string) => {
-    const candidateFlowStatuses = ['invited', 'consent_pending', 'system_check', 'in_progress', 'scheduled'];
-    return candidateFlowStatuses.includes(status) ? 'published' : status;
-  };
 
   const getStatusBadge = (status: string) => {
     switch (normalizeConfigStatus(status)) {
@@ -1277,11 +1296,19 @@ export default function AIInterview() {
 
       {/* Track Invites Modal */}
       {viewInvitationsConfig && (() => {
+        // Resolve effective status — client-side expiry check in case DB hasn't been updated yet
+        const resolveStatus = (inv: any): string => {
+          if (['invited', 'scheduled', 'draft'].includes(inv.status) && inv.expires_at && new Date(inv.expires_at) < new Date()) {
+            return 'expired';
+          }
+          return inv.status;
+        };
+
         const invTotal = invitations.length;
-        const invInvited = invitations.filter(i => i.status === 'invited').length;
-        const invInProgress = invitations.filter(i => i.status === 'in_progress').length;
-        const invCompleted = invitations.filter(i => i.status === 'completed').length;
-        const invCancelled = invitations.filter(i => ['cancelled', 'expired'].includes(i.status)).length;
+        const invInvited = invitations.filter(i => resolveStatus(i) === 'invited').length;
+        const invInProgress = invitations.filter(i => resolveStatus(i) === 'in_progress').length;
+        const invCompleted = invitations.filter(i => resolveStatus(i) === 'completed').length;
+        const invCancelled = invitations.filter(i => ['cancelled', 'expired'].includes(resolveStatus(i))).length;
         const invCompletionRate = invTotal > 0 ? Math.round((invCompleted / invTotal) * 100) : 0;
 
         const getInvStatusBadge = (status: string) => {
@@ -1392,15 +1419,20 @@ export default function AIInterview() {
                         {/* Status + Score + Timeline */}
                         <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-10 sm:pl-0">
                           {/* Status badge */}
-                          {getInvStatusBadge(inv.status)}
+                          {getInvStatusBadge(resolveStatus(inv))}
 
-                          {/* Score */}
-                          {inv.score != null && (
-                            <div className="text-right">
-                              <div className="text-[10px] text-gray-500">Score</div>
-                              <div className="text-sm font-semibold text-green-600">{Number(inv.score)}%</div>
-                            </div>
-                          )}
+                          {/* Score — prefer ai_evaluation.capability_score (matches evaluation page) */}
+                          {(() => {
+                            const capScore = inv.ai_evaluation?.capability_score;
+                            const displayScore = capScore != null ? capScore : inv.score;
+                            if (displayScore == null) return null;
+                            return (
+                              <div className="text-right">
+                                <div className="text-[10px] text-gray-500">Score</div>
+                                <div className="text-sm font-semibold text-green-600">{Number(displayScore)}%</div>
+                              </div>
+                            );
+                          })()}
 
                           {/* Timeline */}
                           <div className="hidden sm:flex items-center gap-3 text-[10px] text-gray-400">
@@ -1423,6 +1455,52 @@ export default function AIInterview() {
                               </span>
                             )}
                           </div>
+
+                          {/* Copy Link — available while session is still active */}
+                          {inv.interview_token && !['completed', 'cancelled', 'expired'].includes(resolveStatus(inv)) && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const link = `${window.location.origin}/ai-interview/${inv.interview_token}`;
+                                await navigator.clipboard.writeText(link);
+                                toast.success('Interview link copied!');
+                              }}
+                              title="Copy interview link"
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                            >
+                              <Copy className="w-3 h-3" />
+                              Copy Link
+                            </button>
+                          )}
+
+                          {/* Resend Email — only for invited (not yet started) */}
+                          {resolveStatus(inv) === 'invited' && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                setResendingEmailFor(inv.id);
+                                try {
+                                  await aiInterviewService.sendSessionEmail(inv.id, {
+                                    base_url: window.location.origin,
+                                  });
+                                  toast.success(`Invitation email resent to ${inv.candidate_email}`);
+                                } catch (err: any) {
+                                  toast.error(err?.message || 'Failed to resend email');
+                                } finally {
+                                  setResendingEmailFor(null);
+                                }
+                              }}
+                              disabled={resendingEmailFor === inv.id}
+                              title="Resend invitation email"
+                              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors disabled:opacity-50"
+                            >
+                              {resendingEmailFor === inv.id
+                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                : <Mail className="w-3 h-3" />
+                              }
+                              Resend Email
+                            </button>
+                          )}
 
                           {/* View Details button */}
                           {(inv.status === 'completed' || inv.status === 'in_progress') && (
@@ -1491,6 +1569,31 @@ export default function AIInterview() {
               >
                 Confirm
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPublishedModal && (
+        <div className="fixed inset-0 z-[60] bg-black/20 backdrop-blur-[1px] flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl border border-gray-200 p-6 text-center">
+            <div className="relative inline-flex items-center justify-center mb-4">
+              <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
+              <span className="absolute w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
+              <span className="absolute w-2 h-2 rounded-full bg-gray-400 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <CheckCircle className="w-8 h-8 text-green-600" />
+              </div>
+            </div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">AI Interview Published</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              Redirected successfully. This message will close in 3 seconds.
+            </p>
+            <div className="bg-gray-50 rounded-xl border border-gray-200 px-4 py-3 text-left">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-gray-500">Position</span>
+                <span className="text-sm font-medium text-gray-900 text-right">{publishedTitle}</span>
+              </div>
             </div>
           </div>
         </div>
