@@ -853,7 +853,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 <div className="flex items-center gap-4 text-sm text-gray-600">
                   <span className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
-                    {config.duration_minutes} min
+                    {config.duration_minutes || 30} min
                   </span>
                   {enabledRounds.length > 0 && (
                     <>

@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
-import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 
 interface AIInterviewResultsProps {
@@ -96,6 +96,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [totalSessions, setTotalSessions] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [summary, setSummary] = useState({
+    completed: 0,
+    inProgress: 0,
+    avgScore: null as number | null,
+  });
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,17 +117,35 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 15;
 
+  const requestParams = useMemo(() => ({
+    search: searchQuery || undefined,
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    score_min: scoreMin !== '' ? parseFloat(scoreMin) : undefined,
+    score_max: scoreMax !== '' ? parseFloat(scoreMax) : undefined,
+    date_from: dateFrom || undefined,
+    date_to: dateTo || undefined,
+    page: currentPage,
+    page_size: PAGE_SIZE,
+  }), [searchQuery, statusFilter, scoreMin, scoreMax, dateFrom, dateTo, currentPage]);
+
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await aiInterviewService.getConfigInvitations(configId);
+      const result: AIInterviewInvitationListResponse = await aiInterviewService.getConfigInvitations(configId, requestParams);
       setSessions(result.items);
+      setTotalSessions(result.total);
+      setTotalPages(Math.max(1, result.total_pages || 1));
+      setSummary({
+        completed: result.completed || 0,
+        inProgress: result.in_progress || 0,
+        avgScore: result.average_score != null ? Math.round(result.average_score) : null,
+      });
     } catch (error: any) {
       toast.error(error.message || 'Failed to load candidate sessions');
     } finally {
       setIsLoading(false);
     }
-  }, [configId]);
+  }, [configId, requestParams]);
 
   useEffect(() => {
     loadSessions();
@@ -131,59 +156,28 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
     const hasLive = sessions.some((s) => s.status === 'in_progress');
     if (!hasLive) return;
     const id = setInterval(() => {
-      aiInterviewService.getConfigInvitations(configId)
-        .then((r) => setSessions(r.items))
+      aiInterviewService.getConfigInvitations(configId, requestParams)
+        .then((r) => {
+          setSessions(r.items);
+          setTotalSessions(r.total);
+          setTotalPages(Math.max(1, r.total_pages || 1));
+          setSummary({
+            completed: r.completed || 0,
+            inProgress: r.in_progress || 0,
+            avgScore: r.average_score != null ? Math.round(r.average_score) : null,
+          });
+        })
         .catch(() => {});
     }, 5000);
     return () => clearInterval(id);
-  }, [sessions, configId]);
+  }, [sessions, configId, requestParams]);
 
   // Reset page on filter change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, scoreMin, scoreMax, dateFrom, dateTo]);
 
-  const filteredSessions = useMemo(() => {
-    return sessions.filter((s) => {
-      // Search
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const name = (s.candidate_name || '').toLowerCase();
-        const email = (s.candidate_email || '').toLowerCase();
-        const cid = (s.candidate_cid || '').toLowerCase();
-        if (!name.includes(q) && !email.includes(q) && !cid.includes(q)) return false;
-      }
-      // Status
-      if (statusFilter !== 'all' && s.status !== statusFilter) return false;
-      // Score range
-      if (scoreMin !== '' && (s.score == null || s.score < parseFloat(scoreMin))) return false;
-      if (scoreMax !== '' && (s.score == null || s.score > parseFloat(scoreMax))) return false;
-      // Date range (completed_at)
-      if (dateFrom && s.completed_at) {
-        if (new Date(s.completed_at) < new Date(dateFrom)) return false;
-      }
-      if (dateTo && s.completed_at) {
-        const to = new Date(dateTo);
-        to.setDate(to.getDate() + 1);
-        if (new Date(s.completed_at) > to) return false;
-      }
-      return true;
-    });
-  }, [sessions, searchQuery, statusFilter, scoreMin, scoreMax, dateFrom, dateTo]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredSessions.length / PAGE_SIZE));
-  const paginatedSessions = filteredSessions.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
-  // Stats
-  const stats = useMemo(() => {
-    const completed = sessions.filter((s) => s.status === 'completed');
-    const total = sessions.length;
-    const avgScore = completed.length > 0
-      ? Math.round(completed.reduce((sum, s) => sum + (s.score || 0), 0) / completed.length)
-      : null;
-    const inProgress = sessions.filter((s) => s.status === 'in_progress').length;
-    return { total, completed: completed.length, inProgress, avgScore };
-  }, [sessions]);
+  const paginatedSessions = sessions;
 
   const hasActiveFilters = statusFilter !== 'all' || scoreMin || scoreMax || dateFrom || dateTo;
 
@@ -225,21 +219,21 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
             <Users className="w-4 h-4 text-gray-400" />
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Invited</span>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+          <div className="text-2xl font-bold text-gray-900">{totalSessions}</div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
             <CheckCircle className="w-4 h-4 text-green-500" />
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Completed</span>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{stats.completed}</div>
+          <div className="text-2xl font-bold text-gray-900">{summary.completed}</div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
             <Clock className="w-4 h-4 text-yellow-500" />
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">In Progress</span>
           </div>
-          <div className="text-2xl font-bold text-gray-900">{stats.inProgress}</div>
+          <div className="text-2xl font-bold text-gray-900">{summary.inProgress}</div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <div className="flex items-center gap-2 mb-1">
@@ -247,7 +241,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Avg Score</span>
           </div>
           <div className="text-2xl font-bold text-gray-900">
-            {stats.avgScore !== null ? `${stats.avgScore}%` : '—'}
+            {summary.avgScore !== null ? `${summary.avgScore}%` : '—'}
           </div>
         </div>
       </div>
@@ -353,11 +347,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-7 h-7 animate-spin text-gray-400" />
           </div>
-        ) : filteredSessions.length === 0 ? (
+        ) : sessions.length === 0 ? (
           <div className="text-center py-16">
             <Users className="w-10 h-10 mx-auto mb-3 text-gray-300" />
             <p className="text-gray-500 font-medium">
-              {sessions.length === 0 ? 'No candidates invited yet' : 'No results match your filters'}
+              {totalSessions === 0 && !hasActiveFilters ? 'No candidates invited yet' : 'No results match your filters'}
             </p>
             {hasActiveFilters && (
               <button onClick={clearFilters} className="mt-2 text-sm text-purple-600 hover:underline">
@@ -499,7 +493,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
                 <div className="text-sm text-gray-500">
-                  Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, filteredSessions.length)} of {filteredSessions.length}
+                  Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, totalSessions)} of {totalSessions}
                 </div>
                 <div className="flex items-center gap-2">
                   <button

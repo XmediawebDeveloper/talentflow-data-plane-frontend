@@ -208,6 +208,12 @@ export interface AIInterviewListResponse {
   total_pages: number;
 }
 
+export interface AIInterviewInvitationListResponse extends AIInterviewListResponse {
+  completed: number;
+  in_progress: number;
+  average_score: number | null;
+}
+
 export interface AIInterviewStatsResponse {
   total_interviews: number;
   total_configs: number;
@@ -593,10 +599,20 @@ export const aiInterviewService = {
   /**
    * Get invitations for a config
    */
-  async getConfigInvitations(configId: string): Promise<{ items: AIInterviewResponse[]; total: number }> {
+  async getConfigInvitations(configId: string, params?: {
+    search?: string;
+    status?: string;
+    score_min?: number;
+    score_max?: number;
+    date_from?: string;
+    date_to?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<AIInterviewInvitationListResponse> {
     try {
-      const response = await api.get<{ items: AIInterviewResponse[]; total: number }>(
-        `/ai-interview/${configId}/invitations`
+      const response = await api.get<AIInterviewInvitationListResponse>(
+        `/ai-interview/${configId}/invitations`,
+        { params }
       );
       return response.data;
     } catch (error) {

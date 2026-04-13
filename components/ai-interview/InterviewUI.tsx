@@ -218,8 +218,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     if (!isConnected || isClosing) return;
     timerIntervalRef.current = setInterval(() => {
-      // Paused while Linda speaks; runs during processing/recording/idle
-      if (isAiSpeakingRef.current) return;
+      // Paused while Linda speaks a question; NOT paused for silence prompts ("Are you there?")
+      if (isAiSpeakingRef.current && !isSilencePromptRef.current) return;
       setRemainingSeconds(prev => Math.max(0, prev - 1));
     }, 1000);
     return () => {
@@ -534,6 +534,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isAiSpeakingRef = useRef(false);
+  // True while Linda is speaking the "Are you there?" silence prompt — timer must NOT pause during this.
+  const isSilencePromptRef = useRef(false);
   const isProcessingRef = useRef(false);
   // Cancellable ref for the 800ms "start recording after Linda stops" setTimeout.
   // Cancelled by the Next Q handler to prevent stale recording after a skip.
@@ -561,7 +563,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Keep refs in sync with state — refs are always current inside stale closures
-  useEffect(() => { isAiSpeakingRef.current = isAiSpeaking; }, [isAiSpeaking]);
+  useEffect(() => {
+    isAiSpeakingRef.current = isAiSpeaking;
+    // Clear silence prompt flag when Linda stops speaking
+    if (!isAiSpeaking) isSilencePromptRef.current = false;
+  }, [isAiSpeaking]);
   useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
   useEffect(() => { isFollowUpRef.current = isFollowUp; }, [isFollowUp]);
 
@@ -590,10 +596,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       clearInterval(questionTimerIntervalRef.current);
     }
     questionTimerIntervalRef.current = setInterval(() => {
-      // Pause only during the MAIN question speech — gives candidate full 2-min window.
-      // Follow-ups: timer keeps running (the backend's remaining-seconds already
-      // accounts for Linda's follow-up speaking time, so we must not pause here).
-      if (isAiSpeakingRef.current && !isFollowUpRef.current) return;
+      // Paused while Linda speaks; runs during processing/recording/idle.
+      if (isAiSpeakingRef.current && !isSilencePromptRef.current) return;
       setQuestionTimerSeconds(prev => {
         if (prev === null || prev <= 1) {
           if (questionTimerIntervalRef.current) {
@@ -976,7 +980,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (questionTimerIntervalRef.current) clearInterval(questionTimerIntervalRef.current);
         questionTimerIntervalRef.current = setInterval(() => {
           // Paused while Linda speaks; runs during processing/recording/idle
-          if (isAiSpeakingRef.current) return;
+          if (isAiSpeakingRef.current && !isSilencePromptRef.current) return;
           setQuestionTimerSeconds(prev => {
             if (prev === null || prev <= 1) {
               if (questionTimerIntervalRef.current) {
@@ -1389,7 +1393,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               if (questionTimerIntervalRef.current) clearInterval(questionTimerIntervalRef.current);
               questionTimerIntervalRef.current = setInterval(() => {
                 // Paused while Linda speaks; runs during processing/recording/idle
-                if (isAiSpeakingRef.current) return;
+                if (isAiSpeakingRef.current && !isSilencePromptRef.current) return;
                 setQuestionTimerSeconds(prev => {
                   if (prev === null || prev <= 1) {
                     if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
@@ -1482,6 +1486,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             // live countdown instead of a frozen number.
             if (!questionTimerIntervalRef.current && dur > 0) {
               questionTimerIntervalRef.current = setInterval(() => {
+                // Paused while Linda speaks; runs during processing/recording/idle.
+                if (isAiSpeakingRef.current && !isSilencePromptRef.current) return;
                 setQuestionTimerSeconds(prev => {
                   if (prev === null || prev <= 1) {
                     if (questionTimerIntervalRef.current) {
@@ -1588,7 +1594,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           setQuestionTimerSeconds(dur);
           questionTimerIntervalRef.current = setInterval(() => {
             // Paused while Linda speaks; runs during processing/recording/idle
-            if (isAiSpeakingRef.current) return;
+            if (isAiSpeakingRef.current && !isSilencePromptRef.current) return;
             setQuestionTimerSeconds(prev => {
               if (prev === null || prev <= 1) {
                 if (questionTimerIntervalRef.current) {
@@ -1656,6 +1662,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       case "silence_detected": {
         // Backend detected silence — show banner with 30s auto-skip countdown.
         // Candidate can respond or dismiss; if they stay silent the question is skipped.
+        isSilencePromptRef.current = true; // Linda's "Are you there?" — timer must keep running
         setShowSilenceBanner(true);
         // Clear any previous countdown/timer
         if (silenceBannerTimerRef.current) clearTimeout(silenceBannerTimerRef.current);

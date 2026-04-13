@@ -208,7 +208,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const loadActivity = useCallback(async () => {
     setActivityLoading(true);
     try {
-      const result = await aiInterviewService.getConfigInvitations(config.id);
+      const result = await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 100 });
       setRecentActivity(result.items);
     } catch (error) {
       console.error('Failed to load activity:', error);

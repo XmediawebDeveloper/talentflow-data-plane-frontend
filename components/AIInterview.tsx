@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2 } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Zap, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -39,6 +39,9 @@ const ROUND_LABELS: Record<string, string> = {
 };
 
 type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'processing' | 'audit' | 'consent' | 'settings';
+const CONFIG_PAGE_SIZE = 10;
+const PROCESSING_PAGE_SIZE = 10;
+const INVITATION_PAGE_SIZE = 10;
 
 export default function AIInterview() {
   const router = useRouter();
@@ -71,6 +74,15 @@ export default function AIInterview() {
   const [invitations, setInvitations] = useState<AIInterviewResponse[]>([]);
   const [loadingInvitations, setLoadingInvitations] = useState(false);
   const [resendingEmailFor, setResendingEmailFor] = useState<string | null>(null); // session id
+  const [invitationTotal, setInvitationTotal] = useState(0);
+  const [invitationTotalPages, setInvitationTotalPages] = useState(1);
+  const [invitationSummary, setInvitationSummary] = useState({
+    completed: 0,
+    inProgress: 0,
+  });
+  const [configListPage, setConfigListPage] = useState(1);
+  const [processingPage, setProcessingPage] = useState(1);
+  const [invitationPage, setInvitationPage] = useState(1);
 
   // Candidate detail view (from Track Invites modal)
   const [candidateDetailFromModal, setCandidateDetailFromModal] = useState<AIInterviewResponse | null>(null);
@@ -225,6 +237,28 @@ export default function AIInterview() {
     }
   }, []);
 
+  const loadInvitations = useCallback(async (configId: string, page: number) => {
+    setLoadingInvitations(true);
+    try {
+      const result = await aiInterviewService.getConfigInvitations(configId, {
+        page,
+        page_size: INVITATION_PAGE_SIZE,
+      });
+      setInvitations(result.items);
+      setInvitationTotal(result.total);
+      setInvitationTotalPages(Math.max(1, result.total_pages || 1));
+      setInvitationSummary({
+        completed: result.completed || 0,
+        inProgress: result.in_progress || 0,
+      });
+    } catch (error) {
+      console.error('Failed to load invitations:', error);
+      toast.error('Failed to load invitations');
+    } finally {
+      setLoadingInvitations(false);
+    }
+  }, []);
+
   const loadProctoringSettings = useCallback(async () => {
     setProctoringLoading(true);
     try {
@@ -280,6 +314,11 @@ export default function AIInterview() {
     if (activeTab === 'processing') loadProcessingSessions();
   }, [activeTab, loadSettings, loadArchivedConfigs, loadAuditTrail, loadProcessingSessions, settingsSubTab, loadProctoringSettings, auditCategory, auditPage]);
 
+  useEffect(() => {
+    if (!viewInvitationsConfig) return;
+    loadInvitations(viewInvitationsConfig.id, invitationPage);
+  }, [viewInvitationsConfig, invitationPage, loadInvitations]);
+
   // Click-outside handler for 3-dot menu
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -327,16 +366,7 @@ export default function AIInterview() {
 
   const handleViewInvitations = async (config: AIInterviewResponse) => {
     setViewInvitationsConfig(config);
-    setLoadingInvitations(true);
-    try {
-      const result = await aiInterviewService.getConfigInvitations(config.id);
-      setInvitations(result.items);
-    } catch (error) {
-      console.error('Failed to load invitations:', error);
-      toast.error('Failed to load invitations');
-    } finally {
-      setLoadingInvitations(false);
-    }
+    setInvitationPage(1);
     setOpenMenuId(null);
   };
 
@@ -465,11 +495,21 @@ export default function AIInterview() {
       return modeFilter === 'timed' ? isTimed : !isTimed;
     });
   })();
+  const configTotalPages = Math.max(1, Math.ceil(filteredConfigs.length / CONFIG_PAGE_SIZE));
+  const paginatedConfigs = filteredConfigs.slice(
+    (configListPage - 1) * CONFIG_PAGE_SIZE,
+    configListPage * CONFIG_PAGE_SIZE,
+  );
+  const processingTotalPages = Math.max(1, Math.ceil(processingSessions.length / PROCESSING_PAGE_SIZE));
+  const paginatedProcessingSessions = processingSessions.slice(
+    (processingPage - 1) * PROCESSING_PAGE_SIZE,
+    processingPage * PROCESSING_PAGE_SIZE,
+  );
 
   const getStatusBadge = (status: string) => {
     switch (normalizeConfigStatus(status)) {
       case 'published':
-        return 'bg-green-100 text-green-700';
+        return 'bg-gray-700 text-white';
       case 'draft':
         return 'bg-gray-100 text-gray-600';
       case 'completed':
@@ -495,6 +535,14 @@ export default function AIInterview() {
   };
 
   const isConfigListTab = ['all', 'published', 'draft', 'completed', 'archived'].includes(activeTab);
+
+  useEffect(() => {
+    setConfigListPage(1);
+  }, [activeTab, modeFilter]);
+
+  useEffect(() => {
+    setProcessingPage(1);
+  }, [processingSessions.length]);
 
   // Candidate detail view from Track Invites modal
   if (candidateDetailFromModal) {
@@ -645,8 +693,8 @@ export default function AIInterview() {
           <div className="border-b border-gray-200 px-3 sm:px-6">
             <div className="flex gap-2 sm:gap-4 overflow-x-auto scrollbar-hide">
               {[
-                { key: 'all', label: 'All Configurations' },
-                { key: 'published', label: 'Published' },
+                { key: 'all', label: 'All AI Interviews' },
+                { key: 'published', label: 'Active' },
                 { key: 'draft', label: 'Draft' },
                 // { key: 'completed', label: 'Completed' },
                 // { key: 'archived', label: 'Archived' },
@@ -712,7 +760,7 @@ export default function AIInterview() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {filteredConfigs.map((config) => {
+                  {paginatedConfigs.map((config) => {
                     const enabledRounds = config.rounds_config
                       ? config.rounds_config.filter((r: any) => r.enabled !== false)
                       : [];
@@ -938,6 +986,32 @@ export default function AIInterview() {
                       </div>
                     );
                   })}
+                  {configTotalPages > 1 && (
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="text-sm text-gray-500">
+                        Showing {((configListPage - 1) * CONFIG_PAGE_SIZE) + 1}–{Math.min(configListPage * CONFIG_PAGE_SIZE, filteredConfigs.length)} of {filteredConfigs.length}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setConfigListPage((p) => Math.max(1, p - 1))}
+                          disabled={configListPage === 1}
+                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm text-gray-700 font-medium px-2">
+                          {configListPage} / {configTotalPages}
+                        </span>
+                        <button
+                          onClick={() => setConfigListPage((p) => Math.min(configTotalPages, p + 1))}
+                          disabled={configListPage === configTotalPages}
+                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -957,7 +1031,7 @@ export default function AIInterview() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {processingSessions.map((session) => (
+                  {paginatedProcessingSessions.map((session) => (
                     <div key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-200 rounded-lg gap-2 sm:gap-3">
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-yellow-100 flex items-center justify-center flex-shrink-0">
@@ -981,6 +1055,32 @@ export default function AIInterview() {
                       </div>
                     </div>
                   ))}
+                  {processingTotalPages > 1 && (
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="text-sm text-gray-500">
+                        Showing {((processingPage - 1) * PROCESSING_PAGE_SIZE) + 1}–{Math.min(processingPage * PROCESSING_PAGE_SIZE, processingSessions.length)} of {processingSessions.length}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setProcessingPage((p) => Math.max(1, p - 1))}
+                          disabled={processingPage === 1}
+                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm text-gray-700 font-medium px-2">
+                          {processingPage} / {processingTotalPages}
+                        </span>
+                        <button
+                          onClick={() => setProcessingPage((p) => Math.min(processingTotalPages, p + 1))}
+                          disabled={processingPage === processingTotalPages}
+                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1304,12 +1404,13 @@ export default function AIInterview() {
           return inv.status;
         };
 
-        const invTotal = invitations.length;
-        const invInvited = invitations.filter(i => resolveStatus(i) === 'invited').length;
-        const invInProgress = invitations.filter(i => resolveStatus(i) === 'in_progress').length;
-        const invCompleted = invitations.filter(i => resolveStatus(i) === 'completed').length;
-        const invCancelled = invitations.filter(i => ['cancelled', 'expired'].includes(resolveStatus(i))).length;
+        const invTotal = invitationTotal;
+        const invInvited = Math.max(0, invitationTotal - invitationSummary.completed - invitationSummary.inProgress);
+        const invInProgress = invitationSummary.inProgress;
+        const invCompleted = invitationSummary.completed;
+        const invCancelled = Math.max(0, invitationTotal - invInvited - invInProgress - invCompleted);
         const invCompletionRate = invTotal > 0 ? Math.round((invCompleted / invTotal) * 100) : 0;
+        const paginatedInvitations = invitations;
 
         const getInvStatusBadge = (status: string) => {
           switch (status) {
@@ -1401,7 +1502,7 @@ export default function AIInterview() {
                   </div>
                 ) : (
                   <div className="space-y-2 sm:space-y-3">
-                    {invitations.map((inv) => (
+                    {paginatedInvitations.map((inv) => (
                       <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors gap-2 sm:gap-3">
                         {/* Candidate info */}
                         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -1515,6 +1616,32 @@ export default function AIInterview() {
                         </div>
                       </div>
                     ))}
+                    {invitationTotalPages > 1 && (
+                      <div className="flex items-center justify-between pt-2">
+                        <div className="text-sm text-gray-500">
+                          Showing {((invitationPage - 1) * INVITATION_PAGE_SIZE) + 1}–{Math.min(invitationPage * INVITATION_PAGE_SIZE, invitationTotal)} of {invitationTotal}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setInvitationPage((p) => Math.max(1, p - 1))}
+                            disabled={invitationPage === 1}
+                            className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <span className="text-sm text-gray-700 font-medium px-2">
+                            {invitationPage} / {invitationTotalPages}
+                          </span>
+                          <button
+                            onClick={() => setInvitationPage((p) => Math.min(invitationTotalPages, p + 1))}
+                            disabled={invitationPage === invitationTotalPages}
+                            className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1522,7 +1649,7 @@ export default function AIInterview() {
               {/* Footer */}
               <div className="border-t border-gray-200 px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
                 <span className="text-xs sm:text-sm text-gray-500">
-                  {invitations.length} candidate{invitations.length !== 1 ? 's' : ''} invited
+                  {invitationTotal} candidate{invitationTotal !== 1 ? 's' : ''} invited
                 </span>
                 <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
