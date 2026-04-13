@@ -20,6 +20,11 @@ import StepSystemCheck from '@/components/candidate/StepSystemCheck';
 import StepIntroVideo from '@/components/candidate/StepIntroVideo';
 import StepLanguageSelect from '@/components/candidate/StepLanguageSelect';
 import StepSamplePractice from '@/components/candidate/StepSamplePractice';
+import {
+  readInterviewStep,
+  writeInterviewStep,
+  clearInterviewStep,
+} from '@/lib/utils/aiInterviewSessionStore';
 
 type Step =
   | 'loading'
@@ -109,8 +114,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     },
   });
 
-  // sessionStorage key for this interview's current step
-  const SESSION_KEY = `tf_ai_step_${token}`;
+  // Post-check step persistence goes through aiInterviewSessionStore, which
+  // mirrors to localStorage with a TTL so an accidental tab close within the
+  // recovery window still restores the right position. See that util for the
+  // security rationale (only the non-sensitive step name is mirrored; the
+  // OTP-gated session-auth marker stays in sessionStorage).
   // Steps that aren't tracked by the backend and must be persisted client-side
   const POST_CHECK_STEPS: Step[] = ['intro_video', 'language_select', 'sample_practice', 'fullscreen_prompt'];
   // Session-auth marker — set after OTP verified; cleared when browser is closed (sessionStorage)
@@ -125,6 +133,10 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const [reauthOtpError, setReauthOtpError] = useState<string | null>(null);
   const [reauthCooldown, setReauthCooldown] = useState(0);
   const reauthCooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Server-side lockout (429 OTP_LOCKED / OTP_SEND_RATE_LIMITED). Seconds until
+  // the candidate may try again. While >0, both Send and Verify are disabled.
+  const [reauthLockoutSeconds, setReauthLockoutSeconds] = useState(0);
+  const reauthLockoutRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load interview info and determine initial step
   const loadInterview = useCallback(async () => {
@@ -142,7 +154,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
       // ── 1. Terminal / active states ──
       if (info.status === 'in_progress') {
-        sessionStorage.removeItem(SESSION_KEY);
+        clearInterviewStep(token);
         // Pre-create 24kHz AudioContext so TalkingHead uses the correct sample rate.
         // Without this, TalkingHead defaults to the device rate (48kHz) and plays
         // 24kHz PCM audio at 2× speed.
@@ -158,7 +170,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         return;
       }
       if (info.status === 'completed' || info.status === 'cancelled') {
-        sessionStorage.removeItem(SESSION_KEY);
+        clearInterviewStep(token);
         setStep('completed');
         return;
       }
@@ -187,7 +199,7 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         // Determine where to send them AFTER they pass OTP
         let targetStep: Step = 'system_check';
         if (info.system_check_passed) {
-          const savedStep = sessionStorage.getItem(SESSION_KEY) as Step | null;
+          const savedStep = readInterviewStep(token) as Step | null;
           if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
             targetStep = savedStep;
           } else if (info.introduction_video_url) {
@@ -209,8 +221,9 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         return;
       }
 
-      // ── 3. Post-system-check steps — restore from sessionStorage ──
-      const savedStep = sessionStorage.getItem(SESSION_KEY) as Step | null;
+      // ── 3. Post-system-check steps — restore via aiInterviewSessionStore ──
+      // (sessionStorage first, localStorage mirror as fallback if tab closed)
+      const savedStep = readInterviewStep(token) as Step | null;
       if (savedStep && POST_CHECK_STEPS.includes(savedStep)) {
         // Skip language_select if language already confirmed
         if (savedStep === 'language_select' && info.selected_language) {
@@ -248,14 +261,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     loadInterview();
   }, [loadInterview]);
 
-  // Persist post-check steps to sessionStorage so refresh restores the correct position
+  // Persist post-check steps so refresh — and accidental tab close within the
+  // TTL window — restores the correct position. See aiInterviewSessionStore.
   useEffect(() => {
     if (POST_CHECK_STEPS.includes(step as Step)) {
-      sessionStorage.setItem(SESSION_KEY, step);
+      writeInterviewStep(token, step);
     } else if (step === 'interview' || step === 'completed' || step === 'error') {
-      sessionStorage.removeItem(SESSION_KEY);
+      clearInterviewStep(token);
     }
-  }, [step]);
+  }, [step, token]);
 
   // Scroll to top on every step transition
   useEffect(() => {
@@ -688,8 +702,40 @@ export function CandidateAIInterviewPortal({ token }: Props) {
       }, 1000);
     };
 
+    // Start a lockout countdown. Backend responds with 429 and
+    // `detail.retry_after_seconds` when the candidate has exhausted attempts
+    // or hit the send rate limit. During the countdown both Send and Verify
+    // are disabled (the button label also shows the remaining time).
+    const startReauthLockout = (seconds: number) => {
+      if (reauthLockoutRef.current) {
+        clearInterval(reauthLockoutRef.current);
+        reauthLockoutRef.current = null;
+      }
+      setReauthLockoutSeconds(Math.max(1, Math.ceil(seconds)));
+      reauthLockoutRef.current = setInterval(() => {
+        setReauthLockoutSeconds(prev => {
+          if (prev <= 1) {
+            clearInterval(reauthLockoutRef.current!);
+            reauthLockoutRef.current = null;
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    };
+
+    // Extract a lockout duration from an axios error. Returns 0 if this
+    // wasn't a lockout response (normal error handling applies).
+    const extractLockoutSeconds = (err: any): number => {
+      const status = err?.response?.status;
+      if (status !== 429) return 0;
+      const detail = err?.response?.data?.detail;
+      const seconds = (detail && typeof detail === 'object') ? detail.retry_after_seconds : undefined;
+      return Number.isFinite(seconds) && seconds > 0 ? Number(seconds) : 0;
+    };
+
     const handleReauthSendOtp = async () => {
-      if (reauthOtpSending || reauthCooldown > 0) return;
+      if (reauthOtpSending || reauthCooldown > 0 || reauthLockoutSeconds > 0) return;
       setReauthOtpSending(true);
       setReauthOtpError(null);
       try {
@@ -697,14 +743,23 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         setReauthOtpSent(true);
         startReauthCooldown();
       } catch (err: any) {
-        setReauthOtpError(err?.response?.data?.detail || 'Failed to send OTP. Please try again.');
+        const lockSecs = extractLockoutSeconds(err);
+        if (lockSecs > 0) {
+          startReauthLockout(lockSecs);
+          const mins = Math.ceil(lockSecs / 60);
+          setReauthOtpError(`Too many verification attempts. Please try again in ${mins} minute${mins === 1 ? '' : 's'}.`);
+        } else {
+          const detail = err?.response?.data?.detail;
+          const msg = (typeof detail === 'string') ? detail : (detail?.message || 'Failed to send OTP. Please try again.');
+          setReauthOtpError(msg);
+        }
       } finally {
         setReauthOtpSending(false);
       }
     };
 
     const handleReauthVerifyOtp = async () => {
-      if (!reauthOtpCode.trim() || reauthOtpVerifying) return;
+      if (!reauthOtpCode.trim() || reauthOtpVerifying || reauthLockoutSeconds > 0) return;
       setReauthOtpVerifying(true);
       setReauthOtpError(null);
       try {
@@ -716,11 +771,24 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           setReauthOtpError('Invalid OTP code. Please check and try again.');
         }
       } catch (err: any) {
-        setReauthOtpError(err?.response?.data?.detail || 'Verification failed. Please try again.');
+        const lockSecs = extractLockoutSeconds(err);
+        if (lockSecs > 0) {
+          startReauthLockout(lockSecs);
+          const mins = Math.ceil(lockSecs / 60);
+          setReauthOtpError(`Too many failed attempts. Please try again in ${mins} minute${mins === 1 ? '' : 's'}.`);
+        } else {
+          const detail = err?.response?.data?.detail;
+          const msg = (typeof detail === 'string') ? detail : (detail?.message || 'Verification failed. Please try again.');
+          setReauthOtpError(msg);
+        }
       } finally {
         setReauthOtpVerifying(false);
       }
     };
+
+    const lockoutLabel = reauthLockoutSeconds > 0
+      ? `Locked — try again in ${Math.floor(reauthLockoutSeconds / 60)}:${String(reauthLockoutSeconds % 60).padStart(2, '0')}`
+      : null;
 
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4" style={{ colorScheme: 'light' }}>
@@ -744,10 +812,14 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           {!reauthOtpSent ? (
             <button
               onClick={handleReauthSendOtp}
-              disabled={reauthOtpSending}
-              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+              disabled={reauthOtpSending || reauthLockoutSeconds > 0}
+              className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all"
             >
-              {reauthOtpSending ? <><Loader2 className="w-4 h-4 animate-spin" />Sending...</> : 'Send OTP'}
+              {reauthLockoutSeconds > 0
+                ? lockoutLabel
+                : reauthOtpSending
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />Sending...</>
+                  : 'Send OTP'}
             </button>
           ) : (
             <div className="space-y-4">
@@ -761,7 +833,8 @@ export function CandidateAIInterviewPortal({ token }: Props) {
                   onChange={(e) => setReauthOtpCode(e.target.value.replace(/\D/g, ''))}
                   onKeyDown={(e) => { if (e.key === 'Enter') handleReauthVerifyOtp(); }}
                   placeholder="6-digit code"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  disabled={reauthLockoutSeconds > 0}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-400"
                 />
               </div>
               {reauthOtpError && (
@@ -771,17 +844,25 @@ export function CandidateAIInterviewPortal({ token }: Props) {
               )}
               <button
                 onClick={handleReauthVerifyOtp}
-                disabled={reauthOtpVerifying || reauthOtpCode.length < 4}
-                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+                disabled={reauthOtpVerifying || reauthOtpCode.length < 4 || reauthLockoutSeconds > 0}
+                className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition-all"
               >
-                {reauthOtpVerifying ? <><Loader2 className="w-4 h-4 animate-spin" />Verifying...</> : 'Verify & Continue'}
+                {reauthLockoutSeconds > 0
+                  ? lockoutLabel
+                  : reauthOtpVerifying
+                    ? <><Loader2 className="w-4 h-4 animate-spin" />Verifying...</>
+                    : 'Verify & Continue'}
               </button>
               <button
                 onClick={handleReauthSendOtp}
-                disabled={reauthOtpSending || reauthCooldown > 0}
+                disabled={reauthOtpSending || reauthCooldown > 0 || reauthLockoutSeconds > 0}
                 className="w-full text-sm text-indigo-600 hover:text-indigo-700 disabled:text-gray-400 py-1"
               >
-                {reauthCooldown > 0 ? `Resend OTP in ${reauthCooldown}s` : 'Resend OTP'}
+                {reauthLockoutSeconds > 0
+                  ? lockoutLabel
+                  : reauthCooldown > 0
+                    ? `Resend OTP in ${reauthCooldown}s`
+                    : 'Resend OTP'}
               </button>
             </div>
           )}

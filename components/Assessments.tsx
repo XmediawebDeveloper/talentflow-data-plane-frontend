@@ -1900,30 +1900,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     className="p-4 sm:p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
                     {/* Grid Card Header */}
-                    <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start mb-3">
                       <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
                         <FileText className="w-5 h-5 text-gray-700" />
                       </div>
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-xs ${
-                          assessment.status === 'Active'
-                            ? 'bg-gray-700 text-white'
-                            : assessment.status === 'Draft'
-                            ? 'bg-gray-200 text-gray-600'
-                            : assessment.status === 'Archived'
-                            ? 'bg-gray-400 text-white'
-                            : assessment.status === 'Completed'
-                            ? 'bg-gray-600 text-white'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {assessment.status}
-                      </span>
                     </div>
 
                     {/* Grid Card Title */}
                     <div className="mb-3">
-                      {/* Line 1: AS-022 SQL Developer - Assessment V1 */}
+                      {/* Line 1: AS-022 SQL Developer - Assessment V1 [AI] [Active] */}
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <span className="inline-flex items-center px-2.5 py-1 bg-gray-800 text-white rounded text-xs font-semibold">
                           {assessment.short_id}
@@ -1938,6 +1923,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             AI
                           </span>
                         )}
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                            assessment.status === 'Active'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : assessment.status === 'Draft'
+                              ? 'bg-amber-100 text-amber-700'
+                              : assessment.status === 'Archived'
+                              ? 'bg-orange-100 text-orange-700'
+                              : assessment.status === 'Completed'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {assessment.status}
+                        </span>
                       </div>
 
                       {/* Line 2: JD-025 SQL Developer <jdversion> */}
@@ -2208,6 +2208,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 AI
                               </span>
                             )}
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                                assessment.status === 'Active'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : assessment.status === 'Draft'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : assessment.status === 'Archived'
+                                  ? 'bg-orange-100 text-orange-700'
+                                  : assessment.status === 'Completed'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : assessment.status === 'Paused'
+                                  ? 'bg-gray-200 text-gray-600'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {assessment.status}
+                            </span>
                           </div>
 
                           {/* Line 2: JD-025 SQL Developer <jdversion> */}
@@ -2300,27 +2317,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </button>
                         </div>
 
-                        {/* Status Badge + Three Dots - always grouped together */}
+                        {/* Three Dots Menu group */}
                         <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
-                          {/* Status Badge */}
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs whitespace-nowrap ${
-                              assessment.status === 'Active'
-                                ? 'bg-gray-700 text-white'
-                                : assessment.status === 'Draft'
-                                ? 'bg-gray-200 text-gray-600'
-                                : assessment.status === 'Archived'
-                                ? 'bg-gray-400 text-white'
-                                : assessment.status === 'Completed'
-                                ? 'bg-gray-600 text-white'
-                                : assessment.status === 'Paused'
-                                ? 'bg-gray-300 text-gray-700'
-                                : 'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {assessment.status}
-                          </span>
-
                           {/* Three Dots Menu */}
                           <div className="relative">
                             <button

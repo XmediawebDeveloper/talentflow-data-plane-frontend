@@ -15,6 +15,8 @@ import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
+import { modeFromDuration, durationFromMode } from '@/lib/constants/aiInterviewMode';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Step indicator constants                                               */
@@ -217,20 +219,16 @@ const SUPPORTED_LANGUAGES = [
   'Thai', 'Turkish', 'Ukrainian', 'Urdu', 'Vietnamese', 'Welsh',
 ];
 
-const PRIORITY_LABELS: Record<number, { label: string; short: string; color: string; dot: string }> = {
-  5: { label: 'P5 – Critical',   short: 'Critical',  color: 'bg-red-100 text-red-700 border-red-200',       dot: 'bg-red-500' },
-  4: { label: 'P4 – High',       short: 'High',      color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
-  3: { label: 'P3 – Medium',     short: 'Medium',    color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
-  2: { label: 'P2 – Low',        short: 'Low',       color: 'bg-blue-100 text-blue-700 border-blue-200',     dot: 'bg-blue-500' },
-  1: { label: 'P1 – Optional',   short: 'Optional',  color: 'bg-gray-100 text-gray-600 border-gray-200',     dot: 'bg-gray-400' },
-};
+// Priority labels are imported from lib/constants/aiInterviewPriority (P1-P3 scale).
+// Any legacy 1-5 values from the AI cluster generator are normalized via
+// getPriorityLabel() so this component never has to know the underlying scale.
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Sub-components                                                          */
 /* ─────────────────────────────────────────────────────────────────────── */
 
 function PriorityBadge({ p }: { p: number }) {
-  const { label, color } = PRIORITY_LABELS[p] ?? PRIORITY_LABELS[3];
+  const { label, color } = getPriorityLabel(p);
   return (
     <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${color}`}>
       {label}
@@ -1103,9 +1101,10 @@ export default function AIInterviewConfig() {
             setHrEnabled(false);
           }
 
-          // Detect mode from stored duration (0 = flexible)
-          const storedDuration = existingDraft.duration_minutes ?? 30;
-          setMode(storedDuration === 0 ? 'flexible' : 'fixed');
+          // Detect mode from stored duration.
+          // Convention: duration_minutes === 0 means flexible mode.
+          // See lib/constants/aiInterviewMode.ts for the rationale.
+          setMode(modeFromDuration(existingDraft.duration_minutes ?? 30));
 
           // Restore available languages
           if ((existingDraft as any).available_languages?.length) {
@@ -1268,7 +1267,7 @@ export default function AIInterviewConfig() {
         const payload = {
           position: selectedJd.title,
           jd_id: selectedJd.id,
-          duration_minutes: mode === 'flexible' ? 0 : totalFixed,
+          duration_minutes: durationFromMode(mode, totalFixed),
           rounds_config: rounds,
           recording_enabled: recordingEnabled,
           available_languages: availableLanguages,

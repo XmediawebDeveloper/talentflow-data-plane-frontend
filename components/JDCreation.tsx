@@ -2612,12 +2612,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Detect changes via data comparison (bulletproof fallback - works even if a handler misses the flag)
     const dataChanged = step2DataSnapshot.current !== '' && JSON.stringify(extractedData) !== step2DataSnapshot.current;
-    const shouldReformat = (extractedDataModified && !hasFormattedForReview) || dataChanged;
 
-    console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'shouldReformat:', shouldReformat);
+    // For manual JD mode: detect if the description lacks markdown formatting
+    // (no headers, no line breaks, no bullets, no bold) → force reformat so the
+    // published JD isn't a single run-on paragraph.
+    const currentDescription = mode === 'ai' ? generatedJD : manualJD;
+    const lacksMarkdownFormatting = mode === 'manual' && currentDescription && !(
+      /^#{1,6}\s/m.test(currentDescription) ||        // markdown headers
+      /\n\n/.test(currentDescription) ||              // paragraph breaks
+      /\*\*[^*]+\*\*/.test(currentDescription) ||     // bold text
+      /^[-*+]\s/m.test(currentDescription)            // bullet points
+    );
+
+    const shouldReformat = (extractedDataModified && !hasFormattedForReview) || dataChanged || lacksMarkdownFormatting;
+
+    console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'lacksMarkdownFormatting:', lacksMarkdownFormatting, 'shouldReformat:', shouldReformat);
 
     // Track the final description to use (avoiding React state async issues)
-    let finalDescription = mode === 'ai' ? generatedJD : manualJD;
+    let finalDescription = currentDescription;
 
     // Reformat with AI if user edited something in Step 2
     // Uses both flag-based check AND data snapshot comparison for reliability
@@ -2955,10 +2967,50 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         }
       }
 
+      // For manual JD mode: detect if the description lacks markdown formatting
+      // (e.g., user resumed an existing draft and went straight to step 3 publish).
+      // Reformat with AI so the published JD isn't a single run-on paragraph.
+      let publishDescription = generatedJD || manualJD;
+      const lacksMarkdownFormatting = mode === 'manual' && publishDescription && !(
+        /^#{1,6}\s/m.test(publishDescription) ||      // markdown headers
+        /\n\n/.test(publishDescription) ||            // paragraph breaks
+        /\*\*[^*]+\*\*/.test(publishDescription) ||   // bold text
+        /^[-*+]\s/m.test(publishDescription)          // bullet points
+      );
+
+      if (lacksMarkdownFormatting && editingId) {
+        console.log('[DEBUG] handleConfirmPublish - manual JD lacks formatting, reformatting before publish');
+        try {
+          const reformatParams = {
+            must_have_skills: extractedData.mustHaveSkills,
+            nice_to_have_skills: extractedData.niceToHaveSkills,
+            must_have_comments: extractedData.mustHaveComments || [],
+            nice_to_have_comments: extractedData.niceToHaveComments || [],
+            experience_min: experienceMin,
+            experience_max: experienceMax,
+            education_requirements: extractedData.education
+              ? (typeof extractedData.education === 'string' ? { degree: extractedData.education } : extractedData.education)
+              : null,
+            certifications: extractedData.certifications,
+            coding_required: extractedData.codingRequired,
+            supported_languages: extractedData.suggestedLanguages,
+            salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
+            salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+            compensation_type: extractedData.compensationType,
+          };
+          const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
+          publishDescription = reformattedJD.description;
+          setManualJD(reformattedJD.description);
+          console.log('[DEBUG] Manual JD reformatted successfully before publish');
+        } catch (reformatErr) {
+          console.error('[ERROR] Failed to reformat before publish, proceeding with raw text:', reformatErr);
+        }
+      }
+
       // Build the JD data for backend
       const jdData = {
         title: jobTitle.trim(),  // Trim spaces before saving
-        description: generatedJD || manualJD,
+        description: publishDescription,
         department: extractedData.department || '',
         location: extractedData.locations.length > 0
           ? extractedData.locations[0].city

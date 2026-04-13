@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
+import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -98,18 +100,14 @@ function getTimedModePercentages(nthEnabled: boolean, hrEnabled: boolean) {
   return { mth, nth, hr };
 }
 
-const PRIORITY_LABELS: Record<number, { label: string; color: string; dot: string }> = {
-  3: { label: 'P3 – High',    color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
-  2: { label: 'P2 – Medium',  color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
-  1: { label: 'P1 – Low',     color: 'bg-blue-100 text-blue-700 border-blue-200',       dot: 'bg-blue-500'   },
-};
+// Priority labels are imported from lib/constants/aiInterviewPriority (P1-P3 scale).
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Helper sub-components                                                   */
 /* ─────────────────────────────────────────────────────────────────────── */
 
 function PriorityBadge({ p }: { p: number }) {
-  const { label, color } = PRIORITY_LABELS[p] ?? PRIORITY_LABELS[3];
+  const { label, color } = getPriorityLabel(p);
   return (
     <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${color}`}>
       {label}
@@ -180,10 +178,10 @@ export default function AIInterviewPreview() {
           setSkillWeights(parsed.skill_weights ?? {});
           setInterviewMode(parsed.interview_mode === 'flexible' ? 'flexible' : 'fixed');
         } catch {
-          setInterviewMode(data.duration_minutes === 0 ? 'flexible' : 'fixed');
+          setInterviewMode(modeFromDuration(data.duration_minutes));
         }
       } else {
-        setInterviewMode(data.duration_minutes === 0 ? 'flexible' : 'fixed');
+        setInterviewMode(modeFromDuration(data.duration_minutes));
       }
     } catch {
       toast.error('Failed to load interview configuration');

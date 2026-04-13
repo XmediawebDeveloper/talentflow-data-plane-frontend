@@ -449,16 +449,21 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             setCurrentQuestion({ qNum, isFollowUp });
             const qEvent: LiveEvent = { kind: 'question' as const, qNum, isFollowUp, ts: Date.now() };
             const newTimerEvts: LiveEvent[] = [qEvent];
-            // If backend says which skill is being asked, stamp it directly (ground-truth mapping)
-            if (msg.current_skill) {
-              const assignEv: LiveEvent = {
+            // Create assigned events for all target skills (multi-skill support).
+            // current_skills contains the primary skill + any additional uncovered skills
+            // in the same cluster that Linda may be addressing in this question.
+            // Fall back to single current_skill for older backend versions.
+            const targetSkills: string[] = Array.isArray(msg.current_skills) && (msg.current_skills as string[]).length > 0
+              ? (msg.current_skills as string[])
+              : (msg.current_skill ? [msg.current_skill as string] : []);
+            for (const sk of targetSkills) {
+              newTimerEvts.push({
                 kind: 'assigned' as const,
-                skill: (msg.current_skill as string).toLowerCase(),
+                skill: sk.toLowerCase(),
                 qNum,
                 isFollowUp,
                 ts: Date.now(),
-              };
-              newTimerEvts.push(assignEv);
+              });
             }
             setLiveEvents(prev => [...newTimerEvts, ...prev].slice(0, 50));
             pendingEventsRef.current.push(...newTimerEvts);

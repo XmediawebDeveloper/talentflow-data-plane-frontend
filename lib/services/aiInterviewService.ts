@@ -167,6 +167,13 @@ export interface AIInterviewResponse {
   invitations_count?: number;
   jd_short_id?: string;  // JD's short display ID e.g. "JD-003", injected by list endpoint
   jd_industry_type?: string;
+  // JD freshness — set by single-config GET endpoint; null on list responses.
+  // True when the linked JD was updated (version bumped or skills changed)
+  // AFTER this interview config was created. Recruiter UI should warn the
+  // user so they know the questions may not reflect the latest JD.
+  jd_stale?: boolean | null;
+  jd_stale_reason?: string | null;
+  jd_current_version?: number | null;
   created_by: string;
   created_by_name?: string;
   scheduled_at?: string;

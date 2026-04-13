@@ -17,6 +17,8 @@ import type {
 } from '@/lib/services/aiInterviewService';
 import CandidateResultsView from './CandidateResultsView';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
+import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 
 const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
@@ -50,14 +52,10 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-const PRIORITY_LABELS: Record<number, { label: string; color: string }> = {
-  3: { label: 'P3 – High',   color: 'bg-orange-100 text-orange-700 border-orange-200' },
-  2: { label: 'P2 – Medium', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
-  1: { label: 'P1 – Low',    color: 'bg-blue-100 text-blue-700 border-blue-200' },
-};
+// Priority labels are imported from lib/constants/aiInterviewPriority (P1-P3 scale).
 
 function PriorityBadge({ p }: { p: number }) {
-  const { label, color } = PRIORITY_LABELS[p] ?? PRIORITY_LABELS[2];
+  const { label, color } = getPriorityLabel(p);
   return (
     <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${color}`}>
       {label}
@@ -143,11 +141,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       return {
         mthClusters: (si.mth_clusters || []) as { id: string; name: string; priority: number; skills: string[]; reason?: string }[],
         nthClusters: (si.nth_clusters || []) as { id: string; name: string; priority: number; skills: string[]; reason?: string }[],
-        interviewMode: (si.interview_mode as string) || (config.duration_minutes === 0 ? 'flexible' : 'fixed'),
+        interviewMode: (si.interview_mode as string) || modeFromDuration(config.duration_minutes),
         perQuestionSeconds: si.per_question_seconds ? Number(si.per_question_seconds) : null,
       };
     } catch {
-      return { mthClusters: [], nthClusters: [], interviewMode: config.duration_minutes === 0 ? 'flexible' : 'fixed', perQuestionSeconds: null };
+      return { mthClusters: [], nthClusters: [], interviewMode: modeFromDuration(config.duration_minutes), perQuestionSeconds: null };
     }
   }, [config.special_instructions, config.duration_minutes]);
 
@@ -618,6 +616,44 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
       {/* Content area */}
       <div className="px-3 sm:px-5 lg:px-8 py-4 sm:py-6 space-y-4 sm:space-y-6">
+
+          {/* JD staleness banner — shows when the linked JD was edited after
+              this interview config was created. Computed by the single-config
+              GET endpoint (see _compute_jd_staleness in the router). */}
+          {config.jd_stale && (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3"
+            >
+              <div className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-[11px] font-bold">
+                !
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-900">
+                  Linked JD has changed since this interview was configured
+                </p>
+                <p className="mt-0.5 text-xs text-amber-800">
+                  {config.jd_stale_reason ?? 'The underlying Job Description was updated after this config was created.'}
+                  {config.jd_current_version != null && config.jd_version != null && (
+                    <> Snapshot: v{config.jd_version} &middot; Current: v{config.jd_current_version}.</>
+                  )}
+                  {' '}Candidates who take this interview will be evaluated against the snapshotted skills, not the current JD.
+                </p>
+                {config.status === 'draft' && config.jd_id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
+                      router.push(url);
+                    }}
+                    className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                  >
+                    Re-sync with latest JD
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Overview Tab */}
           {activeTab === 'overview' && (

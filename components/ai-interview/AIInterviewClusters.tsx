@@ -12,6 +12,10 @@ import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
+import {
+  PRIORITY_LABELS as SHARED_PRIORITY_LABELS,
+  normalizePriority as sharedNormalizePriority,
+} from '@/lib/constants/aiInterviewPriority';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -27,13 +31,9 @@ interface Cluster {
   reason?: string;
 }
 
-/** Clamp any priority value to the 3-level scale (1=Low, 2=Medium, 3=High).
- *  Handles legacy 1-5 AI output AND already-normalised 1-3 values without downgrading them. */
-function normalizePriority(p: number): 1 | 2 | 3 {
-  if (p >= 3) return 3; // 3, 4, 5 → High
-  if (p === 2) return 2; // 2 → Medium
-  return 1;              // 1 or below → Low
-}
+/** Re-export the shared normaliser under the local name so existing call sites
+ *  (and any third-party imports) keep working. See lib/constants/aiInterviewPriority. */
+const normalizePriority = sharedNormalizePriority;
 
 interface SkillEntry {
   name: string;
@@ -82,11 +82,8 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
   return { mthMinutes: 20, nthMinutes: 0, hrMinutes: 10, mthMaxClusters: 3, nthMaxClusters: 0, mthQuestions: 10, nthQuestions: 0, hrQuestions: 5 };
 }
 
-const PRIORITY_LABELS: Record<number, { label: string; short: string; color: string; dot: string }> = {
-  3: { label: 'P3 \u2013 High',   short: 'High',   color: 'bg-orange-100 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
-  2: { label: 'P2 \u2013 Medium', short: 'Medium', color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
-  1: { label: 'P1 \u2013 Low',    short: 'Low',    color: 'bg-blue-100 text-blue-700 border-blue-200',       dot: 'bg-blue-500'   },
-};
+// Priority labels come from lib/constants/aiInterviewPriority (P1-P3 scale).
+const PRIORITY_LABELS = SHARED_PRIORITY_LABELS;
 
 const STEPS = ['Select JD', 'Configure', 'Clusters', 'Preview & Publish'];
 const CURRENT_STEP = 3;

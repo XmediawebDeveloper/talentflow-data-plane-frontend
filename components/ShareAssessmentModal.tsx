@@ -255,8 +255,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   };
 
   const updateCandidate = (id: string, field: 'name' | 'email', value: string) => {
-    setCandidates(candidates.map(c => 
-      c.id === id ? { ...c, [field]: value } : c
+    const normalizedValue = field === 'email' ? value.toLowerCase() : value;
+    setCandidates(candidates.map(c =>
+      c.id === id ? { ...c, [field]: normalizedValue } : c
     ));
   };
   
@@ -461,9 +462,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   // Check if all candidates have valid name and email
   const isValid = candidates.every(c => c.name.trim() && c.email.trim() && isValidEmail(c.email));
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || 'https://talentflow.app');
-  const assessmentLink = `${baseUrl}/assessment/take/<token>?c=<name>&r=<role>`;
-
   if (showSuccess) {
     return (
       <div className="fixed inset-0 bg-gray-900/30 flex items-center justify-center z-50 p-4">
@@ -549,7 +547,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           </div>
           <button
             onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+            className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -968,22 +966,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 </div>
               </div>
             )}
-          </div>
-
-          {/* Assessment Link */}
-          <div className="mb-6">
-            <label className="text-gray-900 mb-2 block">Assessment Link</label>
-            <div
-              className="px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-500 select-none"
-              style={{ userSelect: 'none', WebkitUserSelect: 'none' }}
-              onCopy={(e) => e.preventDefault()}
-              onCut={(e) => e.preventDefault()}
-            >
-              {assessmentLink}
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              A unique personalized link will be generated for each candidate with their name and role
-            </p>
           </div>
 
           {/* Custom Message */}

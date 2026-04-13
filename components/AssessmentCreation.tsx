@@ -673,10 +673,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [isCodingLockedBySmartConfig, setIsCodingLockedBySmartConfig] = useState<boolean>(false);
   const [codingLockReason, setCodingLockReason] = useState<string>('');
 
-  // ✅ SMART CONFIG: Track percentage changes (needs republish)
-  const [hasPercentageChanged, setHasPercentageChanged] = useState<boolean>(false);
-  const [isPublishing, setIsPublishing] = useState<boolean>(false);
-
   // Collapsible sections state
   const [isAIGenerationExpanded, setIsAIGenerationExpanded] = useState(false);
   const [isScoringRulesExpanded, setIsScoringRulesExpanded] = useState(false);
@@ -1010,8 +1006,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     setSections(sections.map(s =>
       s.name === sectionName ? { ...s, percentage: Math.max(0, Math.min(100, value)) } : s
     ));
-    // ✅ SMART CONFIG: Mark that percentage has changed (needs republish)
-    setHasPercentageChanged(true);
   };
 
   const handleDurationChange = (value: number) => {
@@ -1281,49 +1275,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     setSelectedCodingLanguages(prev =>
       prev.includes(lang) ? prev.filter(l => l !== lang) : [...prev, lang]
     );
-  };
-
-  // ✅ SMART CONFIG: Handle "Publish Changes" button click
-  const handlePublishChanges = async () => {
-    if (!selectedJob) {
-      toast.error('No job selected');
-      return;
-    }
-
-    setIsPublishing(true);
-
-    try {
-      // Calculate question count from percentages (total 30 questions)
-      const totalQuestions = 30;
-      const enabledSections = sections.filter(s => s.enabled && s.name !== 'HR');
-
-      const questionDistribution = enabledSections.map(section => ({
-        section: section.name.toLowerCase(),
-        count: Math.round((section.percentage / 100) * totalQuestions),
-        topics: section.topics,
-      }));
-
-      // Prepare regeneration request
-      const regenerateRequest = {
-        jd_id: selectedJob.id,
-        experience_level: selectedJob.experience || 'Mid-Level',
-        skills: selectedJob.skills || [],
-        question_distribution: questionDistribution,
-      };
-
-      console.log('[TalentFlow] Publishing changes - regenerating questions:', regenerateRequest);
-
-      // Call backend API to regenerate questions
-      await assessmentService.regenerateQuestions(regenerateRequest);
-
-      toast.success('Questions regenerated successfully based on new percentages!');
-      setHasPercentageChanged(false); // Reset the flag
-    } catch (error: any) {
-      console.error('Failed to regenerate questions:', error);
-      toast.error(error.message || 'Failed to regenerate questions. Please try again.');
-    } finally {
-      setIsPublishing(false);
-    }
   };
 
   const handleGenerateAssessment = async (saveAsDraft: boolean = false) => {
@@ -1958,28 +1909,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               </p>
                             </div>
                           </div>
-                          {/* Always auto-configured — never manually togglable */}
-                          <span
-                            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full cursor-not-allowed ${isAutoEnabled ? 'bg-gray-800' : 'bg-gray-300'}`}
-                            title={isAutoEnabled ? 'Auto-enabled: coding languages detected in JD' : 'Auto-disabled: no coding languages detected in JD'}
+                          <button
+                            onClick={() => handleCodingToggle()}
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${codingEnabled ? 'bg-gray-800' : 'bg-gray-300'}`}
                           >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white ${isAutoEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                          </span>
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
                         </div>
                       </div>
                     );
                   })()}
                 </div>
 
-                {/* Smart Configuration Info */}
-                <div className="mt-3 sm:mt-4 p-2 sm:p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-700">
-                      <strong>Smart Configuration:</strong> Coding round is automatically enabled/disabled based on programming languages detected in JD skills. This cannot be changed manually. Disabled rounds are hidden from the section distribution below.
-                    </p>
-                  </div>
-                </div>
               </div>
 
               {/* Assessment Duration - Fixed 30 min for Technical + Coding */}
@@ -2336,41 +2277,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   ))}
                 </div>
 
-                {/* ✅ SMART CONFIG: Publish Changes button when percentage modified */}
-                {hasPercentageChanged && (
-                  <div className="mt-3 sm:mt-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                        <div>
-                          <p className="text-xs sm:text-sm font-medium text-blue-900 mb-1">
-                            Percentage Configuration Changed
-                          </p>
-                          <p className="text-xs text-blue-700">
-                            You've modified the section percentages. Click "Publish Changes" to regenerate questions based on the new distribution.
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={handlePublishChanges}
-                        disabled={isPublishing}
-                        className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed text-sm w-full sm:w-auto justify-center"
-                      >
-                        {isPublishing ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Publishing...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className="w-4 h-4" />
-                            Publish Changes
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 

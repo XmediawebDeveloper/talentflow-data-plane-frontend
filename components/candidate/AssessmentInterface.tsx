@@ -1126,6 +1126,10 @@ export function AssessmentInterface({
         newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: true });
         return newMap;
       });
+
+      if (!isLastQuestion) {
+        await onNavigate(currentQuestion.question_number + 1);
+      }
     } catch (error: any) {
       console.error('Failed to submit answer:', error);
 
@@ -1401,8 +1405,11 @@ export function AssessmentInterface({
 
   const isLastQuestion = currentQuestion.question_number === currentQuestion.total_questions;
 
-  // Determine if proctoring devices are disabled
+  // Access is blocked unless all required proctoring conditions are valid together.
   const isDeviceDisabled = !isCameraActive || !isMicrophoneActive;
+  const isFullscreenRequired = enforceFullscreen;
+  const isFullscreenInvalid = isFullscreenRequired && !isFullscreen;
+  const isAssessmentAccessBlocked = isFullscreenInvalid || isDeviceDisabled;
 
   // Progress steps
   const progressSteps = [
@@ -1537,8 +1544,8 @@ export function AssessmentInterface({
         </div>
       )}
 
-      {/* Proctoring Device Disabled Blocker Overlay */}
-      {isDeviceDisabled && (
+      {/* Unified Proctoring Blocker Overlay */}
+      {isAssessmentAccessBlocked && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-8 text-center">
             {/* Alert Icon */}
@@ -1548,17 +1555,39 @@ export function AssessmentInterface({
 
             {/* Title */}
             <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Proctoring Device Disabled
+              Proctoring Requirement Not Met
             </h2>
 
             {/* Description */}
             <p className="text-gray-600 mb-6">
-              Your assessment has been paused because a required proctoring device has been disabled.
-              Please re-enable the following to continue:
+              Return to the secured assessment state to continue. The assessment timer is still running.
+              Complete all of the following requirements:
             </p>
 
-            {/* Disabled Devices List */}
+            {/* Requirement Status List */}
             <div className="space-y-3 mb-6">
+              {isFullscreenRequired && (
+                <div className={`flex items-center gap-3 border rounded-xl p-4 ${
+                  isFullscreenInvalid ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
+                }`}>
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    isFullscreenInvalid ? 'bg-red-100' : 'bg-green-100'
+                  }`}>
+                    <Monitor className={`w-5 h-5 ${isFullscreenInvalid ? 'text-red-600' : 'text-green-600'}`} />
+                  </div>
+                  <div className="text-left">
+                    <p className={`font-semibold ${isFullscreenInvalid ? 'text-red-800' : 'text-green-800'}`}>
+                      {isFullscreenInvalid ? 'Fullscreen Required' : 'Fullscreen Restored'}
+                    </p>
+                    <p className={`text-sm ${isFullscreenInvalid ? 'text-red-600' : 'text-green-600'}`}>
+                      {isFullscreenInvalid
+                        ? 'Return to fullscreen mode before continuing the assessment.'
+                        : 'Assessment is back in fullscreen mode.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {!isCameraActive && (
                 <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
                   <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -1589,11 +1618,18 @@ export function AssessmentInterface({
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                 <div className="text-left text-sm">
-                  <p className="font-medium text-amber-800 mb-1">How to re-enable:</p>
+                  <p className="font-medium text-amber-800 mb-1">How to continue:</p>
                   <ol className="list-decimal list-inside text-amber-700 space-y-1">
-                    <li>Click the camera/microphone icon in your browser's address bar</li>
-                    <li>Select "Allow" for the disabled device(s)</li>
-                    <li>If blocked via system settings, re-enable from your device settings</li>
+                    {isFullscreenInvalid && (
+                      <li>Return to fullscreen mode to resume the secured assessment.</li>
+                    )}
+                    {isDeviceDisabled && (
+                      <li>Click the camera or microphone icon in your browser and re-enable access.</li>
+                    )}
+                    {isDeviceDisabled && (
+                      <li>If the device is blocked at system level, enable it from your OS privacy settings.</li>
+                    )}
+                    <li>The assessment will unlock only after all required checks are valid.</li>
                   </ol>
                 </div>
               </div>
@@ -1602,7 +1638,7 @@ export function AssessmentInterface({
             {/* Warning Footer */}
             <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
               <Video className="w-4 h-4" />
-              <span>This violation has been recorded for review</span>
+              <span>You cannot return to the assessment until camera, microphone, and fullscreen requirements are met</span>
             </div>
           </div>
         </div>

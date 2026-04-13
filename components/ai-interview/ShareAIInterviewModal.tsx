@@ -250,7 +250,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   };
 
   const updateCandidate = (id: string, field: keyof CandidateEmail, value: string) => {
-    setCandidates(candidates.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
+    const normalizedValue = field === 'email' ? value.toLowerCase() : value;
+    setCandidates(candidates.map((c) => (c.id === id ? { ...c, [field]: normalizedValue } : c)));
   };
 
   const isDuplicateEmail = (id: string, email: string): boolean => {
@@ -408,11 +409,10 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     for (const row of rawRows.slice(1)) {
       const rowObj: Record<string, string> = {};
       headers.forEach((h: string, i: number) => { rowObj[h] = String(row[i] ?? '').trim(); });
-      const email = (rowObj[emailCol] || '').trim();
+      const email = (rowObj[emailCol] || '').trim().toLowerCase();
       const name = nameCol ? (rowObj[nameCol] || '').trim() : '';
-      const emailLower = email.toLowerCase();
-      if (email && isValidEmail(email) && !seenInSheet.has(emailLower)) {
-        seenInSheet.add(emailLower);
+      if (email && isValidEmail(email) && !seenInSheet.has(email)) {
+        seenInSheet.add(email);
         results.push({
           id: Date.now().toString() + Math.random(),
           name: name || email.split('@')[0],
@@ -445,7 +445,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           return;
         }
         for (const row of rows) {
-          const email = (row[emailCol] || '').trim();
+          const email = (row[emailCol] || '').trim().toLowerCase();
           const name = nameCol ? (row[nameCol] || '').trim() : '';
           if (email && isValidEmail(email)) {
             parsed.push({ id: Date.now().toString() + Math.random(), name: name || email.split('@')[0], email, source: 'manual' });
@@ -1341,36 +1341,22 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             )}
           </div>
 
-          {/* Interview Link + Expiry — common for all candidates */}
-          <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-gray-900 font-medium">Interview Link</label>
-              <div className="flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5 text-gray-400" />
-                <span className="text-xs text-gray-500">Link expiry</span>
-                <select
-                  value={expiryDays}
-                  onChange={(e) => setExpiryDays(Number(e.target.value))}
-                  className="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-white text-gray-700 focus:ring-2 focus:ring-gray-500"
-                >
-                  <option value={1}>1 day</option>
-                  <option value={3}>3 days</option>
-                  <option value={7}>7 days</option>
-                  <option value={14}>14 days</option>
-                  <option value={30}>30 days</option>
-                  <option value={0}>No expiry</option>
-                </select>
-              </div>
-            </div>
-            <input
-              type="text"
-              readOnly
-              value={`${typeof window !== 'undefined' ? window.location.origin : ''}/ai-interview/<token>`}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white text-gray-500 cursor-default focus:outline-none"
-            />
-            <p className="text-xs text-gray-500 mt-1.5">
-              A unique personalized link will be generated for each candidate — click <span className="font-medium text-gray-700">Copy Link</span> next to their email to get it now, or it will be generated automatically when you send the invitation.
-            </p>
+          {/* Link Expiry */}
+          <div className="mb-6 flex items-center justify-end gap-2">
+            <Clock className="w-3.5 h-3.5 text-gray-400" />
+            <span className="text-xs text-gray-500">Link expiry</span>
+            <select
+              value={expiryDays}
+              onChange={(e) => setExpiryDays(Number(e.target.value))}
+              className="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-white text-gray-700 focus:ring-2 focus:ring-gray-500"
+            >
+              <option value={1}>1 day</option>
+              <option value={3}>3 days</option>
+              <option value={7}>7 days</option>
+              <option value={14}>14 days</option>
+              <option value={30}>30 days</option>
+              <option value={0}>No expiry</option>
+            </select>
           </div>
 
           {/* Custom Message */}
