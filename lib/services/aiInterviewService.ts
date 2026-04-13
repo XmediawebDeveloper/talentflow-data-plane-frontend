@@ -593,14 +593,14 @@ export const aiInterviewService = {
   },
 
   /**
-   * Append live coverage activity events to a session (persisted in DB)
+   * Deprecated: coverage events are now emitted and persisted by the backend
+   * evaluator + question-timer pipeline. The frontend no longer writes them,
+   * which removes the dual-storage divergence between `ai_evaluation.skill_coverage_map`
+   * and `coverage_events`. Kept as a no-op so any straggling caller fails closed
+   * without hitting the network.
    */
-  async appendCoverageEvents(sessionId: string, events: object[]): Promise<void> {
-    try {
-      await api.post(`/ai-interview/${sessionId}/coverage-events`, { events });
-    } catch {
-      // Non-critical — silently ignore failures so the UI isn't disrupted
-    }
+  async appendCoverageEvents(_sessionId: string, _events: object[]): Promise<void> {
+    return;
   },
 
   /**

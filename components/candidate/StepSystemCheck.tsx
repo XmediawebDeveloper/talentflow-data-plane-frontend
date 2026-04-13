@@ -1452,30 +1452,54 @@ export default function StepSystemCheck({
 
         {/* Gradient header */}
         <div className="rounded-xl overflow-hidden shadow-lg">
-          <div className="bg-gray-900 px-6 py-5 rounded-t-xl">
-            <div className="flex items-center gap-2 text-white mb-1">
-              {checksRunning ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : checksCompleted && allSystemPassed ? (
-                <CheckCircle className="w-5 h-5 text-green-400" />
-              ) : checksCompleted ? (
-                <XCircle className="w-5 h-5 text-amber-400" />
-              ) : (
-                <Shield className="w-5 h-5" />
-              )}
-              <h2 className="text-lg font-semibold">
-                {checksRunning ? 'Running System Checks…'
-                  : checksCompleted && allSystemPassed ? 'System Checks Complete'
-                  : checksCompleted ? 'Some Checks Failed'
-                  : 'System Checks'}
-              </h2>
+          <div className="bg-gray-900 px-6 py-5 rounded-t-xl flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 text-white mb-1">
+                {checksRunning ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : checksCompleted && allSystemPassed ? (
+                  <CheckCircle className="w-5 h-5 text-green-400" />
+                ) : checksCompleted ? (
+                  <XCircle className="w-5 h-5 text-amber-400" />
+                ) : (
+                  <Shield className="w-5 h-5" />
+                )}
+                <h2 className="text-lg font-semibold">
+                  {checksRunning ? 'Running System Checks…'
+                    : checksCompleted && allSystemPassed ? 'System Checks Complete'
+                    : checksCompleted ? 'Some Checks Failed'
+                    : 'System Checks'}
+                </h2>
+              </div>
+              <p className="text-green-100 text-sm">
+                {checksRunning ? 'Please wait while we verify your environment'
+                  : checksCompleted && allSystemPassed ? 'All environment checks have been completed'
+                  : checksCompleted ? 'Fix the issues below and retry'
+                  : 'Click "Run Check" to begin verifying your environment'}
+              </p>
             </div>
-            <p className="text-green-100 text-sm">
-              {checksRunning ? 'Please wait while we verify your environment'
-                : checksCompleted && allSystemPassed ? 'All environment checks have been completed'
-                : checksCompleted ? 'Fix the issues below and retry'
-                : 'Click "Run Check" to begin verifying your environment'}
-            </p>
+            {/* Top-right action button — Run Check before first run, Retry after failures.
+                Hidden while checks are in progress (action is implicit) and after a fully
+                successful run (the bottom Continue button takes over). */}
+            {!checksRunning && !(checksCompleted && allSystemPassed) && (
+              <button
+                type="button"
+                onClick={handleRunChecks}
+                className="flex-shrink-0 inline-flex items-center gap-2 bg-white text-gray-900 font-semibold py-2 px-4 rounded-lg text-sm hover:bg-gray-100 transition-all shadow-sm"
+              >
+                {checksCompleted ? (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Retry
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4" />
+                    Run Check
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Card body: 2-column layout */}
@@ -1583,32 +1607,12 @@ export default function StepSystemCheck({
               </div>
             )}
 
-            {/* Action buttons */}
+            {/* Action buttons — Run Check / Retry now live in the header's
+                top-right corner (see the gradient header above). The bottom
+                row is reserved for the running indicator and the Continue
+                button so the primary trigger is always visible at the same
+                spot regardless of state. */}
             <div className="mt-5 flex flex-col sm:flex-row gap-3">
-              {/* Run Check — shown before first run */}
-              {!checksRunning && !checksCompleted && (
-                <button
-                  type="button"
-                  onClick={handleRunChecks}
-                  className="flex-1 inline-flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-6 rounded-lg text-sm hover:bg-gray-800 transition-all"
-                >
-                  <Play className="w-4 h-4" />
-                  Run Check
-                </button>
-              )}
-
-              {/* Retry — shown after checks complete with failures */}
-              {checksCompleted && !allSystemPassed && !checksRunning && (
-                <button
-                  type="button"
-                  onClick={handleRunChecks}
-                  className="flex-1 inline-flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-800 font-semibold py-3 px-6 rounded-lg text-sm hover:bg-gray-50 transition-all"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  Retry
-                </button>
-              )}
-
               {/* Running indicator */}
               {checksRunning && (
                 <div className="flex-1 inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-500 font-semibold py-3 px-6 rounded-lg text-sm cursor-not-allowed">

@@ -14,6 +14,7 @@ import {
   Play,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
+import { isTranscriptMeaningful } from '@/lib/utils/whisperFilter';
 
 // ── Component props ──────────────────────────────────────────────────────────
 
@@ -355,8 +356,18 @@ export default function StepSamplePractice({
 
     try {
       const text = await candidateAIInterviewService.transcribePracticeAudio(token, file);
-      if (text.trim() && mediaRecorderRef.current?.state === 'recording') {
-        setLiveTranscript(text.trim());
+      const trimmed = text.trim();
+      // Filter Whisper hallucinations BEFORE displaying. The practice mic is
+      // typically open in a near-silent room while the candidate listens to
+      // the question, which is exactly the input that triggers Whisper to
+      // emit "Please help! This is a big problem!", "Transcription by ESO…",
+      // and looping repetitions of the previous decoded n-gram.
+      if (
+        trimmed &&
+        isTranscriptMeaningful(trimmed) &&
+        mediaRecorderRef.current?.state === 'recording'
+      ) {
+        setLiveTranscript(trimmed);
         setHasLiveTranscript(true);
       }
     } catch {
@@ -544,8 +555,13 @@ export default function StepSamplePractice({
 
     try {
       const text = await candidateAIInterviewService.transcribePracticeAudio(token, namedBlob);
-      if (text.trim()) {
-        setTranscript(text);
+      const trimmed = text.trim();
+      // Apply the same Whisper-hallucination filter as the live periodic
+      // transcription path. If the final transcript is just a hallucination
+      // ("Please help! …", subtitle attribution, etc.), prefer the browser
+      // transcript when available, otherwise treat as no-speech.
+      if (trimmed && isTranscriptMeaningful(trimmed)) {
+        setTranscript(trimmed);
         setInputMode('voice');
         setVoiceReady(true);
       } else if (!browserTranscript) {

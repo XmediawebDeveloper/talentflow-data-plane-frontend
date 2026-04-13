@@ -180,10 +180,9 @@ export function AssessmentInterface({
   const [isCompleting, setIsCompleting] = useState(false);
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
   const [showHRSummary, setShowHRSummary] = useState(false);
-  const [hrSummaryData, setHRSummaryData] = useState<{ answered: number; total: number; skipped: number }>({ answered: 0, total: 0, skipped: 0 });
+  const [hrSummaryData, setHRSummaryData] = useState<{ answered: number; total: number; unanswered: number }>({ answered: 0, total: 0, unanswered: 0 });
   // const [showUnansweredPopup, setShowUnansweredPopup] = useState(false); // REMOVED: Combined into showCompleteConfirm modal
   const [unansweredQuestions, setUnansweredQuestions] = useState<number[]>([]);
-  const [skippedQuestions, setSkippedQuestions] = useState<number[]>([]);
   // Track which question numbers the candidate has actually visited
   const [visitedQuestions, setVisitedQuestions] = useState<Set<number>>(() => new Set([currentQuestion.question_number]));
 
@@ -309,6 +308,7 @@ export function AssessmentInterface({
 
   // Fullscreen state (only tracking, not used for pausing anymore)
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const fullscreenExitTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Violation tracking - ESC and Alt+Tab attempts (max 3 before warning)
   const [violationCount, setViolationCount] = useState(0);
@@ -646,37 +646,61 @@ export function AssessmentInterface({
       return;
     }
 
+    const clearPendingFullscreenExit = () => {
+      if (fullscreenExitTimerRef.current) {
+        clearTimeout(fullscreenExitTimerRef.current);
+        fullscreenExitTimerRef.current = null;
+      }
+    };
+
     const handleFullscreenChange = async () => {
       const isCurrentlyFullscreen = getIsFullscreen();
-      console.log(`[LOCKDOWN] Fullscreen: ${isCurrentlyFullscreen ? 'ACTIVE' : 'INACTIVE'}`);
-      setIsFullscreen(isCurrentlyFullscreen);
-
-      // VIOLATIONS DISABLED: Just log fullscreen changes, no penalties
-      if (!isCurrentlyFullscreen && !isDisqualified && !showCompleteConfirm) {
-        console.log('[PROCTORING] Fullscreen exited - logging only (no penalties)');
-
-        // Report to server for record-keeping only
-        candidateService.reportProctorEvent(token, {
-          event_type: 'fullscreen_exit',
-          timestamp: new Date().toISOString(),
-          details: {
-            reason: 'User exited fullscreen mode',
-            severity: 'INFO',
-          },
-        }).catch(err => console.error('[VIOLATION] Failed to report fullscreen exit:', err));
-
-        // COMMENTED OUT: No violation tracking, no warnings, no auto-complete
-        // violationCountRef.current += 1;
-        // setViolationCount(violationCountRef.current);
-        // setShowViolationWarning(true);
+      if (isCurrentlyFullscreen) {
+        clearPendingFullscreenExit();
+        console.log('[LOCKDOWN] Fullscreen: ACTIVE');
+        setIsFullscreen(true);
+        return;
       }
+
+      console.log('[LOCKDOWN] Fullscreen change reported as INACTIVE, verifying...');
+      clearPendingFullscreenExit();
+      fullscreenExitTimerRef.current = setTimeout(() => {
+        fullscreenExitTimerRef.current = null;
+        const stillNotFullscreen = !getIsFullscreen();
+        console.log(`[LOCKDOWN] Fullscreen verification: ${stillNotFullscreen ? 'INACTIVE' : 'ACTIVE'}`);
+        if (!stillNotFullscreen) {
+          setIsFullscreen(true);
+          return;
+        }
+
+        setIsFullscreen(false);
+
+        // VIOLATIONS DISABLED: Just log fullscreen changes, no penalties
+        if (!isDisqualified && !showCompleteConfirm) {
+          console.log('[PROCTORING] Fullscreen exited - logging only (no penalties)');
+
+          // Report to server for record-keeping only
+          candidateService.reportProctorEvent(token, {
+            event_type: 'fullscreen_exit',
+            timestamp: new Date().toISOString(),
+            details: {
+              reason: 'User exited fullscreen mode',
+              severity: 'INFO',
+            },
+          }).catch(err => console.error('[VIOLATION] Failed to report fullscreen exit:', err));
+        }
+      }, 600);
     };
 
     const eventName = getFullscreenChangeEvent();
     document.addEventListener(eventName, handleFullscreenChange);
-    handleFullscreenChange();
+    const initialSyncTimer = setTimeout(() => {
+      void handleFullscreenChange();
+    }, 250);
 
     return () => {
+      clearTimeout(initialSyncTimer);
+      clearPendingFullscreenExit();
       document.removeEventListener(eventName, handleFullscreenChange);
     };
   }, [token, isDisqualified, showCompleteConfirm, enforceFullscreen]);
@@ -1239,25 +1263,18 @@ export function AssessmentInterface({
       }
     }
 
-    // ── STEP 2: Check unanswered/skipped questions (skip current — handled above) ──
-    // Unanswered = visited but no answer selected
-    // Skipped    = never visited at all
+    // ── STEP 2: Check unanswered questions (skip current — handled above) ──
+    // Unanswered includes both visited-without-answer and never-visited questions.
     const unanswered: number[] = [];
-    const skipped: number[] = [];
     for (let i = 1; i <= currentQuestion.total_questions; i++) {
       if (i === currentQuestion.question_number) continue;
       const status = answerStatuses.get(`question_${i}`);
       if (!status || !status.hasDraft) {
-        if (visitedQuestions.has(i)) {
-          unanswered.push(i);
-        } else {
-          skipped.push(i);
-        }
+        unanswered.push(i);
       }
     }
 
     setUnansweredQuestions(unanswered);
-    setSkippedQuestions(skipped);
     setShowCompleteConfirm(true);
   };
 
@@ -2009,10 +2026,6 @@ export function AssessmentInterface({
               <p className="text-sm font-medium text-gray-700">Progress</p>
               <div className="flex items-center gap-3 text-xs flex-wrap">
                 <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-gray-100 border border-gray-300"></div>
-                  Skipped
-                </span>
-                <span className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded bg-yellow-100 border border-yellow-300"></div>
                   Unanswered
                 </span>
@@ -2034,11 +2047,9 @@ export function AssessmentInterface({
                 const questionStatus = answerStatuses.get(`question_${num}`);
                 const isLocked = questionStatus?.isLocked || false;
                 const hasDraft = questionStatus?.hasDraft || false;
-                const wasVisited = visitedQuestions.has(num);
-
-                let colorClass = 'bg-gray-100 text-gray-400'; // Skipped (not visited)
+                let colorClass = 'bg-yellow-100 text-yellow-700'; // Unanswered
                 let icon = null;
-                let titleText = `Question ${num} - Skipped`;
+                let titleText = `Question ${num} - Unanswered`;
 
                 if (isCurrent) {
                   colorClass = 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2';
@@ -2051,10 +2062,6 @@ export function AssessmentInterface({
                   colorClass = 'bg-orange-100 text-orange-700';
                   icon = <Save className="w-4 h-4" />;
                   titleText = `Question ${num} - Draft saved`;
-                } else if (wasVisited) {
-                  // Visited but no answer → Unanswered
-                  colorClass = 'bg-yellow-100 text-yellow-700';
-                  titleText = `Question ${num} - Unanswered`;
                 }
 
                 return (
@@ -2114,7 +2121,7 @@ export function AssessmentInterface({
             {unansweredQuestions.length > 0 && (
               <div className="bg-yellow-50 rounded-xl p-4 mb-3 border border-yellow-200">
                 <p className="text-sm text-yellow-700 mb-2 font-semibold">
-                  ⚠️ Unanswered (visited, no answer): <span className="font-bold">{unansweredQuestions.length}</span> question(s)
+                  ⚠️ Unanswered: <span className="font-bold">{unansweredQuestions.length}</span> question(s)
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {unansweredQuestions.map((qNum) => (
@@ -2126,23 +2133,7 @@ export function AssessmentInterface({
               </div>
             )}
 
-            {/* Skipped Questions Warning */}
-            {skippedQuestions.length > 0 && (
-              <div className="bg-gray-50 rounded-xl p-4 mb-3 border border-gray-200">
-                <p className="text-sm text-gray-600 mb-2 font-semibold">
-                  ⏭️ Skipped (not visited): <span className="font-bold">{skippedQuestions.length}</span> question(s)
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {skippedQuestions.map((qNum) => (
-                    <span key={qNum} className="px-3 py-1 bg-gray-200 text-gray-700 rounded-full text-sm font-medium">
-                      Q{qNum}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {unansweredQuestions.length === 0 && skippedQuestions.length === 0 && (
+            {unansweredQuestions.length === 0 && (
               <div className="bg-green-50 rounded-xl p-3 mb-3 border border-green-200">
                 <p className="text-sm text-green-700 font-semibold">✅ All questions answered!</p>
               </div>
@@ -2159,8 +2150,10 @@ export function AssessmentInterface({
                   <div className="text-xs text-gray-500">Unanswered</div>
                 </div>
                 <div>
-                  <div className="text-lg font-bold text-gray-500">{skippedQuestions.length}</div>
-                  <div className="text-xs text-gray-500">Skipped</div>
+                  <div className="text-lg font-bold text-orange-600">
+                    {Array.from(answerStatuses.values()).filter(status => status.hasDraft && !status.isLocked).length}
+                  </div>
+                  <div className="text-xs text-gray-500">Draft</div>
                 </div>
               </div>
               <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">

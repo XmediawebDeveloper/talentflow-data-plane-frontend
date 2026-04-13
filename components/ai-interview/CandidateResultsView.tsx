@@ -334,19 +334,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     }
   }, [interview.coverage_events]);
 
-  // Batch-save new events to DB — debounced so rapid bursts don't flood the API
-  const pendingEventsRef = useRef<LiveEvent[]>([]);
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flushEvents = (sessionId: string) => {
-    if (pendingEventsRef.current.length === 0) return;
-    const toSave = pendingEventsRef.current;
-    pendingEventsRef.current = [];
-    aiInterviewService.appendCoverageEvents(sessionId, toSave);
-  };
-  const scheduleFlush = (sessionId: string) => {
-    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-    flushTimerRef.current = setTimeout(() => flushEvents(sessionId), 3000);
-  };
+  // Coverage events are now written server-side (backend emits + persists via
+  // coverage_events JSONB). The frontend no longer POSTs back, which removes
+  // the dual-storage divergence risk. Client-derived events below are kept for
+  // live UI display only — the canonical timeline comes from the REST payload
+  // on refresh and from the `coverage_events_appended` WS message in-session.
 
   // Tick every second to keep "X ago" relative time fresh
   const [, setTick] = useState(0);
@@ -436,8 +428,6 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
               if (newEvents.length > 0) {
                 setLiveEvents(prev => [...newEvents, ...prev].slice(0, 50));
-                pendingEventsRef.current.push(...newEvents);
-                scheduleFlush(liveSession.id);
               }
             } else {
               prevScRef.current = msg;
@@ -466,12 +456,25 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               });
             }
             setLiveEvents(prev => [...newTimerEvts, ...prev].slice(0, 50));
-            pendingEventsRef.current.push(...newTimerEvts);
-            scheduleFlush(liveSession.id);
+          } else if (msg.type === 'coverage_events_appended') {
+            // Server-authoritative events appended to coverage_events JSONB.
+            // Merge into the display feed, de-duping by (kind, qNum, skill).
+            const incoming: LiveEvent[] = Array.isArray(msg.events) ? msg.events : [];
+            if (incoming.length > 0) {
+              setLiveEvents(prev => {
+                const seen = new Set(
+                  prev.map(e => `${e.kind}|${e.qNum ?? ''}|${(e.skill ?? '').toLowerCase()}`)
+                );
+                const fresh = incoming.filter(e => {
+                  const k = `${e.kind}|${e.qNum ?? ''}|${(e.skill ?? '').toLowerCase()}`;
+                  if (seen.has(k)) return false;
+                  seen.add(k);
+                  return true;
+                });
+                return fresh.length > 0 ? [...fresh, ...prev].slice(0, 50) : prev;
+              });
+            }
           } else if (msg.type === 'interview_closing' || msg.type === 'interview_complete' || msg.type === 'interview_ended') {
-            // Flush any pending events before fetching final state
-            if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-            flushEvents(liveSession.id);
             // Interview finished — refresh from REST to update status display.
             // NOTE: ai_evaluation may not be saved yet (backend saves after this event).
             // The evaluation_ready event below triggers the definitive refresh once saved.
