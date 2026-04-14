@@ -604,6 +604,41 @@ export const aiInterviewService = {
   },
 
   /**
+   * Download a report for a completed AI interview.
+   * @param sessionId - The interview session ID
+   * @param reportType - 'coverage' or 'evaluation'
+   * @param format - 'pdf', 'excel', or 'json'
+   * @returns Blob for download
+   */
+  async downloadReport(
+    sessionId: string,
+    reportType: 'coverage' | 'evaluation',
+    format: 'pdf' | 'excel' | 'json' = 'pdf',
+  ): Promise<Blob> {
+    const response = await api.get(
+      `/ai-interview/${sessionId}/reports/${reportType}?format=${format}`,
+      { responseType: 'blob' },
+    );
+    return response.data;
+  },
+
+  /**
+   * Trigger a browser download from a Blob.
+   */
+  triggerBlobDownload(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  },
+
+  /**
    * Get invitations for a config
    */
   async getConfigInvitations(configId: string, params?: {

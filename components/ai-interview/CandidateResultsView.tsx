@@ -13,6 +13,8 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend,
 } from 'recharts';
+import EvaluationTab from './tabs/EvaluationTab';
+import SkillCoverageTab from './tabs/SkillCoverageTab';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
@@ -382,98 +384,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data);
-          if (msg.type === 'skill_coverage_update') {
-            setLastUpdatedAt(new Date());
-            setLiveSession(prev => ({ ...prev, skill_coverage: msg }));
-
-            // Diff against previous snapshot to detect skill state changes
-            // Update skill level ratchet — never downgrade a skill's best-seen level
-            {
-              const ratchet = skillLevelRatchetRef.current;
-              const pr: Record<string, number> = { covered: 3, medium: 2, low: 1, skipped: 1 };
-              for (const s of msg.covered || [])        { const k = s.toLowerCase(); if (!(k in ratchet) || pr[ratchet[k]] < 3) ratchet[k] = 'covered'; }
-              for (const s of msg.medium_covered || []) { const k = s.toLowerCase(); if (!(k in ratchet) || pr[ratchet[k]] < 2) ratchet[k] = 'medium'; }
-              for (const s of msg.low_covered || [])    { const k = s.toLowerCase(); if (!(k in ratchet) || pr[ratchet[k]] < 1) ratchet[k] = 'low'; }
-              for (const s of msg.skipped || [])        { const k = s.toLowerCase(); if (!(k in ratchet)) ratchet[k] = 'skipped'; }
-            }
-
-            const prev = prevScRef.current;
-            prevScRef.current = msg;
-            if (prev) {
-              const nowCovered   = new Set<string>((msg.covered        || []).map((s: string) => s.toLowerCase()));
-              const nowMedium    = new Set<string>((msg.medium_covered || []).map((s: string) => s.toLowerCase()));
-              const nowLow       = new Set<string>((msg.low_covered    || []).map((s: string) => s.toLowerCase()));
-              const wasCovered   = new Set<string>((prev.covered        || []).map((s: string) => s.toLowerCase()));
-              const wasMedium    = new Set<string>((prev.medium_covered || []).map((s: string) => s.toLowerCase()));
-              const wasLow       = new Set<string>((prev.low_covered    || []).map((s: string) => s.toLowerCase()));
-              const wasSkipped   = new Set<string>(((prev as any).skipped || []).map((s: string) => s.toLowerCase()));
-
-              const newEvents: LiveEvent[] = [];
-              const ts = Date.now();
-              // Stamp the current question number from msg.questions_asked so we can
-              // reliably map each skill to the exact question that covered it.
-              const evQNum: number | undefined = msg.questions_asked || undefined;
-              // Stamp isFollowUp from the ref (synchronously up-to-date) rather than
-              // looking it up later from qFollowUpMap, which gets overwritten when a
-              // follow-up fires for the same qNum as the main question.
-              const evIsFollowUp: boolean = currentQuestionRef.current?.isFollowUp ?? false;
-              // Newly strongly covered
-              for (const s of msg.covered    || []) if (!wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'covered', skill: s, ts, qNum: evQNum, isFollowUp: evIsFollowUp });
-              // Newly medium covered (wasn't medium or covered before)
-              for (const s of msg.medium_covered || []) if (!wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'medium', skill: s, ts, qNum: evQNum, isFollowUp: evIsFollowUp });
-              // Newly low covered (wasn't touched before)
-              for (const s of msg.low_covered || []) if (!wasLow.has(s.toLowerCase()) && !wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'low', skill: s, ts, qNum: evQNum, isFollowUp: evIsFollowUp });
-              // Newly skipped (IDK / silence — counts as low coverage, no follow-up)
-              for (const s of msg.skipped || []) if (!wasSkipped.has(s.toLowerCase()) && !wasLow.has(s.toLowerCase()) && !wasMedium.has(s.toLowerCase()) && !wasCovered.has(s.toLowerCase())) newEvents.push({ kind: 'low', skill: s, ts, qNum: evQNum, isFollowUp: evIsFollowUp });
-
-              if (newEvents.length > 0) {
-                setLiveEvents(prev => [...newEvents, ...prev].slice(0, 50));
-              }
-            } else {
-              prevScRef.current = msg;
-            }
-          } else if (msg.type === 'question_timer_started') {
+          // Live skill coverage broadcasts removed (batch model — coverage
+          // is computed once at interview end and loaded via REST on evaluation_ready).
+          // WS kept for: question timer, interview lifecycle, evaluation_ready.
+          if (msg.type === 'question_timer_started') {
             const qNum = msg.question_number ?? 0;
             const isFollowUp = !!msg.is_follow_up;
             currentQuestionRef.current = { qNum, isFollowUp };
             setCurrentQuestion({ qNum, isFollowUp });
-            const qEvent: LiveEvent = { kind: 'question' as const, qNum, isFollowUp, ts: Date.now() };
-            const newTimerEvts: LiveEvent[] = [qEvent];
-            // Create assigned events for all target skills (multi-skill support).
-            // current_skills contains the primary skill + any additional uncovered skills
-            // in the same cluster that Linda may be addressing in this question.
-            // Fall back to single current_skill for older backend versions.
-            const targetSkills: string[] = Array.isArray(msg.current_skills) && (msg.current_skills as string[]).length > 0
-              ? (msg.current_skills as string[])
-              : (msg.current_skill ? [msg.current_skill as string] : []);
-            for (const sk of targetSkills) {
-              newTimerEvts.push({
-                kind: 'assigned' as const,
-                skill: sk.toLowerCase(),
-                qNum,
-                isFollowUp,
-                ts: Date.now(),
-              });
-            }
-            setLiveEvents(prev => [...newTimerEvts, ...prev].slice(0, 50));
-          } else if (msg.type === 'coverage_events_appended') {
-            // Server-authoritative events appended to coverage_events JSONB.
-            // Merge into the display feed, de-duping by (kind, qNum, skill).
-            const incoming: LiveEvent[] = Array.isArray(msg.events) ? msg.events : [];
-            if (incoming.length > 0) {
-              setLiveEvents(prev => {
-                const seen = new Set(
-                  prev.map(e => `${e.kind}|${e.qNum ?? ''}|${(e.skill ?? '').toLowerCase()}`)
-                );
-                const fresh = incoming.filter(e => {
-                  const k = `${e.kind}|${e.qNum ?? ''}|${(e.skill ?? '').toLowerCase()}`;
-                  if (seen.has(k)) return false;
-                  seen.add(k);
-                  return true;
-                });
-                return fresh.length > 0 ? [...fresh, ...prev].slice(0, 50) : prev;
-              });
-            }
           } else if (msg.type === 'interview_closing' || msg.type === 'interview_complete' || msg.type === 'interview_ended') {
             // Interview finished — refresh from REST to update status display.
             // NOTE: ai_evaluation may not be saved yet (backend saves after this event).
@@ -607,6 +525,39 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const isInProgress = liveSession.status === 'in_progress';
   const isPartial = eval_.partial === true;
   const hasData = isCompleted || isPartial;
+
+  // ── Evaluation readiness detection ─────────────────────────────────
+  // After an interview completes, there's a gap while the batch evaluator
+  // runs (_save_interview_results). During this gap, status = 'completed'
+  // but ai_evaluation is empty/partial. All tabs should show a spinner
+  // until the evaluation lands.
+  //
+  // Detection: v2 has evaluation_version; v1 has capability_score or cluster_insights.
+  // If completed but none of these exist, evaluation is still pending.
+  const evaluationReady = !!(
+    eval_.evaluation_version ||
+    eval_.capability_score ||
+    eval_.cluster_insights?.length ||
+    eval_.evaluations?.length
+  );
+  const evaluationPending = isCompleted && !evaluationReady;
+
+  // Polling fallback — when the page loads after interview ended but before
+  // evaluation finished, there's no WS to receive evaluation_ready. Poll
+  // every 5s until data arrives, then stop.
+  useEffect(() => {
+    if (!evaluationPending) return;
+    let cancelled = false;
+    const poll = setInterval(() => {
+      aiInterviewService.get(liveSession.id)
+        .then(updated => {
+          if (cancelled) return;
+          setLiveSession(updated);
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => { cancelled = true; clearInterval(poll); };
+  }, [evaluationPending, liveSession.id]);
 
   // Flexible/conversational mode is identified by the presence of capability_score_reasoning,
   // which is generated only for flexible mode interviews (AC — Mode Indicator).
@@ -770,7 +721,28 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     </div>
   );
 
+  // Spinner shown while batch evaluation is being generated after interview completes.
+  const renderEvaluationSpinner = () => (
+    <div className="flex flex-col items-center justify-center py-24">
+      <div className="relative mb-6">
+        <div className="w-16 h-16 rounded-full border-4 border-gray-200" />
+        <div className="absolute inset-0 w-16 h-16 rounded-full border-4 border-transparent border-t-indigo-600 animate-spin" />
+      </div>
+      <h3 className="text-base font-semibold text-gray-900 mb-1">Generating Evaluation Results</h3>
+      <p className="text-sm text-gray-500 max-w-xs text-center">
+        The AI is analyzing the interview transcript and computing scores.
+        This usually takes 15–30 seconds.
+      </p>
+      <div className="flex items-center gap-2 mt-4">
+        <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+        <span className="text-xs text-indigo-600 font-medium">Processing...</span>
+      </div>
+    </div>
+  );
+
   const getPlaceholderMessage = (tabKey?: string) => {
+    // While evaluation is being generated, all tabs show the spinner
+    if (evaluationPending) return null; // handled by renderEvaluationSpinner below
     // Skill Coverage and Clusters handle their own in-progress state — don't block them
     if (isInProgress && tabKey !== 'skill_coverage' && tabKey !== 'clusters') {
       return 'Interview in progress — data will appear once completed';
@@ -847,6 +819,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
           </div>
         </div>
 
+        {/* Evaluation pending banner */}
+        {evaluationPending && (
+          <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-800">
+            <div className="w-4 h-4 rounded-full border-2 border-indigo-300 border-t-indigo-600 animate-spin flex-shrink-0" />
+            Generating evaluation results — this usually takes 15–30 seconds...
+          </div>
+        )}
+
         {/* Partial warning banner */}
         {isPartial && (
           <div className="mb-4 flex items-center gap-2 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
@@ -896,11 +876,24 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
           </div>
 
           <div className="p-6">
+            {/* Evaluation pending spinner — shown for ALL tabs while batch eval runs */}
+            {evaluationPending && renderEvaluationSpinner()}
+
             {/* Skill Coverage Tab */}
-            {activeTab === 'skill_coverage' && (() => {
-              // Derive skill coverage from ai_evaluation.skill_coverage_map when:
-              //   a) live field is absent, OR
-              //   b) live field has questions_asked=0 (stale initial state) on a completed session
+            {!evaluationPending && activeTab === 'skill_coverage' && (
+              <SkillCoverageTab
+                sessionId={liveSession.id}
+                aiEvaluation={eval_}
+                isCompleted={liveSession.status === 'completed'}
+              />
+            )}
+
+            {/* Legacy skill_coverage block removed — replaced by SkillCoverageTab above.
+              Original inline block handled: live WS-derived coverage, cluster-organized skills,
+              ratchet logic, question mapping strategies. Now all handled by SkillCoverageTab
+              with v2 coverage_trail + download buttons.
+            */}
+            {false && (() => {
               const rawMap = eval_.skill_coverage_map as Record<string, string> | undefined;
               const buildFromEval = rawMap && Object.keys(rawMap).length > 0
                 ? (() => {
@@ -1455,7 +1448,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             })()}
 
             {/* Overview Tab */}
-            {activeTab === 'overview' && (
+            {!evaluationPending && activeTab === 'overview' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (
                 <div className="space-y-6">
                   {/* Final Capability Score — flexible mode only (Report Section 5) */}
@@ -1804,7 +1797,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             )}
 
             {/* Cluster Insights Tab */}
-            {activeTab === 'clusters' && (() => {
+            {!evaluationPending && activeTab === 'clusters' && (() => {
               const clusterPlaceholder = getPlaceholderMessage('clusters');
               if (clusterPlaceholder) return renderPlaceholder(clusterPlaceholder);
 
@@ -2061,7 +2054,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             })()}
 
             {/* Sentiment Tab */}
-            {activeTab === 'sentiment' && (
+            {!evaluationPending && activeTab === 'sentiment' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (
                 <div className="space-y-6">
                   {sentimentTimeline.length > 0 ? (
@@ -2140,7 +2133,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             )}
 
             {/* Q&A Tab */}
-            {activeTab === 'qa' && (
+            {!evaluationPending && activeTab === 'qa' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
                 // Prefer question_history (richer — has round_type, response_type, timestamp)
                 // Fall back to evaluations if history not present
@@ -2219,7 +2212,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
             {/* Recording Tab — pass liveSession so hasFile reflects the latest
                 recording_file_path even when it was set after the initial prop fetch */}
-            {activeTab === 'recording' && (
+            {!evaluationPending && activeTab === 'recording' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (
                 <RecordingTabContent
                   interview={liveSession}
@@ -2236,7 +2229,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
 
             {/* Transcript Tab — use liveSession so evaluation_ready refresh populates
                 the transcript even when the recruiter opened the view mid-interview */}
-            {activeTab === 'transcript' && (
+            {!evaluationPending && activeTab === 'transcript' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
                 const messages = (liveSession.conversation_transcript || interview.conversation_transcript || [])
                   .filter((msg: any) => msg.role !== 'system' && msg.content?.trim());
@@ -2342,7 +2335,20 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               })()
             )}
             {/* Evaluation Tab */}
-            {activeTab === 'evaluation' && (() => {
+            {!evaluationPending && activeTab === 'evaluation' && (
+              <EvaluationTab
+                sessionId={liveSession.id}
+                aiEvaluation={eval_}
+                isCompleted={liveSession.status === 'completed'}
+              />
+            )}
+
+            {/* Legacy evaluation block removed — replaced by EvaluationTab above.
+              Original inline block handled: capability_score hero, section_scores,
+              cluster_insights drill-down, per-skill table without formula transparency.
+              Now all handled by EvaluationTab with v2 scoring_formula + skill_score_cards.
+            */}
+            {false && (() => {
               const evalPlaceholder = getPlaceholderMessage();
               if (evalPlaceholder) return renderPlaceholder(evalPlaceholder);
 
@@ -2533,7 +2539,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             })()}
 
             {/* Violations Tab */}
-            {activeTab === 'violations' && (
+            {!evaluationPending && activeTab === 'violations' && (
               <div className="space-y-6">
 
                 {/* Risk Summary Banner */}

@@ -1,0 +1,425 @@
+'use client';
+
+import { useState, useMemo } from 'react';
+import {
+  ChevronDown, ChevronRight, Download, Layers, Clock, MessageSquare,
+  CheckCircle2, AlertCircle, MinusCircle, HelpCircle, ArrowRight,
+} from 'lucide-react';
+import { aiInterviewService } from '@/lib/services/aiInterviewService';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface TrailEntry {
+  state: string;
+  q_num: number;
+  ts: string;
+  score: number | null;
+  is_follow_up: boolean;
+}
+
+interface FollowUp {
+  q_num: number;
+  question: string;
+  answer: string;
+  score: number | null;
+  question_intent: string;
+  response_type: string;
+  timestamp: string;
+}
+
+interface QuestionGroup {
+  q_num: number;
+  skill: string;
+  round_type: string;
+  question: string;
+  answer: string;
+  score: number | null;
+  timestamp: string;
+  response_type: string;
+  follow_ups: FollowUp[];
+}
+
+interface Props {
+  sessionId: string;
+  aiEvaluation: Record<string, any>;
+  isCompleted: boolean;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const LEVEL_CONFIG: Record<string, { icon: typeof CheckCircle2; color: string; bg: string; border: string; label: string; dot: string }> = {
+  covered:     { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', label: 'Covered',   dot: 'bg-emerald-500' },
+  medium:      { icon: AlertCircle,  color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200',   label: 'Medium',    dot: 'bg-amber-400' },
+  low:         { icon: MinusCircle,  color: 'text-orange-600',  bg: 'bg-orange-50',   border: 'border-orange-200',  label: 'Low',       dot: 'bg-orange-400' },
+  skipped:     { icon: HelpCircle,   color: 'text-red-500',     bg: 'bg-red-50',      border: 'border-red-200',     label: 'Skipped',   dot: 'bg-red-400' },
+  not_started: { icon: HelpCircle,   color: 'text-gray-400',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Asked', dot: 'bg-gray-300' },
+  asked:       { icon: Clock,        color: 'text-blue-500',    bg: 'bg-blue-50',     border: 'border-blue-200',    label: 'Asked',     dot: 'bg-blue-400' },
+};
+
+function LevelBadge({ level }: { level: string }) {
+  const cfg = LEVEL_CONFIG[level] || LEVEL_CONFIG.not_started;
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${cfg.bg} ${cfg.color} ${cfg.border} border`}>
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </span>
+  );
+}
+
+function ScorePill({ score }: { score: number | null }) {
+  if (score == null) return null;
+  const color = score >= 4 ? 'bg-emerald-100 text-emerald-700' : score >= 3 ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700';
+  return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>{score}/5</span>;
+}
+
+// ── Coverage Trail Stepper ───────────────────────────────────────────────────
+
+function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
+  if (!entries.length) return null;
+
+  return (
+    <div className="relative pl-5 py-1">
+      <div className="absolute left-[9px] top-3 bottom-3 w-px bg-gray-200" />
+      {entries.map((entry, i) => {
+        const cfg = LEVEL_CONFIG[entry.state] || LEVEL_CONFIG.not_started;
+        const isLast = i === entries.length - 1;
+        return (
+          <div key={i} className="relative flex items-start gap-3 mb-2.5 last:mb-0">
+            <div className={`relative z-10 mt-1 w-[11px] h-[11px] rounded-full border-2 ${isLast ? cfg.border + ' ' + cfg.dot.replace('bg-', 'border-') : 'border-gray-300'} bg-white flex items-center justify-center`}>
+              {isLast && <div className={`w-[5px] h-[5px] rounded-full ${cfg.dot}`} />}
+            </div>
+            <div className="flex-1 flex items-center gap-2 flex-wrap min-w-0 -mt-0.5">
+              <LevelBadge level={entry.state} />
+              {entry.q_num > 0 && <span className="text-[10px] font-mono text-gray-400">Q{entry.q_num}</span>}
+              {entry.is_follow_up && <span className="text-[10px] font-medium text-blue-500">follow-up</span>}
+              {entry.score != null && <ScorePill score={entry.score} />}
+              {entry.state === 'asked' && <ArrowRight className="w-3 h-3 text-gray-300" />}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Q&A Card (main question + nested follow-ups) ────────────────────────────
+
+function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel: string }) {
+  const [showAnswer, setShowAnswer] = useState(false);
+  const cfg = LEVEL_CONFIG[coverageLevel] || LEVEL_CONFIG.not_started;
+  const fuCount = group.follow_ups?.length || 0;
+
+  return (
+    <div className={`border rounded-lg overflow-hidden ${cfg.border}`}>
+      {/* Main question header */}
+      <div
+        className={`flex items-start gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50/50 transition-colors ${cfg.bg}`}
+        onClick={() => setShowAnswer(!showAnswer)}
+      >
+        <div className="flex-shrink-0 mt-0.5">
+          {showAnswer ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className="text-[10px] font-bold text-gray-500 bg-white px-1.5 py-0.5 rounded border border-gray-200">Q{group.q_num}</span>
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+              group.round_type?.includes('must_have') ? 'bg-indigo-50 text-indigo-600' :
+              group.round_type?.includes('nice_to_have') ? 'bg-purple-50 text-purple-600' :
+              'bg-gray-100 text-gray-500'
+            }`}>
+              {group.round_type?.includes('must_have') ? 'Must Have' :
+               group.round_type?.includes('nice_to_have') ? 'Nice to Have' :
+               group.round_type?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'General'}
+            </span>
+            <ScorePill score={group.score} />
+            {fuCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-medium">
+                <MessageSquare className="w-3 h-3" />
+                {fuCount} follow-up{fuCount > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-gray-800 leading-snug line-clamp-2">{group.question || 'Question not recorded'}</p>
+        </div>
+        <LevelBadge level={coverageLevel} />
+      </div>
+
+      {/* Expanded: answer + follow-ups */}
+      {showAnswer && (
+        <div className="border-t border-gray-100">
+          {/* Main answer */}
+          {group.answer && (
+            <div className="px-4 py-3 bg-white">
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Candidate Answer</p>
+              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{group.answer}</p>
+            </div>
+          )}
+          {group.response_type === 'skipped' && (
+            <div className="px-4 py-3 bg-red-50/30">
+              <p className="text-xs text-red-500 italic">Skipped / No answer provided</p>
+            </div>
+          )}
+
+          {/* Follow-ups */}
+          {group.follow_ups?.map((fu, i) => (
+            <div key={i} className="border-t border-gray-100">
+              {/* Follow-up question */}
+              <div className="px-4 py-3 bg-blue-50/30">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-[10px] font-mono text-blue-500 bg-blue-100 px-1.5 py-0.5 rounded">
+                    Q{group.q_num}.{i + 1}
+                  </span>
+                  <span className="text-[10px] text-blue-500 font-medium capitalize">
+                    {fu.question_intent?.replace(/_/g, ' ') || 'follow-up'}
+                  </span>
+                  <ScorePill score={fu.score} />
+                </div>
+                <p className="text-sm text-gray-700 leading-snug">{fu.question || 'Follow-up question'}</p>
+              </div>
+              {/* Follow-up answer */}
+              {fu.answer && (
+                <div className="px-4 py-3 bg-white pl-8">
+                  <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{fu.answer}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Component ───────────────────────────────────────────────────────────
+
+export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCompleted }: Props) {
+  const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
+  const [downloading, setDownloading] = useState(false);
+
+  const coverageMap: Record<string, string> = eval_?.skill_coverage_map || {};
+  const priorityMap: Record<string, string> = eval_?.skill_priority_map || {};
+  const coverageTrail: Record<string, TrailEntry[]> = eval_?.coverage_trail || {};
+  const questionGroups: QuestionGroup[] = eval_?.question_groups || [];
+
+  // Build skill → question groups mapping
+  const skillQuestionMap = useMemo(() => {
+    const map: Record<string, QuestionGroup[]> = {};
+    for (const g of questionGroups) {
+      const skill = (g.skill || '').toLowerCase();
+      if (skill) {
+        if (!map[skill]) map[skill] = [];
+        map[skill].push(g);
+      }
+    }
+    return map;
+  }, [questionGroups]);
+
+  // Sort skills: must-have first, then by level
+  const allSkills = useMemo(() => {
+    return Object.keys(coverageMap).sort((a, b) => {
+      const pOrder: Record<string, number> = { must_have: 0, nice_to_have: 1 };
+      const lOrder: Record<string, number> = { covered: 0, medium: 1, low: 2, skipped: 3, not_started: 4 };
+      const pa = pOrder[priorityMap[a] || 'must_have'] ?? 1;
+      const pb = pOrder[priorityMap[b] || 'must_have'] ?? 1;
+      if (pa !== pb) return pa - pb;
+      const la = lOrder[coverageMap[a]] ?? 4;
+      const lb = lOrder[coverageMap[b]] ?? 4;
+      return la - lb || a.localeCompare(b);
+    });
+  }, [coverageMap, priorityMap]);
+
+  const counts = useMemo(() => ({
+    total: allSkills.length,
+    covered: allSkills.filter(s => coverageMap[s] === 'covered').length,
+    medium: allSkills.filter(s => coverageMap[s] === 'medium').length,
+    low: allSkills.filter(s => coverageMap[s] === 'low').length,
+    skipped: allSkills.filter(s => coverageMap[s] === 'skipped' || coverageMap[s] === 'not_started').length,
+  }), [allSkills, coverageMap]);
+
+  if (!isCompleted) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <Layers className="w-10 h-10 mb-3 opacity-40" />
+        <p className="text-sm">Skill coverage will be available after the interview completes.</p>
+      </div>
+    );
+  }
+
+  if (allSkills.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <Layers className="w-10 h-10 mb-3 opacity-40" />
+        <p className="text-sm">No skill coverage data available.</p>
+      </div>
+    );
+  }
+
+  const toggleSkill = (skill: string) => {
+    setExpandedSkills(prev => {
+      const next = new Set(prev);
+      next.has(skill) ? next.delete(skill) : next.add(skill);
+      return next;
+    });
+  };
+
+  const handleDownload = async (format: 'pdf' | 'excel' | 'json') => {
+    setDownloading(true);
+    try {
+      const blob = await aiInterviewService.downloadReport(sessionId, 'coverage', format);
+      const ext = format === 'excel' ? 'xlsx' : format;
+      aiInterviewService.triggerBlobDownload(blob, `Coverage_Report.${ext}`);
+    } catch { /* silent */ }
+    setDownloading(false);
+  };
+
+  const coveredPct = counts.total > 0 ? Math.round(((counts.covered + counts.medium) / counts.total) * 100) : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* ── Download bar ──────────────────────────────────────────── */}
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs text-gray-400 mr-auto">
+          {coveredPct}% skills at medium+ coverage
+        </span>
+        {['pdf', 'excel', 'json'].map(fmt => (
+          <button
+            key={fmt}
+            onClick={() => handleDownload(fmt as any)}
+            disabled={downloading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {fmt.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Summary strip ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: 'Covered', count: counts.covered, dot: 'bg-emerald-500', text: 'text-emerald-700' },
+          { label: 'Medium', count: counts.medium, dot: 'bg-amber-400', text: 'text-amber-700' },
+          { label: 'Low', count: counts.low, dot: 'bg-orange-400', text: 'text-orange-700' },
+          { label: 'Not Assessed', count: counts.skipped, dot: 'bg-gray-300', text: 'text-gray-500' },
+        ].map(item => (
+          <div key={item.label} className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <span className={`w-2.5 h-2.5 rounded-full ${item.dot}`} />
+              <span className={`text-xl font-bold ${item.text}`}>{item.count}</span>
+            </div>
+            <p className="text-[10px] text-gray-500">{item.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Stacked progress bar ──────────────────────────────────── */}
+      <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden flex">
+        <div className="h-full bg-emerald-500 transition-[width] duration-700" style={{ width: `${counts.total > 0 ? (counts.covered / counts.total) * 100 : 0}%` }} />
+        <div className="h-full bg-amber-400 transition-[width] duration-700" style={{ width: `${counts.total > 0 ? (counts.medium / counts.total) * 100 : 0}%` }} />
+        <div className="h-full bg-orange-400 transition-[width] duration-700" style={{ width: `${counts.total > 0 ? (counts.low / counts.total) * 100 : 0}%` }} />
+      </div>
+
+      {/* ── Per-skill expandable cards ────────────────────────────── */}
+      <div className="space-y-2">
+        {allSkills.map(skill => {
+          const level = coverageMap[skill] || 'not_started';
+          const priority = priorityMap[skill] || 'must_have';
+          const trail = coverageTrail[skill] || [];
+          const groups = skillQuestionMap[skill.toLowerCase()] || [];
+          const isExpanded = expandedSkills.has(skill);
+          const cfg = LEVEL_CONFIG[level] || LEVEL_CONFIG.not_started;
+
+          // Compute Q numbers and follow-up count from question groups
+          const qNums = groups.map(g => g.q_num).filter(Boolean);
+          const totalFollowUps = groups.reduce((sum, g) => sum + (g.follow_ups?.length || 0), 0);
+
+          return (
+            <div key={skill} className={`border rounded-xl overflow-hidden transition-shadow ${isExpanded ? 'shadow-md ' + cfg.border : 'border-gray-200'}`}>
+              {/* ── Skill row header ─────────────────────────────── */}
+              <div
+                className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50/50 transition-colors ${isExpanded ? cfg.bg : ''}`}
+                onClick={() => toggleSkill(skill)}
+              >
+                {/* Chevron */}
+                <div className="flex-shrink-0">
+                  {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                </div>
+
+                {/* Skill name + priority */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+                    <span className="text-sm font-semibold text-gray-900 truncate">{skill}</span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                      priority === 'must_have' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {priority === 'must_have' ? 'MH' : 'NH'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Level badge */}
+                <LevelBadge level={level} />
+
+                {/* Question numbers */}
+                {qNums.length > 0 && (
+                  <span className="text-[10px] text-gray-400 font-mono hidden sm:inline">
+                    {qNums.map(q => `Q${q}`).join(', ')}
+                  </span>
+                )}
+
+                {/* Follow-up count */}
+                {totalFollowUps > 0 && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-blue-500 font-medium">
+                    <MessageSquare className="w-3 h-3" />
+                    +{totalFollowUps}
+                  </span>
+                )}
+              </div>
+
+              {/* ── Expanded content ─────────────────────────────── */}
+              {isExpanded && (
+                <div className="border-t border-gray-100">
+                  {/* Coverage Trail */}
+                  {trail.length > 0 && (
+                    <div className="px-5 py-3 bg-gray-50/50">
+                      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Coverage Progression</p>
+                      <CoverageTrail entries={trail} />
+                    </div>
+                  )}
+
+                  {/* Q&A Cards — main questions + follow-ups */}
+                  {groups.length > 0 && (
+                    <div className="px-5 py-3 space-y-3">
+                      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                        Questions & Answers ({groups.length} question{groups.length > 1 ? 's' : ''}{totalFollowUps > 0 ? `, ${totalFollowUps} follow-up${totalFollowUps > 1 ? 's' : ''}` : ''})
+                      </p>
+                      {groups.map((g, i) => (
+                        <QACard key={i} group={g} coverageLevel={level} />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* No data fallback */}
+                  {trail.length === 0 && groups.length === 0 && (
+                    <div className="px-5 py-4 text-center text-xs text-gray-400 italic">
+                      No detailed data available for this skill
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Legend ─────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-4 text-[10px] text-gray-400 flex-wrap">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-400 inline-block" /> MH = Must-Have</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" /> NH = Nice-to-Have</span>
+        <span>Coverage trail shows: Asked <ArrowRight className="w-3 h-3 inline" /> Low <ArrowRight className="w-3 h-3 inline" /> Medium <ArrowRight className="w-3 h-3 inline" /> Covered</span>
+      </div>
+    </div>
+  );
+}
