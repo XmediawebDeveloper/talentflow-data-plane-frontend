@@ -1176,7 +1176,7 @@ export default function CandidateResultDetails({
                           {questionsForRound.map((q, qIdx) => (
                             <div key={qIdx} className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
                               {(() => {
-                                const isTextQuestion = !['coding', 'single_choice', 'multiple_choice'].includes(q.question_type);
+                                const isTextQuestion = !['coding', 'mcq', 'single_choice', 'multiple_choice'].includes(q.question_type);
                                 return (
                                   <>
                               {/* Question Header */}
@@ -1192,11 +1192,12 @@ export default function CandidateResultDetails({
                                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                                         q.question_type === 'coding'
                                           ? 'bg-purple-100 text-purple-700'
-                                          : q.question_type === 'single_choice' || q.question_type === 'multiple_choice'
+                                          : q.question_type === 'mcq' || q.question_type === 'single_choice' || q.question_type === 'multiple_choice'
                                           ? 'bg-blue-100 text-blue-700'
                                           : 'bg-gray-100 text-gray-700'
                                       }`}>
                                         {q.question_type === 'coding' ? 'Coding'
+                                          : q.question_type === 'mcq' ? 'MCQ'
                                           : q.question_type === 'single_choice' ? 'Single Choice'
                                           : q.question_type === 'multiple_choice' ? 'Multiple Choice'
                                           : 'Text'}
