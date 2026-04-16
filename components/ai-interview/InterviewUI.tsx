@@ -982,9 +982,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // VAD settings
   const silenceStartRef = useRef<number | null>(null);
   const speechDetectedRef = useRef(false);
+  const speechDetectedAtRef = useRef<number | null>(null);
   const speechStartSentRef = useRef(false); // fires speech_started once per recording session
   const silenceThresholdRef = useRef(0.005);
-  const silenceDurationMsRef = useRef(4500); // 4.5s silence = natural end of answer; backend overrides via vad_config
+  const silenceDurationMsRef = useRef(9000); // conversational mode needs long pauses tolerated; backend may override
   const LIVE_BATCH_CHAR_THRESHOLD = 320;
   const liveBatchSentCharsRef = useRef(0);
   const liveBatchIndexRef = useRef(0);
@@ -2554,6 +2555,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     avatarState.onUserStopSpeaking();
     silenceStartRef.current = null;
     speechDetectedRef.current = false;
+    speechDetectedAtRef.current = null;
     stopWebSpeechRecognition();
     clearNoResponseTimer();
     clearMaxRecordingTimer();
@@ -2651,6 +2653,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     avatarState.onUserStopSpeaking();
     silenceStartRef.current = null;
     speechDetectedRef.current = false;
+    speechDetectedAtRef.current = null;
     postSpeechNoiseCountRef.current = 0;
     stopWebSpeechRecognition();
     clearNoResponseTimer();
@@ -2810,6 +2813,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
       silenceStartRef.current = null;
       speechDetectedRef.current = false;
+      speechDetectedAtRef.current = null;
       speechStartSentRef.current = false;
       speechFrameCountRef.current = 0;
       postSpeechNoiseCountRef.current = 0;
@@ -2879,6 +2883,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             // is still picked up the moment the guard lifts.
             if (speechFrameCountRef.current >= MIN_SPEECH_FRAMES && !suppressNewSpeechDetection) {
               speechDetectedRef.current = true;
+              speechDetectedAtRef.current = Date.now();
               postSpeechNoiseCountRef.current = MIN_RESPEECH_FRAMES; // start confirmed
               if (!speechStartSentRef.current) {
                 speechStartSentRef.current = true;
@@ -2908,6 +2913,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             if (silenceStartRef.current === null) {
               silenceStartRef.current = Date.now();
             } else if (Date.now() - silenceStartRef.current > silenceDurationMsRef.current) {
+              // Conversational mode: do not end the turn too early after the first
+              // detected speech. This prevents a brief pause inside an answer from
+              // immediately closing the turn and moving Linda to the next question.
+              const speechAgeMs =
+                speechDetectedAtRef.current == null ? 0 : Date.now() - speechDetectedAtRef.current;
+              if ((isFlexibleMode || isNewFlexibleMode) && speechAgeMs < 2000) {
+                return;
+              }
               stopRecording();
               return;
             }
