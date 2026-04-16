@@ -214,9 +214,11 @@ const getAudioWorkerCode = () => `
       if (detected) {
         consecutiveVoice++;
         consecutiveSilent = 0;
-        if (!isVoiceActive && consecutiveVoice >= VOICE_THRESHOLD_FRAMES) {
+        // Emit on every confirmed voice frame so continuous background sound
+        // (TV, music, ambient chatter) generates repeated violations rather
+        // than a single edge-triggered event.
+        if (consecutiveVoice >= VOICE_THRESHOLD_FRAMES) {
           isVoiceActive = true;
-          // Reset noise counters — don't carry stale state into post-speech period
           consecutiveNoisy = 0;
           consecutiveQuiet = 0;
           self.postMessage({
@@ -317,6 +319,10 @@ export function useInterviewProctoringMonitor({
   const videoIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const voiceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const batchFlushIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const trackHealthIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const cameraDisabledRef = useRef<boolean>(false);
+  const micDisabledRef = useRef<boolean>(false);
+  const permissionCleanupRef = useRef<(() => void) | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -510,16 +516,12 @@ export function useInterviewProctoringMonitor({
               : { ...prev, isHighBackgroundNoise: data.noisy }
           );
           if (data.noisy) {
-            // Advisory warning — emitted directly to bus, NOT via emitEvent,
-            // so it never reaches the backend as a proctoring violation (AIU-67).
-            const now = Date.now();
-            if (now - lastNoiseWarningRef.current >= NOISE_WARNING_COOLDOWN) {
-              lastNoiseWarningRef.current = now;
-              InterviewEventBus.emit('background_noise', {
-                avgNoise: Math.round(data.avgNoise),
-              });
-              console.log(`[INTERVIEW_PROCTORING] Background noise advisory: avg=${Math.round(data.avgNoise)}`);
-            }
+            // Route through emitEvent so it's queued to the backend as its own
+            // violation type, distinct from voice_detected. UI cooldown still
+            // prevents toast spam.
+            emitEventRef.current('background_noise', {
+              avgNoise: Math.round(data.avgNoise),
+            });
           }
         }
       };
@@ -574,40 +576,113 @@ export function useInterviewProctoringMonitor({
 
   // ==================== EVENT-DRIVEN DETECTIONS (main thread, cheap) ====================
 
+  const reportCameraDisabled = useCallback((reason: string) => {
+    if (cameraDisabledRef.current) return;
+    cameraDisabledRef.current = true;
+    setState(prev => ({ ...prev, isCameraActive: false }));
+    emitEventRef.current('camera_disabled', { reason });
+  }, []);
+
+  const reportCameraRestored = useCallback(() => {
+    if (!cameraDisabledRef.current) return;
+    cameraDisabledRef.current = false;
+    setState(prev => ({ ...prev, isCameraActive: true }));
+  }, []);
+
+  const reportMicDisabled = useCallback((reason: string) => {
+    if (micDisabledRef.current) return;
+    micDisabledRef.current = true;
+    setState(prev => ({ ...prev, isMicrophoneActive: false }));
+    emitEventRef.current('microphone_disabled', { reason });
+  }, []);
+
+  const reportMicRestored = useCallback(() => {
+    if (!micDisabledRef.current) return;
+    micDisabledRef.current = false;
+    setState(prev => ({ ...prev, isMicrophoneActive: true }));
+  }, []);
+
   const setupTrackMonitoring = useCallback(() => {
     const currentStream = streamRef.current;
     if (!currentStream) return;
 
     currentStream.getVideoTracks().forEach(track => {
-      track.onended = () => {
-        setState(prev => ({ ...prev, isCameraActive: false }));
-        emitEventRef.current('camera_disabled', { reason: 'track_ended' });
-      };
-      track.onmute = () => {
-        setState(prev => ({ ...prev, isCameraActive: false }));
-        emitEventRef.current('camera_disabled', { reason: 'track_muted' });
-      };
-      track.onunmute = () => {
-        setState(prev => ({ ...prev, isCameraActive: true }));
-      };
+      track.onended = () => reportCameraDisabled('track_ended');
+      track.onmute = () => reportCameraDisabled('track_muted');
+      track.onunmute = () => reportCameraRestored();
     });
 
     currentStream.getAudioTracks().forEach(track => {
-      track.onended = () => {
-        setState(prev => ({ ...prev, isMicrophoneActive: false }));
-        emitEventRef.current('microphone_disabled', { reason: 'track_ended' });
-      };
-      track.onmute = () => {
-        setState(prev => ({ ...prev, isMicrophoneActive: false }));
-        emitEventRef.current('microphone_disabled', { reason: 'track_muted' });
-      };
-      track.onunmute = () => {
-        setState(prev => ({ ...prev, isMicrophoneActive: true }));
-      };
+      track.onended = () => reportMicDisabled('track_ended');
+      track.onmute = () => reportMicDisabled('track_muted');
+      track.onunmute = () => reportMicRestored();
     });
 
+    // Periodic health check — track events (onended/onmute) don't always fire
+    // when the user disables camera/mic via browser site settings. Poll
+    // readyState and track.enabled to catch those cases.
+    trackHealthIntervalRef.current = setInterval(() => {
+      const s = streamRef.current;
+      if (!s) return;
+
+      const vTracks = s.getVideoTracks();
+      if (vTracks.length === 0) {
+        reportCameraDisabled('no_track');
+      } else {
+        const vt = vTracks[0];
+        if (vt.readyState === 'ended' || vt.muted || !vt.enabled) {
+          reportCameraDisabled(
+            vt.readyState === 'ended' ? 'readystate_ended'
+            : vt.muted ? 'track_muted_poll'
+            : 'track_disabled'
+          );
+        } else {
+          reportCameraRestored();
+        }
+      }
+
+      const aTracks = s.getAudioTracks();
+      if (aTracks.length === 0) {
+        reportMicDisabled('no_track');
+      } else {
+        const at = aTracks[0];
+        if (at.readyState === 'ended' || at.muted || !at.enabled) {
+          reportMicDisabled(
+            at.readyState === 'ended' ? 'readystate_ended'
+            : at.muted ? 'track_muted_poll'
+            : 'track_disabled'
+          );
+        } else {
+          reportMicRestored();
+        }
+      }
+    }, 2000);
+
+    // Permissions API — catches browser-level permission revocation even when
+    // the MediaStreamTrack events stay silent.
+    const permCleanups: Array<() => void> = [];
+    const watchPermission = async (name: 'camera' | 'microphone') => {
+      try {
+        // @ts-expect-error — 'camera'/'microphone' are valid PermissionName values in browsers
+        const status = await navigator.permissions.query({ name });
+        const onChange = () => {
+          if (status.state !== 'granted') {
+            if (name === 'camera') reportCameraDisabled(`permission_${status.state}`);
+            else reportMicDisabled(`permission_${status.state}`);
+          }
+        };
+        status.addEventListener('change', onChange);
+        permCleanups.push(() => status.removeEventListener('change', onChange));
+      } catch {
+        /* Permissions API not supported for this name — skip */
+      }
+    };
+    watchPermission('camera');
+    watchPermission('microphone');
+    permissionCleanupRef.current = () => permCleanups.forEach(fn => fn());
+
     console.log('[INTERVIEW_PROCTORING] Track monitoring started');
-  }, []);
+  }, [reportCameraDisabled, reportCameraRestored, reportMicDisabled, reportMicRestored]);
 
   const setupTabSwitchDetection = useCallback(() => {
     const handleVisibilityChange = () => {
@@ -819,6 +894,8 @@ export function useInterviewProctoringMonitor({
       if (videoIntervalRef.current) { clearInterval(videoIntervalRef.current); videoIntervalRef.current = null; }
       if (voiceIntervalRef.current) { clearInterval(voiceIntervalRef.current); voiceIntervalRef.current = null; }
       if (batchFlushIntervalRef.current) { clearInterval(batchFlushIntervalRef.current); batchFlushIntervalRef.current = null; }
+      if (trackHealthIntervalRef.current) { clearInterval(trackHealthIntervalRef.current); trackHealthIntervalRef.current = null; }
+      if (permissionCleanupRef.current) { permissionCleanupRef.current(); permissionCleanupRef.current = null; }
 
       // Final flush — send remaining events to backend
       if (backendQueueRef.current.length > 0) {

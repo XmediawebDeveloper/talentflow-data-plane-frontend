@@ -20,7 +20,7 @@ import { Clock, Timer, LogOut, Send, Mic, MessageSquare, ShieldCheck, Video, Vid
 import { createAvatar3DSender } from "./avatar3d/avatar3d-channel";
 import { DEFAULT_VISEME_WEIGHTS } from "./avatar3d/avatar3d-types";
 import { VisemeTimeline } from "./avatar3d/text-to-viseme";
-import { isFlexibleDuration } from "@/lib/constants/aiInterviewMode";
+import { isFlexibleDuration, modeFromConfig } from "@/lib/constants/aiInterviewMode";
 import { isTranscriptMeaningful } from "@/lib/utils/whisperFilter";
 
 interface FaceVerificationHandle {
@@ -214,10 +214,38 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isFullscreenExited, setIsFullscreenExited] = useState(false);
+  // Ref mirror so timer setIntervals (which close over stale state) can
+  // read the current value synchronously.
+  const isFullscreenExitedRef = useRef(false);
+  useEffect(() => { isFullscreenExitedRef.current = isFullscreenExited; }, [isFullscreenExited]);
+  // Frozen timer values captured at the exact moment fullscreen was exited.
+  // Timer restoration on fullscreen return reads from here instead of from
+  // the server's wall-clock elapsed — that's what lets "Answer time" stay
+  // at the same value across the fullscreen pause instead of jumping
+  // forward by the real-world duration the candidate was away.
+  const frozenGlobalSecondsRef = useRef<number | null>(null);
+  const frozenQuestionSecondsRef = useRef<number | null>(null);
 
   // Face-not-in-frame blocking
   const [isFaceBlocked, setIsFaceBlocked] = useState(false);
   const isFaceBlockedRef = useRef(false);
+
+  // Media permission terminal block.
+  // Set to true when:
+  //   1. navigator.permissions.query() reports camera/mic is "denied"
+  //   2. MediaStreamTrack.ended / muted fires mid-interview (candidate
+  //      revoked the OS-level permission from the browser site settings)
+  //   3. A fresh getUserMedia probe rejects with NotAllowed/PermissionDenied
+  // Once armed, the interview UI is frozen behind a blocking overlay — the
+  // candidate cannot resume, regardless of whether they re-enter fullscreen.
+  // This implements the user-requested "block the interview immediately
+  // if any permission is blocked" rule.
+  const [mediaBlocked, setMediaBlocked] = useState<null | {
+    kind: 'camera' | 'microphone' | 'both';
+    reason: string;
+  }>(null);
+  const mediaBlockedRef = useRef<typeof mediaBlocked>(null);
+  useEffect(() => { mediaBlockedRef.current = mediaBlocked; }, [mediaBlocked]);
 
   // Session ID — populated from `connected` WS event, used for violation event logging
   const sessionIdRef = useRef<string | null>(null);
@@ -234,11 +262,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   //   timed / fixed       = duration > 0, interview_mode='fixed'  → count DOWN
   //                         Both timers pause while Linda speaks; run during candidate
   //                         recording, processing, and idle phases.
-  // Flexible mode is encoded as duration_minutes === 0 (sentinel).
-  // See lib/constants/aiInterviewMode.ts for the rationale.
-  const isFlexibleMode = isFlexibleDuration(interviewInfo.duration_minutes);
-  const isNewFlexibleMode = !isFlexibleMode && interviewInfo.interview_mode === 'flexible';
-  const [remainingSeconds, setRemainingSeconds] = useState(isFlexibleMode ? 30 * 60 : interviewInfo.duration_minutes * 60);
+  // Flexible mode is now determined by special_instructions.interview_mode
+  // (authoritative). duration_minutes holds the real budget (30 / 35 / N),
+  // not a sentinel. Legacy records with duration_minutes=0 still fall back
+  // to "flexible" via the helper.
+  const resolvedMode = modeFromConfig((interviewInfo as any).special_instructions, interviewInfo.duration_minutes);
+  const isFlexibleMode = resolvedMode === 'flexible' && isFlexibleDuration(interviewInfo.duration_minutes);
+  const isNewFlexibleMode = resolvedMode === 'flexible' && !isFlexibleMode;
+  const [remainingSeconds, setRemainingSeconds] = useState(
+    isFlexibleMode ? 30 * 60 : (interviewInfo.duration_minutes || 30) * 60
+  );
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -256,7 +289,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // fire DURING the candidate's answer window and the global clock
       // must keep ticking so the 30-min budget is enforced.
       if (isClarificationRef.current) return;
-      if (isAiSpeakingRef.current && !isSilencePromptRef.current) return;
+      // Pause while fullscreen is exited — the interview is frozen behind
+      // the "Fullscreen Required" overlay, backend continues to tick its
+      // own clock but the candidate must not be charged for that lost
+      // time on the visible global timer.
+      if (isFullscreenExitedRef.current) return;
+      // Timed/fixed mode: global timer must tick NON-STOP (the 30-min budget
+      // is a hard cap and Linda's speech counts against it). Only flexible
+      // mode pauses during Linda speaking so between-question TTS doesn't
+      // burn the candidate's budget.
+      if (isFlexibleMode && isAiSpeakingRef.current && !isSilencePromptRef.current) return;
       setRemainingSeconds(prev => Math.max(0, prev - 1));
     }, 1000);
     return () => {
@@ -582,6 +624,175 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Scheduled playback — gapless audio via Web Audio API clock
   const nextPlayTimeRef = useRef(0);   // ctx.currentTime when next buffer should start
   const pendingBuffersRef = useRef(0); // buffers scheduled but not yet finished
+
+  // ── Audio playback tracker ──
+  // The REAL "Linda's audio has finished" signal. A dedicated, silent
+  // AudioContext that mirrors every PCM chunk TalkingHead receives by
+  // scheduling a gain=0 AudioBufferSourceNode of the same length. Tracked
+  // fields:
+  //   playbackTrackerCtxRef             — the dedicated AudioContext
+  //   playbackScheduledEndAtRef         — ctx.currentTime seconds when the
+  //                                        last-scheduled buffer ends
+  //   playbackTrackerPendingRef         — count of buffers scheduled but
+  //                                        not yet finished (from onended)
+  // Because AudioContext.currentTime is driven by the hardware audio clock
+  // it's the browser's authoritative playback clock — we can't be wrong
+  // about whether audio has finished as long as we schedule a silent mirror
+  // of every real chunk. No TalkingHead internals, no wall-clock guesses.
+  const playbackTrackerCtxRef = useRef<AudioContext | null>(null);
+  const playbackScheduledEndAtRef = useRef<number>(0); // in ctx seconds
+  const playbackTrackerPendingRef = useRef<number>(0);
+  // True once at least one chunk for the current turn was successfully
+  // scheduled on the tracker context. Used by `whenTrackedPlaybackEnds` to
+  // decide whether the tracker's state is trustworthy or we need to fall
+  // back to the wall-clock heuristic (happens on first question when the
+  // AudioContext is still suspended, pre-user-gesture).
+  const trackedThisTurnRef = useRef(false);
+  // Ref shim — populated below in a useEffect so the `ws.onmessage` closure
+  // (created once when `connect()` runs) always sees the latest callback.
+  const trackPlaybackChunkRef = useRef<(pcmData: ArrayBuffer) => void>(() => {});
+  // Pending callbacks waiting for audio to truly finish. Each entry is
+  // a function that will be called once `playbackScheduledEndAtRef <= ctx.currentTime`
+  // AND audio_end was received. Used by finalizePlayback to defer its
+  // work until the real end-of-playback, with no wall-clock guessing.
+  const awaitingAudioEndCallbacksRef = useRef<Array<() => void>>([]);
+
+  // Ensure we have a tracker context. Reuses a single instance for the
+  // entire session; AudioContext creation is not free, so we avoid
+  // spawning one per Linda turn. The tracker prefers to share the
+  // pre-created, already-unlocked `__interviewAudioContext` (set by the
+  // fullscreen-prompt user-gesture button in CandidateAIInterviewPortal)
+  // so it starts in the 'running' state even on the very first question.
+  const getPlaybackTracker = useCallback((): AudioContext | null => {
+    if (typeof window === 'undefined') return null;
+    let ctx = playbackTrackerCtxRef.current;
+    if (!ctx || ctx.state === 'closed') {
+      try {
+        // Prefer the pre-warmed context if TalkingHead hasn't claimed it yet.
+        const preCreated = (window as any).__interviewAudioContext as AudioContext | undefined;
+        if (preCreated && preCreated.state !== 'closed' && preCreated.sampleRate === 24000) {
+          ctx = preCreated;
+        } else {
+          ctx = new AudioContext({ sampleRate: 24000 });
+        }
+        playbackTrackerCtxRef.current = ctx;
+      } catch {
+        return null;
+      }
+    }
+    if (ctx.state === 'suspended') {
+      // Fire-and-forget resume. Any gesture during the interview will
+      // unlock it; until then the tracker will lag behind real audio,
+      // in which case we fall back to wall-clock anchors.
+      ctx.resume().catch(() => { /* ignore */ });
+    }
+    return ctx;
+  }, []);
+
+  // Schedule a silent mirror of an Int16 PCM @ 24 kHz chunk. The chunk's
+  // duration is encoded in its byteLength; we convert to a same-length
+  // AudioBuffer so its onended fires at exactly the wall-clock moment
+  // the real chunk finishes playing through TalkingHead.
+  const trackPlaybackChunk = useCallback((pcmData: ArrayBuffer) => {
+    const ctx = getPlaybackTracker();
+    if (!ctx) return;
+    // If the context is suspended (first call before user gesture takes
+    // effect), aggressively try to resume it. On subsequent chunks it
+    // should be 'running'. If still suspended after the resume attempt,
+    // skip this chunk — the wall-clock fallback in whenTrackedPlaybackEnds
+    // will kick in.
+    if (ctx.state !== 'running') {
+      ctx.resume().catch(() => { /* ignore */ });
+      if (ctx.state !== 'running') return;
+    }
+    try {
+      const sampleCount = pcmData.byteLength / 2; // Int16 = 2 bytes/sample
+      if (sampleCount <= 0) return;
+      const buf = ctx.createBuffer(1, sampleCount, 24000);
+      // leave channel silent — we only need the DURATION to be correct
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      // gain=0 node to prevent any accidental audible click even if hw mixer
+      // ever routes this through speakers on a misconfigured browser
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      src.connect(gain).connect(ctx.destination);
+      const startAt = Math.max(ctx.currentTime, playbackScheduledEndAtRef.current);
+      src.start(startAt);
+      playbackScheduledEndAtRef.current = startAt + buf.duration;
+      playbackTrackerPendingRef.current += 1;
+      trackedThisTurnRef.current = true;
+      src.onended = () => {
+        playbackTrackerPendingRef.current = Math.max(0, playbackTrackerPendingRef.current - 1);
+        // If this was the last pending chunk AND audio_end was already
+        // received, fire any deferred callbacks.
+        if (
+          playbackTrackerPendingRef.current === 0 &&
+          audioEndReceivedRef.current &&
+          awaitingAudioEndCallbacksRef.current.length > 0
+        ) {
+          const pending = awaitingAudioEndCallbacksRef.current.splice(0);
+          pending.forEach(cb => { try { cb(); } catch { /* ignore */ } });
+        }
+      };
+    } catch (err) {
+      console.warn('[PlaybackTracker] schedule failed:', err);
+    }
+  }, [getPlaybackTracker]);
+
+  // Wait until the tracker confirms every scheduled buffer has been played.
+  // Returns immediately if audio is already drained. Otherwise schedules the
+  // callback to fire from the last chunk's onended handler. Includes a
+  // safety wall-clock timeout so we can't hang forever if the tracker
+  // context is frozen.
+  const whenTrackedPlaybackEnds = useCallback((cb: () => void, safetyTimeoutMs = 20000) => {
+    const ctx = playbackTrackerCtxRef.current;
+    const pendingCount = playbackTrackerPendingRef.current;
+    const scheduledEnd = playbackScheduledEndAtRef.current;
+    const nowSec = ctx?.currentTime ?? 0;
+    // If the tracker context never accepted any chunks this turn (e.g. it
+    // was suspended pre-user-gesture on the very first question), we
+    // CANNOT trust its "pending=0" signal — it would fire immediately.
+    // Fall back to the wall-clock heuristic instead.
+    if (!trackedThisTurnRef.current) {
+      const lastPcmAt = lastPcmAtMsRef.current ?? firstPcmAtMsRef.current ?? Date.now();
+      const expectedEndMs = lastPcmAt + AUDIO_TAIL_MARGIN_MS;
+      const remainingMs = Math.max(0, expectedEndMs - Date.now());
+      if (remainingMs > 0) {
+        setTimeout(() => { try { cb(); } catch { /* ignore */ } }, remainingMs);
+      } else {
+        try { cb(); } catch { /* ignore */ }
+      }
+      return;
+    }
+    // Already drained?
+    if (
+      pendingCount === 0 &&
+      (!ctx || nowSec >= scheduledEnd - 0.01)
+    ) {
+      try { cb(); } catch { /* ignore */ }
+      return;
+    }
+    // Defer until the tracker says we're done.
+    let fired = false;
+    const wrapped = () => {
+      if (fired) return;
+      fired = true;
+      try { cb(); } catch { /* ignore */ }
+    };
+    awaitingAudioEndCallbacksRef.current.push(wrapped);
+    // Wall-clock safety net — if the tracker context is suspended (browser
+    // doesn't allow AudioContext before a user gesture on first question)
+    // we still need to advance at some point.
+    setTimeout(() => {
+      const idx = awaitingAudioEndCallbacksRef.current.indexOf(wrapped);
+      if (idx >= 0) {
+        awaitingAudioEndCallbacksRef.current.splice(idx, 1);
+        console.warn('[PlaybackTracker] safety timeout — firing deferred callback');
+        wrapped();
+      }
+    }, safetyTimeoutMs);
+  }, []);
   const isRecordingRef = useRef(false);
   const audioEndReceivedRef = useRef(false);
   const currentAiTextRef = useRef("");
@@ -611,15 +822,26 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // TalkingHead finishes playing — not after a fixed 3s regardless of length.
   const currentTurnAudioMsRef = useRef(0);
   // Wall-clock timestamp (Date.now()) of when the FIRST PCM chunk for the
-  // current Linda turn was received. Combined with currentTurnAudioMsRef,
-  // this lets us compute when audio SHOULD finish playing:
-  //   expectedAudioEndMs = firstPcmAtMs + currentTurnAudioMsRef
-  // which is the only trustworthy "audio finished" signal — TalkingHead's
-  // onAudioEnd callback fires erratically (sometimes before the last buffer
-  // even starts playing), so we guard sendPlaybackComplete on this anchor
-  // so the backend's 8 s silence clock cannot start before Linda's TTS has
-  // actually played on the speakers.
+  // current Linda turn was received. Used by the token-reveal system to
+  // compute audio progress (once audio_end fires).
   const firstPcmAtMsRef = useRef<number | null>(null);
+  // Wall-clock timestamp of the LAST PCM chunk received for the current
+  // Linda turn. Updated on every queueAudio call. This is the right anchor
+  // for "when does playback actually end on the speakers":
+  //   trueEndMs = lastPcmAtMs + AUDIO_TAIL_MARGIN_MS
+  // (the margin covers TalkingHead's internal buffer + the last chunk's
+  // own playback duration). `firstPcmAt + audioMs` is NOT correct for
+  // this because chunks stream in real-time — so at end-of-stream,
+  // `firstPcm + audioMs ≈ now`, and finalizePlayback would fire right
+  // when the backend stopped sending (not when the speakers went silent).
+  const lastPcmAtMsRef = useRef<number | null>(null);
+  // Wall-clock fallback margin — applied ONLY when the AudioBufferSourceNode
+  // tracker is unavailable (e.g. first question with a suspended
+  // AudioContext). Previously 1200 ms, bumped to 3000 ms after field reports
+  // of "Your turn" still surfacing mid-speech on long TTS responses. With
+  // the tracker path working, this margin is rarely reached — it's the
+  // safety net, not the primary signal.
+  const AUDIO_TAIL_MARGIN_MS = 3000;
 
   // Token reveal system
   const tokenBufferRef = useRef("");
@@ -672,7 +894,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // paused during any ack / follow-up / next-question TTS, which drifted
       // the displayed value away from the backend's monotonic clock and
       // desynced from the global timer.
-      if (isClarificationRef.current) {
+      if (isClarificationRef.current || isFullscreenExitedRef.current) {
         if (questionTimerPausedAtRef.current === null) {
           questionTimerPausedAtRef.current = performance.now();
         }
@@ -819,8 +1041,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }, 150);
   }, []);
 
-  // Save AI message
+  // Save AI message — called from finalizePlayback at the TRUE end-of-audio.
+  // Stop any ongoing reveal loop and flush the live bubble into the chat
+  // as one committed assistant message. Because finalizePlayback is gated
+  // on firstPcmAt + audioMs, this can only fire AFTER the audio has
+  // actually finished playing — guaranteeing the live bubble transitioning
+  // into the chat message coincides with Linda's audio ending, which is
+  // exactly when "Your turn" should surface.
   const saveAiMessage = useCallback(() => {
+    if (revealTimerRef.current) {
+      clearInterval(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
     // Always use full tokenBuffer — currentAiTextRef may be partially revealed
     const text = tokenBufferRef.current.trim();
     if (text) {
@@ -837,27 +1069,77 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }
   }, []);
 
-  // Token reveal system
+  // Token reveal system — the live "Linda" bubble that reveals tokens as
+  // they stream.
+  //
+  // There are TWO reveal phases, because the total audio duration is
+  // unknown until the backend sends `audio_end`:
+  //
+  //   Phase A (streaming): audio_end not yet received. We don't know the
+  //   total TTS duration, and `currentTurnAudioMsRef` only reflects audio
+  //   RECEIVED so far (chunks stream at real-time rate, so it roughly
+  //   equals wall-clock elapsed → useless as a denominator). Use a
+  //   conservative CPS (~14 chars/sec) pacing; this matches typical TTS
+  //   speaking rate so the text advances with the audio instead of
+  //   out-racing or lagging it.
+  //
+  //   Phase B (post-audio_end): we know the TRUE total audio duration
+  //   (currentTurnAudioMsRef is final) AND the wall-clock end point
+  //   (`firstPcmAt + audioMs`). Compute progress from the anchor and
+  //   drive the reveal to finish exactly at that wall-clock moment.
+  //
+  // The reveal loop KEEPS ticking while Linda is still audible, even once
+  // all text is revealed, so the bubble cannot "finish" before audio does.
+  // `saveAiMessage` (which commits the bubble into the chat) is triggered
+  // exclusively by `finalizePlayback`, which itself fires at true end-of-
+  // audio — so the chat-message transition is bound to audio end, not to
+  // text-reveal completion.
+  const CONSERVATIVE_REVEAL_CPS = 14;
   const startRevealingTokens = useCallback(() => {
     if (revealTimerRef.current) {
       clearInterval(revealTimerRef.current);
     }
     revealTimerRef.current = setInterval(() => {
       const fullText = tokenBufferRef.current;
-      const currentRevealed = revealedCharsRef.current;
-      if (currentRevealed < fullText.length) {
-        // ~4 chars per 80ms = ~50 chars/sec — syncs with TTS speaking pace
-        const charsToReveal = Math.min(4, fullText.length - currentRevealed);
-        revealedCharsRef.current += charsToReveal;
-        const revealedText = fullText.substring(0, revealedCharsRef.current);
+      if (fullText.length === 0) return;
+      const firstPcmAt = firstPcmAtMsRef.current;
+      const audioMs = currentTurnAudioMsRef.current;
+      let target = revealedCharsRef.current;
+
+      if (audioEndReceivedRef.current && firstPcmAt !== null && audioMs > 0) {
+        // Phase B: audio_end received → we know the true end time.
+        // Use lastPcmAt + tail margin as the wall-clock end anchor so the
+        // reveal finishes exactly when playback does (not when streaming
+        // does). Start time stays firstPcmAt so the text keeps advancing
+        // steadily from the beginning.
+        const lastPcmAt = lastPcmAtMsRef.current ?? firstPcmAt;
+        const endMs = lastPcmAt + AUDIO_TAIL_MARGIN_MS;
+        const totalMs = Math.max(1, endMs - firstPcmAt);
+        const elapsedMs = Math.max(0, Date.now() - firstPcmAt);
+        const progress = Math.min(1, elapsedMs / totalMs);
+        target = Math.min(fullText.length, Math.floor(progress * fullText.length));
+      } else {
+        // Phase A: still streaming OR no audio yet. Conservative CPS pacing.
+        // Cap at 80% of the buffer length so the bubble cannot outrun the
+        // text that has actually streamed in — the remaining 20% is reserved
+        // for the post-audio_end finalisation in Phase B.
+        const cpsStep = Math.max(1, Math.round(CONSERVATIVE_REVEAL_CPS * 0.08));
+        const cap = Math.max(0, Math.floor(fullText.length * 0.8));
+        target = Math.min(
+          cap,
+          revealedCharsRef.current + cpsStep
+        );
+      }
+      if (target > revealedCharsRef.current) {
+        revealedCharsRef.current = target;
+        const revealedText = fullText.substring(0, target);
         currentAiTextRef.current = revealedText;
         setCurrentAiText(revealedText);
-      } else {
-        if (revealTimerRef.current) {
-          clearInterval(revealTimerRef.current);
-          revealTimerRef.current = null;
-        }
       }
+      // NOTE: We intentionally do NOT clear the interval when the text is
+      // fully revealed. The loop keeps running so we remain ready for
+      // streamed additions, and `saveAiMessage` (called by finalizePlayback
+      // at true end-of-audio) is the single owner of end-of-bubble cleanup.
     }, 80);
   }, []);
 
@@ -1116,7 +1398,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         questionTimerIntervalRef.current = setInterval(() => {
           // Per-question timer only pauses during clarification — see the
           // main question_timer_started path for the rationale.
-          if (isClarificationRef.current) return;
+          if (isClarificationRef.current || isFullscreenExitedRef.current) return;
           setQuestionTimerSeconds(prev => {
             if (prev === null || prev <= 1) {
               if (questionTimerIntervalRef.current) {
@@ -1164,6 +1446,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // proportional to how long Linda actually spoke (not a fixed 3 s).
     // Int16 PCM @ 24 kHz: byteLength / 2 samples × (1000 ms / 24000 samples)
     currentTurnAudioMsRef.current += (pcmData.byteLength / 2 / 24000) * 1000;
+    // Stamp the wall-clock of the most recent chunk — the TRUE anchor for
+    // end-of-playback (buffered audio ends at lastPcmAt + tail margin).
+    lastPcmAtMsRef.current = Date.now();
 
     if (!isPlayingRef.current) {
       // First chunk of this turn — stamp the wall-clock so we can later
@@ -1232,13 +1517,43 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             }))
           );
         }
-        // Restore global timer — deduct elapsed time so it continues from where it was
-        if (data.elapsed_seconds && data.elapsed_seconds > 0) {
+        // Restore global timer ONLY if we're not currently mid-fullscreen-exit.
+        // When the candidate exits fullscreen the timer is frozen (we want it
+        // maintained across the pause) — if a WS reconnect fires session_resumed
+        // during that window, the server's wall-clock elapsed would clobber the
+        // frozen value and make the timer appear to jump / reset. The
+        // fullscreen-change return handler will restore from the frozen ref
+        // when the candidate re-enters.
+        if (data.elapsed_seconds && data.elapsed_seconds > 0 && !isFullscreenExitedRef.current) {
           const totalSeconds = isFlexibleMode ? 30 * 60 : interviewInfo.duration_minutes * 60;
           const restored = Math.max(0, totalSeconds - data.elapsed_seconds);
           setRemainingSeconds(restored);
         }
-        setStatus(`Session resumed — continuing from question ${data.prior_question_count}`);
+        // Auto-advance the displayed question number based on elapsed / slot.
+        // Mirrors the backend auto-skip logic in send_resume_continuation:
+        //   expected_prior_q = floor(elapsed_seconds / slot_seconds)
+        //   next question    = expected_prior_q + 1
+        // so a candidate who left at Q2 and returns 10 minutes later sees
+        // "Question 6/15" instead of "Question 2/15". The authoritative
+        // count will be overwritten by the next QuestionTimerStartedMessage
+        // when Linda speaks Q(expected_prior_q + 1), but we show the
+        // advanced number immediately so the "continuing from question N"
+        // status line is correct.
+        if (!isFlexibleMode && data.elapsed_seconds && data.elapsed_seconds > 0) {
+          const slotSec = 120; // QUESTION_DURATION_SECONDS on backend
+          const maxQ = totalQuestions ?? interviewInfo.total_questions ?? 15;
+          const expectedPriorQ = Math.min(maxQ, Math.floor(data.elapsed_seconds / slotSec));
+          const nextQ = Math.min(maxQ, expectedPriorQ + 1);
+          if (nextQ > (questionNumber ?? 0)) {
+            setQuestionNumber(nextQ);
+            questionNumberRef.current = nextQ;
+          }
+        }
+        const _priorDisplay = Math.max(
+          data.prior_question_count ?? 0,
+          !isFlexibleMode && data.elapsed_seconds ? Math.floor(data.elapsed_seconds / 120) : 0
+        );
+        setStatus(`Session resumed — continuing from question ${_priorDisplay + 1}`);
         break;
       }
       case "greeting":
@@ -1345,8 +1660,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         tokenBufferRef.current += data.token;
         // Feed updated text for word-level phoneme lip sync
         talkingHeadRef.current?.setText(tokenBufferRef.current);
-        // Restart reveal timer if it stopped (caught up) but more tokens arrived
-        if (!revealTimerRef.current && isAiSpeakingRef.current) {
+        // Start (or restart) the reveal loop the moment tokens arrive —
+        // NOT gated on isAiSpeakingRef. If we wait for speaking_started, the
+        // buffer silently accumulates and then paints all at once when the
+        // reveal finally begins; the bubble "jumps". Starting now also means
+        // the audio-synced pacing will take over as soon as the first PCM
+        // chunk arrives (firstPcmAtMsRef becomes non-null), and until then
+        // the fallback CPS path keeps the text moving smoothly.
+        if (!revealTimerRef.current) {
           startRevealingTokens();
         }
         if (!isPlayingRef.current && !isAiSpeakingRef.current) {
@@ -1402,11 +1723,36 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // speak" signal immediately so the banner can't linger from Q(n-1).
         candidatePlaybackEndedRef.current = false;
         setCandidatePlaybackEnded(false);
+        // CRITICAL: reset ALL playback-tracking state so the new Linda turn
+        // starts from a clean slate. Previously `isPlayingRef` was NOT reset
+        // here; if it was stale `true` from a previous turn (TalkingHead
+        // onAudioEnd never fired correctly), `queueAudio` would skip setting
+        // `firstPcmAtMsRef`, the `finalizePlayback` deferral math would use
+        // the stale anchor, compute `remainingPlaybackMs = 0`, and fire
+        // immediately — surfacing "Your turn" while Linda was still speaking
+        // the "Are you there?" prompt.
+        isPlayingRef.current = false;
         pendingBuffersRef.current = 0;
         nextPlayTimeRef.current = 0;
         noResponseRetryRef.current = 0;
         currentTurnAudioMsRef.current = 0; // reset audio duration counter for this turn
         firstPcmAtMsRef.current = null;    // reset first-chunk anchor for this turn
+        lastPcmAtMsRef.current = null;     // reset last-chunk anchor for this turn
+        // Reset the playback tracker's per-turn counters. We deliberately
+        // DO NOT reset `playbackScheduledEndAtRef` — that's the AudioContext
+        // clock position. Each new chunk is scheduled at
+        // `max(ctx.currentTime, playbackScheduledEndAtRef)`, so starting
+        // from 0 on a new turn just means the first chunk plays at
+        // ctx.currentTime. The `pending` and `awaiting` queues DO reset.
+        playbackTrackerPendingRef.current = 0;
+        awaitingAudioEndCallbacksRef.current = [];
+        trackedThisTurnRef.current = false;
+        const _pbCtx = playbackTrackerCtxRef.current;
+        if (_pbCtx && _pbCtx.state === 'running') {
+          playbackScheduledEndAtRef.current = _pbCtx.currentTime;
+        } else {
+          playbackScheduledEndAtRef.current = 0;
+        }
         // Clear silence banner + countdown when Linda starts speaking
         setShowSilenceBanner(false);
         setSilenceCountdown(null);
@@ -1463,17 +1809,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             clearTimeout(audioEndFallbackRef.current);
             audioEndFallbackRef.current = null;
           }
-          // Compute the TRUE end-of-playback moment from the first-chunk
-          // anchor: audio truly ends at firstPcmAt + totalAudioMs. If
-          // TalkingHead fired this callback early (as it often does on Q3+),
-          // `remainingPlaybackMs` will be > 0 — we DEFER all end-of-playback
-          // work (including the "Your turn" UI, sendPlaybackComplete to the
-          // backend, and the mic-open timer) by that amount so the 8 s
-          // silence clock can only start AFTER Linda's audio has actually
-          // played out on the speakers.
-          const expectedEndMs =
-            (firstPcmAtMsRef.current ?? Date.now()) + currentTurnAudioMsRef.current;
-          const remainingPlaybackMs = Math.max(0, expectedEndMs - Date.now());
+          // The AUTHORITATIVE end-of-playback signal: `whenTrackedPlaybackEnds`
+          // queues our callback on the playback-tracker AudioContext's
+          // `onended` handler for the LAST scheduled silent mirror buffer.
+          // That fires at the exact wall-clock moment the real audio has
+          // finished playing through TalkingHead's worklet — no guessing,
+          // no margins, no wall-clock heuristics.
           const finalizePlayback = () => {
             isPlayingRef.current = false;
             isAiSpeakingRef.current = false;
@@ -1509,12 +1850,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               }
             }, 800);
           };
-          if (remainingPlaybackMs > 0) {
-            console.warn(`[TalkingHead] onAudioEnd fired ${remainingPlaybackMs} ms early — deferring ALL end-of-playback work (Your turn, mic open, playback_complete)`);
-            setTimeout(finalizePlayback, remainingPlaybackMs);
-          } else {
-            finalizePlayback();
-          }
+          // Wait for the tracker's audio-clock-end-of-playback BEFORE running
+          // the end-of-turn work. If audio has already drained (tracker
+          // pending=0 and ctx.currentTime >= scheduledEnd), this fires
+          // synchronously. Otherwise it queues on the last chunk's `onended`.
+          whenTrackedPlaybackEnds(finalizePlayback);
         };
         break;
       case "silent_discard":
@@ -1639,7 +1979,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               if (questionTimerIntervalRef.current) clearInterval(questionTimerIntervalRef.current);
               questionTimerIntervalRef.current = setInterval(() => {
                 // Per-question timer only pauses during clarification.
-                if (isClarificationRef.current) return;
+                if (isClarificationRef.current || isFullscreenExitedRef.current) return;
                 setQuestionTimerSeconds(prev => {
                   if (prev === null || prev <= 1) {
                     if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
@@ -1722,10 +2062,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         const incomingQNum = data.question_number ?? null;
         const sameQuestion = incomingQNum !== null && incomingQNum === questionNumberRef.current;
         if (sameQuestion && data.is_follow_up === true) {
-          // Follow-up / clarification: sync timer to backend's remaining value
+          // Follow-up / clarification: do NOT restart the timer. The main
+          // question's 2-min slot is shared between Linda's follow-up and
+          // the candidate's answer to it — the countdown must continue from
+          // wherever it was, never jump back to the full duration. Only
+          // sync DOWNWARD if the backend explicitly sends a value less than
+          // what we're currently showing (genuine drift correction).
           if (data.total_questions != null) setTotalQuestions(data.total_questions);
-          // Sync to backend's remaining seconds for accuracy (drift correction)
-          if (dur > 0) {
+          const _cur = questionTimerSecondsRef.current;
+          if (dur > 0 && _cur != null && dur < _cur) {
+            // Drift correction: backend is ahead of us, jump forward.
+            setQuestionTimerSeconds(dur);
+            questionTimerSecondsRef.current = dur;
+          } else if (dur > 0 && _cur == null) {
+            // Edge case: no running timer (e.g. reconnect). Start one.
             setQuestionTimerSeconds(dur);
             questionTimerSecondsRef.current = dur;
           }
@@ -1735,54 +2085,38 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             setIsClarification(true);
             isClarificationRef.current = true;
             setStatus("Clarifying the question — timer paused");
-          } else {
-            // Follow-up (not clarification): timer must keep counting down.
-            // ALWAYS tear down and re-create the interval from the backend-
-            // synced remaining value. Previously we only created a new
-            // interval when `questionTimerIntervalRef.current` was null —
-            // but after the candidate answers, `stopRecording` clears the
-            // ref, then before the follow-up `question_timer_started` arrives
-            // the interval is null as expected. In some timing windows the
-            // ref was left non-null from a stale interval that had already
-            // been paused / never fired a tick (e.g. the anchored main-Q
-            // interval whose anchor elapsed past total). The result was a
-            // "frozen" displayed value — the user saw 00:55 stuck forever.
-            // Hard-reset removes that ambiguity: after every non-clarification
-            // follow-up we ALWAYS have a fresh, known-good 1 Hz decrement.
-            if (questionTimerIntervalRef.current) {
-              clearInterval(questionTimerIntervalRef.current);
-              questionTimerIntervalRef.current = null;
-            }
-            if (dur > 0) {
-              questionTimerIntervalRef.current = setInterval(() => {
-                // Follow-up timer only pauses during clarification.
-                if (isClarificationRef.current) return;
-                setQuestionTimerSeconds(prev => {
-                  if (prev === null || prev <= 1) {
-                    if (questionTimerIntervalRef.current) {
-                      clearInterval(questionTimerIntervalRef.current);
-                      questionTimerIntervalRef.current = null;
-                    }
-                    setTimeout(() => {
-                      setQuestionTimerExpired(true);
-                      questionTimerExpiredRef.current = true;
-                      setIsClarification(false);
-                      isClarificationRef.current = false;
-                      setShowSilenceBanner(false);
-                      setSilenceCountdown(null);
-                      if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
-                      setStatus("Time's up — moving to the next question...");
-                      setIsProcessing(false);
-                      isProcessingRef.current = false;
-                      clearNoResponseTimer();
-                      stopRecordingSilentRef.current();
-                    }, 0);
-                    return 0;
+          } else if (!questionTimerIntervalRef.current && dur > 0) {
+            // Only (re)create an interval if none is running. Don't tear down
+            // the main question's anchored interval — it's already counting
+            // down correctly and jumping to a simple decrement would lose
+            // the monotonic anchor.
+            questionTimerIntervalRef.current = setInterval(() => {
+              if (isClarificationRef.current || isFullscreenExitedRef.current) return;
+              setQuestionTimerSeconds(prev => {
+                if (prev === null || prev <= 1) {
+                  if (questionTimerIntervalRef.current) {
+                    clearInterval(questionTimerIntervalRef.current);
+                    questionTimerIntervalRef.current = null;
                   }
-                  return prev - 1;
-                });
-              }, 1000);
-            }
+                  setTimeout(() => {
+                    setQuestionTimerExpired(true);
+                    questionTimerExpiredRef.current = true;
+                    setIsClarification(false);
+                    isClarificationRef.current = false;
+                    setShowSilenceBanner(false);
+                    setSilenceCountdown(null);
+                    if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
+                    setStatus("Time's up — moving to the next question...");
+                    setIsProcessing(false);
+                    isProcessingRef.current = false;
+                    clearNoResponseTimer();
+                    stopRecordingSilentRef.current();
+                  }, 0);
+                  return 0;
+                }
+                return prev - 1;
+              });
+            }, 1000);
           }
           // Keep active skill highlight — same skill, follow-up question
           // Update is_follow_up flag on the active skill if backend tells us which one
@@ -1868,12 +2202,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           setQuestionTimerSeconds(dur);
           questionTimerIntervalRef.current = setInterval(() => {
             // Per-question timer runs CONTINUOUSLY once the question starts.
-            // The only allowed pause is a candidate-initiated clarification
-            // (Linda re-explaining a question should not burn the answer
-            // window). Acks, follow-ups, and next-question TTS all keep the
-            // clock running so the displayed value stays in sync with the
+            // Allowed pauses:
+            //   - clarification (Linda re-explaining a question)
+            //   - fullscreen exit (interview frozen behind the blocker)
+            // Acks, follow-ups, and next-question TTS all keep the clock
+            // running so the displayed value stays in sync with the
             // backend's monotonic per-question timer AND the global timer.
-            if (isClarificationRef.current) {
+            if (isClarificationRef.current || isFullscreenExitedRef.current) {
               // Enter pause bookkeeping once so cumulative paused time is correct.
               if (questionTimerPausedAtRef.current === null) {
                 questionTimerPausedAtRef.current = performance.now();
@@ -1912,6 +2247,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
         break;
       }
+      case "question_timer_stopped":
+        // Candidate ended their turn — clear the per-question timer.
+        // Backend fires this after end_turn before starting the next Q's timer.
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        setQuestionTimerSeconds(null);
+        questionTimerSecondsRef.current = null;
+        questionTimerPendingRef.current = null;
+        questionTimerReceivedAtRef.current = null;
+        break;
       case "question_timer_expired":
         setQuestionTimerExpired(true);
         questionTimerExpiredRef.current = true;
@@ -2118,6 +2465,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
   // Keep callback refs in sync (avoids WebSocket reconnect on re-renders)
   useEffect(() => { queueAudioRef.current = queueAudio; }, [queueAudio]);
+  useEffect(() => { trackPlaybackChunkRef.current = trackPlaybackChunk; }, [trackPlaybackChunk]);
   useEffect(() => { handleMessageRef.current = handleMessage; }, [handleMessage]);
 
   // Upload recording
@@ -2963,6 +3311,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // Also feed our AudioContext for pendingBuffers state tracking.
         talkingHeadRef.current?.streamAudio(event.data);
         queueAudioRef.current(event.data);
+        // And mirror the chunk on our own silent tracker context so we know
+        // the AUTHORITATIVE audio-clock end-of-playback moment (see
+        // `trackPlaybackChunk` / `whenTrackedPlaybackEnds`).
+        trackPlaybackChunkRef.current(event.data);
       } else {
         const data = JSON.parse(event.data);
         handleMessageRef.current(data);
@@ -3056,6 +3408,113 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   //
   // The overlay UI already blocks "end interview" / skip controls; the mic
   // mute closes the remaining audio-submission loophole.
+  // Probe live mic/camera permission state. Returns a `mediaBlocked` descriptor
+  // ONLY when the browser's Permissions API reports the permission as
+  // "denied" — this is the authoritative OS-level revocation signal.
+  //
+  // We deliberately DO NOT inspect `mediaStreamRef` tracks here:
+  //   - `mediaStreamRef` is the audio-only stream from startRecordingInternal
+  //     (getUserMedia({audio:true}), no video). Checking getVideoTracks()
+  //     against that stream always reports `length === 0` → false positive
+  //     "camera revoked" after every Linda turn ended.
+  //   - Between turns, the audio stream is torn down, so getAudioTracks()
+  //     returns `ended` tracks → false positive "microphone revoked".
+  //
+  // Track-based revocation detection is still done — but by the dedicated
+  // `track.onended` / `track.onmute` callbacks inside
+  // useInterviewProctoringMonitor, which only run against the LIVE
+  // tracks while they're expected to be live. Those paths already emit
+  // `camera_disabled` / `microphone_disabled` events and flow to this
+  // component's block overlay via the same `armMediaBlock` reducer if we
+  // ever want to wire them together — for now, the probe stays
+  // Permissions-API-only and avoids the stream-inspection false positives.
+  const probeMediaPermissions = useCallback(async (): Promise<typeof mediaBlocked> => {
+    let camDenied = false;
+    let micDenied = false;
+    try {
+      const perms = (navigator as any).permissions;
+      if (perms?.query) {
+        try {
+          const camStatus = await perms.query({ name: 'camera' as PermissionName });
+          if (camStatus?.state === 'denied') camDenied = true;
+        } catch { /* unsupported */ }
+        try {
+          const micStatus = await perms.query({ name: 'microphone' as PermissionName });
+          if (micStatus?.state === 'denied') micDenied = true;
+        } catch { /* unsupported */ }
+      }
+    } catch { /* ignore */ }
+    if (camDenied && micDenied) return { kind: 'both', reason: 'camera_and_microphone_revoked' };
+    if (camDenied) return { kind: 'camera', reason: 'camera_revoked' };
+    if (micDenied) return { kind: 'microphone', reason: 'microphone_revoked' };
+    return null;
+  }, []);
+
+  // Arm the terminal media-permission block. Fires a severe proctor event
+  // so the recruiter sees it under Proctoring Violations, then freezes the
+  // UI behind a blocking overlay.
+  const armMediaBlock = useCallback((result: NonNullable<typeof mediaBlocked>, extraDetails?: Record<string, any>) => {
+    if (mediaBlockedRef.current) return; // already armed — idempotent
+    mediaBlockedRef.current = result;
+    setMediaBlocked(result);
+    setStatus("Camera / microphone access is required to continue.");
+    // Force-mute and stop recording so no further audio can reach the backend.
+    isMutedRef.current = true;
+    setIsMuted(true);
+    stopRecordingSilentRef.current();
+    // Report as a severe proctoring violation (backend persists to
+    // proctoring_events and surfaces it in the recruiter's results view).
+    try {
+      const eventType =
+        result.kind === 'camera' ? 'camera_disabled' :
+        result.kind === 'microphone' ? 'microphone_disabled' :
+        'camera_disabled'; // "both" → log camera_disabled; microphone_disabled follows below
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: eventType,
+        severity: 'severe',
+        details: { reason: result.reason, phase: 'in_interview', ...(extraDetails || {}) },
+      }).catch(() => { /* best-effort */ });
+      if (result.kind === 'both') {
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'microphone_disabled',
+          severity: 'severe',
+          details: { reason: result.reason, phase: 'in_interview', ...(extraDetails || {}) },
+        }).catch(() => { /* best-effort */ });
+      }
+    } catch { /* ignore */ }
+  }, [token]);
+
+  // Watchdog: poll the Permissions API + track health every 2 s during the
+  // interview. If permission is revoked (candidate opened site-settings and
+  // blocked camera/mic while the tab was in the background), arm the block
+  // immediately — don't wait for the next mic-open attempt.
+  useEffect(() => {
+    if (!isConnected || mediaBlocked) return;
+    let cancelled = false;
+    // Every 10 s is plenty — permission revocation is a rare, user-initiated
+    // action. Polling at 2 s was excessive and added main-thread work every
+    // tick for an event that might never happen. The existing track.onended /
+    // track.onmute listeners in useInterviewProctoringMonitor handle
+    // synchronous revocation; this poll is just a safety net for browsers
+    // that don't fire those events reliably.
+    const iv = setInterval(async () => {
+      if (cancelled || mediaBlockedRef.current) return;
+      const result = await probeMediaPermissions();
+      if (result) armMediaBlock(result, { source: 'watchdog' });
+    }, 10000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [isConnected, mediaBlocked, probeMediaPermissions, armMediaBlock]);
+
+  // Also run the probe once on connect so any permission that was revoked
+  // BEFORE the interview UI mounted is caught before Linda even speaks.
+  useEffect(() => {
+    if (!isConnected) return;
+    (async () => {
+      const result = await probeMediaPermissions();
+      if (result) armMediaBlock(result, { source: 'interview_entry' });
+    })();
+  }, [isConnected, probeMediaPermissions, armMediaBlock]);
+
   useEffect(() => {
     if (!isConnected) return;
 
@@ -3063,10 +3522,48 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // so we can restore it when they return. null means "not currently in
     // an enforced-mute window".
     let preExitMuteState: boolean | null = null;
+    // Wall-clock timestamp of when the pause started, so the paired
+    // session_resumed proctor event can include the total pause duration.
+    let pausedAtMs: number | null = null;
 
-    const handleFullscreenChange = () => {
+    const handleFullscreenChange = async () => {
       if (!document.fullscreenElement) {
         setIsFullscreenExited(true);
+        isFullscreenExitedRef.current = true;
+        pausedAtMs = Date.now();
+        // Snapshot the timers at the exact moment fullscreen is lost so
+        // they can be restored verbatim on return. This is what keeps the
+        // visible timer from "jumping forward" when a reconnect fires the
+        // session_resumed handler mid-pause.
+        frozenGlobalSecondsRef.current = remainingSeconds;
+        frozenQuestionSecondsRef.current = questionTimerSecondsRef.current;
+        // Report fullscreen exit as a proctor event immediately so the
+        // recruiter sees it in the violation feed regardless of whether
+        // the candidate comes back or not.
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'fullscreen_exit',
+          severity: 'low',
+          details: { phase: 'in_interview' },
+        }).catch(() => { /* best-effort */ });
+        // ALSO record an explicit session_paused event so the recruiter's
+        // violation timeline shows the exact moment the interview was frozen
+        // (distinct from the fullscreen_exit trigger — the pause is the
+        // downstream effect on the session, and the recruiter needs it to
+        // compute "how long was the candidate away" when paired with the
+        // matching session_resumed entry).
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'session_paused',
+          severity: 'low',
+          details: { reason: 'fullscreen_exit', paused_at: new Date().toISOString() },
+        }).catch(() => { /* best-effort */ });
+        // Freeze the session: stop Linda's TTS playback, close the mic,
+        // and tell the backend to pause so it doesn't advance follow-ups /
+        // silence clocks / etc. while the candidate is outside fullscreen.
+        try { talkingHeadRef.current?.streamStop(); } catch { /* ignore */ }
+        isPlayingRef.current = false;
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          try { wsRef.current.send(JSON.stringify({ type: 'session_pause', reason: 'fullscreen_exit' })); } catch { /* best-effort */ }
+        }
         // Only capture the pre-exit state on the FIRST exit (not on repeated
         // fullscreenchange fires while still out).
         if (preExitMuteState === null) {
@@ -3077,7 +3574,66 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           setIsMuted(true);
         }
       } else {
+        // RETURNING TO FULLSCREEN.
+        // Before doing anything else, re-check mic/camera permission — if the
+        // candidate blocked it while the browser UI was visible, arm the
+        // media block NOW and log an additional proctor violation that the
+        // block was attempted on resume (i.e. they clicked the button after
+        // tampering with permissions).
+        const probe = await probeMediaPermissions();
+        if (probe) {
+          armMediaBlock(probe, {
+            source: 'fullscreen_resume',
+            note: 'candidate revoked permission during fullscreen exit and attempted to resume',
+          });
+          // Leave the fullscreen-exit overlay torn down — the block overlay
+          // takes over from here.
+          setIsFullscreenExited(false);
+          isFullscreenExitedRef.current = false;
+          preExitMuteState = null;
+          pausedAtMs = null;
+          return;
+        }
+        // Compute how long the session was paused. Missing pausedAtMs (e.g.
+        // because this handler is firing without a matching exit — shouldn't
+        // happen but be defensive) falls back to null so the recruiter sees
+        // "duration: null" and knows it's a partial record.
+        const pauseDurationMs = pausedAtMs !== null ? Math.max(0, Date.now() - pausedAtMs) : null;
+        const pauseDurationSec = pauseDurationMs !== null ? Math.round(pauseDurationMs / 1000) : null;
+        // Record the session_resumed event with the paired duration so the
+        // recruiter's violation timeline has a clean "paused → resumed" entry.
+        candidateAIInterviewService.reportProctorEvent(token, {
+          event_type: 'session_resumed',
+          severity: 'low',
+          details: {
+            reason: 'fullscreen_returned',
+            pause_duration_ms: pauseDurationMs,
+            pause_duration_seconds: pauseDurationSec,
+            resumed_at: new Date().toISOString(),
+          },
+        }).catch(() => { /* best-effort */ });
+        pausedAtMs = null;
         setIsFullscreenExited(false);
+        isFullscreenExitedRef.current = false;
+        // Restore the timers from their frozen pre-exit values. The server
+        // may have sent fresh `global_remaining_seconds` while we were
+        // paused (from reconnect or a queued question_timer_started);
+        // those would otherwise clobber the frozen value. Writing back
+        // explicitly here keeps the UX promise: "timer maintains the time
+        // across fullscreen exit".
+        if (frozenGlobalSecondsRef.current !== null) {
+          setRemainingSeconds(frozenGlobalSecondsRef.current);
+        }
+        if (frozenQuestionSecondsRef.current !== null) {
+          setQuestionTimerSeconds(frozenQuestionSecondsRef.current);
+          questionTimerSecondsRef.current = frozenQuestionSecondsRef.current;
+        }
+        frozenGlobalSecondsRef.current = null;
+        frozenQuestionSecondsRef.current = null;
+        // Unfreeze the backend — it can resume whatever flow it was in.
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          try { wsRef.current.send(JSON.stringify({ type: 'session_resume' })); } catch { /* best-effort */ }
+        }
         // Restore whatever the candidate had before they exited fullscreen.
         if (preExitMuteState !== null) {
           isMutedRef.current = preExitMuteState;
@@ -3096,7 +3652,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // the local pointer.
       preExitMuteState = null;
     };
-  }, [isConnected]);
+  }, [isConnected, probeMediaPermissions, armMediaBlock, token]);
 
   // Copy-paste blocking is handled by useInterviewProctoringMonitor (copyPasteBlocking prop).
   // No duplicate listener needed here.
@@ -3432,22 +3988,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
 
           {/* ── Bottom half: Candidate webcam ── */}
           <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-            {/* Label row */}
-            <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-2.5 pb-1 flex items-center justify-between">
+            {/* Label row — REC badge and HAND RAISED badge removed per UX request.
+                Only the "You" label remains. */}
+            <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-2.5 pb-1 flex items-center">
               <span className="text-gray-400 text-[11px] font-medium uppercase tracking-wide">You</span>
-              <div className="flex items-center gap-2">
-                {isRecording && (
-                  <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500/20 border border-red-500/25">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                    <span className="text-red-400 text-[9px] font-bold tracking-widest">REC</span>
-                  </div>
-                )}
-                {handDetection.isHandRaised && (
-                  <div className="px-2 py-0.5 bg-orange-500/25 rounded-full">
-                    <span className="text-orange-400 text-[9px] font-bold">HAND RAISED</span>
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Webcam feed fills this half */}
@@ -3978,7 +4522,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 )}
               </div>
             </div>
-            {/* Return button */}
+            {/* Return button. Clickable even if permission was revoked so the
+                candidate can attempt the gesture — the fullscreen-change handler
+                then re-probes permissions and arms the terminal block if they
+                blocked camera/mic in the meantime. */}
             <button
               onClick={() => requestFullscreen(document.documentElement)}
               className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25"
@@ -3986,6 +4533,45 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               <Maximize className="w-4 h-4" />
               Return to Fullscreen
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Media-permission terminal block ──
+          Shown the moment camera / mic permission is revoked or denied.
+          Supersedes every other overlay (z-[300] > fullscreen overlay's z-[200]).
+          The interview cannot resume from this state — the candidate must
+          restore permissions AND restart the session from scratch, which
+          matches the product rule "do not allow to start the interview again". */}
+      {mediaBlocked && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md">
+          <div className="relative w-full max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
+            <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 border border-red-400/40">
+              <MicOff className="w-7 h-7 text-red-400" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-white font-semibold text-lg mb-1.5">
+                {mediaBlocked.kind === 'camera' && 'Camera access blocked'}
+                {mediaBlocked.kind === 'microphone' && 'Microphone access blocked'}
+                {mediaBlocked.kind === 'both' && 'Camera & microphone access blocked'}
+              </h3>
+              <p className="text-[#cbd5e1] text-sm leading-relaxed">
+                Your interview has been suspended because the required
+                {' '}
+                {mediaBlocked.kind === 'both'
+                  ? 'camera and microphone permissions were'
+                  : `${mediaBlocked.kind} permission was`}
+                {' '}revoked.
+              </p>
+              <p className="text-[#94a3b8] text-xs leading-relaxed mt-3">
+                This action has been logged as a proctoring violation.
+                You cannot resume this session. Please close this tab and
+                contact your recruiter if this was accidental.
+              </p>
+            </div>
+            <div className="w-full text-center text-[11px] text-red-300/80 border border-red-500/20 rounded-lg bg-red-500/5 px-3 py-2">
+              Interview session ended
+            </div>
           </div>
         </div>
       )}

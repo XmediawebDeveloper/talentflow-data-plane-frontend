@@ -562,6 +562,48 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           </div>
           
           <div className="flex flex-wrap items-center gap-2">
+            {/* Column Selector */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColumnSelector(!showColumnSelector)}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1.5 sm:gap-2"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                Columns ({enabledColumns.length})
+              </button>
+
+              {showColumnSelector && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowColumnSelector(false)}
+                  ></div>
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-96 overflow-y-auto">
+                    <div className="px-4 py-2 border-b border-gray-200">
+                      <div className="text-sm text-gray-900">Select Columns</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {enabledColumns.length} of {columns.length} selected
+                      </div>
+                    </div>
+                    {columns.map((column) => (
+                      <label
+                        key={column.id}
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={column.enabled}
+                          onChange={() => handleToggleColumn(column.id)}
+                          className="w-4 h-4 text-gray-800 rounded"
+                        />
+                        <span className="text-sm text-gray-700">{column.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Export Excel */}
             {selectedResults.length === 0 && (
               <button
@@ -605,7 +647,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
         {/* Search and Inline Filter Bar */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex-1 min-w-[150px] sm:min-w-[200px] relative">
+          <div className="flex-1 basis-full sm:basis-[260px] min-w-[180px] sm:max-w-sm relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -696,47 +738,6 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             </button>
           )}
 
-          {/* Column Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowColumnSelector(!showColumnSelector)}
-              className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              Columns ({enabledColumns.length})
-            </button>
-
-            {showColumnSelector && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowColumnSelector(false)}
-                ></div>
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-96 overflow-y-auto">
-                  <div className="px-4 py-2 border-b border-gray-200">
-                    <div className="text-sm text-gray-900">Select Columns</div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {enabledColumns.length} of {columns.length} selected
-                    </div>
-                  </div>
-                  {columns.map((column) => (
-                    <label
-                      key={column.id}
-                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={column.enabled}
-                        onChange={() => handleToggleColumn(column.id)}
-                        className="w-4 h-4 text-gray-800 rounded"
-                      />
-                      <span className="text-sm text-gray-700">{column.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
         </div>
       </div>
 

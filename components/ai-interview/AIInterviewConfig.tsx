@@ -98,6 +98,92 @@ function redistributeFlexPct(
   return scaled;
 }
 
+function getReenabledPctSeed(currentPct: number, fallbackPct: number): number {
+  return currentPct > 0 ? currentPct : fallbackPct;
+}
+
+function redistributeFlexPctWithPinnedRound(
+  mthPct: number,
+  nthEnabled: boolean,
+  nthPct: number,
+  hrEnabled: boolean,
+  hrPct: number,
+  pinnedRound: 'nth' | 'hr',
+): [number, number, number] {
+  const pinnedPctRaw = pinnedRound === 'nth' ? nthPct : hrPct;
+  const pinnedPct = Math.max(0, Math.min(100, pinnedPctRaw));
+  const remaining = 100 - pinnedPct;
+
+  const otherEntries = [
+    { key: 'mth' as const, enabled: true, value: mthPct },
+    { key: 'nth' as const, enabled: nthEnabled && pinnedRound !== 'nth', value: nthPct },
+    { key: 'hr' as const, enabled: hrEnabled && pinnedRound !== 'hr', value: hrPct },
+  ].filter(entry => entry.enabled);
+
+  const totalOther = otherEntries.reduce((sum, entry) => sum + entry.value, 0);
+  if (totalOther <= 0) {
+    return [
+      remaining,
+      nthEnabled ? (pinnedRound === 'nth' ? pinnedPct : 0) : 0,
+      hrEnabled ? (pinnedRound === 'hr' ? pinnedPct : 0) : 0,
+    ];
+  }
+
+  const scaled: Record<'mth' | 'nth' | 'hr', number> = { mth: 0, nth: 0, hr: 0 };
+  otherEntries.forEach((entry) => {
+    scaled[entry.key] = Math.round((entry.value / totalOther) * remaining);
+  });
+  scaled.mth += remaining - otherEntries.reduce((sum, entry) => sum + scaled[entry.key], 0);
+
+  if (pinnedRound === 'nth') scaled.nth = nthEnabled ? pinnedPct : 0;
+  if (pinnedRound === 'hr') scaled.hr = hrEnabled ? pinnedPct : 0;
+
+  return [scaled.mth, nthEnabled ? scaled.nth : 0, hrEnabled ? scaled.hr : 0];
+}
+
+function allocateFlexibleMinutes(
+  totalMinutes: number,
+  rounds: Array<{ key: 'mth' | 'nth' | 'hr'; enabled: boolean; percentage: number }>,
+): Record<'mth' | 'nth' | 'hr', number> {
+  const allocation: Record<'mth' | 'nth' | 'hr', number> = { mth: 0, nth: 0, hr: 0 };
+  const activeRounds = rounds.filter(round => round.enabled && round.percentage > 0);
+  const totalPercentage = activeRounds.reduce((sum, round) => sum + round.percentage, 0);
+
+  if (totalMinutes <= 0 || totalPercentage <= 0) {
+    return allocation;
+  }
+
+  const exactAllocations = activeRounds.map(round => {
+    const exact = (round.percentage / totalPercentage) * totalMinutes;
+    const floor = Math.floor(exact);
+    return {
+      key: round.key,
+      floor,
+      remainder: exact - floor,
+    };
+  });
+
+  exactAllocations.forEach(round => {
+    allocation[round.key] = round.floor;
+  });
+
+  let remainderMinutes = totalMinutes - exactAllocations.reduce((sum, round) => sum + round.floor, 0);
+  exactAllocations
+    .sort((a, b) => {
+      if (b.remainder !== a.remainder) return b.remainder - a.remainder;
+      if (a.key === 'mth') return -1;
+      if (b.key === 'mth') return 1;
+      return a.key.localeCompare(b.key);
+    })
+    .forEach(round => {
+      if (remainderMinutes <= 0) return;
+      allocation[round.key] += 1;
+      remainderMinutes -= 1;
+    });
+
+  return allocation;
+}
+
 function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
   if (!nthEnabled && !hrEnabled) {
     return {
@@ -647,6 +733,14 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
   const effectiveCount = mode === 'fixed' ? questionCount : FLEX_HR_MIN;
   const atLimit = effectiveCount > 0 && selectedIds.length >= effectiveCount;
 
+  useEffect(() => {
+    if (!enabled || mode !== 'flexible') {
+      setHrWeightError(false);
+      return;
+    }
+    setHrWeightError(percentage < 10);
+  }, [enabled, mode, percentage]);
+
   const toggleQuestion = (id: string) => {
     if (selectedIds.includes(id)) {
       onSelectedChange(selectedIds.filter(x => x !== id));
@@ -721,13 +815,18 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                 onChange={e => {
                   const raw = e.target.value;
                   if (raw === '') return;
-                  const v = Math.min(100, parseInt(raw));
-                  if (!isNaN(v) && v >= 0) {
-                    setHrWeightError(v < 10);
+                  const parsed = parseInt(raw, 10);
+                  const v = Math.min(100, parsed);
+                  if (!Number.isNaN(v) && v >= 0) {
+                    if (v < 10) {
+                      setHrWeightError(true);
+                      return;
+                    }
+                    setHrWeightError(false);
                     onPctChange(v);
                   }
                 }}
-                onBlur={() => { if (percentage < 10) setHrWeightError(true); }}
+                onBlur={() => { setHrWeightError(enabled && mode === 'flexible' && percentage < 10); }}
                 className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-1 ${
                   hrWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-300 focus:ring-gray-400'
                 }`}
@@ -736,7 +835,7 @@ function HRSection({ mode, enabled, questionCount, flexibleMinutes, percentage, 
                 hrWeightError ? 'border-red-400 text-red-600' : 'border-gray-300 text-gray-600'
               }`}>%</span>
             </div>
-            {hrWeightError && <span className="text-[11px] text-red-500 ml-1">Min 10%</span>}
+            {hrWeightError && <span className="text-[11px] text-red-500 ml-1">HR round must be at least 10%</span>}
           </div>
         )}
       </div>
@@ -1267,7 +1366,10 @@ export default function AIInterviewConfig() {
         const payload = {
           position: selectedJd.title,
           jd_id: selectedJd.id,
-          duration_minutes: durationFromMode(mode, totalFixed),
+          // Flexible mode has a real 30-min budget (35 with buffer). Store
+          // the real value, not the old 0-sentinel. Mode is determined by
+          // special_instructions.interview_mode.
+          duration_minutes: mode === 'flexible' ? (bufferEnabled ? 35 : 30) : totalFixed,
           rounds_config: rounds,
           recording_enabled: recordingEnabled,
           available_languages: availableLanguages,
@@ -1389,6 +1491,8 @@ export default function AIInterviewConfig() {
 
   const totalPct = mth.percentage + (nth.enabled ? nth.percentage : 0) + (hrEnabled ? hrPct : 0);
   const pctValid = totalPct === 100;
+  const hrPctInvalid = mode === 'flexible' && hrEnabled && hrPct < 10;
+  const canContinueToClusters = (mode === 'flexible' ? pctValid && !hrPctInvalid : true) && !savingDraft && !generatingClusters;
   const experienceRange =
     selectedJd?.experience_min != null && selectedJd?.experience_max != null
       ? `${selectedJd.experience_min}–${selectedJd.experience_max} yrs`
@@ -1405,9 +1509,16 @@ export default function AIInterviewConfig() {
 
   // Flexible mode: time split per section based on weight % × 30 min
   const FLEXIBLE_TOTAL_MIN = 30;
-  const flexMthMin = pctValid ? Math.round(mth.percentage / 100 * FLEXIBLE_TOTAL_MIN) : 0;
-  const flexNthMin = pctValid && nth.enabled ? Math.round(nth.percentage / 100 * FLEXIBLE_TOTAL_MIN) : 0;
-  const flexHrMin  = pctValid && hrEnabled   ? Math.round(hrPct / 100 * FLEXIBLE_TOTAL_MIN) : 0;
+  const flexMinuteAllocation = pctValid
+    ? allocateFlexibleMinutes(FLEXIBLE_TOTAL_MIN, [
+        { key: 'mth', enabled: true, percentage: mth.percentage },
+        { key: 'nth', enabled: nth.enabled, percentage: nth.percentage },
+        { key: 'hr', enabled: hrEnabled, percentage: hrPct },
+      ])
+    : { mth: 0, nth: 0, hr: 0 };
+  const flexMthMin = flexMinuteAllocation.mth;
+  const flexNthMin = flexMinuteAllocation.nth;
+  const flexHrMin  = flexMinuteAllocation.hr;
 
   // Static question distribution based on enabled sections (timed mode: total=15)
   const timedQDist = {
@@ -1606,7 +1717,7 @@ export default function AIInterviewConfig() {
       const payload = {
         position: selectedJd.title,
         jd_id: selectedJd.id,
-        duration_minutes: mode === 'flexible' ? 0 : totalFixed,
+        duration_minutes: mode === 'flexible' ? (bufferEnabled ? 35 : 30) : totalFixed,
         rounds_config: buildRounds(true),
         recording_enabled: recordingEnabled,
         available_languages: availableLanguages,
@@ -1738,13 +1849,15 @@ export default function AIInterviewConfig() {
           : [];
 
         if (mthSkillNames.length > 0 || nthSkillNames.length > 0) {
+          const mthDurationForGeneration = mode === 'flexible' ? flexMthMin : fixedMthMin;
+          const nthDurationForGeneration = mode === 'flexible' ? flexNthMin : fixedNthMin;
           const result = await aiInterviewService.generateClusters(
             mthSkillNames,
             nthSkillNames,
             selectedJd.title,
             selectedJd.description,
-            fixedMthMin,
-            nthSkillNames.length > 0 ? fixedNthMin : 0,
+            mthDurationForGeneration,
+            nthSkillNames.length > 0 ? nthDurationForGeneration : 0,
             effectiveMthMax,
             nthSkillNames.length > 0 ? effectiveNthMax : 0,
           );
@@ -2005,9 +2118,16 @@ export default function AIInterviewConfig() {
                       const newNthEnabled = !nth.enabled;
                       setNth(prev => ({ ...prev, enabled: newNthEnabled }));
                       if (mode === 'flexible') {
-                        const [newMth, newNth, newHr] = redistributeFlexPct(
-                          mth.percentage, newNthEnabled, nth.percentage, hrEnabled, hrPct,
-                        );
+                        const nthSeedPct = newNthEnabled
+                          ? getReenabledPctSeed(nth.percentage, DEFAULT_PCT.nth)
+                          : nth.percentage;
+                        const [newMth, newNth, newHr] = newNthEnabled
+                          ? redistributeFlexPctWithPinnedRound(
+                              mth.percentage, true, nthSeedPct, hrEnabled, hrPct, 'nth',
+                            )
+                          : redistributeFlexPct(
+                              mth.percentage, false, nthSeedPct, hrEnabled, hrPct,
+                            );
                         setMth(prev => ({ ...prev, percentage: newMth }));
                         if (newNthEnabled) setNth(prev => ({ ...prev, percentage: newNth }));
                         setHrPct(newHr);
@@ -2051,15 +2171,25 @@ export default function AIInterviewConfig() {
                 const newHrEnabled = !hrEnabled;
                 setHrEnabled(newHrEnabled);
                 if (mode === 'flexible') {
-                  const [newMth, newNth, newHr] = redistributeFlexPct(
-                    mth.percentage, nth.enabled, nth.percentage, newHrEnabled, hrPct,
-                  );
+                  const hrSeedPct = newHrEnabled
+                    ? Math.max(10, getReenabledPctSeed(hrPct, DEFAULT_PCT.hr))
+                    : hrPct;
+                  const [newMth, newNth, newHr] = newHrEnabled
+                    ? redistributeFlexPctWithPinnedRound(
+                        mth.percentage, nth.enabled, nth.percentage, true, hrSeedPct, 'hr',
+                      )
+                    : redistributeFlexPct(
+                        mth.percentage, nth.enabled, nth.percentage, false, hrSeedPct,
+                      );
                   setMth(prev => ({ ...prev, percentage: newMth }));
                   if (nth.enabled) setNth(prev => ({ ...prev, percentage: newNth }));
                   setHrPct(newHr);
                 }
               }}
-              onPctChange={setHrPct}
+              onPctChange={value => {
+                if (mode === 'flexible' && value < 10) return;
+                setHrPct(value);
+              }}
               bankQuestions={hrBankQuestions}
               selectedIds={hrSelectedIds}
               onSelectedChange={setHrSelectedIds}
@@ -2523,9 +2653,9 @@ export default function AIInterviewConfig() {
               <div className="space-y-2">
                 <button
                   onClick={handleContinueToClusters}
-                  disabled={(mode === 'flexible' && !pctValid) || savingDraft || generatingClusters}
+                  disabled={!canContinueToClusters}
                   className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
-                    (mode === 'flexible' ? pctValid : true) && !savingDraft && !generatingClusters
+                    canContinueToClusters
                       ? 'bg-gray-900 text-white hover:bg-gray-800'
                       : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}

@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react';
 import {
-  ChevronDown, ChevronRight, Download, Layers, Clock, MessageSquare,
-  CheckCircle2, AlertCircle, MinusCircle, HelpCircle, ArrowRight,
+  ChevronDown, ChevronRight, ChevronUp, Download, Layers, Clock, MessageSquare,
+  CheckCircle2, AlertCircle, MinusCircle, HelpCircle, ArrowRight, XCircle,
 } from 'lucide-react';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 
@@ -99,6 +99,164 @@ function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Per-question coverage band from 0-5 score ──────────────────────────────
+// The question score in SkillCoverageTab is 0-5 (ScorePill uses /5).
+// Map to Not Covered / Low / Medium / High.
+type CovLevel = 'not_covered' | 'low' | 'medium' | 'high';
+
+function qCoverage(score: number | null): CovLevel {
+  if (score == null || score <= 0) return 'not_covered';
+  if (score >= 4) return 'high';
+  if (score >= 3) return 'medium';
+  return 'low';
+}
+
+const COV_STYLES: Record<CovLevel, { label: string; badge: string; icon: any }> = {
+  high:        { label: 'High',        badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle2 },
+  medium:      { label: 'Medium',      badge: 'bg-amber-50 text-amber-700 border-amber-200',       icon: AlertCircle },
+  low:         { label: 'Low',         badge: 'bg-orange-50 text-orange-700 border-orange-200',    icon: MinusCircle },
+  not_covered: { label: 'Not Covered', badge: 'bg-gray-100 text-gray-500 border-gray-200',         icon: XCircle },
+};
+
+function CovBadge({ level }: { level: CovLevel }) {
+  const s = COV_STYLES[level];
+  const Icon = s.icon;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${s.badge}`}>
+      <Icon className="w-3 h-3" />
+      {s.label}
+    </span>
+  );
+}
+
+// Truncates long text at `limit` chars and reveals the rest behind a Show more / Show less toggle.
+// Short text (≤ limit) renders as-is with no button.
+function TruncatedText({ text, limit = 180, className = '' }: { text: string; limit?: number; className?: string }) {
+  const [open, setOpen] = useState(false);
+  if (!text) return <span className={className}>—</span>;
+  const needsCut = text.length > limit;
+  if (!needsCut) return <span className={className}>{text}</span>;
+  return (
+    <span className={className}>
+      {open ? text : text.slice(0, limit).trimEnd() + '…'}
+      {' '}
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
+        className="text-[10px] font-medium text-indigo-600 hover:text-indigo-800"
+      >
+        {open ? 'Show less' : 'Show more'}
+      </button>
+    </span>
+  );
+}
+
+// ── Question Table (Q# / Question / Candidate Response / Coverage) ─────────
+// Follow-ups are nested inside the parent row via an inline toggle.
+function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
+  const [openRow, setOpenRow] = useState<Set<number>>(new Set());
+  if (groups.length === 0) {
+    return <div className="text-xs text-gray-400 italic px-4 py-3">No questions recorded for this skill.</div>;
+  }
+  const toggle = (i: number) => {
+    setOpenRow(p => {
+      const n = new Set(p);
+      n.has(i) ? n.delete(i) : n.add(i);
+      return n;
+    });
+  };
+  return (
+    <div className="overflow-x-auto rounded-lg border border-gray-200 w-full">
+      {/* w-full + table-auto = fill container; columns still size to content
+          within the available width, so short responses sit in a narrow cell
+          and long responses get more room. */}
+      <table className="w-full text-xs" style={{ tableLayout: 'auto' }}>
+        <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-[10px]">
+          <tr>
+            <th className="px-3 py-2 text-left font-semibold w-12 whitespace-nowrap">Q #</th>
+            <th className="px-3 py-2 text-left font-semibold">Question</th>
+            <th className="px-3 py-2 text-left font-semibold">Candidate Response</th>
+            <th className="px-3 py-2 text-left font-semibold w-32 whitespace-nowrap">Coverage</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100 bg-white">
+          {groups.map((g, i) => {
+            const mainLevel = qCoverage(g.score);
+            const fus = g.follow_ups || [];
+            const hasFu = fus.length > 0;
+            const isOpen = openRow.has(i);
+            return (
+              <tr key={i} className="align-top">
+                <td className="px-3 py-2 align-top whitespace-nowrap">
+                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
+                    Q{g.q_num}
+                  </span>
+                </td>
+                <td className="px-3 py-2 align-top" style={{ maxWidth: '28rem' }}>
+                  <div className="text-[12px] font-medium text-gray-800 leading-snug break-words">
+                    <TruncatedText text={g.question || ''} limit={160} />
+                  </div>
+                  {hasFu && (
+                    <div className="mt-2 pl-3 border-l-2 border-violet-200">
+                      {!isOpen ? (
+                        <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                          <ChevronDown className="w-3 h-3" />
+                          {fus.length} follow-up{fus.length > 1 ? 's' : ''}
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                            <ChevronUp className="w-3 h-3" />
+                            Hide follow-ups
+                          </button>
+                          {fus.map((fu, fi) => (
+                            <div key={fi}>
+                              <div className="flex items-center gap-1.5 mb-0.5">
+                                <span className="text-[10px] font-semibold text-violet-700 bg-violet-100 rounded px-1.5 py-0.5">F{fi + 1}</span>
+                              </div>
+                              <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
+                                <TruncatedText text={fu.question || ''} limit={140} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </td>
+                <td className="px-3 py-2 align-top" style={{ maxWidth: '40rem' }}>
+                  <div className="text-[12px] text-gray-700 leading-snug whitespace-pre-wrap break-words">
+                    <TruncatedText text={g.answer || ''} limit={220} />
+                  </div>
+                  {hasFu && isOpen && (
+                    <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
+                      {fus.map((fu, fi) => (
+                        <div key={fi} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                          <span className="text-[10px] font-semibold text-violet-700 mr-1">F{fi + 1}:</span>
+                          <TruncatedText text={fu.answer || ''} limit={180} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </td>
+                <td className="px-3 py-2 align-top whitespace-nowrap">
+                  <CovBadge level={mainLevel} />
+                  {hasFu && isOpen && (
+                    <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
+                      {fus.map((fu, fi) => (
+                        <div key={fi}><CovBadge level={qCoverage(fu.score)} /></div>
+                      ))}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -381,28 +539,18 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
               {/* ── Expanded content ─────────────────────────────── */}
               {isExpanded && (
                 <div className="border-t border-gray-100">
-                  {/* Coverage Trail */}
-                  {trail.length > 0 && (
-                    <div className="px-5 py-3 bg-gray-50/50">
-                      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Coverage Progression</p>
-                      <CoverageTrail entries={trail} />
-                    </div>
-                  )}
-
-                  {/* Q&A Cards — main questions + follow-ups */}
+                  {/* Questions & Answers — table format */}
                   {groups.length > 0 && (
-                    <div className="px-5 py-3 space-y-3">
+                    <div className="px-5 py-3 space-y-2">
                       <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
                         Questions & Answers ({groups.length} question{groups.length > 1 ? 's' : ''}{totalFollowUps > 0 ? `, ${totalFollowUps} follow-up${totalFollowUps > 1 ? 's' : ''}` : ''})
                       </p>
-                      {groups.map((g, i) => (
-                        <QACard key={i} group={g} coverageLevel={level} />
-                      ))}
+                      <QuestionTable groups={groups} />
                     </div>
                   )}
 
                   {/* No data fallback */}
-                  {trail.length === 0 && groups.length === 0 && (
+                  {groups.length === 0 && (
                     <div className="px-5 py-4 text-center text-xs text-gray-400 italic">
                       No detailed data available for this skill
                     </div>
@@ -418,7 +566,6 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
       <div className="flex items-center gap-4 text-[10px] text-gray-400 flex-wrap">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-400 inline-block" /> MH = Must-Have</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" /> NH = Nice-to-Have</span>
-        <span>Coverage trail shows: Asked <ArrowRight className="w-3 h-3 inline" /> Low <ArrowRight className="w-3 h-3 inline" /> Medium <ArrowRight className="w-3 h-3 inline" /> Covered</span>
       </div>
     </div>
   );

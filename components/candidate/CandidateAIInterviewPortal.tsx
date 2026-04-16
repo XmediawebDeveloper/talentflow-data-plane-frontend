@@ -152,7 +152,35 @@ export function CandidateAIInterviewPortal({ token }: Props) {
         setSelectedLanguage(info.selected_language || info.available_languages[0]);
       }
 
-      // ── 1. Terminal / active states ──
+      // ── 1. Terminal states — check in order: EXPIRED → COMPLETED → IN_PROGRESS → FRESH ──
+      //
+      // Gate 1: EXPIRED
+      //   (a) backend already flipped status to 'expired', or
+      //   (b) expires_at is in the past and the candidate never got to a
+      //       terminal state (completed/in_progress should not be re-labelled
+      //       as expired even if the clock ran out afterwards).
+      const _expiredByClock =
+        !!info.expires_at &&
+        new Date(info.expires_at) < new Date() &&
+        info.status !== 'completed' &&
+        info.status !== 'cancelled' &&
+        info.status !== 'in_progress';
+      if (info.status === 'expired' || _expiredByClock) {
+        clearInterviewStep(token);
+        setIsExpiredError(true);
+        setErrorMessage('This interview link has expired and is no longer available.');
+        setStep('error');
+        return;
+      }
+
+      // Gate 2: COMPLETED / CANCELLED
+      if (info.status === 'completed' || info.status === 'cancelled') {
+        clearInterviewStep(token);
+        setStep('completed');
+        return;
+      }
+
+      // Gate 3: IN PROGRESS (resume active interview)
       if (info.status === 'in_progress') {
         clearInterviewStep(token);
         // Pre-create 24kHz AudioContext so TalkingHead uses the correct sample rate.
@@ -167,16 +195,6 @@ export function CandidateAIInterviewPortal({ token }: Props) {
           }
         }
         setStep('interview');
-        return;
-      }
-      if (info.status === 'completed' || info.status === 'cancelled') {
-        clearInterviewStep(token);
-        setStep('completed');
-        return;
-      }
-      if (info.status === 'expired') {
-        setIsExpiredError(true);
-        setStep('error');
         return;
       }
 
@@ -515,6 +533,66 @@ export function CandidateAIInterviewPortal({ token }: Props) {
   const handleFullscreenReady = useCallback(async () => {
     if (startSubmitting) return;
     setStartSubmitting(true);
+
+    // Pre-flight permission check — refuse to start the interview if the
+    // browser / OS has camera or microphone permission set to "denied".
+    // Without this, the candidate would land in the interview UI and
+    // immediately hit the terminal block; catching it HERE lets them fix
+    // the permission and retry from the same screen instead.
+    try {
+      const perms = (navigator as any).permissions;
+      let camDenied = false;
+      let micDenied = false;
+      if (perms?.query) {
+        try {
+          const camStatus = await perms.query({ name: 'camera' as PermissionName });
+          camDenied = camStatus?.state === 'denied';
+        } catch { /* unsupported */ }
+        try {
+          const micStatus = await perms.query({ name: 'microphone' as PermissionName });
+          micDenied = micStatus?.state === 'denied';
+        } catch { /* unsupported */ }
+      }
+      // Also do a getUserMedia probe — Permissions API returns "prompt" in
+      // some browsers even when the user previously denied once. The probe
+      // is a fast, definitive signal.
+      try {
+        const probe = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        probe.getTracks().forEach(t => t.stop());
+      } catch (probeErr: any) {
+        if (probeErr?.name === 'NotAllowedError' || probeErr?.name === 'PermissionDeniedError') {
+          camDenied = true;
+          micDenied = true;
+        }
+      }
+      if (camDenied || micDenied) {
+        const kind = camDenied && micDenied ? 'camera and microphone' : camDenied ? 'camera' : 'microphone';
+        toast.error(
+          `${kind.charAt(0).toUpperCase() + kind.slice(1)} access is blocked. ` +
+          'Please enable it in your browser settings and try again.',
+          { duration: 8000 }
+        );
+        // Log as proctor event so the recruiter sees the denied attempt.
+        try {
+          await candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: camDenied ? 'camera_disabled' : 'microphone_disabled',
+            severity: 'severe',
+            details: { reason: 'denied_on_start', phase: 'pre_interview' },
+          });
+          if (camDenied && micDenied) {
+            await candidateAIInterviewService.reportProctorEvent(token, {
+              event_type: 'microphone_disabled',
+              severity: 'severe',
+              details: { reason: 'denied_on_start', phase: 'pre_interview' },
+            });
+          }
+        } catch { /* best-effort */ }
+        setStartSubmitting(false);
+        return; // stay on the fullscreen_prompt step; do NOT enter the interview
+      }
+    } catch (permErr) {
+      console.warn('[Portal] Permission pre-check failed:', permErr);
+    }
 
     // CRITICAL: Create AudioContext in user gesture context
     try {

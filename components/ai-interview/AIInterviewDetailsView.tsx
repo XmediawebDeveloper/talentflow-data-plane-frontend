@@ -18,7 +18,7 @@ import type {
 import CandidateResultsView from './CandidateResultsView';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
-import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
+import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
 
 const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
@@ -141,7 +141,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       return {
         mthClusters: (si.mth_clusters || []) as { id: string; name: string; priority: number; skills: string[]; reason?: string }[],
         nthClusters: (si.nth_clusters || []) as { id: string; name: string; priority: number; skills: string[]; reason?: string }[],
-        interviewMode: (si.interview_mode as string) || modeFromDuration(config.duration_minutes),
+        interviewMode: modeFromConfig(si, config.duration_minutes),
         perQuestionSeconds: si.per_question_seconds ? Number(si.per_question_seconds) : null,
       };
     } catch {

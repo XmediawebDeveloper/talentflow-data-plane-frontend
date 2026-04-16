@@ -14,10 +14,13 @@ import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewMod
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 
 // Returns the effective interview duration string.
-// Conversational (flexible) sessions have duration_minutes=0; base is 30 min.
-// Buffer time (+5 min) is stored as buffer_enabled in special_instructions JSON.
+// New configs store the real 30 / 35 / N value in duration_minutes.
+// Legacy configs used duration_minutes=0 as a sentinel for flexible mode —
+// those still need the buffer-aware fallback so older records render
+// correctly in the list.
 function getInterviewDuration(durationMinutes: number | undefined | null, specialInstructions?: string | null): string {
   if ((durationMinutes ?? 0) === 0) {
     let bufferEnabled = false;
@@ -491,8 +494,9 @@ export default function AIInterview() {
     });
     if (modeFilter === 'all') return base;
     return base.filter((config) => {
-      const isTimed = (config.duration_minutes ?? 0) > 0;
-      return modeFilter === 'timed' ? isTimed : !isTimed;
+      // Single source of truth for mode: special_instructions.interview_mode.
+      const mode = modeFromConfig(config.special_instructions, config.duration_minutes);
+      return modeFilter === 'timed' ? mode === 'fixed' : mode === 'flexible';
     });
   })();
   const configTotalPages = Math.max(1, Math.ceil(filteredConfigs.length / CONFIG_PAGE_SIZE));
@@ -793,17 +797,28 @@ export default function AIInterview() {
                               <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(config.status)}`}>
                                 {getStatusLabel(config.status)}
                               </span>
-                              {(config.duration_minutes ?? 0) > 0 ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-600 border border-orange-200">
-                                  <Clock className="w-3 h-3" />
-                                  Timed
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200">
-                                  <MessageSquare className="w-3 h-3" />
-                                  Conversational
-                                </span>
-                              )}
+                              {(() => {
+                                const mode = modeFromConfig(config.special_instructions, config.duration_minutes);
+                                let hasBuffer = false;
+                                try {
+                                  const si = JSON.parse(config.special_instructions || '{}');
+                                  hasBuffer = !!si.buffer_enabled;
+                                } catch {}
+                                if (mode === 'fixed') {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-600 border border-orange-200">
+                                      <Clock className="w-3 h-3" />
+                                      Timed
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-200">
+                                    <MessageSquare className="w-3 h-3" />
+                                    {hasBuffer ? 'Conversational\u2011incl.Buffer' : 'Conversational'}
+                                  </span>
+                                );
+                              })()}
                             </div>
                             {/* JD reference line — mirrors Assessments card style */}
                             {(config.jd_short_id || config.jd_title) && (

@@ -805,25 +805,37 @@ export default function AIInterviewClusters() {
         const nthRound = rounds.find(r => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have' || r.type === 'nice-to-have');
         const hrRound = rounds.find(r => r.type === 'hr');
 
-        // Determine mode and timed allocation
-        const durationMin = draft.duration_minutes ?? 30;
-        const fixed = durationMin > 0;
-        setIsFixed(fixed);
-        const nthEnabledForTimed = nthRound ? nthRound.enabled !== false : false;
-        const hrEnabledForTimed = hrRound ? hrRound.enabled !== false : false;
-        const timedAllocation = getTimedModeAllocation(nthEnabledForTimed, hrEnabledForTimed);
-        setFixedMthMin(fixed ? timedAllocation.mthMinutes : 0);
-        setFixedNthMin(fixed ? timedAllocation.nthMinutes : 0);
-        setMthMaxClusters(fixed ? timedAllocation.mthMaxClusters : 3);
-        setNthMaxClusters(fixed ? timedAllocation.nthMaxClusters : 2);
-        setHrEnabled(hrEnabledForTimed);
-        setFixedHrMin(fixed ? timedAllocation.hrMinutes : 0);
-
         // Parse special_instructions
         let si: Record<string, any> = {};
         try {
           si = JSON.parse(draft.special_instructions || '{}');
         } catch { /* noop */ }
+
+        const isFlexibleMode = si.interview_mode === 'flexible';
+        const nthEnabledForTimed = nthRound ? nthRound.enabled !== false : false;
+        const hrEnabledForTimed = hrRound ? hrRound.enabled !== false : false;
+        const timedAllocation = getTimedModeAllocation(nthEnabledForTimed, hrEnabledForTimed);
+
+        setIsFixed(!isFlexibleMode);
+        setIsFlexible(isFlexibleMode);
+        setMthMaxClusters(isFlexibleMode ? 3 : timedAllocation.mthMaxClusters);
+        setNthMaxClusters(isFlexibleMode ? 2 : timedAllocation.nthMaxClusters);
+        setHrEnabled(hrEnabledForTimed);
+        setFixedMthMin(
+          isFlexibleMode
+            ? (mthRound?.duration_minutes ?? 0)
+            : timedAllocation.mthMinutes,
+        );
+        setFixedNthMin(
+          isFlexibleMode
+            ? (nthEnabledForTimed ? (nthRound?.duration_minutes ?? 0) : 0)
+            : timedAllocation.nthMinutes,
+        );
+        setFixedHrMin(
+          isFlexibleMode
+            ? (hrEnabledForTimed ? (hrRound?.duration_minutes ?? 0) : 0)
+            : timedAllocation.hrMinutes,
+        );
 
         const mthComments: Record<string, string> = si.skill_comments?.mth || {};
         const nthComments: Record<string, string> = si.skill_comments?.nth || {};
@@ -871,7 +883,7 @@ export default function AIInterviewClusters() {
         //   NHS enabled+fixed: trim to timedAllocation.nthMaxClusters; NHS enabled+flexible: trim to 2
         //   NHS disabled: always clear (regardless of what was saved)
         if (si.mth_clusters?.length) {
-          const mthMax = fixed ? timedAllocation.mthMaxClusters : 3;
+          const mthMax = isFlexibleMode ? 3 : timedAllocation.mthMaxClusters;
           const mthRaw: any[] = si.mth_clusters;
           const mthTrimmed = mthRaw.slice(0, mthMax);
           setMthClusters(mthTrimmed.map((c: any) => ({
@@ -880,7 +892,7 @@ export default function AIInterviewClusters() {
           })));
         }
         if (si.nth_clusters?.length) {
-          const nthMax = fixed ? timedAllocation.nthMaxClusters : 2;
+          const nthMax = isFlexibleMode ? 2 : timedAllocation.nthMaxClusters;
           const nthRaw: any[] = si.nth_clusters;
           // nthEnabledForTimed=false means NHS is disabled — always clear saved clusters
           const nthTrimmed = !nthEnabledForTimed
@@ -897,8 +909,7 @@ export default function AIInterviewClusters() {
         }
 
         // Flexible mode: read interview_mode, finalization state, and JD description
-        if (si.interview_mode === 'flexible') {
-          setIsFlexible(true);
+        if (isFlexibleMode) {
           setIsFinalized(!!si.flexible_finalized);
         }
         if (si.jd_description) {

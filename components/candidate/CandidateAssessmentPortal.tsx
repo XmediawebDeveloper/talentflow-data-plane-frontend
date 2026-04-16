@@ -438,6 +438,24 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       // DISABLED: Identity verification removed - candidates can directly attend
       // const isIdentityVerified = sessionStorage.getItem(`identity_verified_${token}`) === 'true';
 
+      // ── Gate 1: EXPIRED ─────────────────────────────────────────────────────
+      // Check expiry BEFORE any other state. Two paths:
+      //   (a) backend already flipped attempt_status to 'expired', or
+      //   (b) DB hasn't been updated yet but expires_at is in the past AND
+      //       the candidate has not completed the attempt (completed runs
+      //       should still show as Completed, not Expired).
+      const _expiredByStatus = info.attempt_status === 'expired';
+      const _expiredByClock =
+        !!info.expires_at &&
+        new Date(info.expires_at) < new Date() &&
+        info.attempt_status !== 'completed';
+      if (_expiredByStatus || _expiredByClock) {
+        setIsExpiredLink(true);
+        setError('This assessment link has expired. Please contact your recruiter for a new link.');
+        setStepSafe('error');
+        return;
+      }
+
       // Determine initial step based on status
       if (info.attempt_status === 'completed') {
         console.log('[DEBUG] Attempt status is COMPLETED');
@@ -513,10 +531,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           if (errorMsg.toLowerCase().includes('time expired')) {
             console.log('[DEBUG] Assessment time expired - completing assessment');
             try {
-              // Try to complete the assessment and get results
-              const result = await candidateService.completeAssessment(token);
+              // Try to complete the assessment (scoring runs in background)
+              await candidateService.completeAssessment(token);
               if (!isMountedRef.current) return;
-              setResults(result);
               setStepSafe('completed');
             } catch (completeError) {
               console.log('[DEBUG] Could not complete - trying to get results directly');
@@ -1425,6 +1442,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             onAnswerSubmit={handleAnswerSubmit}
             onComplete={handleCompleteAssessment}
             onNavigate={handleNavigateToQuestion}
+            onSetQuestion={setCurrentQuestion}
             onTimeUpdate={setOverlayTimeRemaining}
             videoRef={videoRef}
             stream={cameraStream}

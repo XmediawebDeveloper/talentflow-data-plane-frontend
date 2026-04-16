@@ -2708,7 +2708,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         if (s === 'bounced' || inv.bounced_at) {
                           return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Bounced</span>;
                         }
-                        if (s === 'expired') {
+                        // Client-side expiry check: catch invitations where the DB status
+                        // hasn't been updated yet but expires_at has already passed.
+                        const notYetStarted = !inv.started_at && !inv.completed_at && s !== 'completed';
+                        if (s === 'expired' || (notYetStarted && inv.expires_at && new Date(inv.expires_at) < new Date())) {
                           return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
                         }
                         if (s === 'abandoned') {

@@ -49,6 +49,8 @@ export interface CandidateInterviewInfo {
   interview_mode?: string | null;
   // Proctoring
   copy_paste_blocking?: boolean | null;
+  // Expiry timestamp for client-side expiry checks
+  expires_at?: string | null;
 }
 
 export interface AvailableLanguagesResponse {

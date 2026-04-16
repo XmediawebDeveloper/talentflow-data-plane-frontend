@@ -40,7 +40,7 @@ import { TechnicalQuestionView } from './questions/TechnicalQuestionView';
 import { CodingQuestionView } from './questions/CodingQuestionView';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useRetryQueue } from '@/hooks/useRetryQueue';
-import { getFullscreenChangeEvent, isFullscreen as getIsFullscreen, exitFullscreen as compatExitFullscreen, playVideo } from '@/lib/utils/browserCompat';
+import { getFullscreenChangeEvent, isFullscreen as getIsFullscreen, exitFullscreen as compatExitFullscreen, requestFullscreen as compatRequestFullscreen, playVideo } from '@/lib/utils/browserCompat';
 
 interface Round {
   round_type: string;
@@ -80,6 +80,7 @@ interface AssessmentInterfaceProps {
   ) => Promise<SubmitAnswerResponse>;
   onComplete: () => void;
   onNavigate: (questionNumber: number) => void;
+  onSetQuestion?: (question: CurrentQuestion) => void;
   onTimeUpdate?: (remainingSeconds: number) => void;
   videoRef: RefObject<HTMLVideoElement | null>;
   stream: MediaStream | null;
@@ -101,6 +102,7 @@ export function AssessmentInterface({
   onAnswerSubmit,
   onComplete,
   onNavigate,
+  onSetQuestion,
   onTimeUpdate,
   videoRef,
   stream,
@@ -307,7 +309,8 @@ export function AssessmentInterface({
   };
 
   // Fullscreen state (only tracking, not used for pausing anymore)
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  // Initialize from actual browser state to avoid a false-negative flash on mount
+  const [isFullscreen, setIsFullscreen] = useState(() => getIsFullscreen());
   const fullscreenExitTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Violation tracking - ESC and Alt+Tab attempts (max 3 before warning)
@@ -1142,7 +1145,7 @@ export function AssessmentInterface({
     setLastSaveError(null);
 
     try {
-      await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
+      const response = await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
 
       // Update answer status - use question NUMBER as key, mark as LOCKED (submitted)
       setAnswerStatuses(prev => {
@@ -1152,26 +1155,33 @@ export function AssessmentInterface({
       });
 
       if (!isLastQuestion) {
-        await onNavigate(currentQuestion.question_number + 1);
+        // Use next_question from submit response to avoid a second API call
+        if (response.next_question && onSetQuestion) {
+          onSetQuestion(response.next_question);
+        } else {
+          await onNavigate(currentQuestion.question_number + 1);
+        }
       }
     } catch (error: any) {
       console.error('Failed to submit answer:', error);
 
       // Check error type and show appropriate message
-      const isTimeExpired = error?.response?.data?.detail?.error === 'TIME_EXPIRED';
-      const isNetworkError = !navigator.onLine || error?.code === 'ECONNABORTED' || error?.message?.includes('Network Error');
+      // Note: candidateService wraps errors in plain Error objects, so check error.message
+      const errorMessage = error?.message || 'Failed to submit answer. Please try again.';
+      const isTimeExpired = errorMessage.includes('TIME_EXPIRED') || errorMessage.toLowerCase().includes('time expired');
+      const isNetworkError = !navigator.onLine || error?.code === 'ECONNABORTED' || errorMessage.includes('Network Error');
 
       if (isTimeExpired) {
         setLastSaveError('Assessment time has expired. Your progress has been saved.');
-        alert('Assessment time has expired. The assessment will be auto-submitted.');
         setTimeout(() => onComplete(), 1000);
       } else if (isNetworkError) {
         setLastSaveError('No internet connection. Your answer is saved locally and will be submitted when connection is restored.');
         setAutoSaveStatus('offline');
       } else {
-        const errorMsg = error?.response?.data?.detail?.message || error?.message || 'Failed to submit answer. Please try again.';
-        setLastSaveError(errorMsg);
-        alert(`Failed to submit answer: ${errorMsg}`);
+        setLastSaveError(errorMessage);
+        // Show error via the existing UI status bar — never use alert() as it exits fullscreen
+        setAutoSaveStatus('error');
+        setTimeout(() => setAutoSaveStatus('idle'), 5000);
       }
     } finally {
       setIsSubmitting(false);
@@ -1215,9 +1225,10 @@ export function AssessmentInterface({
     try {
       // Save current answer as DRAFT (editable, can change later)
       const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+      let submitResponse: SubmitAnswerResponse | null = null;
       if (hasAnswer && !isCurrentAnswerLocked) {
         // Submit with is_draft: true to keep answer editable
-        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+        submitResponse = await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
         setAnswerStatuses(prev => {
           const newMap = new Map(prev);
           newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });
@@ -1225,8 +1236,12 @@ export function AssessmentInterface({
         });
       }
 
-      // Navigate to next question
-      await onNavigate(currentQuestion.question_number + 1);
+      // Use next_question from submit response to avoid a second API call
+      if (submitResponse?.next_question && onSetQuestion) {
+        onSetQuestion(submitResponse.next_question);
+      } else {
+        await onNavigate(currentQuestion.question_number + 1);
+      }
     } catch (error) {
       console.error('Failed to navigate to next:', error);
     } finally {
@@ -1561,107 +1576,8 @@ export function AssessmentInterface({
         </div>
       )}
 
-      {/* Unified Proctoring Blocker Overlay */}
-      {isAssessmentAccessBlocked && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-8 text-center">
-            {/* Alert Icon */}
-            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ShieldAlert className="w-10 h-10 text-red-600" />
-            </div>
-
-            {/* Title */}
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Proctoring Requirement Not Met
-            </h2>
-
-            {/* Description */}
-            <p className="text-gray-600 mb-6">
-              Return to the secured assessment state to continue. The assessment timer is still running.
-              Complete all of the following requirements:
-            </p>
-
-            {/* Requirement Status List */}
-            <div className="space-y-3 mb-6">
-              {isFullscreenRequired && (
-                <div className={`flex items-center gap-3 border rounded-xl p-4 ${
-                  isFullscreenInvalid ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'
-                }`}>
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    isFullscreenInvalid ? 'bg-red-100' : 'bg-green-100'
-                  }`}>
-                    <Monitor className={`w-5 h-5 ${isFullscreenInvalid ? 'text-red-600' : 'text-green-600'}`} />
-                  </div>
-                  <div className="text-left">
-                    <p className={`font-semibold ${isFullscreenInvalid ? 'text-red-800' : 'text-green-800'}`}>
-                      {isFullscreenInvalid ? 'Fullscreen Required' : 'Fullscreen Restored'}
-                    </p>
-                    <p className={`text-sm ${isFullscreenInvalid ? 'text-red-600' : 'text-green-600'}`}>
-                      {isFullscreenInvalid
-                        ? 'Return to fullscreen mode before continuing the assessment.'
-                        : 'Assessment is back in fullscreen mode.'}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {!isCameraActive && (
-                <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
-                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Camera className="w-5 h-5 text-red-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-semibold text-red-800">Camera Disabled</p>
-                    <p className="text-sm text-red-600">Your camera has been turned off or blocked.</p>
-                  </div>
-                </div>
-              )}
-
-              {!isMicrophoneActive && (
-                <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
-                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Mic className="w-5 h-5 text-red-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-semibold text-red-800">Microphone Disabled</p>
-                    <p className="text-sm text-red-600">Your microphone has been turned off or blocked.</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Instructions */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div className="text-left text-sm">
-                  <p className="font-medium text-amber-800 mb-1">How to continue:</p>
-                  <ol className="list-decimal list-inside text-amber-700 space-y-1">
-                    {isFullscreenInvalid && (
-                      <li>Return to fullscreen mode to resume the secured assessment.</li>
-                    )}
-                    {isDeviceDisabled && (
-                      <li>Click the camera or microphone icon in your browser and re-enable access.</li>
-                    )}
-                    {isDeviceDisabled && (
-                      <li>If the device is blocked at system level, enable it from your OS privacy settings.</li>
-                    )}
-                    <li>The assessment will unlock only after all required checks are valid.</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-
-            {/* Warning Footer */}
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-              <Video className="w-4 h-4" />
-              <span>You cannot return to the assessment until camera, microphone, and fullscreen requirements are met</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Old fullscreen prompt modal removed - ESC is now blocked completely */}
+      {/* Proctoring blocker overlay removed — the parent CandidateAssessmentPortal
+          handles the fullscreen-exit overlay (shows a "Return to Fullscreen" button). */}
 
       {/* Sticky Header Container */}
       <div className="sticky top-0 z-50">
@@ -2020,7 +1936,7 @@ export function AssessmentInterface({
             </div>
           </div>
 
-          {/* Progress Indicator - Display Only (No Navigation) */}
+          {/* Progress Indicator - Click to Navigate */}
           <div className="mt-3 sm:mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <p className="text-sm font-medium text-gray-700">Progress</p>
@@ -2065,13 +1981,22 @@ export function AssessmentInterface({
                 }
 
                 return (
-                  <div
+                  <button
                     key={num}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center ${colorClass}`}
+                    type="button"
+                    disabled={isCurrent || isNavigating || isSubmitting}
+                    onClick={() => {
+                      if (!isCurrent && !isNavigating && !isSubmitting) {
+                        onNavigate(num);
+                      }
+                    }}
+                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center transition-transform ${colorClass} ${
+                      isCurrent ? '' : 'cursor-pointer hover:scale-110 hover:shadow-md'
+                    } disabled:cursor-default disabled:hover:scale-100 disabled:hover:shadow-none`}
                     title={titleText}
                   >
                     {icon || num}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -2164,10 +2089,18 @@ export function AssessmentInterface({
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl mb-6 border border-blue-200">
-              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl mb-3 border border-blue-200">
+              <Save className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-blue-700">
-                Once submitted, you cannot modify your answers. Make sure you've reviewed all your responses.
+                All your saved drafts and the current answer will be automatically locked in
+                and submitted as your final responses.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-xl mb-6 border border-amber-200">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-700">
+                Once submitted, you cannot modify your answers. Please review all your responses before continuing.
               </p>
             </div>
 

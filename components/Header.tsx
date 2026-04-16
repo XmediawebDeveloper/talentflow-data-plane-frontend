@@ -1,9 +1,10 @@
-import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
+import { Bell, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Loader2, X, Wifi, WifiOff, Building2, Menu, Moon, Sun } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from 'next-themes';
 import { User as UserType } from '@/lib/types/tenant';
 import NotificationCenter from './NotificationCenter';
 import QuickActions from './QuickActions';
+import GlobalSearch from './GlobalSearch';
 // FIX-010: Import Tooltip for icon buttons
 import { Tooltip } from '@/components/ui/tooltip';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -509,17 +510,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
         </button>
       )}
 
-      {/* Search Bar - Hidden on mobile, visible on desktop */}
-      <div className="hidden lg:flex items-center flex-1 max-w-2xl">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search candidates, jobs, assessments..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors text-gray-900"
-          />
-        </div>
-      </div>
+      {/* Global Search Bar - Hidden on mobile, visible on desktop */}
+      <GlobalSearch className="hidden lg:flex items-center flex-1 max-w-2xl" />
 
       {/* Spacer for mobile to push icons to the right */}
       <div className="flex-1 lg:hidden" />

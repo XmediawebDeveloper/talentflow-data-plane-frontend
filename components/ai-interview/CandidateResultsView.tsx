@@ -8,7 +8,9 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
+  Download,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend,
@@ -97,6 +99,7 @@ function VideoPane({
   loading,
   error,
   onError,
+  onDuration,
 }: {
   label: string;
   hasFile: boolean;
@@ -104,6 +107,7 @@ function VideoPane({
   loading: boolean;
   error: boolean;
   onError: () => void;
+  onDuration?: (seconds: number) => void;
 }) {
   if (!hasFile) {
     return (
@@ -136,29 +140,140 @@ function VideoPane({
   }
   if (blobUrl) {
     return (
-      <video controls className="w-full max-h-[500px] rounded-lg bg-black" src={blobUrl} onError={onError}>
-        Your browser does not support video playback.
-      </video>
+      <VideoWithDuration blobUrl={blobUrl} onError={onError} onDuration={onDuration} />
     );
   }
   return null;
 }
 
+function formatDuration(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return '--:--';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function VideoWithDuration({ blobUrl, onError, onDuration }: { blobUrl: string; onError: () => void; onDuration?: (seconds: number) => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [duration, setDuration] = useState<number | null>(null);
+
+  const applyDuration = (d: number) => {
+    setDuration(d);
+    if (onDuration && isFinite(d) && d > 0) onDuration(d);
+  };
+
+  const handleLoadedMetadata = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (isFinite(v.duration) && v.duration > 0) {
+      applyDuration(v.duration);
+      return;
+    }
+    const onTimeUpdate = () => {
+      v.removeEventListener('timeupdate', onTimeUpdate);
+      v.currentTime = 0;
+      applyDuration(v.duration);
+    };
+    v.addEventListener('timeupdate', onTimeUpdate);
+    v.currentTime = 1e9;
+  };
+
+  return (
+    <div className="relative">
+      <video
+        ref={videoRef}
+        controls
+        className="w-full max-h-[500px] rounded-lg bg-black"
+        src={blobUrl}
+        onLoadedMetadata={handleLoadedMetadata}
+        onError={onError}
+      >
+        Your browser does not support video playback.
+      </video>
+      {duration !== null && (
+        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 rounded bg-black/70 text-white text-xs font-medium">
+          <Clock className="w-3 h-3" /> {formatDuration(duration)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatBytes(bytes: number | null): string {
+  if (bytes == null || !isFinite(bytes) || bytes < 0) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(1)} KB`;
+  const mb = kb / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  return `${(mb / 1024).toFixed(2)} GB`;
+}
+
+function formatInterviewDate(iso?: string): string {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+  } catch { return '—'; }
+}
+
+function RecordingInfoPanel({
+  status, size, duration, interviewDate,
+}: {
+  status: string;
+  size: number | null;
+  duration: number | null;
+  interviewDate?: string;
+}) {
+  const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
+    <div className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
+      <span className="text-xs text-gray-500">{label}</span>
+      <span className="text-sm font-medium text-gray-900">{value}</span>
+    </div>
+  );
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-4">
+      <h3 className="text-sm font-semibold text-gray-900 mb-2">Recording Information</h3>
+      <Row label="Status" value={<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">{status}</span>} />
+      <Row label="File Size" value={formatBytes(size)} />
+      <Row label="Duration" value={duration != null ? formatDuration(duration) : '—'} />
+      <Row label="Interview Date" value={formatInterviewDate(interviewDate)} />
+    </div>
+  );
+}
+
 function RecordingTabContent({
   interview,
-  videoBlobUrl, videoLoading, videoError, setVideoError,
-  screenBlobUrl, screenLoading, screenError,
+  videoBlobUrl, videoBlobSize, videoLoading, videoError, setVideoError,
+  screenBlobUrl, screenBlobSize, screenLoading, screenError,
 }: {
   interview: AIInterviewResponse;
   videoBlobUrl: string | null;
+  videoBlobSize: number | null;
   videoLoading: boolean;
   videoError: boolean;
   setVideoError: (v: boolean) => void;
   screenBlobUrl: string | null;
+  screenBlobSize: number | null;
   screenLoading: boolean;
   screenError: boolean;
 }) {
   const [recView, setRecView] = useState<'candidate' | 'screen'>('candidate');
+  const [candidateDuration, setCandidateDuration] = useState<number | null>(null);
+  const [screenDuration, setScreenDuration] = useState<number | null>(null);
+
+  const isCandidate = recView === 'candidate';
+  const blobUrl = isCandidate ? videoBlobUrl : screenBlobUrl;
+  const blobSize = isCandidate ? videoBlobSize : screenBlobSize;
+  const duration = isCandidate ? candidateDuration : screenDuration;
+  const downloadName = isCandidate
+    ? `candidate-view-${interview.id}.mp4`
+    : `interview-view-${interview.id}.mp4`;
+  const interviewDate = interview.started_at || interview.scheduled_at || interview.created_at;
+  const statusLabel = interview.recording_file_path || interview.screen_recording_file_path
+    ? 'Transcribed'
+    : 'Unavailable';
 
   return (
     <div className="space-y-4">
@@ -167,7 +282,7 @@ function RecordingTabContent({
         <button
           onClick={() => setRecView('candidate')}
           className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            recView === 'candidate' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            isCandidate ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Camera className="w-3.5 h-3.5" /> Candidate View
@@ -175,50 +290,167 @@ function RecordingTabContent({
         <button
           onClick={() => setRecView('screen')}
           className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            recView === 'screen' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            !isCandidate ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Monitor className="w-3.5 h-3.5" /> Interview View
         </button>
       </div>
 
-      {recView === 'candidate' ? (
-        <VideoPane
-          label="Candidate recording"
-          hasFile={!!interview.recording_file_path}
-          blobUrl={videoBlobUrl}
-          loading={videoLoading}
-          error={videoError}
-          onError={() => setVideoError(true)}
-        />
-      ) : (
-        <div className="space-y-2">
-          <p className="text-xs text-gray-500">
-            Screen recording captured during the interview session.
-          </p>
-          <VideoPane
-            label="Screen recording"
-            hasFile={!!interview.screen_recording_file_path}
-            blobUrl={screenBlobUrl}
-            loading={screenLoading}
-            error={screenError}
-            onError={() => {}}
-          />
+      {/* Split layout: video left, info right */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 space-y-2">
+          {!isCandidate && (
+            <p className="text-xs text-gray-500">Screen recording captured during the interview session.</p>
+          )}
+          {isCandidate ? (
+            <VideoPane
+              label="Candidate recording"
+              hasFile={!!interview.recording_file_path}
+              blobUrl={videoBlobUrl}
+              loading={videoLoading}
+              error={videoError}
+              onError={() => setVideoError(true)}
+              onDuration={setCandidateDuration}
+            />
+          ) : (
+            <VideoPane
+              label="Screen recording"
+              hasFile={!!interview.screen_recording_file_path}
+              blobUrl={screenBlobUrl}
+              loading={screenLoading}
+              error={screenError}
+              onError={() => {}}
+              onDuration={setScreenDuration}
+            />
+          )}
         </div>
-      )}
+
+        <div className="space-y-3">
+          <RecordingInfoPanel
+            status={statusLabel}
+            size={blobSize}
+            duration={duration}
+            interviewDate={interviewDate}
+          />
+          {blobUrl && (
+            <a
+              href={blobUrl}
+              download={downloadName}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-colors"
+            >
+              <Download className="w-4 h-4" /> Download MP4
+            </a>
+          )}
+        </div>
+      </div>
     </div>
+  );
+}
+
+function escapeHtml(s: string): string {
+  return (s ?? '').toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ── Transcript diff helpers ────────────────────────────────────────
+// Word-level diff between raw ASR and corrected text. When ≤50% of tokens
+// changed, highlight individual words; otherwise mark whole sentence rewrite.
+type DiffPart = { text: string; changed: boolean };
+
+function tokenize(s: string): string[] {
+  return s.match(/\S+|\s+/g) || [];
+}
+
+function lcs(a: string[], b: string[]): number[][] {
+  const n = a.length, m = b.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] + 1 : Math.max(dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp;
+}
+
+function diffWords(raw: string, corrected: string): { raw: DiffPart[]; corrected: DiffPart[]; mode: 'word' | 'sentence' | 'none' } {
+  if (raw === corrected) {
+    return { raw: [{ text: raw, changed: false }], corrected: [{ text: corrected, changed: false }], mode: 'none' };
+  }
+  const a = tokenize(raw);
+  const b = tokenize(corrected);
+  const aWords = a.filter(t => /\S/.test(t));
+  const bWords = b.filter(t => /\S/.test(t));
+  const dp = lcs(a, b);
+  // Walk LCS to mark changed tokens
+  const rawParts: DiffPart[] = [];
+  const corrParts: DiffPart[] = [];
+  let i = a.length, j = b.length;
+  const rawRev: DiffPart[] = [];
+  const corrRev: DiffPart[] = [];
+  while (i > 0 && j > 0) {
+    if (a[i - 1] === b[j - 1]) {
+      rawRev.push({ text: a[i - 1], changed: false });
+      corrRev.push({ text: b[j - 1], changed: false });
+      i--; j--;
+    } else if (dp[i - 1][j] >= dp[i][j - 1]) {
+      rawRev.push({ text: a[i - 1], changed: /\S/.test(a[i - 1]) });
+      i--;
+    } else {
+      corrRev.push({ text: b[j - 1], changed: /\S/.test(b[j - 1]) });
+      j--;
+    }
+  }
+  while (i > 0) { rawRev.push({ text: a[i - 1], changed: /\S/.test(a[i - 1]) }); i--; }
+  while (j > 0) { corrRev.push({ text: b[j - 1], changed: /\S/.test(b[j - 1]) }); j--; }
+  rawParts.push(...rawRev.reverse());
+  corrParts.push(...corrRev.reverse());
+
+  // Decide mode: if ≥50% of corrected tokens changed, treat as full sentence rewrite
+  const changedCorr = corrParts.filter(p => p.changed && /\S/.test(p.text)).length;
+  const ratio = bWords.length > 0 ? changedCorr / bWords.length : 0;
+  if (ratio >= 0.5) {
+    return {
+      raw: [{ text: raw, changed: true }],
+      corrected: [{ text: corrected, changed: true }],
+      mode: 'sentence',
+    };
+  }
+  return { raw: rawParts, corrected: corrParts, mode: 'word' };
+}
+
+function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected' }) {
+  const hl = tone === 'raw'
+    ? 'bg-amber-200/80 text-amber-900 rounded px-0.5'
+    : 'bg-green-200/80 text-green-900 rounded px-0.5 font-medium';
+  return (
+    <span>
+      {parts.map((p, i) => p.changed
+        ? <mark key={i} className={hl}>{p.text}</mark>
+        : <span key={i}>{p.text}</span>
+      )}
+    </span>
   );
 }
 
 export default function CandidateResultsView({ interview, onBack }: CandidateResultsViewProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [transcriptView, setTranscriptView] = useState<'chat' | 'table'>('chat');
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [qaExportMenuOpen, setQaExportMenuOpen] = useState(false);
   const [videoError, setVideoError] = useState(false);
   const [videoBlobUrl, setVideoBlobUrl] = useState<string | null>(null);
+  const [videoBlobSize, setVideoBlobSize] = useState<number | null>(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [screenBlobUrl, setScreenBlobUrl] = useState<string | null>(null);
+  const [screenBlobSize, setScreenBlobSize] = useState<number | null>(null);
   const [screenLoading, setScreenLoading] = useState(false);
   const [screenError, setScreenError] = useState(false);
-  const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set());
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
   const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
   const [violationPage, setViolationPage] = useState(1);
   const [riskThresholds, setRiskThresholds] = useState<RiskThresholds>(DEFAULT_THRESHOLDS);
@@ -258,6 +490,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
         if (cancelled) return;
         const url = URL.createObjectURL(res.data);
         setVideoBlobUrl(url);
+        setVideoBlobSize(res.data?.size ?? null);
       })
       .catch(() => {
         if (!cancelled) setVideoError(true);
@@ -277,6 +510,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
       .then((res) => {
         if (cancelled) return;
         setScreenBlobUrl(URL.createObjectURL(res.data));
+        setScreenBlobSize(res.data?.size ?? null);
       })
       .catch(() => { if (!cancelled) setScreenError(true); })
       .finally(() => { if (!cancelled) setScreenLoading(false); });
@@ -632,11 +866,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     return 'text-red-600 bg-red-50 border-red-200';
   };
 
-  const toggleQuestion = (idx: number) => {
+  const toggleQuestion = (key: string) => {
     setExpandedQuestions(prev => {
       const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -2049,6 +2283,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   capabilityScore={eval_.capability_score ?? null}
                   sectionScores={eval_.section_scores ?? null}
                   capabilityScoreReasoning={eval_.capability_score_reasoning ?? null}
+                  questionHistory={eval_.question_history || []}
                 />
               );
             })()}
@@ -2137,7 +2372,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
                 // Prefer question_history (richer — has round_type, response_type, timestamp)
                 // Fall back to evaluations if history not present
-                const qaItems: any[] = eval_.question_history?.length > 0
+                const qaItemsRaw: any[] = eval_.question_history?.length > 0
                   ? eval_.question_history
                   : evaluations.map((e: any, i: number) => ({
                       question_number: i + 1,
@@ -2149,18 +2384,234 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       skip_source: null,
                       timestamp: null,
                     }));
+                // Group follow-ups with their parent main question. Follow-ups
+                // are rendered as F1, F2… nested inside the parent's Q box.
+                // Detect follow-ups by: (a) explicit is_follow_up flag, OR
+                // (b) same question_number as the previous entry (follow-ups
+                // share their parent's question_number in question_history).
+                type QaGroup = { main: any; followUps: any[] };
+                const groups: QaGroup[] = [];
+                for (const it of qaItemsRaw) {
+                  const prev = groups.length > 0 ? groups[groups.length - 1] : null;
+                  const isFu = !!it.is_follow_up || (
+                    prev != null &&
+                    it.question_number != null &&
+                    prev.main.question_number != null &&
+                    it.question_number === prev.main.question_number
+                  );
+                  if (isFu && prev) {
+                    prev.followUps.push(it);
+                  } else {
+                    groups.push({ main: it, followUps: [] });
+                  }
+                }
 
-                if (qaItems.length === 0) return renderPlaceholder('No Q&A data available');
+                if (groups.length === 0) return renderPlaceholder('No Q&A data available');
+
+                // ── Q&A export helpers ────────────────────────────────────
+                const qaBaseName = `qa_${interview.candidate_name || 'candidate'}_${liveSession.id.slice(0, 8)}`.replace(/\s+/g, '_');
+                const candidateNameLabel = interview.candidate_name || 'Candidate';
+
+                const roundLabelFor = (rt?: string) => {
+                  const k = (rt || '').toLowerCase();
+                  if (k === 'hr') return 'HR';
+                  if (k === 'must_have_skills') return 'Must Have Skills';
+                  if (k === 'nice_to_have_skills') return 'Nice To Have Skills';
+                  return rt ? rt.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '';
+                };
+
+                const exportQaPDF = async () => {
+                  const html2pdf = (await import('html2pdf.js')).default;
+                  const root = document.createElement('div');
+                  root.style.cssText = 'padding:24px;font-family:Arial,sans-serif;color:#111;max-width:720px;';
+                  let inner = `<h1 style="font-size:20px;margin:0 0 4px 0">Q&amp;A Transcript</h1>
+                    <div style="font-size:12px;color:#666;margin-bottom:16px">${candidateNameLabel} · ${groups.length} questions</div>`;
+                  groups.forEach((g: any, i: number) => {
+                    const it = g.main;
+                    const rl = roundLabelFor(it.round_type);
+                    const topic = it.topic && it.topic !== 'general' ? it.topic : '';
+                    inner += `<div style="margin-bottom:14px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;page-break-inside:avoid">
+                      <div style="font-size:11px;color:#6b7280;margin-bottom:4px">
+                        <b>Q${it.question_number ?? i + 1}</b>${rl ? ` · ${rl}` : ''}${topic ? ` · ${topic}` : ''}
+                      </div>
+                      <div style="font-size:13px;font-weight:600;color:#111;margin-bottom:6px">${escapeHtml(it.question || '')}</div>
+                      <div style="font-size:12px;color:#374151"><b>Candidate Answer:</b> ${escapeHtml(it.answer || '—')}</div>`;
+                    g.followUps.forEach((fu: any, fi: number) => {
+                      inner += `<div style="margin-top:8px;padding-left:10px;border-left:2px solid #c4b5fd">
+                        <div style="font-size:10px;color:#7c3aed;margin-bottom:2px"><b>F${fi + 1}</b></div>
+                        <div style="font-size:12px;font-weight:600;color:#111;margin-bottom:4px">${escapeHtml(fu.question || '')}</div>
+                        <div style="font-size:12px;color:#374151"><b>Candidate Answer:</b> ${escapeHtml(fu.answer || '—')}</div>
+                      </div>`;
+                    });
+                    inner += `</div>`;
+                  });
+                  root.innerHTML = inner;
+                  document.body.appendChild(root);
+                  try {
+                    await html2pdf().set({
+                      margin: [10, 10, 10, 10],
+                      filename: `${qaBaseName}.pdf`,
+                      image: { type: 'jpeg', quality: 0.95 },
+                      html2canvas: { scale: 2 },
+                      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                    }).from(root).save();
+                  } finally {
+                    document.body.removeChild(root);
+                    setQaExportMenuOpen(false);
+                  }
+                };
+
+                const exportQaDOCX = async () => {
+                  const docx = await import('docx');
+                  const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = docx;
+                  const children: any[] = [
+                    new Paragraph({
+                      heading: HeadingLevel.HEADING_1,
+                      children: [new TextRun({ text: 'Q&A Transcript', bold: true })],
+                    }),
+                    new Paragraph({
+                      children: [new TextRun({ text: `${candidateNameLabel} · ${groups.length} questions`, color: '666666', size: 20 })],
+                      spacing: { after: 240 },
+                    }),
+                  ];
+                  groups.forEach((g: any, i: number) => {
+                    const it = g.main;
+                    const rl = roundLabelFor(it.round_type);
+                    const topic = it.topic && it.topic !== 'general' ? it.topic : '';
+                    const meta = [`Q${it.question_number ?? i + 1}`, rl, topic].filter(Boolean).join(' · ');
+                    children.push(new Paragraph({
+                      spacing: { before: 160, after: 60 },
+                      children: [new TextRun({ text: meta, bold: true, color: '6b7280', size: 18 })],
+                    }));
+                    children.push(new Paragraph({
+                      children: [new TextRun({ text: it.question || '', bold: true, size: 22 })],
+                      spacing: { after: 60 },
+                    }));
+                    children.push(new Paragraph({
+                      children: [
+                        new TextRun({ text: 'Candidate Answer: ', bold: true, size: 22 }),
+                        new TextRun({ text: it.answer || '—', size: 22 }),
+                      ],
+                      spacing: { after: 120 },
+                    }));
+                    g.followUps.forEach((fu: any, fi: number) => {
+                      children.push(new Paragraph({
+                        indent: { left: 360 },
+                        children: [new TextRun({ text: `F${fi + 1}`, bold: true, color: '7c3aed', size: 18 })],
+                      }));
+                      children.push(new Paragraph({
+                        indent: { left: 360 },
+                        children: [new TextRun({ text: fu.question || '', bold: true, size: 22 })],
+                        spacing: { after: 40 },
+                      }));
+                      children.push(new Paragraph({
+                        indent: { left: 360 },
+                        children: [
+                          new TextRun({ text: 'Candidate Answer: ', bold: true, size: 22 }),
+                          new TextRun({ text: fu.answer || '—', size: 22 }),
+                        ],
+                        spacing: { after: 120 },
+                      }));
+                    });
+                  });
+                  const doc = new Document({ sections: [{ properties: {}, children }] });
+                  const blob = await Packer.toBlob(doc);
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${qaBaseName}.docx`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  setQaExportMenuOpen(false);
+                };
+
+                const renderAnswer = (item: any, key: string) => {
+                  const isSkipped = item.response_type === 'skipped';
+                  const answerText = item.answer || '';
+                  if (!answerText) return null;
+                  const isExpanded = expandedQuestions.has(key);
+                  const truncated = answerText.length > 200;
+                  return (
+                    <div className="mt-1.5">
+                      <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
+                        <span className="font-semibold text-gray-900">Candidate Answer: </span>
+                        {isExpanded || !truncated ? answerText : `${answerText.slice(0, 200)}...`}
+                      </div>
+                      {truncated && (
+                        <button
+                          onClick={() => toggleQuestion(key)}
+                          className="flex items-center gap-1 mt-1.5 text-xs text-gray-400 hover:text-gray-600"
+                        >
+                          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          {isExpanded ? 'Show less' : 'Show more'}
+                        </button>
+                      )}
+                    </div>
+                  );
+                };
 
                 return (
                   <div className="space-y-3">
-                    {qaItems.map((item: any, idx: number) => {
+                    {/* Export toolbar */}
+                    <div className="flex justify-end relative">
+                      <button
+                        onClick={() => setQaExportMenuOpen(v => !v)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-gray-900 text-white hover:bg-gray-800"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Export
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                      {qaExportMenuOpen && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setQaExportMenuOpen(false)} />
+                          <div className="absolute right-0 top-9 z-20 w-32 bg-white border border-gray-200 rounded-md shadow-lg py-1">
+                            <button onClick={exportQaPDF} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                              <FileText className="w-3.5 h-3.5 text-red-500" /> PDF
+                            </button>
+                            <button onClick={exportQaDOCX} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                              <FileText className="w-3.5 h-3.5 text-blue-600" /> DOCX
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {groups.map(({ main: item, followUps }, idx: number) => {
                       const isSkipped = item.response_type === 'skipped';
-                      const answerText = item.answer || '';
-                      const isExpanded = expandedQuestions.has(idx);
-                      const truncated = answerText.length > 200;
-                      const roundLabel = item.round_type
-                        ? item.round_type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+                      // If the first question has no round_type/topic (backend occasionally
+                      // leaves Q1 un-tagged because the round only activates on Q2), inherit
+                      // from the next available group. Final fallback: must_have_skills.
+                      let effectiveRtype = (item.round_type || '').toLowerCase();
+                      let effectiveTopic = item.topic;
+                      if (!effectiveRtype || effectiveRtype === 'general') {
+                        for (let k = idx + 1; k < groups.length; k++) {
+                          const nxt = groups[k].main;
+                          if (nxt.round_type) { effectiveRtype = String(nxt.round_type).toLowerCase(); break; }
+                        }
+                        if (!effectiveRtype) effectiveRtype = 'must_have_skills';
+                      }
+                      if (!effectiveTopic || effectiveTopic === 'general') {
+                        for (let k = idx + 1; k < groups.length; k++) {
+                          const nxt = groups[k].main;
+                          if (nxt.topic && nxt.topic !== 'general') { effectiveTopic = nxt.topic; break; }
+                        }
+                      }
+                      const rtype = effectiveRtype;
+                      const isHR = rtype === 'hr';
+                      const isMustHave = rtype === 'must_have_skills';
+                      const isNiceToHave = rtype === 'nice_to_have_skills';
+                      // Same color scheme for the full round — not position-dependent.
+                      // Must Have → amber; Nice To Have → blue; HR → purple.
+                      const roundBadge = isHR
+                        ? { label: 'HR', cls: 'bg-purple-50 text-purple-700 border-purple-200' }
+                        : isMustHave
+                        ? { label: 'Must Have Skills', cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+                        : isNiceToHave
+                        ? { label: 'Nice To Have Skills', cls: 'bg-blue-50 text-blue-700 border-blue-200' }
+                        : item.round_type
+                        ? { label: item.round_type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()), cls: 'bg-gray-50 text-gray-600 border-gray-200' }
                         : null;
 
                       return (
@@ -2171,11 +2622,13 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             </span>
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
-                                {roundLabel && (
-                                  <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">{roundLabel}</span>
+                                {roundBadge && (
+                                  <span className={`px-2 py-0.5 text-xs rounded-full font-medium border ${roundBadge.cls}`}>
+                                    {roundBadge.label}
+                                  </span>
                                 )}
-                                {item.topic && item.topic !== 'general' && (
-                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">{item.topic}</span>
+                                {effectiveTopic && effectiveTopic !== 'general' && (
+                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">{effectiveTopic}</span>
                                 )}
                                 {isSkipped && (
                                   <span className="px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full">
@@ -2184,22 +2637,33 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                 )}
                               </div>
                               <p className="text-sm font-medium text-gray-900 leading-snug">{item.question}</p>
+                              {renderAnswer(item, `q-${idx}`)}
                             </div>
                           </div>
-                          {answerText && (
-                            <div className="ml-9">
-                              <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-600'}`}>
-                                {isExpanded || !truncated ? answerText : `${answerText.slice(0, 200)}...`}
-                              </div>
-                              {truncated && (
-                                <button
-                                  onClick={() => toggleQuestion(idx)}
-                                  className="flex items-center gap-1 mt-1.5 text-xs text-gray-400 hover:text-gray-600"
-                                >
-                                  {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                  {isExpanded ? 'Show less' : 'Show more'}
-                                </button>
-                              )}
+
+                          {followUps.length > 0 && (
+                            <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-violet-200">
+                              {followUps.map((fu: any, fIdx: number) => {
+                                const fuSkipped = fu.response_type === 'skipped';
+                                return (
+                                  <div key={fIdx}>
+                                    <div className="flex items-start gap-2">
+                                      <span className="flex-shrink-0 text-[10px] font-semibold text-violet-700 bg-violet-100 rounded px-1.5 py-0.5 mt-0.5">
+                                        F{fIdx + 1}
+                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                        {fuSkipped && (
+                                          <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-500 text-xs rounded-full mb-1">
+                                            Skipped{fu.skip_source === 'user' ? ' by candidate' : ''}
+                                          </span>
+                                        )}
+                                        <p className="text-sm font-medium text-gray-800 leading-snug">{fu.question}</p>
+                                        {renderAnswer(fu, `q-${idx}-f-${fIdx}`)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -2217,10 +2681,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 <RecordingTabContent
                   interview={liveSession}
                   videoBlobUrl={videoBlobUrl}
+                  videoBlobSize={videoBlobSize}
                   videoLoading={videoLoading}
                   videoError={videoError}
                   setVideoError={setVideoError}
                   screenBlobUrl={screenBlobUrl}
+                  screenBlobSize={screenBlobSize}
                   screenLoading={screenLoading}
                   screenError={screenError}
                 />
@@ -2244,9 +2710,47 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   } catch { return ''; }
                 };
 
+                // Build Q/F numbering. A non-follow-up AI turn becomes the current
+                // main Q (label = its question_id, e.g. Q3) and resets the follow-up
+                // counter. A follow-up gets F{n} scoped to that parent. Each candidate
+                // turn inherits the label of the immediately preceding AI turn.
+                type Labeled = { msg: any; label: string; isFollowUp: boolean };
+                const labeled: Labeled[] = [];
+                let mainCount = 0;
+                let currentLabel = '';
+                let currentIsFu = false;
+                let fuCounter = 0;
+                for (const m of messages) {
+                  if (m.role === 'assistant') {
+                    if (m.is_follow_up) {
+                      fuCounter += 1;
+                      currentLabel = `F${fuCounter}`;
+                      currentIsFu = true;
+                    } else {
+                      mainCount += 1;
+                      currentLabel = m.question_id || `Q${mainCount}`;
+                      currentIsFu = false;
+                      fuCounter = 0;
+                    }
+                  }
+                  labeled.push({ msg: m, label: currentLabel, isFollowUp: currentIsFu });
+                }
+
+                const ToggleBtn = ({ value, label, icon }: { value: 'chat' | 'table'; label: string; icon: React.ReactNode }) => (
+                  <button
+                    onClick={() => setTranscriptView(value)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      transcriptView === value ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                );
+
                 return (
-                  <div className="max-w-3xl mx-auto">
-                    {/* Header */}
+                  <div className="max-w-4xl mx-auto">
+                    {/* Header with view toggle */}
                     <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
@@ -2263,73 +2767,381 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           <span className="text-xs text-gray-500">{candidateName}</span>
                         </div>
                       </div>
-                      <span className="text-xs text-gray-400">{messages.length} messages</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-gray-400">{messages.length} messages</span>
+                        <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                          <ToggleBtn value="chat" label="Chat" icon={<MessageSquare className="w-3.5 h-3.5" />} />
+                          <ToggleBtn value="table" label="Table" icon={<Layers className="w-3.5 h-3.5" />} />
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="space-y-4">
-                      {messages.map((msg: any, idx: number) => {
-                        const isAssistant = msg.role === 'assistant';
-                        const ts = formatTs(msg.timestamp);
-                        const content = msg.content as string;
-                        // AIU71: candidate-only metadata
-                        const rawContent: string | undefined = !isAssistant ? msg.raw_content : undefined;
-                        const questionId: string | undefined = !isAssistant ? msg.question_id : undefined;
-                        const language: string | undefined = !isAssistant ? msg.language : undefined;
-                        const hasCorrection = !isAssistant && rawContent && rawContent !== content;
+                    {transcriptView === 'chat' && (
+                      <div className="space-y-4 max-w-3xl mx-auto">
+                        {labeled.map(({ msg, label, isFollowUp }, idx) => {
+                          const isAssistant = msg.role === 'assistant';
+                          const ts = formatTs(msg.timestamp);
+                          const content = msg.content as string;
+                          const rawContent: string | undefined = !isAssistant ? msg.raw_content : undefined;
+                          const language: string | undefined = !isAssistant ? msg.language : undefined;
+                          const hasCorrection = !isAssistant && rawContent && rawContent !== content;
+                          const diff = hasCorrection ? diffWords(rawContent || '', content) : null;
 
-                        return (
-                          <div key={idx} className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'}`}>
-                            {/* Avatar */}
-                            <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ${
-                              isAssistant ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-600'
-                            }`}>
-                              {isAssistant ? <Bot className="w-3.5 h-3.5" /> : candidateName[0].toUpperCase()}
-                            </div>
-
-                            {/* Bubble + metadata */}
-                            <div className={`max-w-[75%] ${isAssistant ? '' : 'items-end flex flex-col'}`}>
-                              {/* AIU71: question-id + language badges for candidate turns */}
-                              {!isAssistant && (questionId || language) && (
-                                <div className="flex items-center gap-1.5 mb-1 flex-row-reverse">
-                                  {questionId && (
-                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 leading-none">
-                                      {questionId}
-                                    </span>
-                                  )}
-                                  {language && (
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 leading-none">
-                                      {language}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-
-                              <div className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                                isAssistant
-                                  ? 'bg-gray-100 text-gray-800 rounded-tl-sm'
-                                  : 'bg-blue-500 text-white rounded-tr-sm'
+                          return (
+                            <div
+                              key={idx}
+                              className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'} ${isFollowUp ? 'pl-6 border-l-2 border-violet-200 ml-3' : ''}`}
+                            >
+                              <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ${
+                                isAssistant ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-600'
                               }`}>
-                                {content}
+                                {isAssistant ? <Bot className="w-3.5 h-3.5" /> : candidateName[0].toUpperCase()}
                               </div>
 
-                              {/* AIU71: raw transcript shown when it differs from corrected */}
-                              {hasCorrection && (
-                                <div className="mt-1.5 max-w-full px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-right">
-                                  <p className="text-[10px] font-medium text-amber-600 mb-0.5">ASR (original)</p>
-                                  <p className="text-xs text-amber-800 leading-snug">{rawContent}</p>
-                                </div>
-                              )}
+                              <div className={`max-w-[75%] ${isAssistant ? '' : 'items-end flex flex-col'}`}>
+                                {(label || language) && (
+                                  <div className={`flex items-center gap-1.5 mb-1 ${isAssistant ? '' : 'flex-row-reverse'}`}>
+                                    {label && (
+                                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded leading-none ${
+                                        isFollowUp ? 'bg-violet-100 text-violet-700' : 'bg-indigo-100 text-indigo-700'
+                                      }`}>
+                                        {label}
+                                      </span>
+                                    )}
+                                    {language && !isAssistant && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 leading-none">
+                                        {language}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
 
-                              {ts && (
-                                <div className={`text-[10px] text-gray-400 mt-1 ${isAssistant ? 'pl-1' : 'pr-1 text-right'}`}>
-                                  {ts}
-                                </div>
-                              )}
+                                {isAssistant ? (
+                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-gray-100 text-gray-800 rounded-tl-sm">
+                                    {content}
+                                  </div>
+                                ) : hasCorrection && diff ? (
+                                  <>
+                                    {/* Original (raw ASR) — shown FIRST */}
+                                    <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-amber-50 border border-amber-200 text-amber-900">
+                                      <div className="text-[10px] font-semibold text-amber-600 mb-1 uppercase tracking-wide">Original (ASR)</div>
+                                      <DiffText parts={diff.raw} tone="raw" />
+                                    </div>
+                                    {/* Corrected — shown BELOW */}
+                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-blue-500 text-white">
+                                      <div className="text-[10px] font-semibold text-blue-100 mb-1 uppercase tracking-wide">Corrected</div>
+                                      <DiffText parts={diff.corrected} tone="corrected" />
+                                    </div>
+                                    {diff.mode === 'sentence' && (
+                                      <div className="text-[10px] text-amber-600 mt-1 pr-1 text-right italic">full-sentence rewrite</div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-blue-500 text-white rounded-tr-sm">
+                                    {content}
+                                  </div>
+                                )}
+
+                                {ts && (
+                                  <div className={`text-[10px] text-gray-400 mt-1 ${isAssistant ? 'pl-1' : 'pr-1 text-right'}`}>
+                                    {ts}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                          </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {transcriptView === 'table' && (() => {
+                      // Group messages into { mainQ + mainAnswer + [follow-ups] } blocks.
+                      // Each group becomes ONE table row. Follow-ups render as nested
+                      // Q/A sub-blocks inside the parent row's raw/corrected cells.
+                      //
+                      // NOTE: conversation_transcript assistant messages don't carry an
+                      // is_follow_up flag. And question_history's is_follow_up field is
+                      // unreliable. Use question_number instead: follow-ups share their
+                      // parent's question_number, so any qh entry whose question_number
+                      // equals the PREVIOUS entry's question_number is a follow-up.
+                      const followUpQuestionTexts = new Set<string>();
+                      const _qh = (eval_.question_history || []);
+                      for (let i = 0; i < _qh.length; i++) {
+                        const cur = _qh[i];
+                        const prv = i > 0 ? _qh[i - 1] : null;
+                        const isFu = !!cur.is_follow_up || (
+                          prv != null &&
+                          cur.question_number != null &&
+                          prv.question_number != null &&
+                          cur.question_number === prv.question_number
                         );
-                      })}
-                    </div>
+                        if (isFu && cur.question) {
+                          followUpQuestionTexts.add((cur.question as string).trim());
+                        }
+                      }
+                      const isFollowUpAssistant = (content: string): boolean => {
+                        if (!content) return false;
+                        const trimmed = content.trim();
+                        if (followUpQuestionTexts.has(trimmed)) return true;
+                        // Fuzzy: first 80 chars match (handles minor ASR/TTS wording drift)
+                        const head = trimmed.slice(0, 80);
+                        for (const fu of followUpQuestionTexts) {
+                          if (fu.slice(0, 80) === head) return true;
+                        }
+                        return false;
+                      };
+
+                      type FU = {
+                        label: string;
+                        question: string;
+                        raw: string;
+                        corrected: string;
+                        language: string;
+                        timestamp: string;
+                      };
+                      type Group = {
+                        mainLabel: string;
+                        mainQuestion: string;
+                        mainRaw: string;
+                        mainCorrected: string;
+                        language: string;
+                        timestamp: string;
+                        followUps: FU[];
+                      };
+                      const groups: Group[] = [];
+                      let current: Group | null = null;
+                      let pendingAI: { label: string; text: string; isFu: boolean } | null = null;
+
+                      for (const m of messages) {
+                        if (m.role === 'assistant') {
+                          const isFu = m.is_follow_up || isFollowUpAssistant(m.content);
+                          if (!isFu) {
+                            if (current) groups.push(current);
+                            const lbl = m.question_id || `Q${groups.length + 1}`;
+                            current = {
+                              mainLabel: lbl,
+                              mainQuestion: m.content || '',
+                              mainRaw: '',
+                              mainCorrected: '',
+                              language: '',
+                              timestamp: m.timestamp || '',
+                              followUps: [],
+                            };
+                            pendingAI = { label: lbl, text: m.content || '', isFu: false };
+                          } else {
+                            if (!current) {
+                              current = {
+                                mainLabel: m.question_id || 'Q?',
+                                mainQuestion: '',
+                                mainRaw: '',
+                                mainCorrected: '',
+                                language: '',
+                                timestamp: m.timestamp || '',
+                                followUps: [],
+                              };
+                            }
+                            const fLbl = `F${current.followUps.length + 1}`;
+                            pendingAI = { label: fLbl, text: m.content || '', isFu: true };
+                          }
+                        } else if (m.role === 'user' && current) {
+                          const raw = (m.raw_content || m.content || '') as string;
+                          const corrected = (m.content || '') as string;
+                          if (pendingAI && pendingAI.isFu) {
+                            current.followUps.push({
+                              label: pendingAI.label,
+                              question: pendingAI.text,
+                              raw,
+                              corrected,
+                              language: m.language || 'English',
+                              timestamp: m.timestamp || '',
+                            });
+                          } else {
+                            current.mainRaw = raw;
+                            current.mainCorrected = corrected;
+                            current.language = m.language || 'English';
+                            // Timestamp = when the candidate response was stored,
+                            // not when the AI question was asked. Always overwrite.
+                            current.timestamp = m.timestamp || current.timestamp;
+                          }
+                          pendingAI = null;
+                        }
+                      }
+                      if (current) groups.push(current);
+
+                      // ── Export helpers ────────────────────────────────────────
+                      const escapeCsv = (v: string) => {
+                        const s = (v ?? '').toString();
+                        return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+                      };
+                      // Flatten groups into sequential rows: one main row + one row per follow-up.
+                      // Follow-ups keep the parent's Question ID (e.g. Q1) and are tagged Type="Follow-up".
+                      type FlatRow = {
+                        sno: number;
+                        questionId: string;
+                        type: 'Main' | 'Followup';
+                        question: string;
+                        raw: string;
+                        corrected: string;
+                        language: string;
+                        timestamp: string;
+                      };
+                      const flatRows: FlatRow[] = [];
+                      let sno = 0;
+                      for (const g of groups) {
+                        sno += 1;
+                        flatRows.push({
+                          sno,
+                          questionId: g.mainLabel,
+                          type: 'Main',
+                          question: g.mainQuestion,
+                          raw: g.mainRaw,
+                          corrected: g.mainCorrected,
+                          language: g.language,
+                          timestamp: g.timestamp,
+                        });
+                        for (const fu of g.followUps) {
+                          sno += 1;
+                          flatRows.push({
+                            sno,
+                            questionId: g.mainLabel,
+                            type: 'Followup',
+                            question: fu.question,
+                            raw: fu.raw,
+                            corrected: fu.corrected,
+                            language: fu.language,
+                            timestamp: fu.timestamp,
+                          });
+                        }
+                      }
+                      const buildRows = () => flatRows.map(r => ({
+                        'S.No': String(r.sno),
+                        'Question ID': r.questionId,
+                        'Type': r.type,
+                        'Question': r.question,
+                        'Raw Transcript': r.raw,
+                        'Corrected Transcript': r.corrected,
+                        'Language': r.language,
+                        'Timestamp': formatTs(r.timestamp),
+                      }));
+                      const download = (blob: Blob, filename: string) => {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      };
+                      const baseName = `transcript_${interview.candidate_name || 'candidate'}_${liveSession.id.slice(0, 8)}`.replace(/\s+/g, '_');
+                      const exportCSV = () => {
+                        const rows = buildRows();
+                        if (rows.length === 0) return;
+                        const headers = Object.keys(rows[0]);
+                        const lines = [headers.join(',')];
+                        for (const r of rows) lines.push(headers.map(h => escapeCsv(r[h])).join(','));
+                        download(new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' }), `${baseName}.csv`);
+                        setExportMenuOpen(false);
+                      };
+                      const exportXLSX = () => {
+                        const rows = buildRows();
+                        if (rows.length === 0) return;
+                        const ws = XLSX.utils.json_to_sheet(rows);
+                        ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 10 }, { wch: 50 }, { wch: 50 }, { wch: 50 }, { wch: 10 }, { wch: 12 }];
+                        const wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, 'Transcript');
+                        XLSX.writeFile(wb, `${baseName}.xlsx`);
+                        setExportMenuOpen(false);
+                      };
+
+                      return (
+                        <div className="space-y-3">
+                          {/* Export toolbar */}
+                          <div className="flex justify-end relative">
+                            <button
+                              onClick={() => setExportMenuOpen(v => !v)}
+                              disabled={groups.length === 0}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-gray-900 text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Export
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                            {exportMenuOpen && (
+                              <>
+                                <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
+                                <div className="absolute right-0 top-9 z-20 w-32 bg-white border border-gray-200 rounded-md shadow-lg py-1">
+                                  <button onClick={exportCSV} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                                    <FileText className="w-3.5 h-3.5 text-gray-400" /> CSV
+                                  </button>
+                                  <button onClick={exportXLSX} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                                    <FileText className="w-3.5 h-3.5 text-green-600" /> XLSX
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          <div className="overflow-x-auto rounded-lg border border-gray-200">
+                            <table className="w-full text-sm">
+                              <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wide">
+                                <tr>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-12">S.No</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-20">Question ID</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-24">Type</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold">Question</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold">Raw Transcript</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold">Corrected Transcript</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-20">Language</th>
+                                  <th className="px-3 py-2.5 text-left font-semibold w-20">Timestamp</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {flatRows.map((r, idx) => {
+                                  const diff = r.raw && r.corrected ? diffWords(r.raw, r.corrected) : null;
+                                  const isFu = r.type === 'Followup';
+                                  return (
+                                    <tr key={idx} className={`align-top ${isFu ? 'bg-violet-50/40' : 'bg-white'}`}>
+                                      <td className="px-3 py-3 align-top text-xs text-gray-500">{r.sno}</td>
+                                      <td className="px-3 py-3 align-top">
+                                        <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                                          {r.questionId}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-3 align-top">
+                                        <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
+                                          isFu ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-600'
+                                        }`}>
+                                          {r.type}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-3 align-top text-[12px] text-gray-700 leading-snug italic">
+                                        {r.question || '—'}
+                                      </td>
+                                      <td className="px-3 py-3 align-top text-amber-900 leading-snug">
+                                        {diff && diff.mode !== 'none'
+                                          ? <DiffText parts={diff.raw} tone="raw" />
+                                          : <span className="text-gray-700">{r.raw || '—'}</span>}
+                                      </td>
+                                      <td className="px-3 py-3 align-top text-gray-800 leading-snug">
+                                        {diff && diff.mode !== 'none'
+                                          ? <DiffText parts={diff.corrected} tone="corrected" />
+                                          : <span>{r.corrected || '—'}</span>}
+                                      </td>
+                                      <td className="px-3 py-3 align-top text-xs text-gray-500">{r.language || 'English'}</td>
+                                      <td className="px-3 py-3 align-top text-xs text-gray-500 whitespace-nowrap">{formatTs(r.timestamp)}</td>
+                                    </tr>
+                                  );
+                                })}
+                                {flatRows.length === 0 && (
+                                  <tr><td colSpan={8} className="px-4 py-6 text-center text-xs text-gray-400">No candidate responses recorded.</td></tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()
