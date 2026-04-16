@@ -1499,7 +1499,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // Sync global timer from backend — accounts for resumed sessions with elapsed time.
         if (data.remaining_seconds != null && data.remaining_seconds >= 0) {
           console.log(`[WS ${timestamp}] Syncing global timer from backend: ${data.remaining_seconds}s remaining`);
-          setRemainingSeconds(data.remaining_seconds);
+          setRemainingSeconds(prev => {
+            if (isFlexibleMode || isNewFlexibleMode) {
+              return Math.min(prev, data.remaining_seconds);
+            }
+            return data.remaining_seconds;
+          });
         }
         if (data.timer_state) {
           console.log(`[WS ${timestamp}] Timer state:`, data.timer_state);
@@ -1525,9 +1530,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // fullscreen-change return handler will restore from the frozen ref
         // when the candidate re-enters.
         if (data.elapsed_seconds && data.elapsed_seconds > 0 && !isFullscreenExitedRef.current) {
-          const totalSeconds = isFlexibleMode ? 30 * 60 : interviewInfo.duration_minutes * 60;
+          const totalSeconds = (isFlexibleMode || isNewFlexibleMode) ? 30 * 60 : interviewInfo.duration_minutes * 60;
           const restored = Math.max(0, totalSeconds - data.elapsed_seconds);
-          setRemainingSeconds(restored);
+          setRemainingSeconds(prev => {
+            if (isFlexibleMode || isNewFlexibleMode) {
+              return Math.min(prev, restored);
+            }
+            return restored;
+          });
         }
         // Auto-advance the displayed question number based on elapsed / slot.
         // Mirrors the backend auto-skip logic in send_resume_continuation:
@@ -1539,7 +1549,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // when Linda speaks Q(expected_prior_q + 1), but we show the
         // advanced number immediately so the "continuing from question N"
         // status line is correct.
-        if (!isFlexibleMode && data.elapsed_seconds && data.elapsed_seconds > 0) {
+        if (!(isFlexibleMode || isNewFlexibleMode) && data.elapsed_seconds && data.elapsed_seconds > 0) {
           const slotSec = 120; // QUESTION_DURATION_SECONDS on backend
           const maxQ = totalQuestions ?? interviewInfo.total_questions ?? 15;
           const expectedPriorQ = Math.min(maxQ, Math.floor(data.elapsed_seconds / slotSec));

@@ -16,6 +16,7 @@ import {
   ResponsiveContainer, LineChart, Line, Legend,
 } from 'recharts';
 import EvaluationTab from './tabs/EvaluationTab';
+import EvaluationDashboardTab from './tabs/EvaluationDashboardTab';
 import SkillCoverageTab from './tabs/SkillCoverageTab';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -28,7 +29,7 @@ interface CandidateResultsViewProps {
   onBack: () => void;
 }
 
-type TabKey = 'overview' | 'evaluation' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'clusters' | 'violations' | 'skill_coverage';
+type TabKey = 'overview' | 'evaluation' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'clusters' | 'violations' | 'skill_coverage';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -51,6 +52,16 @@ const SEV_WEIGHT: Record<'minor' | 'moderate' | 'severe', number> = { minor: 1, 
 
 interface RiskThresholds { low: number; medium: number }
 const DEFAULT_THRESHOLDS: RiskThresholds = { low: 3, medium: 8 };
+// Per-violation-box count thresholds: 0–low → Low Risk, low+1–medium → Medium Risk, medium+ → High Risk
+interface ViolationCountThresholds { lowMax: number; medMax: number }
+const DEFAULT_VIOLATION_THRESHOLDS: ViolationCountThresholds = { lowMax: 2, medMax: 5 };
+
+function violationBoxRisk(count: number, t: ViolationCountThresholds): { label: string; cls: string } {
+  if (count === 0) return { label: '', cls: '' };
+  if (count <= t.lowMax) return { label: 'Low Risk', cls: 'text-blue-600 bg-blue-50' };
+  if (count <= t.medMax) return { label: 'Medium Risk', cls: 'text-orange-600 bg-orange-50' };
+  return { label: 'High Risk', cls: 'text-red-600 bg-red-50' };
+}
 
 function getRiskLevelWeighted(
   score: number,
@@ -454,6 +465,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
   const [violationPage, setViolationPage] = useState(1);
   const [riskThresholds, setRiskThresholds] = useState<RiskThresholds>(DEFAULT_THRESHOLDS);
+  const [violationThresholds, setViolationThresholds] = useState<ViolationCountThresholds>(DEFAULT_VIOLATION_THRESHOLDS);
   const [showThresholdEditor, setShowThresholdEditor] = useState(false);
 
   // Load saved thresholds from proctoring settings on mount
@@ -935,7 +947,10 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; badge?: number; live?: boolean }[] = [
     { key: 'overview',       label: 'Overview',        icon: <BarChart3 className="w-4 h-4" /> },
     ...((isCompleted || isPartial)
-      ? [{ key: 'evaluation' as TabKey, label: 'Evaluation', icon: <Award className="w-4 h-4" /> }]
+      ? [
+          { key: 'evaluation' as TabKey, label: 'Evaluation', icon: <Award className="w-4 h-4" /> },
+          { key: 'eval_dashboard' as TabKey, label: 'Evaluation Dashboard', icon: <Target className="w-4 h-4" /> },
+        ]
       : []),
     { key: 'skill_coverage', label: 'Skill Coverage',  icon: <Activity className="w-4 h-4" />, live: isInProgress },
     { key: 'clusters',       label: 'Cluster Insights', icon: <Layers className="w-4 h-4" />, live: isInProgress },
@@ -2393,12 +2408,10 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 const groups: QaGroup[] = [];
                 for (const it of qaItemsRaw) {
                   const prev = groups.length > 0 ? groups[groups.length - 1] : null;
-                  const isFu = !!it.is_follow_up || (
-                    prev != null &&
-                    it.question_number != null &&
-                    prev.main.question_number != null &&
-                    it.question_number === prev.main.question_number
-                  );
+                  const _intent = (it.question_intent || '').toLowerCase();
+                  const isFu = !!it.is_follow_up
+                    || ['follow_up', 'probe', 'deep_dive'].includes(_intent)
+                    || (prev != null && it.question_number != null && prev.main.question_number != null && String(it.question_number) === String(prev.main.question_number));
                   if (isFu && prev) {
                     prev.followUps.push(it);
                   } else {
@@ -2641,15 +2654,29 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             </div>
                           </div>
 
-                          {followUps.length > 0 && (
+                          {followUps.length > 0 && (() => {
+                            let _qaFuC = 0, _qaDdC = 0;
+                            return (
                             <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-violet-200">
                               {followUps.map((fu: any, fIdx: number) => {
                                 const fuSkipped = fu.response_type === 'skipped';
+                                const isDd = fu.question_intent === 'deep_dive';
+                                let badge: string;
+                                let badgeCls: string;
+                                if (isDd) {
+                                  _qaDdC += 1;
+                                  badge = `D${_qaDdC}`;
+                                  badgeCls = 'text-teal-700 bg-teal-100';
+                                } else {
+                                  _qaFuC += 1;
+                                  badge = `F${_qaFuC}`;
+                                  badgeCls = 'text-violet-700 bg-violet-100';
+                                }
                                 return (
                                   <div key={fIdx}>
                                     <div className="flex items-start gap-2">
-                                      <span className="flex-shrink-0 text-[10px] font-semibold text-violet-700 bg-violet-100 rounded px-1.5 py-0.5 mt-0.5">
-                                        F{fIdx + 1}
+                                      <span className={`flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 ${badgeCls}`}>
+                                        {badge}
                                       </span>
                                       <div className="flex-1 min-w-0">
                                         {fuSkipped && (
@@ -2665,7 +2692,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                 );
                               })}
                             </div>
-                          )}
+                            );
+                          })()}
                         </div>
                       );
                     })}
@@ -2710,30 +2738,76 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   } catch { return ''; }
                 };
 
-                // Build Q/F numbering. A non-follow-up AI turn becomes the current
-                // main Q (label = its question_id, e.g. Q3) and resets the follow-up
-                // counter. A follow-up gets F{n} scoped to that parent. Each candidate
-                // turn inherits the label of the immediately preceding AI turn.
-                type Labeled = { msg: any; label: string; isFollowUp: boolean };
+                // Build Q/F/D numbering using question_history intent data.
+                // Strategy: build an intent lookup from ALL question_history entries
+                // (keyed by question text prefix), then classify each assistant message.
+                type QType = 'followup' | 'deepdive' | 'main';
+                const _chatQh = (eval_.question_history || []) as any[];
+
+                // Map: first-60-chars of question → intent ('follow_up'|'probe'|'deep_dive'|'explore')
+                const _intentMap = new Map<string, string>();
+                for (const qh of _chatQh) {
+                  if (qh.question) {
+                    const key = (qh.question as string).trim().slice(0, 60);
+                    const intent = (qh.question_intent || '').toLowerCase();
+                    if (intent) _intentMap.set(key, intent);
+                    // Also detect via is_follow_up flag or shared question_number
+                    if (!intent && (qh.is_follow_up)) {
+                      _intentMap.set(key, 'follow_up');
+                    }
+                  }
+                }
+                // Also detect by shared question_number (timed mode)
+                for (let _i = 1; _i < _chatQh.length; _i++) {
+                  const cur = _chatQh[_i];
+                  const prv = _chatQh[_i - 1];
+                  if (cur.question && cur.question_number != null && prv.question_number != null
+                      && String(cur.question_number) === String(prv.question_number)) {
+                    const key = (cur.question as string).trim().slice(0, 60);
+                    if (!_intentMap.has(key)) _intentMap.set(key, 'follow_up');
+                  }
+                }
+
+                const _lookupIntent = (content: string): string => {
+                  if (!content) return '';
+                  const key = content.trim().slice(0, 60);
+                  if (_intentMap.has(key)) return _intentMap.get(key)!;
+                  // Fuzzy: check if any key starts the same way
+                  for (const [k, v] of _intentMap) {
+                    if (key.startsWith(k.slice(0, 40)) || k.startsWith(key.slice(0, 40))) return v;
+                  }
+                  return '';
+                };
+
+                type Labeled = { msg: any; label: string; isFollowUp: boolean; qtype: QType };
                 const labeled: Labeled[] = [];
                 let mainCount = 0;
                 let currentLabel = '';
-                let currentIsFu = false;
+                let currentQtype: QType = 'main';
                 let fuCounter = 0;
+                let ddCounter = 0;
                 for (const m of messages) {
                   if (m.role === 'assistant') {
-                    if (m.is_follow_up) {
+                    const intent = _lookupIntent(m.content);
+                    const isDd = intent === 'deep_dive';
+                    const isFu = !isDd && (intent === 'follow_up' || intent === 'probe' || !!m.is_follow_up);
+                    if (isDd) {
+                      ddCounter += 1;
+                      currentLabel = `D${ddCounter}`;
+                      currentQtype = 'deepdive';
+                    } else if (isFu) {
                       fuCounter += 1;
                       currentLabel = `F${fuCounter}`;
-                      currentIsFu = true;
+                      currentQtype = 'followup';
                     } else {
                       mainCount += 1;
                       currentLabel = m.question_id || `Q${mainCount}`;
-                      currentIsFu = false;
+                      currentQtype = 'main';
                       fuCounter = 0;
+                      ddCounter = 0;
                     }
                   }
-                  labeled.push({ msg: m, label: currentLabel, isFollowUp: currentIsFu });
+                  labeled.push({ msg: m, label: currentLabel, isFollowUp: currentQtype !== 'main', qtype: currentQtype });
                 }
 
                 const ToggleBtn = ({ value, label, icon }: { value: 'chat' | 'table'; label: string; icon: React.ReactNode }) => (
@@ -2749,7 +2823,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 );
 
                 return (
-                  <div className="max-w-4xl mx-auto">
+                  <div className="w-full">
                     {/* Header with view toggle */}
                     <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                       <div className="flex items-center gap-3">
@@ -2777,8 +2851,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     </div>
 
                     {transcriptView === 'chat' && (
-                      <div className="space-y-4 max-w-3xl mx-auto">
-                        {labeled.map(({ msg, label, isFollowUp }, idx) => {
+                      <div className="space-y-4 w-full">
+                        {labeled.map(({ msg, label, isFollowUp, qtype }, idx) => {
                           const isAssistant = msg.role === 'assistant';
                           const ts = formatTs(msg.timestamp);
                           const content = msg.content as string;
@@ -2790,7 +2864,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           return (
                             <div
                               key={idx}
-                              className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'} ${isFollowUp ? 'pl-6 border-l-2 border-violet-200 ml-3' : ''}`}
+                              className={`flex gap-2.5 ${isAssistant ? '' : 'flex-row-reverse'} ${isFollowUp ? `pl-6 border-l-2 ml-3 ${qtype === 'deepdive' ? 'border-teal-200' : 'border-violet-200'}` : ''}`}
                             >
                               <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5 ${
                                 isAssistant ? 'bg-blue-100 text-blue-600' : 'bg-gray-200 text-gray-600'
@@ -2803,7 +2877,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                   <div className={`flex items-center gap-1.5 mb-1 ${isAssistant ? '' : 'flex-row-reverse'}`}>
                                     {label && (
                                       <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded leading-none ${
-                                        isFollowUp ? 'bg-violet-100 text-violet-700' : 'bg-indigo-100 text-indigo-700'
+                                        qtype === 'deepdive' ? 'bg-teal-100 text-teal-700' : isFollowUp ? 'bg-violet-100 text-violet-700' : 'bg-indigo-100 text-indigo-700'
                                       }`}>
                                         {label}
                                       </span>
@@ -2859,38 +2933,37 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       // Each group becomes ONE table row. Follow-ups render as nested
                       // Q/A sub-blocks inside the parent row's raw/corrected cells.
                       //
-                      // NOTE: conversation_transcript assistant messages don't carry an
-                      // is_follow_up flag. And question_history's is_follow_up field is
-                      // unreliable. Use question_number instead: follow-ups share their
-                      // parent's question_number, so any qh entry whose question_number
-                      // equals the PREVIOUS entry's question_number is a follow-up.
-                      const followUpQuestionTexts = new Set<string>();
-                      const _qh = (eval_.question_history || []);
-                      for (let i = 0; i < _qh.length; i++) {
-                        const cur = _qh[i];
-                        const prv = i > 0 ? _qh[i - 1] : null;
-                        const isFu = !!cur.is_follow_up || (
-                          prv != null &&
-                          cur.question_number != null &&
-                          prv.question_number != null &&
-                          cur.question_number === prv.question_number
-                        );
-                        if (isFu && cur.question) {
-                          followUpQuestionTexts.add((cur.question as string).trim());
+                      // Build intent lookup from question_history (same approach as chat view).
+                      const _tblIntentMap = new Map<string, string>();
+                      const _tblQh = (eval_.question_history || []) as any[];
+                      for (const qh of _tblQh) {
+                        if (qh.question) {
+                          const key = (qh.question as string).trim().slice(0, 60);
+                          const intent = (qh.question_intent || '').toLowerCase();
+                          if (intent) _tblIntentMap.set(key, intent);
+                          if (!intent && qh.is_follow_up) _tblIntentMap.set(key, 'follow_up');
                         }
                       }
-                      const isFollowUpAssistant = (content: string): boolean => {
-                        if (!content) return false;
-                        const trimmed = content.trim();
-                        if (followUpQuestionTexts.has(trimmed)) return true;
-                        // Fuzzy: first 80 chars match (handles minor ASR/TTS wording drift)
-                        const head = trimmed.slice(0, 80);
-                        for (const fu of followUpQuestionTexts) {
-                          if (fu.slice(0, 80) === head) return true;
+                      for (let i = 1; i < _tblQh.length; i++) {
+                        const cur = _tblQh[i];
+                        const prv = _tblQh[i - 1];
+                        if (cur.question && cur.question_number != null && prv.question_number != null
+                            && String(cur.question_number) === String(prv.question_number)) {
+                          const key = (cur.question as string).trim().slice(0, 60);
+                          if (!_tblIntentMap.has(key)) _tblIntentMap.set(key, 'follow_up');
                         }
-                        return false;
+                      }
+                      const _tblLookup = (content: string): string => {
+                        if (!content) return '';
+                        const key = content.trim().slice(0, 60);
+                        if (_tblIntentMap.has(key)) return _tblIntentMap.get(key)!;
+                        for (const [k, v] of _tblIntentMap) {
+                          if (key.startsWith(k.slice(0, 40)) || k.startsWith(key.slice(0, 40))) return v;
+                        }
+                        return '';
                       };
 
+                      type SubType = 'followup' | 'deepdive';
                       type FU = {
                         label: string;
                         question: string;
@@ -2898,6 +2971,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         corrected: string;
                         language: string;
                         timestamp: string;
+                        subType: SubType;
                       };
                       type Group = {
                         mainLabel: string;
@@ -2910,12 +2984,28 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       };
                       const groups: Group[] = [];
                       let current: Group | null = null;
-                      let pendingAI: { label: string; text: string; isFu: boolean } | null = null;
+                      let pendingAI: { label: string; text: string; isSub: boolean; subType: SubType } | null = null;
+                      let _tblFuCtr = 0;
+                      let _tblDdCtr = 0;
 
                       for (const m of messages) {
                         if (m.role === 'assistant') {
-                          const isFu = m.is_follow_up || isFollowUpAssistant(m.content);
-                          if (!isFu) {
+                          const _tblMsgIntent = _tblLookup(m.content);
+                          const isDd = _tblMsgIntent === 'deep_dive';
+                          const isFu = !isDd && (_tblMsgIntent === 'follow_up' || _tblMsgIntent === 'probe' || !!m.is_follow_up);
+                          if (isDd) {
+                            _tblDdCtr += 1;
+                            if (!current) {
+                              current = { mainLabel: 'Q?', mainQuestion: '', mainRaw: '', mainCorrected: '', language: '', timestamp: m.timestamp || '', followUps: [] };
+                            }
+                            pendingAI = { label: `D${_tblDdCtr}`, text: m.content || '', isSub: true, subType: 'deepdive' };
+                          } else if (isFu) {
+                            _tblFuCtr += 1;
+                            if (!current) {
+                              current = { mainLabel: 'Q?', mainQuestion: '', mainRaw: '', mainCorrected: '', language: '', timestamp: m.timestamp || '', followUps: [] };
+                            }
+                            pendingAI = { label: `F${_tblFuCtr}`, text: m.content || '', isSub: true, subType: 'followup' };
+                          } else {
                             if (current) groups.push(current);
                             const lbl = m.question_id || `Q${groups.length + 1}`;
                             current = {
@@ -2927,26 +3017,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               timestamp: m.timestamp || '',
                               followUps: [],
                             };
-                            pendingAI = { label: lbl, text: m.content || '', isFu: false };
-                          } else {
-                            if (!current) {
-                              current = {
-                                mainLabel: m.question_id || 'Q?',
-                                mainQuestion: '',
-                                mainRaw: '',
-                                mainCorrected: '',
-                                language: '',
-                                timestamp: m.timestamp || '',
-                                followUps: [],
-                              };
-                            }
-                            const fLbl = `F${current.followUps.length + 1}`;
-                            pendingAI = { label: fLbl, text: m.content || '', isFu: true };
+                            pendingAI = { label: lbl, text: m.content || '', isSub: false, subType: 'followup' };
+                            _tblFuCtr = 0;
+                            _tblDdCtr = 0;
                           }
                         } else if (m.role === 'user' && current) {
                           const raw = (m.raw_content || m.content || '') as string;
                           const corrected = (m.content || '') as string;
-                          if (pendingAI && pendingAI.isFu) {
+                          if (pendingAI && pendingAI.isSub) {
                             current.followUps.push({
                               label: pendingAI.label,
                               question: pendingAI.text,
@@ -2954,6 +3032,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               corrected,
                               language: m.language || 'English',
                               timestamp: m.timestamp || '',
+                              subType: pendingAI.subType,
                             });
                           } else {
                             current.mainRaw = raw;
@@ -2975,10 +3054,11 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       };
                       // Flatten groups into sequential rows: one main row + one row per follow-up.
                       // Follow-ups keep the parent's Question ID (e.g. Q1) and are tagged Type="Follow-up".
+                      type RowType = 'Main' | 'Followup' | 'Deep Dive';
                       type FlatRow = {
                         sno: number;
                         questionId: string;
-                        type: 'Main' | 'Followup';
+                        type: RowType;
                         question: string;
                         raw: string;
                         corrected: string;
@@ -3004,7 +3084,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                           flatRows.push({
                             sno,
                             questionId: g.mainLabel,
-                            type: 'Followup',
+                            type: fu.subType === 'deepdive' ? 'Deep Dive' : 'Followup',
                             question: fu.question,
                             raw: fu.raw,
                             corrected: fu.corrected,
@@ -3100,8 +3180,10 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                 {flatRows.map((r, idx) => {
                                   const diff = r.raw && r.corrected ? diffWords(r.raw, r.corrected) : null;
                                   const isFu = r.type === 'Followup';
+                                  const isDd = r.type === 'Deep Dive';
+                                  const isSub = isFu || isDd;
                                   return (
-                                    <tr key={idx} className={`align-top ${isFu ? 'bg-violet-50/40' : 'bg-white'}`}>
+                                    <tr key={idx} className={`align-top ${isDd ? 'bg-teal-50/40' : isFu ? 'bg-violet-50/40' : 'bg-white'}`}>
                                       <td className="px-3 py-3 align-top text-xs text-gray-500">{r.sno}</td>
                                       <td className="px-3 py-3 align-top">
                                         <span className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
@@ -3110,7 +3192,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                                       </td>
                                       <td className="px-3 py-3 align-top">
                                         <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded ${
-                                          isFu ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-600'
+                                          isDd ? 'bg-teal-100 text-teal-700' : isFu ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-600'
                                         }`}>
                                           {r.type}
                                         </span>
@@ -3149,6 +3231,15 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             {/* Evaluation Tab */}
             {!evaluationPending && activeTab === 'evaluation' && (
               <EvaluationTab
+                sessionId={liveSession.id}
+                aiEvaluation={eval_}
+                isCompleted={liveSession.status === 'completed'}
+              />
+            )}
+
+            {/* Evaluation Dashboard Tab */}
+            {!evaluationPending && activeTab === 'eval_dashboard' && (
+              <EvaluationDashboardTab
                 sessionId={liveSession.id}
                 aiEvaluation={eval_}
                 isCompleted={liveSession.status === 'completed'}
@@ -3354,7 +3445,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             {!evaluationPending && activeTab === 'violations' && (
               <div className="space-y-6">
 
-                {/* Risk Summary Banner */}
+                {/* Total Violations Banner */}
                 <div className={`rounded-lg border ${risk.bg} ${risk.border} overflow-hidden`}>
                   <div className="flex items-center justify-between px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -3366,12 +3457,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         <p className="text-xs text-gray-500 mt-0.5">
                           {totalViolations === 0
                             ? 'No violations detected during this interview.'
-                            : `Risk score: ${severityStats.score} pts — Low×${severityStats.minor} (×1) · Medium×${severityStats.moderate} (×2) · High×${severityStats.severe} (×3)`}
+                            : `${totalViolations} total violation${totalViolations !== 1 ? 's' : ''} detected`}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`text-2xl font-bold ${risk.color}`}>{severityStats.score}</span>
+                      <span className={`text-2xl font-bold ${risk.color}`}>{totalViolations}</span>
                       <button
                         onClick={() => setShowThresholdEditor(p => !p)}
                         title="Configure risk thresholds"
@@ -3385,69 +3476,48 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     </div>
                   </div>
 
-                  {/* Severity Breakdown Pills */}
-                  {totalViolations > 0 && (
-                    <div className="px-4 pb-3 flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-gray-500">Breakdown:</span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                        severityStats.minor > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'
-                      }`}>
-                        Low: {severityStats.minor}
-                      </span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                        severityStats.moderate > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-400'
-                      }`}>
-                        Medium: {severityStats.moderate}
-                      </span>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                        severityStats.severe > 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-400'
-                      }`}>
-                        High: {severityStats.severe}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Threshold Editor */}
+                  {/* Threshold Editor — configures per-box risk levels */}
                   {showThresholdEditor && (
                     <div className="px-4 pb-3 border-t border-gray-200 pt-3 bg-white bg-opacity-60">
-                      <p className="text-xs font-medium text-gray-600 mb-2">Configure Risk Thresholds (score points)</p>
+                      <p className="text-xs font-medium text-gray-600 mb-2">Configure Per-Violation Risk Thresholds</p>
                       <div className="flex items-center gap-4 flex-wrap">
                         <label className="flex items-center gap-2 text-xs text-gray-600">
-                          <span className="w-24">Low Risk ≤</span>
+                          <span className="text-blue-600 font-medium">Low Risk</span>
+                          <span>0 –</span>
                           <input
-                            type="number" min={1} max={riskThresholds.medium - 1}
-                            value={riskThresholds.low}
-                            onChange={e => setRiskThresholds(t => ({ ...t, low: Math.max(1, Math.min(t.medium - 1, Number(e.target.value))) }))}
+                            type="number" min={1} max={violationThresholds.medMax - 1}
+                            value={violationThresholds.lowMax}
+                            onChange={e => setViolationThresholds(t => ({ ...t, lowMax: Math.max(1, Math.min(t.medMax - 1, Number(e.target.value))) }))}
                             className="w-14 px-2 py-1 rounded border border-gray-300 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
                           />
-                          <span className="text-gray-400">pts</span>
+                          <span className="text-gray-400">violations</span>
                         </label>
                         <label className="flex items-center gap-2 text-xs text-gray-600">
-                          <span className="w-24">Medium Risk ≤</span>
+                          <span className="text-orange-600 font-medium">Medium Risk</span>
+                          <span>{violationThresholds.lowMax + 1} –</span>
                           <input
-                            type="number" min={riskThresholds.low + 1}
-                            value={riskThresholds.medium}
-                            onChange={e => setRiskThresholds(t => ({ ...t, medium: Math.max(t.low + 1, Number(e.target.value)) }))}
+                            type="number" min={violationThresholds.lowMax + 1}
+                            value={violationThresholds.medMax}
+                            onChange={e => setViolationThresholds(t => ({ ...t, medMax: Math.max(t.lowMax + 1, Number(e.target.value)) }))}
                             className="w-14 px-2 py-1 rounded border border-gray-300 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400"
                           />
-                          <span className="text-gray-400">pts</span>
+                          <span className="text-gray-400">violations</span>
                         </label>
-                        <span className="text-xs text-gray-400">High Risk = above Medium threshold</span>
+                        <span className="text-xs text-red-600 font-medium">{violationThresholds.medMax + 1}+ = High Risk</span>
                         <button
-                          onClick={() => { setRiskThresholds(DEFAULT_THRESHOLDS); }}
+                          onClick={() => { setViolationThresholds(DEFAULT_VIOLATION_THRESHOLDS); }}
                           className="text-xs text-blue-500 hover:underline"
                         >
                           Reset defaults
                         </button>
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-1.5">Low = 1 pt · Medium = 2 pts · High = 3 pts</p>
                     </div>
                   )}
                 </div>
 
-                {/* Violation Type Grid — only types with at least one occurrence */}
+                {/* All Violation Type Boxes — always shown, default count 0 */}
                 {(() => {
-                  const activeTypes = [
+                  const ALL_TYPES = [
                     'face_missing', 'multiple_faces', 'gaze_away',
                     'tab_switch', 'window_blur', 'fullscreen_exit',
                     'camera_disabled', 'camera_obstructed', 'microphone_disabled',
@@ -3456,18 +3526,16 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     'face_mismatch', 'face_identity_changed',
                     'voice_mismatch', 'voice_identity_changed',
                     'screenshot_attempt', 'screen_recording_attempt', 'screen_share_stopped',
-                  ].filter(type => (violationCounts[type] ?? 0) > 0);
+                  ];
                   return (
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 mb-3">Violation Breakdown</h3>
-                  {activeTypes.length === 0 ? (
-                    <p className="text-sm text-gray-400">No violations recorded.</p>
-                  ) : (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {activeTypes.map(type => {
+                    {ALL_TYPES.map(type => {
                       const cfg = EVENT_CONFIG[type];
                       const count = violationCounts[type] ?? 0;
                       if (!cfg) return null;
+                      const boxRisk = violationBoxRisk(count, violationThresholds);
                       return (
                         <div
                           key={type}
@@ -3480,17 +3548,23 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                             <p className={`text-xs font-medium truncate ${count > 0 ? cfg.color : 'text-gray-400'}`}>
                               {cfg.label}
                             </p>
-                            <p className={`text-xs font-bold ${
-                              count >= 5 ? 'text-red-600' : count >= 3 ? 'text-orange-500' : count > 0 ? 'text-gray-700' : 'text-gray-300'
-                            }`}>
-                              {count}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-lg font-bold ${
+                                count > 0 ? 'text-gray-900' : 'text-gray-300'
+                              }`}>
+                                {count}
+                              </span>
+                              {count > 0 && boxRisk.label && (
+                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${boxRisk.cls}`}>
+                                  {boxRisk.label}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                  )}
                 </div>
                   );
                 })()}

@@ -2,6 +2,8 @@
 
 import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
@@ -4007,7 +4009,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 rounded-md bg-white markdown-content">
                         {generatedJD ? (
                           <>
-                            <ReactMarkdown>{generatedJD}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{generatedJD}</ReactMarkdown>
                             <div className="flex items-center gap-2 mt-4 text-blue-600 border-t pt-4">
                               <Loader2 className="w-4 h-4 animate-spin" />
                               <span className="text-sm font-medium">Generating...</span>
@@ -4077,7 +4079,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         />
                       ) : (
                         <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 rounded-md bg-white markdown-content">
-                          <ReactMarkdown>{generatedJD
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{generatedJD
                             .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
                               match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
                             )
@@ -4101,7 +4103,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 ) : (
                   manualJD ? (
                     <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 rounded-md bg-white markdown-content">
-                      <ReactMarkdown>{(() => {
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{(() => {
                         const connectors = new Set(['&', 'and', 'or', 'of', 'to', 'for', 'the', 'a', 'an', 'in', 'on', 'with', 'at', 'by', 'its', 'their']);
                         const actionVerbRe = /^(Design|Develop|Write|Build|Create|Implement|Maintain|Manage|Lead|Work|Collaborate|Participate|Fix|Optimize|Test|Review|Ensure|Prepare|Provide|Support|Assist|Handle|Conduct|Perform|Execute|Analyze|Monitor|Collect|Recommend|Identify|Report|Coordinate|Communicate|Drive|Define|Evaluate|Assess|Deliver|Plan|Track|Update|Resolve|Document|Oversee|Establish|Improve|Facilitate|Negotiate|Allocate|Forecast|Validate|Maintain|Respond|Develop)/i;
 
@@ -6156,7 +6158,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* JD Content */}
                   <div className="markdown-content text-gray-700 leading-relaxed">
                     {console.log('[DEBUG] Review stage showing JD, mode:', mode, 'length:', (mode === 'ai' ? generatedJD : manualJD)?.length)}
-                    <ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                       {(mode === 'ai' ? generatedJD : manualJD)
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
                           match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match

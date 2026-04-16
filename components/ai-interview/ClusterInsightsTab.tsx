@@ -71,11 +71,13 @@ function questionCoverage(score: number | null): CoverageLevel {
   return 'low';
 }
 
-// Skill band (from backend: Strong/Proficient/Developing/Weak/...) → coverage label
+// Skill band (from backend) → internal coverage level for styling.
+// Supports both new labels (High/Medium/Low/Not Covered) and legacy (Strong/Proficient/Developing/Weak).
 function skillBandToCoverage(band: string, score: number | null): CoverageLevel {
   if (score == null || score <= 0 || band === 'Not Covered' || band === 'Not Evaluated') return 'not_covered';
-  if (band === 'Strong' || band === 'Proficient') return 'high';
-  if (band === 'Developing') return 'medium';
+  const b = band.toLowerCase();
+  if (b === 'high' || b === 'strong' || b === 'proficient') return 'high';
+  if (b === 'medium' || b === 'developing') return 'medium';
   return 'low';
 }
 
@@ -237,7 +239,7 @@ export default function ClusterInsightsTab({
     );
   }
 
-  const SECTION_ORDER = ['mth', 'nth', 'hr'];
+  const SECTION_ORDER = ['mth', 'nth'];
   const grouped: Record<string, ClusterEntry[]> = {};
   for (const entry of clusterInsights) {
     const cat = entry.category || 'mth';
@@ -326,8 +328,12 @@ export default function ClusterInsightsTab({
                       >
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-gray-900">{cluster.cluster_name}</span>
-                          <span className="px-1.5 py-0.5 text-[10px] bg-gray-100 text-gray-500 rounded border border-gray-200">
-                            P{cluster.priority}
+                          <span className={`px-1.5 py-0.5 text-[10px] rounded border ${
+                            (cluster.priority_label === 'High' || cluster.priority >= 3) ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                            (cluster.priority_label === 'Medium' || cluster.priority === 2) ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                            'bg-orange-50 text-orange-700 border-orange-200'
+                          }`}>
+                            {cluster.priority_label || (cluster.priority >= 3 ? 'High' : cluster.priority === 2 ? 'Medium' : 'Low')} Priority
                           </span>
                           <span className="text-[11px] text-gray-400">
                             {cluster.evaluated}/{cluster.total} skills

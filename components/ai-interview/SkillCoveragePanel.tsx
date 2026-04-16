@@ -31,14 +31,21 @@ interface SkillCoveragePanelProps {
   isFollowUp?: boolean;
 }
 
-// Skipped and IDK both count as Low Coverage — no follow-up asked for either
+// Unified display labels: High, Medium, Low, Not Covered
+// Supports both new standardized labels and legacy internal levels for backward compat.
 const LEVEL_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  covered:         { label: 'High',      color: 'text-green-400',  bg: 'bg-green-950' },
-  medium:          { label: 'Medium',    color: 'text-yellow-400', bg: 'bg-yellow-950' },
-  low:             { label: 'Low',       color: 'text-orange-400', bg: 'bg-orange-950' },
-  skipped:         { label: 'Low',       color: 'text-orange-400', bg: 'bg-orange-950' },
-  not_covered_idk: { label: 'Low',       color: 'text-orange-400', bg: 'bg-orange-950' },
-  not_started:     { label: 'Not Asked', color: 'text-gray-500',   bg: 'bg-gray-850'  },
+  // New standardized labels (backend sends these for new interviews)
+  'High':          { label: 'High',        color: 'text-green-400',  bg: 'bg-green-950' },
+  'Medium':        { label: 'Medium',      color: 'text-yellow-400', bg: 'bg-yellow-950' },
+  'Low':           { label: 'Low',         color: 'text-orange-400', bg: 'bg-orange-950' },
+  'Not Covered':   { label: 'Not Covered', color: 'text-gray-500',   bg: 'bg-gray-850'  },
+  // Legacy internal levels (backward compat with older saved data)
+  covered:         { label: 'High',        color: 'text-green-400',  bg: 'bg-green-950' },
+  medium:          { label: 'Medium',      color: 'text-yellow-400', bg: 'bg-yellow-950' },
+  low:             { label: 'Low',         color: 'text-orange-400', bg: 'bg-orange-950' },
+  skipped:         { label: 'Not Covered', color: 'text-gray-500',   bg: 'bg-gray-850'  },
+  not_covered_idk: { label: 'Low',         color: 'text-orange-400', bg: 'bg-orange-950' },
+  not_started:     { label: 'Not Covered', color: 'text-gray-500',   bg: 'bg-gray-850'  },
 };
 
 function getRoundTypeLabel(round_type: string): string {

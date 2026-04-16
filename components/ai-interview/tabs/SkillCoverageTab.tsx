@@ -48,12 +48,18 @@ interface Props {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const LEVEL_CONFIG: Record<string, { icon: typeof CheckCircle2; color: string; bg: string; border: string; label: string; dot: string }> = {
-  covered:     { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', label: 'Covered',   dot: 'bg-emerald-500' },
-  medium:      { icon: AlertCircle,  color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200',   label: 'Medium',    dot: 'bg-amber-400' },
-  low:         { icon: MinusCircle,  color: 'text-orange-600',  bg: 'bg-orange-50',   border: 'border-orange-200',  label: 'Low',       dot: 'bg-orange-400' },
-  skipped:     { icon: HelpCircle,   color: 'text-red-500',     bg: 'bg-red-50',      border: 'border-red-200',     label: 'Skipped',   dot: 'bg-red-400' },
-  not_started: { icon: HelpCircle,   color: 'text-gray-400',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Asked', dot: 'bg-gray-300' },
-  asked:       { icon: Clock,        color: 'text-blue-500',    bg: 'bg-blue-50',     border: 'border-blue-200',    label: 'Asked',     dot: 'bg-blue-400' },
+  // New standardized labels (backend sends these for new interviews)
+  'High':          { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', label: 'High',        dot: 'bg-emerald-500' },
+  'Medium':        { icon: AlertCircle,  color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200',   label: 'Medium',      dot: 'bg-amber-400' },
+  'Low':           { icon: MinusCircle,  color: 'text-orange-600',  bg: 'bg-orange-50',   border: 'border-orange-200',  label: 'Low',         dot: 'bg-orange-400' },
+  'Not Covered':   { icon: HelpCircle,   color: 'text-gray-400',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Covered', dot: 'bg-gray-300' },
+  // Legacy internal levels (backward compat with older saved data)
+  covered:     { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50',  border: 'border-emerald-200', label: 'High',        dot: 'bg-emerald-500' },
+  medium:      { icon: AlertCircle,  color: 'text-amber-600',   bg: 'bg-amber-50',    border: 'border-amber-200',   label: 'Medium',      dot: 'bg-amber-400' },
+  low:         { icon: MinusCircle,  color: 'text-orange-600',  bg: 'bg-orange-50',   border: 'border-orange-200',  label: 'Low',         dot: 'bg-orange-400' },
+  skipped:     { icon: HelpCircle,   color: 'text-red-500',     bg: 'bg-red-50',      border: 'border-red-200',     label: 'Not Covered', dot: 'bg-red-400' },
+  not_started: { icon: HelpCircle,   color: 'text-gray-400',    bg: 'bg-gray-50',     border: 'border-gray-200',    label: 'Not Covered', dot: 'bg-gray-300' },
+  asked:       { icon: Clock,        color: 'text-blue-500',    bg: 'bg-blue-50',     border: 'border-blue-200',    label: 'Asked',       dot: 'bg-blue-400' },
 };
 
 function LevelBadge({ level }: { level: string }) {
@@ -456,10 +462,10 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
       {/* ── Summary strip ─────────────────────────────────────────── */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Covered', count: counts.covered, dot: 'bg-emerald-500', text: 'text-emerald-700' },
+          { label: 'High', count: counts.covered, dot: 'bg-emerald-500', text: 'text-emerald-700' },
           { label: 'Medium', count: counts.medium, dot: 'bg-amber-400', text: 'text-amber-700' },
           { label: 'Low', count: counts.low, dot: 'bg-orange-400', text: 'text-orange-700' },
-          { label: 'Not Assessed', count: counts.skipped, dot: 'bg-gray-300', text: 'text-gray-500' },
+          { label: 'Not Covered', count: counts.skipped, dot: 'bg-gray-300', text: 'text-gray-500' },
         ].map(item => (
           <div key={item.label} className="bg-white border border-gray-200 rounded-xl p-3 text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
@@ -478,95 +484,177 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
         <div className="h-full bg-orange-400 transition-[width] duration-700" style={{ width: `${counts.total > 0 ? (counts.low / counts.total) * 100 : 0}%` }} />
       </div>
 
-      {/* ── Per-skill expandable cards ────────────────────────────── */}
-      <div className="space-y-2">
-        {allSkills.map(skill => {
-          const level = coverageMap[skill] || 'not_started';
-          const priority = priorityMap[skill] || 'must_have';
-          const trail = coverageTrail[skill] || [];
-          const groups = skillQuestionMap[skill.toLowerCase()] || [];
-          const isExpanded = expandedSkills.has(skill);
-          const cfg = LEVEL_CONFIG[level] || LEVEL_CONFIG.not_started;
+      {/* ── Skills grouped by section (Must Have / Nice to Have / HR) ─ */}
+      {(() => {
+        // Group skills into sections by priority
+        const mustHaveSkills = allSkills.filter(s => (priorityMap[s] || 'must_have') === 'must_have');
+        const niceToHaveSkills = allSkills.filter(s => priorityMap[s] === 'nice_to_have');
+        // HR questions: question_groups with round_type containing 'hr'
+        const hrGroups = questionGroups.filter(g => (g.round_type || '').toLowerCase() === 'hr');
 
-          // Compute Q numbers and follow-up count from question groups
-          const qNums = groups.map(g => g.q_num).filter(Boolean);
-          const totalFollowUps = groups.reduce((sum, g) => sum + (g.follow_ups?.length || 0), 0);
+        // round_tracking from evaluation — has budget/actual time and Q counts
+        const roundTracking: Array<{
+          type: string; display_name: string;
+          budget_minutes: number; actual_duration_minutes: number;
+          planned_questions: number; actual_questions_asked: number;
+        }> = eval_?.round_tracking || [];
 
-          return (
-            <div key={skill} className={`border rounded-xl overflow-hidden transition-shadow ${isExpanded ? 'shadow-md ' + cfg.border : 'border-gray-200'}`}>
-              {/* ── Skill row header ─────────────────────────────── */}
-              <div
-                className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50/50 transition-colors ${isExpanded ? cfg.bg : ''}`}
-                onClick={() => toggleSkill(skill)}
-              >
-                {/* Chevron */}
-                <div className="flex-shrink-0">
-                  {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                </div>
+        // Map section key → round_type for lookup
+        const ROUND_TYPE_MAP: Record<string, string> = {
+          mth: 'must_have_skills', nth: 'nice_to_have_skills', hr: 'hr',
+        };
 
-                {/* Skill name + priority */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
-                    <span className="text-sm font-semibold text-gray-900 truncate">{skill}</span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                      priority === 'must_have' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {priority === 'must_have' ? 'MH' : 'NH'}
+        // Compute per-section stats from question_groups + round_tracking
+        const sectionStats = (sectionKey: string, sectionSkills: string[]) => {
+          const rt = ROUND_TYPE_MAP[sectionKey] || '';
+          const tracking = roundTracking.find(r => r.type === rt);
+          // Count main Qs and follow-ups from question_groups for this section's skills
+          const sectionGroups = sectionKey === 'hr'
+            ? hrGroups
+            : questionGroups.filter(g => {
+                const sk = (g.skill || '').toLowerCase();
+                return sectionSkills.some(s => s.toLowerCase() === sk);
+              });
+          const totalQs = sectionGroups.length;
+          const totalFu = sectionGroups.reduce((s, g) => s + (g.follow_ups?.length || 0), 0);
+          const allocatedQs = tracking?.planned_questions ?? 0;
+          const askedQs = tracking?.actual_questions_asked ?? totalQs;
+          const allocatedMin = tracking?.budget_minutes ?? 0;
+          const takenMin = tracking?.actual_duration_minutes ?? 0;
+          return { totalQs, totalFu, allocatedQs, askedQs, allocatedMin, takenMin };
+        };
+
+        const fmtMin = (m: number) => {
+          if (m <= 0) return '0m';
+          if (m < 1) return `${Math.round(m * 60)}s`;
+          return `${Math.round(m * 10) / 10}m`;
+        };
+
+        const SECTIONS = [
+          { key: 'mth', label: 'Must Have Skills', skills: mustHaveSkills, borderColor: 'border-l-purple-400 bg-purple-50/30', headerColor: 'bg-purple-50 border-purple-100 text-purple-900' },
+          { key: 'nth', label: 'Nice To Have Skills', skills: niceToHaveSkills, borderColor: 'border-l-indigo-400 bg-indigo-50/30', headerColor: 'bg-indigo-50 border-indigo-100 text-indigo-900' },
+          { key: 'hr', label: 'HR', skills: [] as string[], borderColor: 'border-l-teal-400 bg-teal-50/30', headerColor: 'bg-teal-50 border-teal-100 text-teal-900' },
+        ].filter(s => s.skills.length > 0 || (s.key === 'hr' && hrGroups.length > 0));
+
+        return (
+          <div className="space-y-6">
+            {SECTIONS.map(section => {
+              const stats = sectionStats(section.key, section.skills);
+              return (
+              <div key={section.key} className={`rounded-xl border overflow-hidden border-l-4 ${section.borderColor}`}>
+                {/* Section header with stats */}
+                <div className={`px-5 py-3 border-b ${section.headerColor}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-sm font-semibold">{section.label}</span>
+                    <span className="text-xs opacity-60">
+                      {section.key === 'hr'
+                        ? `${hrGroups.length} question${hrGroups.length !== 1 ? 's' : ''}`
+                        : `${section.skills.length} skill${section.skills.length !== 1 ? 's' : ''}`
+                      }
                     </span>
+                  </div>
+                  <div className="flex items-center gap-4 flex-wrap text-[11px]">
+                    {stats.allocatedQs > 0 && (
+                      <span className="flex items-center gap-1 text-gray-600">
+                        <MessageSquare className="w-3 h-3" />
+                        Allocated: {stats.allocatedQs} Q{stats.allocatedQs !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1 text-gray-600">
+                      <MessageSquare className="w-3 h-3" />
+                      Asked: {stats.askedQs} Q{stats.askedQs !== 1 ? 's' : ''}
+                    </span>
+                    {stats.totalFu > 0 && (
+                      <span className="flex items-center gap-1 text-blue-600">
+                        <MessageSquare className="w-3 h-3" />
+                        {stats.totalFu} follow-up{stats.totalFu !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    {stats.allocatedMin > 0 && (
+                      <span className="flex items-center gap-1 text-gray-600">
+                        <Clock className="w-3 h-3" />
+                        Allocated: {fmtMin(stats.allocatedMin)}
+                      </span>
+                    )}
+                    {stats.takenMin > 0 && (
+                      <span className="flex items-center gap-1 text-gray-600">
+                        <Clock className="w-3 h-3" />
+                        Time Taken: {fmtMin(stats.takenMin)}
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                {/* Level badge */}
-                <LevelBadge level={level} />
+                {section.key === 'hr' ? (
+                  /* HR: flat question table (no skill sub-accordion) */
+                  <div className="bg-white p-4">
+                    {hrGroups.length > 0 ? (
+                      <QuestionTable groups={hrGroups} />
+                    ) : (
+                      <div className="text-xs text-gray-400 italic px-2 py-4">No HR questions recorded.</div>
+                    )}
+                  </div>
+                ) : (
+                  /* MH / NTH: skill accordions */
+                  <div className="divide-y divide-gray-100 bg-white">
+                    {section.skills.map(skill => {
+                      const level = coverageMap[skill] || 'not_started';
+                      const groups = skillQuestionMap[skill.toLowerCase()] || [];
+                      const isExpanded = expandedSkills.has(skill);
+                      const cfg = LEVEL_CONFIG[level] || LEVEL_CONFIG.not_started;
+                      const qNums = groups.map(g => g.q_num).filter(Boolean);
+                      const totalFollowUps = groups.reduce((sum, g) => sum + (g.follow_ups?.length || 0), 0);
 
-                {/* Question numbers */}
-                {qNums.length > 0 && (
-                  <span className="text-[10px] text-gray-400 font-mono hidden sm:inline">
-                    {qNums.map(q => `Q${q}`).join(', ')}
-                  </span>
-                )}
+                      return (
+                        <div key={skill}>
+                          {/* Skill accordion header */}
+                          <div
+                            className={`flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50/50 transition-colors ${isExpanded ? cfg.bg : ''}`}
+                            onClick={() => toggleSkill(skill)}
+                          >
+                            <div className="flex-shrink-0">
+                              {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+                                <span className="text-sm font-semibold text-gray-900 truncate">{skill}</span>
+                              </div>
+                            </div>
+                            <LevelBadge level={level} />
+                            {totalFollowUps > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-blue-500 font-medium">
+                                <MessageSquare className="w-3 h-3" />
+                                +{totalFollowUps}
+                              </span>
+                            )}
+                          </div>
 
-                {/* Follow-up count */}
-                {totalFollowUps > 0 && (
-                  <span className="inline-flex items-center gap-1 text-[10px] text-blue-500 font-medium">
-                    <MessageSquare className="w-3 h-3" />
-                    +{totalFollowUps}
-                  </span>
+                          {/* Expanded: question table */}
+                          {isExpanded && (
+                            <div className="border-t border-gray-100">
+                              {groups.length > 0 ? (
+                                <div className="px-5 py-3">
+                                  <QuestionTable groups={groups} />
+                                </div>
+                              ) : (
+                                <div className="px-5 py-4 text-center text-xs text-gray-400 italic">
+                                  No questions recorded for this skill
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-
-              {/* ── Expanded content ─────────────────────────────── */}
-              {isExpanded && (
-                <div className="border-t border-gray-100">
-                  {/* Questions & Answers — table format */}
-                  {groups.length > 0 && (
-                    <div className="px-5 py-3 space-y-2">
-                      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                        Questions & Answers ({groups.length} question{groups.length > 1 ? 's' : ''}{totalFollowUps > 0 ? `, ${totalFollowUps} follow-up${totalFollowUps > 1 ? 's' : ''}` : ''})
-                      </p>
-                      <QuestionTable groups={groups} />
-                    </div>
-                  )}
-
-                  {/* No data fallback */}
-                  {groups.length === 0 && (
-                    <div className="px-5 py-4 text-center text-xs text-gray-400 italic">
-                      No detailed data available for this skill
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ── Legend ─────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 text-[10px] text-gray-400 flex-wrap">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-400 inline-block" /> MH = Must-Have</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" /> NH = Nice-to-Have</span>
-      </div>
+            );
+            })}
+          </div>
+        );
+      })()}
     </div>
   );
 }

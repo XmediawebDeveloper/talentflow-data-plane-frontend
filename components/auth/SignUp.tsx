@@ -531,13 +531,20 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       // Note: If freeTrialAcknowledged is true and no plan_id, backend handles as trial
       // The key difference is user has now EXPLICITLY acknowledged they want free trial
 
+      // Abort after 90s to avoid infinite spinner if backend is unresponsive
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
+
       const response = await fetch(`${API_URL}/signup/complete-registration`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
@@ -602,7 +609,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
     } catch (err: any) {
       console.error('Signup error:', err);
-      const message = err.message || 'Registration failed. Please try again.';
+      let message = err.message || 'Registration failed. Please try again.';
+      if (err.name === 'AbortError') {
+        message = 'Workspace creation is taking longer than expected. Please try logging in — your account may already be ready.';
+      }
       setError(message);
       toast.error('Registration failed', { description: message });
     } finally {

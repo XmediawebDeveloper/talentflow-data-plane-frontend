@@ -1369,7 +1369,7 @@ export default function AIInterviewConfig() {
           // Flexible mode has a real 30-min budget (35 with buffer). Store
           // the real value, not the old 0-sentinel. Mode is determined by
           // special_instructions.interview_mode.
-          duration_minutes: mode === 'flexible' ? (bufferEnabled ? 35 : 30) : totalFixed,
+          duration_minutes: mode === 'flexible' ? 30 : totalFixed,
           rounds_config: rounds,
           recording_enabled: recordingEnabled,
           available_languages: availableLanguages,
@@ -1717,7 +1717,7 @@ export default function AIInterviewConfig() {
       const payload = {
         position: selectedJd.title,
         jd_id: selectedJd.id,
-        duration_minutes: mode === 'flexible' ? (bufferEnabled ? 35 : 30) : totalFixed,
+        duration_minutes: mode === 'flexible' ? 30 : totalFixed,
         rounds_config: buildRounds(true),
         recording_enabled: recordingEnabled,
         available_languages: availableLanguages,
@@ -2505,9 +2505,9 @@ export default function AIInterviewConfig() {
                   )}
                   <div className="px-3 py-2 flex items-center justify-between gap-2">
                     <span className="text-xs text-gray-500 flex-shrink-0">Total Duration</span>
-                    <span className="text-xs font-semibold text-gray-900 text-right">
+                      <span className="text-xs font-semibold text-gray-900 text-right">
                       {mode === 'flexible'
-                        ? bufferEnabled ? '35 min' : '30 min'
+                        ? '30 min'
                         : `${totalFixed} min`}
                     </span>
                   </div>
@@ -2597,7 +2597,7 @@ export default function AIInterviewConfig() {
                       <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                         <span className="text-xs font-medium text-gray-500">Time Allocation</span>
                         <span className="text-xs font-semibold text-gray-700">
-                          {bufferEnabled ? '35 min total' : '30 min total'}
+                          {bufferEnabled ? '30 min base + 5 min buffer' : '30 min total'}
                         </span>
                       </div>
                       <table className="w-full text-xs">
@@ -2637,7 +2637,7 @@ export default function AIInterviewConfig() {
                           )}
                           {bufferEnabled && (
                             <tr className="bg-gray-50">
-                              <td className="px-3 py-2 text-gray-700 font-semibold">Total</td>
+                              <td className="px-3 py-2 text-gray-700 font-semibold">Max</td>
                               <td className="px-3 py-2 text-right text-gray-400">—</td>
                               <td className="px-3 py-2 text-right font-bold text-gray-900">35 min</td>
                             </tr>
