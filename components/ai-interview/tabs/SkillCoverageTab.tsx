@@ -15,6 +15,7 @@ interface TrailEntry {
   ts: string;
   score: number | null;
   is_follow_up: boolean;
+  question_intent?: string; // v3: explore | follow_up | probe | deep_dive | main_question
 }
 
 interface FollowUp {
@@ -39,10 +40,19 @@ interface QuestionGroup {
   follow_ups: FollowUp[];
 }
 
+interface ClusterDef {
+  id: string;
+  name: string;
+  priority: number;
+  skills: string[];
+}
+
 interface Props {
   sessionId: string;
   aiEvaluation: Record<string, any>;
   isCompleted: boolean;
+  /** Cluster config from special_instructions — defines the canonical skill order. */
+  clusterConfig?: { mth: ClusterDef[]; nth: ClusterDef[] };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -98,7 +108,14 @@ function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
             <div className="flex-1 flex items-center gap-2 flex-wrap min-w-0 -mt-0.5">
               <LevelBadge level={entry.state} />
               {entry.q_num > 0 && <span className="text-[10px] font-mono text-gray-400">Q{entry.q_num}</span>}
-              {entry.is_follow_up && <span className="text-[10px] font-medium text-blue-500">follow-up</span>}
+              {(() => {
+                const intent = (entry.question_intent || '').toLowerCase();
+                const isDd = intent === 'deep_dive';
+                const isFu = !isDd && (entry.is_follow_up || ['follow_up', 'probe'].includes(intent));
+                if (isDd) return <span className="text-[10px] font-semibold text-teal-700 bg-teal-100 rounded px-1 py-0.5">D</span>;
+                if (isFu) return <span className="text-[10px] font-semibold text-violet-700 bg-violet-100 rounded px-1 py-0.5">F</span>;
+                return null;
+              })()}
               {entry.score != null && <ScorePill score={entry.score} />}
               {entry.state === 'asked' && <ArrowRight className="w-3 h-3 text-gray-300" />}
             </div>
@@ -210,24 +227,36 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                       {!isOpen ? (
                         <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
                           <ChevronDown className="w-3 h-3" />
-                          {fus.length} follow-up{fus.length > 1 ? 's' : ''}
+                          {(() => {
+                            const dd = fus.filter(f => (f.question_intent || '').toLowerCase() === 'deep_dive').length;
+                            const fu2 = fus.length - dd;
+                            return [fu2 > 0 ? `${fu2} follow-up${fu2 > 1 ? 's' : ''}` : '', dd > 0 ? `${dd} deep dive${dd > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ');
+                          })()}
                         </button>
                       ) : (
                         <div className="space-y-2">
                           <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
                             <ChevronUp className="w-3 h-3" />
-                            Hide follow-ups
+                            Hide
                           </button>
-                          {fus.map((fu, fi) => (
-                            <div key={fi}>
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className="text-[10px] font-semibold text-violet-700 bg-violet-100 rounded px-1.5 py-0.5">F{fi + 1}</span>
-                              </div>
-                              <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
-                                <TruncatedText text={fu.question || ''} limit={140} />
-                              </div>
-                            </div>
-                          ))}
+                          {(() => {
+                            let fCtr = 0; let dCtr = 0;
+                            return fus.map((fu, fi) => {
+                              const isDd = (fu.question_intent || '').toLowerCase() === 'deep_dive';
+                              const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
+                              const tagCls = isDd ? 'text-teal-700 bg-teal-100' : 'text-violet-700 bg-violet-100';
+                              return (
+                                <div key={fi}>
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className={`text-[10px] font-semibold ${tagCls} rounded px-1.5 py-0.5`}>{tag}</span>
+                                  </div>
+                                  <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
+                                    <TruncatedText text={fu.question || ''} limit={140} />
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
                         </div>
                       )}
                     </div>
@@ -239,12 +268,20 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                   </div>
                   {hasFu && isOpen && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
-                      {fus.map((fu, fi) => (
-                        <div key={fi} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
-                          <span className="text-[10px] font-semibold text-violet-700 mr-1">F{fi + 1}:</span>
-                          <TruncatedText text={fu.answer || ''} limit={180} />
-                        </div>
-                      ))}
+                      {(() => {
+                        let fCtr = 0; let dCtr = 0;
+                        return fus.map((fu, fi) => {
+                          const isDd = (fu.question_intent || '').toLowerCase() === 'deep_dive';
+                          const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
+                          const tagColor = isDd ? 'text-teal-700' : 'text-violet-700';
+                          return (
+                            <div key={fi} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                              <span className={`text-[10px] font-semibold ${tagColor} mr-1`}>{tag}:</span>
+                              <TruncatedText text={fu.answer || ''} limit={180} />
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                   )}
                 </td>
@@ -297,12 +334,17 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
                group.round_type?.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) || 'General'}
             </span>
             <ScorePill score={group.score} />
-            {fuCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-medium">
-                <MessageSquare className="w-3 h-3" />
-                {fuCount} follow-up{fuCount > 1 ? 's' : ''}
-              </span>
-            )}
+            {fuCount > 0 && (() => {
+              const ddCt = (group.follow_ups || []).filter(f => (f.question_intent || '').toLowerCase() === 'deep_dive').length;
+              const fuCt = fuCount - ddCt;
+              const parts = [fuCt > 0 ? `${fuCt} follow-up${fuCt > 1 ? 's' : ''}` : '', ddCt > 0 ? `${ddCt} deep dive${ddCt > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ');
+              return (
+                <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-medium">
+                  <MessageSquare className="w-3 h-3" />
+                  {parts}
+                </span>
+              );
+            })()}
           </div>
           <p className="text-sm text-gray-800 leading-snug line-clamp-2">{group.question || 'Question not recorded'}</p>
         </div>
@@ -325,30 +367,38 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
             </div>
           )}
 
-          {/* Follow-ups */}
-          {group.follow_ups?.map((fu, i) => (
-            <div key={i} className="border-t border-gray-100">
-              {/* Follow-up question */}
-              <div className="px-4 py-3 bg-blue-50/30">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-[10px] font-mono text-blue-500 bg-blue-100 px-1.5 py-0.5 rounded">
-                    Q{group.q_num}.{i + 1}
-                  </span>
-                  <span className="text-[10px] text-blue-500 font-medium capitalize">
-                    {fu.question_intent?.replace(/_/g, ' ') || 'follow-up'}
-                  </span>
-                  <ScorePill score={fu.score} />
+          {/* Follow-ups & Deep Dives */}
+          {(() => {
+            let fCtr = 0; let dCtr = 0;
+            return (group.follow_ups || []).map((fu, i) => {
+              const isDd = (fu.question_intent || '').toLowerCase() === 'deep_dive';
+              const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
+              const tagCls = isDd ? 'text-teal-700 bg-teal-100' : 'text-violet-700 bg-violet-100';
+              const bgCls = isDd ? 'bg-teal-50/30' : 'bg-violet-50/30';
+              const intentLabel = isDd ? 'Deep Dive' : (fu.question_intent || 'follow-up').replace(/_/g, ' ');
+              return (
+                <div key={i} className="border-t border-gray-100">
+                  <div className={`px-4 py-3 ${bgCls}`}>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`text-[10px] font-semibold ${tagCls} px-1.5 py-0.5 rounded`}>
+                        {tag}
+                      </span>
+                      <span className={`text-[10px] font-medium capitalize ${isDd ? 'text-teal-600' : 'text-violet-600'}`}>
+                        {intentLabel}
+                      </span>
+                      <ScorePill score={fu.score} />
+                    </div>
+                    <p className="text-sm text-gray-700 leading-snug">{fu.question || 'Question'}</p>
+                  </div>
+                  {fu.answer && (
+                    <div className="px-4 py-3 bg-white pl-8">
+                      <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{fu.answer}</p>
+                    </div>
+                  )}
                 </div>
-                <p className="text-sm text-gray-700 leading-snug">{fu.question || 'Follow-up question'}</p>
-              </div>
-              {/* Follow-up answer */}
-              {fu.answer && (
-                <div className="px-4 py-3 bg-white pl-8">
-                  <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{fu.answer}</p>
-                </div>
-              )}
-            </div>
-          ))}
+              );
+            });
+          })()}
         </div>
       )}
     </div>
@@ -357,7 +407,7 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
 
 // ── Main Component ───────────────────────────────────────────────────────────
 
-export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCompleted }: Props) {
+export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCompleted, clusterConfig }: Props) {
   const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
 
@@ -379,8 +429,41 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
     return map;
   }, [questionGroups]);
 
-  // Sort skills: must-have first, then by level
+  // Order skills following the cluster config (same order as when clusters were created).
+  // MustHave clusters first, then NiceToHave — within each cluster skills stay in config order.
+  // Skills present in coverageMap but absent from cluster config are appended at the end.
   const allSkills = useMemo(() => {
+    const mthSkills = clusterConfig?.mth.flatMap(c => c.skills) ?? [];
+    const nthSkills = clusterConfig?.nth.flatMap(c => c.skills) ?? [];
+    const configOrder = [...mthSkills, ...nthSkills];
+
+    if (configOrder.length > 0) {
+      // Build a case-insensitive position lookup from the cluster config
+      const posMap = new Map<string, number>();
+      configOrder.forEach((s, i) => { posMap.set(s.toLowerCase(), i); });
+
+      const coverageKeys = Object.keys(coverageMap);
+      // Include config skills (even if missing from coverageMap) + any extras in coverageMap
+      const seen = new Set<string>();
+      const ordered: string[] = [];
+      for (const s of configOrder) {
+        const key = coverageKeys.find(k => k.toLowerCase() === s.toLowerCase()) ?? s;
+        if (!seen.has(key.toLowerCase())) {
+          seen.add(key.toLowerCase());
+          ordered.push(key);
+        }
+      }
+      // Append any skills from coverageMap that weren't in the config
+      for (const k of coverageKeys) {
+        if (!seen.has(k.toLowerCase())) {
+          seen.add(k.toLowerCase());
+          ordered.push(k);
+        }
+      }
+      return ordered;
+    }
+
+    // Fallback: no cluster config — sort by priority then coverage level
     return Object.keys(coverageMap).sort((a, b) => {
       const pOrder: Record<string, number> = { must_have: 0, nice_to_have: 1 };
       const lOrder: Record<string, number> = { covered: 0, medium: 1, low: 2, skipped: 3, not_started: 4 };
@@ -391,7 +474,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
       const lb = lOrder[coverageMap[b]] ?? 4;
       return la - lb || a.localeCompare(b);
     });
-  }, [coverageMap, priorityMap]);
+  }, [coverageMap, priorityMap, clusterConfig]);
 
   const counts = useMemo(() => ({
     total: allSkills.length,
@@ -486,9 +569,17 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
 
       {/* ── Skills grouped by section (Must Have / Nice to Have / HR) ─ */}
       {(() => {
-        // Group skills into sections by priority
-        const mustHaveSkills = allSkills.filter(s => (priorityMap[s] || 'must_have') === 'must_have');
-        const niceToHaveSkills = allSkills.filter(s => priorityMap[s] === 'nice_to_have');
+        // Group skills into sections — use cluster config order when available.
+        const mthConfigSet = new Set((clusterConfig?.mth.flatMap(c => c.skills) ?? []).map(s => s.toLowerCase()));
+        const nthConfigSet = new Set((clusterConfig?.nth.flatMap(c => c.skills) ?? []).map(s => s.toLowerCase()));
+        const hasConfig = mthConfigSet.size > 0 || nthConfigSet.size > 0;
+
+        const mustHaveSkills = hasConfig
+          ? allSkills.filter(s => mthConfigSet.has(s.toLowerCase()))
+          : allSkills.filter(s => (priorityMap[s] || 'must_have') === 'must_have');
+        const niceToHaveSkills = hasConfig
+          ? allSkills.filter(s => nthConfigSet.has(s.toLowerCase()))
+          : allSkills.filter(s => priorityMap[s] === 'nice_to_have');
         // HR questions: question_groups with round_type containing 'hr'
         const hrGroups = questionGroups.filter(g => (g.round_type || '').toLowerCase() === 'hr');
 

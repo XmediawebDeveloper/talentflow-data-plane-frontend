@@ -671,6 +671,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Delete assessment via API
   const handleDeleteAssessment = async (assessmentId: string) => {
+    // Find the assessment to check if candidates have started
+    const assessment = assessments.find((a: any) => a.id === assessmentId);
+    if (assessment && (assessment.completed_count > 0 || assessment.invitations_count > 0)) {
+      toast.error('Cannot delete — candidates have already been invited to this assessment');
+      setOpenMenuId(null);
+      return;
+    }
+
     if (!await dialog.confirm({ title: 'Delete Assessment', message: 'Delete this assessment permanently? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) return;
 
     try {
@@ -2139,27 +2147,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                             Archive
                           </button>
-                          {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (
-                            <button
-                              onClick={() => {
-                                if (!canDeleteAssessment) {
-                                  toast.error('You do not have permission to delete assessments');
-                                  return;
-                                }
-                                handleDeleteAssessment(assessment.id);
-                              }}
-                              disabled={!canDeleteAssessment}
-                              title={!canDeleteAssessment ? 'You do not have permission to delete assessments' : ''}
-                              className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
-                                !canDeleteAssessment
-                                  ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                  : 'text-red-600 hover:bg-red-50'
-                              }`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                              Delete
-                            </button>
-                          )}
+                          {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
+                            const hasCandidates = assessment.invitations_count > 0;
+                            const isDisabled = !canDeleteAssessment || hasCandidates;
+                            const disabledReason = !canDeleteAssessment
+                              ? 'You do not have permission to delete assessments'
+                              : hasCandidates
+                                ? 'Cannot delete — candidates have already been invited to this assessment'
+                                : '';
+                            return (
+                              <button
+                                onClick={() => {
+                                  if (isDisabled) {
+                                    toast.error(disabledReason);
+                                    return;
+                                  }
+                                  handleDeleteAssessment(assessment.id);
+                                }}
+                                disabled={isDisabled}
+                                title={disabledReason}
+                                className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
+                                  isDisabled
+                                    ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                    : 'text-red-600 hover:bg-red-50'
+                                }`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                Delete
+                              </button>
+                            );
+                          })()}
                         </div>
                       </>
                     )}
@@ -2481,27 +2498,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Archive
                                 </button>
                                 <div className="border-t border-gray-100 my-1"></div>
-                                {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (
-                                  <button
-                                    onClick={() => {
-                                      if (!canDeleteAssessment) {
-                                        toast.error('You do not have permission to delete assessments');
-                                        return;
-                                      }
-                                      handleDeleteAssessment(assessment.id);
-                                    }}
-                                    disabled={!canDeleteAssessment}
-                                    title={!canDeleteAssessment ? 'You do not have permission to delete assessments' : ''}
-                                    className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
-                                      !canDeleteAssessment
-                                        ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                        : 'text-red-600 hover:bg-red-50'
-                                    }`}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                    Delete
-                                  </button>
-                                )}
+                                {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
+                                  const hasCandidates = assessment.invitations_count > 0;
+                                  const isDisabled = !canDeleteAssessment || hasCandidates;
+                                  const disabledReason = !canDeleteAssessment
+                                    ? 'You do not have permission to delete assessments'
+                                    : hasCandidates
+                                      ? 'Cannot delete — candidates have already been invited to this assessment'
+                                      : '';
+                                  return (
+                                    <button
+                                      onClick={() => {
+                                        if (isDisabled) {
+                                          toast.error(disabledReason);
+                                          return;
+                                        }
+                                        handleDeleteAssessment(assessment.id);
+                                      }}
+                                      disabled={isDisabled}
+                                      title={disabledReason}
+                                      className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
+                                        isDisabled
+                                          ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                          : 'text-red-600 hover:bg-red-50'
+                                      }`}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                      Delete
+                                    </button>
+                                  );
+                                })()}
                               </div>
                             </>
                           )}

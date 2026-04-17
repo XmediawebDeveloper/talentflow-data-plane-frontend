@@ -576,6 +576,17 @@ export function useInterviewProctoringMonitor({
 
   // ==================== EVENT-DRIVEN DETECTIONS (main thread, cheap) ====================
 
+  // Debounce timers — onmute fires transiently on many browsers (tab
+  // throttle, screen-share picker overlay, OS camera re-negotiation, etc.)
+  // so we only report a persistent track loss after TRACK_MUTE_DEBOUNCE_MS
+  // of continuous mute. onended is permanent (no recovery), so it fires
+  // immediately. This eliminates false-positive "Camera Disabled" popups
+  // that were appearing during normal interviews without the candidate
+  // ever revoking permission.
+  const TRACK_MUTE_DEBOUNCE_MS = 3000;
+  const cameraMuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const micMuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const reportCameraDisabled = useCallback((reason: string) => {
     if (cameraDisabledRef.current) return;
     cameraDisabledRef.current = true;
@@ -584,6 +595,11 @@ export function useInterviewProctoringMonitor({
   }, []);
 
   const reportCameraRestored = useCallback(() => {
+    // Cancel pending debounce if the track recovered within the window.
+    if (cameraMuteTimerRef.current) {
+      clearTimeout(cameraMuteTimerRef.current);
+      cameraMuteTimerRef.current = null;
+    }
     if (!cameraDisabledRef.current) return;
     cameraDisabledRef.current = false;
     setState(prev => ({ ...prev, isCameraActive: true }));
@@ -597,6 +613,10 @@ export function useInterviewProctoringMonitor({
   }, []);
 
   const reportMicRestored = useCallback(() => {
+    if (micMuteTimerRef.current) {
+      clearTimeout(micMuteTimerRef.current);
+      micMuteTimerRef.current = null;
+    }
     if (!micDisabledRef.current) return;
     micDisabledRef.current = false;
     setState(prev => ({ ...prev, isMicrophoneActive: true }));
@@ -607,14 +627,35 @@ export function useInterviewProctoringMonitor({
     if (!currentStream) return;
 
     currentStream.getVideoTracks().forEach(track => {
+      // onended = permanent track death (permission revoked, device unplugged).
+      // Fire immediately — no recovery possible.
       track.onended = () => reportCameraDisabled('track_ended');
-      track.onmute = () => reportCameraDisabled('track_muted');
+      // onmute = transient mute (tab throttle, OS re-negotiation, screen-share
+      // picker). Only report if the track stays muted for TRACK_MUTE_DEBOUNCE_MS.
+      track.onmute = () => {
+        if (cameraMuteTimerRef.current) clearTimeout(cameraMuteTimerRef.current);
+        cameraMuteTimerRef.current = setTimeout(() => {
+          cameraMuteTimerRef.current = null;
+          // Re-check: the track might have unmuted inside the debounce window
+          // but AFTER our timeout was queued (race). readyState === 'live' and
+          // !muted means the track is fine now — don't report.
+          if (track.readyState === 'live' && !track.muted) return;
+          reportCameraDisabled('track_muted');
+        }, TRACK_MUTE_DEBOUNCE_MS);
+      };
       track.onunmute = () => reportCameraRestored();
     });
 
     currentStream.getAudioTracks().forEach(track => {
       track.onended = () => reportMicDisabled('track_ended');
-      track.onmute = () => reportMicDisabled('track_muted');
+      track.onmute = () => {
+        if (micMuteTimerRef.current) clearTimeout(micMuteTimerRef.current);
+        micMuteTimerRef.current = setTimeout(() => {
+          micMuteTimerRef.current = null;
+          if (track.readyState === 'live' && !track.muted) return;
+          reportMicDisabled('track_muted');
+        }, TRACK_MUTE_DEBOUNCE_MS);
+      };
       track.onunmute = () => reportMicRestored();
     });
 
@@ -896,6 +937,9 @@ export function useInterviewProctoringMonitor({
       if (batchFlushIntervalRef.current) { clearInterval(batchFlushIntervalRef.current); batchFlushIntervalRef.current = null; }
       if (trackHealthIntervalRef.current) { clearInterval(trackHealthIntervalRef.current); trackHealthIntervalRef.current = null; }
       if (permissionCleanupRef.current) { permissionCleanupRef.current(); permissionCleanupRef.current = null; }
+      // Cancel pending mute debounce timers so they can't fire into an unmounted tree
+      if (cameraMuteTimerRef.current) { clearTimeout(cameraMuteTimerRef.current); cameraMuteTimerRef.current = null; }
+      if (micMuteTimerRef.current) { clearTimeout(micMuteTimerRef.current); micMuteTimerRef.current = null; }
 
       // Final flush — send remaining events to backend
       if (backendQueueRef.current.length > 0) {

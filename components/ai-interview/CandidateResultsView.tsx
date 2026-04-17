@@ -1134,6 +1134,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 sessionId={liveSession.id}
                 aiEvaluation={eval_}
                 isCompleted={liveSession.status === 'completed'}
+                clusterConfig={clusterConfig}
               />
             )}
 
@@ -1722,7 +1723,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   )}
 
                   {/* Stat Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="bg-gray-50 rounded-lg p-4 text-center">
                       <div className="text-2xl font-semibold text-gray-900">
                         {eval_.total_questions ?? (evaluations.length || 'N/A')}
@@ -1734,32 +1735,6 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         {formatDuration(eval_.duration_minutes)}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">Duration</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4 text-center">
-                      <div className={`text-2xl font-semibold ${
-                        summary.hiring_recommendation === 'yes' || summary.hiring_recommendation === 'strong_yes'
-                          ? 'text-green-600'
-                          : summary.hiring_recommendation === 'no' || summary.hiring_recommendation === 'strong_no'
-                          ? 'text-red-600'
-                          : 'text-yellow-600'
-                      }`}>
-                        {summary.hiring_recommendation
-                          ? summary.hiring_recommendation.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
-                          : 'N/A'}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">Hiring Recommendation</div>
-                      {/* AI confidence in recommendation — flexible mode only (AC8 Explainability) */}
-                      {isFlexibleMode && summary.confidence != null && (
-                        <div className="mt-1.5 flex items-center justify-center gap-1">
-                          {Array.from({ length: 5 }, (_, i) => (
-                            <span
-                              key={i}
-                              className={`w-2 h-2 rounded-full ${i < summary.confidence ? 'bg-indigo-500' : 'bg-gray-200'}`}
-                            />
-                          ))}
-                          <span className="text-[10px] text-gray-400 ml-1">confidence</span>
-                        </div>
-                      )}
                     </div>
                   </div>
 
@@ -2088,6 +2063,59 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     nice_to_have_skills: [] as string[], total_questions: 0, questions_asked: 0 }
                 : null;
               const hasEvalCoverage = scFromEval !== null || clusterInitial !== null;
+              // When completed with cluster config + coverage data but no backend cluster_insights,
+              // build cluster insight entries and show the ClusterInsightsTab instead of the
+              // live-coverage fallback. This ensures timed-mode interviews get the same rich
+              // cluster-drill-down view that flexible mode gets from the backend.
+              if (!hasClusterInsights && isCompleted && hasClusterConfig && clusterRawMap && Object.keys(clusterRawMap).length > 0) {
+                const scoreLookup = eval_?.skill_scores_map as Record<string, number> | undefined;
+                const bandFromLevel = (lvl: string, sc010: number | null): string => {
+                  if (sc010 == null || sc010 <= 0) return 'Not Covered';
+                  if (lvl === 'covered') return 'High';
+                  if (lvl === 'medium') return 'Medium';
+                  return 'Low';
+                };
+                const buildEntries = (clusters: typeof clusterConfig.mth, cat: 'mth' | 'nth') =>
+                  clusters.map(c => {
+                    const rows = c.skills.map(sk => {
+                      const lvl = clusterRawMap[sk] || clusterRawMap[Object.keys(clusterRawMap).find(k => k.toLowerCase() === sk.toLowerCase()) || ''] || 'not_started';
+                      const sc010 = scoreLookup?.[sk] ?? scoreLookup?.[Object.keys(scoreLookup || {}).find(k => k.toLowerCase() === sk.toLowerCase()) || ''] ?? null;
+                      const score100 = sc010 != null ? Math.round(sc010 * 10) : null;
+                      return { skill: sk, score: score100, band: bandFromLevel(lvl, score100), note: '' };
+                    });
+                    const scored = rows.filter(r => r.score != null && r.score > 0);
+                    const avg = scored.length > 0 ? Math.round(scored.reduce((s, r) => s + r.score!, 0) / scored.length) : null;
+                    return {
+                      cluster_name: c.name,
+                      category: cat,
+                      section_name: cat === 'mth' ? 'Must Have Skills' : 'Nice To Have Skills',
+                      section_pct: 0,
+                      priority: c.priority,
+                      priority_label: c.priority >= 3 ? 'High' : c.priority === 2 ? 'Medium' : 'Low',
+                      weight: 0,
+                      band_score: avg,
+                      band: avg == null ? 'Not Covered' : avg >= 70 ? 'High' : avg >= 40 ? 'Medium' : 'Low',
+                      skill_scores: rows,
+                      evaluated: scored.length,
+                      total: c.skills.length,
+                      cluster_note: '',
+                    };
+                  });
+                const derivedInsights = [
+                  ...buildEntries(clusterConfig.mth, 'mth'),
+                  ...buildEntries(clusterConfig.nth, 'nth'),
+                ];
+                return (
+                  <ClusterInsightsTab
+                    clusterInsights={derivedInsights}
+                    capabilityScore={eval_.capability_score ?? null}
+                    sectionScores={eval_.section_scores ?? null}
+                    capabilityScoreReasoning={eval_.capability_score_reasoning ?? null}
+                    questionHistory={eval_.question_history || []}
+                  />
+                );
+              }
+
               // Enter the derived view when:
               //   • interview is in-progress (live), OR
               //   • completed but no cluster_insights — either cluster config or eval coverage data exists
@@ -2099,10 +2127,12 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                   : (scFromEval ?? liveSession.skill_coverage ?? bestSeenSkillCoverageRef.current ?? null);
 
                 // Use resolved cluster config (session special_instructions → fetched config fallback)
+                // Keep the original config order — MustHave clusters first, then NiceToHave,
+                // skills within each cluster in the order they were configured.
                 const allClusters = [
                   ...clusterConfig.mth.map(c => ({ ...c, section: 'mth' as const })),
                   ...clusterConfig.nth.map(c => ({ ...c, section: 'nth' as const })),
-                ].sort((a, b) => b.priority - a.priority || a.name.localeCompare(b.name));
+                ];
 
                 // Case-insensitive sets for skill matching
                 const coveredLower = new Set([...(sc?.covered || []), ...(sc?.medium_covered || []), ...(sc?.low_covered || [])].map(s => s.toLowerCase()));

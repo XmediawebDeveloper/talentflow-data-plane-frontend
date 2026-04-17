@@ -16,6 +16,7 @@ interface ClusterEntry {
   section_name: string;
   section_pct: number;
   priority: number;
+  priority_label?: string;
   weight: number;
   band_score: number | null;
   band: string;
@@ -35,7 +36,9 @@ interface SectionScore {
 interface QuestionHistoryEntry {
   question_number: number;
   question: string;
+  question_text?: string;   // v3 uses question_text instead of question
   answer: string;
+  response_text?: string;   // v3 uses response_text instead of answer
   response_type: string;
   skip_source: string | null;
   score: number | null;   // 0-10 per-question score
@@ -43,6 +46,7 @@ interface QuestionHistoryEntry {
   round_type: string;
   timestamp?: string;
   is_follow_up?: boolean;
+  question_intent?: string; // v3: explore | follow_up | probe | deep_dive | main_question
 }
 
 interface ClusterInsightsTabProps {
@@ -104,19 +108,37 @@ function CoverageBadge({ level }: { level: CoverageLevel }) {
   );
 }
 
-// Group question history: main question + its follow-ups (shared topic/question_number).
+// Group question history: main question + follow-ups/deep-dives.
+// Follow-ups → F1, F2 ... Deep dives → D1, D2 ...
 type QGroup = { main: QuestionHistoryEntry; followUps: QuestionHistoryEntry[] };
 
 function buildQuestionGroups(history: QuestionHistoryEntry[]): QGroup[] {
   const groups: QGroup[] = [];
   for (const h of history) {
-    if (h.is_follow_up) {
-      if (groups.length > 0) groups[groups.length - 1].followUps.push(h);
+    const intent = (h.question_intent || '').toLowerCase();
+    const isSub = h.is_follow_up || ['follow_up', 'probe', 'deep_dive'].includes(intent);
+    if (isSub && groups.length > 0) {
+      groups[groups.length - 1].followUps.push(h);
     } else {
       groups.push({ main: h, followUps: [] });
     }
   }
   return groups;
+}
+
+// Label for a sub-question: F1/F2 for follow-ups, D1/D2 for deep dives
+function subLabel(entries: QuestionHistoryEntry[], index: number): { tag: string; color: string; bg: string } {
+  const intent = (entries[index].question_intent || '').toLowerCase();
+  const isDd = intent === 'deep_dive';
+  // Count only same-type entries before this one to get sequential number
+  let seq = 0;
+  for (let i = 0; i <= index; i++) {
+    const it = (entries[i].question_intent || '').toLowerCase();
+    if (isDd && it === 'deep_dive') seq++;
+    if (!isDd && it !== 'deep_dive') seq++;
+  }
+  if (isDd) return { tag: `D${seq}`, color: 'text-teal-700', bg: 'bg-teal-100' };
+  return { tag: `F${seq}`, color: 'text-violet-700', bg: 'bg-violet-100' };
 }
 
 function QuestionTable({ groups }: { groups: QGroup[] }) {
@@ -131,12 +153,27 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
       return n;
     });
   };
+
+  // Readable type label for the Type column
+  function typeLabel(h: QuestionHistoryEntry): { text: string; cls: string } {
+    const intent = (h.question_intent || '').toLowerCase();
+    if (intent === 'deep_dive')  return { text: 'Deep Dive',  cls: 'bg-teal-100 text-teal-700' };
+    if (intent === 'follow_up')  return { text: 'Follow-up',  cls: 'bg-violet-100 text-violet-700' };
+    if (intent === 'probe')      return { text: 'Follow-up',  cls: 'bg-violet-100 text-violet-700' };
+    if (intent === 'main_question') return { text: 'Main',    cls: 'bg-gray-100 text-gray-600' };
+    if (intent === 'explore')    return { text: 'Main',       cls: 'bg-gray-100 text-gray-600' };
+    // Fallback for old data without question_intent
+    if (h.is_follow_up)          return { text: 'Follow-up',  cls: 'bg-violet-100 text-violet-700' };
+    return { text: 'Main', cls: 'bg-gray-100 text-gray-600' };
+  }
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-[10px]">
           <tr>
             <th className="px-3 py-2 text-left font-semibold w-14">Q #</th>
+            <th className="px-3 py-2 text-left font-semibold w-24">Type</th>
             <th className="px-3 py-2 text-left font-semibold">Question</th>
             <th className="px-3 py-2 text-left font-semibold">Candidate Response</th>
             <th className="px-3 py-2 text-left font-semibold w-32">Coverage</th>
@@ -147,6 +184,17 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
             const mainLevel = questionCoverage(g.main.score);
             const hasFu = g.followUps.length > 0;
             const isOpen = openRow.has(i);
+            const mainType = typeLabel(g.main);
+            const qText = g.main.question || g.main.question_text || '—';
+            const aText = g.main.answer || g.main.response_text || '—';
+            // Count follow-ups vs deep-dives for the expand button
+            const ddCount = g.followUps.filter(fu => (fu.question_intent || '').toLowerCase() === 'deep_dive').length;
+            const fuCount = g.followUps.length - ddCount;
+            const expandLabel = [
+              fuCount > 0 ? `${fuCount} follow-up${fuCount > 1 ? 's' : ''}` : '',
+              ddCount > 0 ? `${ddCount} deep dive${ddCount > 1 ? 's' : ''}` : '',
+            ].filter(Boolean).join(', ');
+
             return (
               <tr key={i} className="align-top">
                 <td className="px-3 py-2 align-top">
@@ -155,7 +203,12 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
                   </span>
                 </td>
                 <td className="px-3 py-2 align-top">
-                  <div className="text-[12px] font-medium text-gray-800 leading-snug">{g.main.question || '—'}</div>
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${mainType.cls}`}>
+                    {mainType.text}
+                  </span>
+                </td>
+                <td className="px-3 py-2 align-top">
+                  <div className="text-[12px] font-medium text-gray-800 leading-snug">{qText}</div>
                   {hasFu && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
                       {!isOpen ? (
@@ -164,7 +217,7 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
                           className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1"
                         >
                           <ChevronDown className="w-3 h-3" />
-                          {g.followUps.length} follow-up{g.followUps.length > 1 ? 's' : ''}
+                          {expandLabel}
                         </button>
                       ) : (
                         <>
@@ -173,31 +226,39 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
                             className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1"
                           >
                             <ChevronUp className="w-3 h-3" />
-                            Hide follow-ups
+                            Hide
                           </button>
-                          {g.followUps.map((fu, fi) => (
-                            <div key={fi}>
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className="text-[10px] font-semibold text-violet-700 bg-violet-100 rounded px-1.5 py-0.5">F{fi + 1}</span>
+                          {g.followUps.map((fu, fi) => {
+                            const sl = subLabel(g.followUps, fi);
+                            const fuQ = fu.question || fu.question_text || '—';
+                            return (
+                              <div key={fi}>
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className={`text-[10px] font-semibold ${sl.color} ${sl.bg} rounded px-1.5 py-0.5`}>{sl.tag}</span>
+                                </div>
+                                <div className="text-[11px] font-medium text-gray-700 leading-snug">{fuQ}</div>
                               </div>
-                              <div className="text-[11px] font-medium text-gray-700 leading-snug">{fu.question || '—'}</div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </>
                       )}
                     </div>
                   )}
                 </td>
                 <td className="px-3 py-2 align-top">
-                  <div className="text-[12px] text-gray-700 leading-snug whitespace-pre-wrap">{g.main.answer || '—'}</div>
+                  <div className="text-[12px] text-gray-700 leading-snug whitespace-pre-wrap">{aText}</div>
                   {hasFu && isOpen && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
-                      {g.followUps.map((fu, fi) => (
-                        <div key={fi} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap">
-                          <span className="text-[10px] font-semibold text-violet-700 mr-1">F{fi + 1}:</span>
-                          {fu.answer || '—'}
-                        </div>
-                      ))}
+                      {g.followUps.map((fu, fi) => {
+                        const sl = subLabel(g.followUps, fi);
+                        const fuA = fu.answer || fu.response_text || '—';
+                        return (
+                          <div key={fi} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap">
+                            <span className={`text-[10px] font-semibold ${sl.color} mr-1`}>{sl.tag}:</span>
+                            {fuA}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </td>

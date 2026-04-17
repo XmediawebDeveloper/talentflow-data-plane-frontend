@@ -118,6 +118,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [questionTimerSeconds, setQuestionTimerSeconds] = useState<number | null>(null);
   const [questionTimerExpired, setQuestionTimerExpired] = useState(false);
   const questionTimerExpiredRef = useRef(false); // sync ref — avoids stale closure in setTimeout/setInterval callbacks
+  // Tracks whether the BACKEND already sent question_timer_expired for the current
+  // question. When true, the client must NOT send its own skip_question — the
+  // backend's _auto_skip already called handle_skip_question. Cleared when the
+  // next question_timer_started arrives.
+  const backendExpiredRef = useRef(false);
   const questionTimerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // Ref that mirrors questionTimerSeconds state — readable synchronously in callbacks.
   // Required for stopRecording to deduct remaining seconds from the global timer.
@@ -391,6 +396,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const maxRecordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const handleNoResponseRef = useRef<() => void>(() => {});
   const stopRecordingSilentRef = useRef<() => void>(() => {});
+
+  // Clear no-response timer helper — declared early because it's referenced in
+  // many setInterval / ws.onmessage callbacks that appear before the former
+  // declaration site (line ~2556). Moving it here prevents a potential TDZ
+  // violation in minified builds where const reordering can surface.
+  const clearNoResponseTimer = useCallback(() => {
+    if (noResponseTimerRef.current) {
+      clearTimeout(noResponseTimerRef.current);
+      noResponseTimerRef.current = null;
+    }
+  }, []);
+
+  // Clear max recording timer helper
+  const clearMaxRecordingTimer = useCallback(() => {
+    if (maxRecordingTimerRef.current) {
+      clearTimeout(maxRecordingTimerRef.current);
+      maxRecordingTimerRef.current = null;
+    }
+  }, []);
 
   // Safety-net: if TalkingHead's onAudioEnd callback never fires (e.g., AudioContext
   // suspended after streamStart returns early), start the mic after a short delay.
@@ -925,59 +949,25 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           isProcessingRef.current = false;
           clearNoResponseTimer();
           stopRecordingSilentRef.current();
+          // Tell the backend to skip immediately — don't wait for its phased
+          // silence flow (8s + TTS + 5s) which may not have reached the skip
+          // point yet. The backend's skip_question handler cancels _auto_skip
+          // and calls handle_skip_question, which advances to the next question
+          // and sends question_timer_started for the new timer.
+          if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
+            wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
+          }
         }, 0);
       }
     }, 1000);
   }, [isAiSpeaking, computeQuestionRemaining]);
 
-  // Auto-restart question timer when it expires — increments question number and restarts
-  // a fresh 2-min window. Fires after a 2-second delay to let Linda finish "let's move on".
-  // If the backend sends question_timer_started before the delay fires, it will reset
-  // questionTimerExpired to false and cancel this effect's timeout via cleanup.
-  useEffect(() => {
-    if (!questionTimerExpired) return;
-    if (!isConnected || isClosing) return;
-    const t = setTimeout(() => {
-      const nextQ = (questionNumberRef.current ?? 0) + 1;
-      // Don't auto-restart once all questions are exhausted
-      if (totalQuestions !== null && nextQ > totalQuestions) return;
-      setQuestionNumber(nextQ);
-      questionNumberRef.current = nextQ;
-      setQuestionTimerExpired(false);
-      questionTimerExpiredRef.current = false;
-      questionTimerTotalRef.current = 120;
-      setQuestionTimerSeconds(120);
-      questionTimerSecondsRef.current = 120;
-      if (questionTimerIntervalRef.current) {
-        clearInterval(questionTimerIntervalRef.current);
-      }
-      questionTimerIntervalRef.current = setInterval(() => {
-        setQuestionTimerSeconds(prev => {
-          if (prev === null || prev <= 1) {
-            if (questionTimerIntervalRef.current) {
-              clearInterval(questionTimerIntervalRef.current);
-              questionTimerIntervalRef.current = null;
-            }
-            setTimeout(() => {
-              setQuestionTimerExpired(true);
-              questionTimerExpiredRef.current = true;
-              setShowSilenceBanner(false);
-              setSilenceCountdown(null);
-              if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
-              setStatus("Time's up — moving to the next question...");
-              setIsProcessing(false);
-              isProcessingRef.current = false;
-              stopRecordingSilentRef.current();
-            }, 0);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }, 2000);
-    return () => clearTimeout(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [questionTimerExpired, isConnected, isClosing, totalQuestions]);
+  // When the per-question timer expires, the client sends skip_question to the
+  // backend (see the timer-expiry block above). The backend's handle_skip_question
+  // advances to the next question and sends question_timer_started, which resets
+  // the client timer via the question_timer_started handler. No client-side
+  // auto-restart is needed — the backend is the single source of truth for
+  // question progression.
 
   // VAD settings
   const silenceStartRef = useRef<number | null>(null);
@@ -1244,7 +1234,34 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // Show everything: all finalized segments + current interim.
       // Require > 3 chars to suppress ghost results from background noise.
       const fullText = (webSpeechFinalizedRef.current + (interimText ? ' ' + interimText : '')).trim();
-      if (fullText.length > 3) setCurrentTranscript(fullText);
+      if (fullText.length > 3) {
+        setCurrentTranscript(fullText);
+        // Bridge: Web Speech API detected real speech — also set the VAD's
+        // speechDetectedRef and send speech_started to the backend. This
+        // prevents the "Are you there?" prompt from firing when the candidate
+        // IS speaking but their mic amplitude stays below the VAD threshold
+        // (quiet voice, Bluetooth headset, browser gain normalization). The
+        // VAD and Web Speech API are independent; without this bridge the
+        // no-response timer only checks speechDetectedRef (VAD) and fires
+        // even though the transcript bubble is visibly showing text.
+        if (!speechDetectedRef.current) {
+          speechDetectedRef.current = true;
+          speechDetectedAtRef.current = Date.now();
+          postSpeechNoiseCountRef.current = MIN_RESPEECH_FRAMES;
+          if (!speechStartSentRef.current) {
+            speechStartSentRef.current = true;
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: "speech_started" }));
+            }
+          }
+        }
+        // Clear the no-response timer — candidate is actively speaking.
+        if (noResponseTimerRef.current) {
+          clearTimeout(noResponseTimerRef.current);
+          noResponseTimerRef.current = null;
+        }
+        noResponseRetryRef.current = 0;
+      }
     };
     recognition.onend = () => {
       // Only auto-restart if the candidate's mic is truly open AND Linda is
@@ -1406,8 +1423,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 clearInterval(questionTimerIntervalRef.current);
                 questionTimerIntervalRef.current = null;
               }
-              // Time's up — backend handles skip (silence_skip / backend_auto)
-              // Point 1: no client-side skip_question fallback
               setTimeout(() => {
                 setQuestionTimerExpired(true);
                 questionTimerExpiredRef.current = true;
@@ -1421,6 +1436,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 isProcessingRef.current = false;
                 clearNoResponseTimer();
                 stopRecordingSilentRef.current();
+                if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
+                  wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
+                }
               }, 0);
               return 0;
             }
@@ -1745,7 +1763,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         isPlayingRef.current = false;
         pendingBuffersRef.current = 0;
         nextPlayTimeRef.current = 0;
-        noResponseRetryRef.current = 0;
+        // Only reset the no-response retry counter for genuine NEW turns
+        // (Linda asking a new question, ack, follow-up). During silence-nudge
+        // flows (isSilencePromptRef = true) the backend is driving the
+        // "Are you there?" → auto-skip pipeline. Resetting the counter here
+        // would let the CLIENT's handleNoResponse fire again with retry=0
+        // after the nudge TTS finishes, producing a duplicate "Are you there?"
+        // that stacks up and loops indefinitely.
+        if (!isSilencePromptRef.current) {
+          noResponseRetryRef.current = 0;
+        }
         currentTurnAudioMsRef.current = 0; // reset audio duration counter for this turn
         firstPcmAtMsRef.current = null;    // reset first-chunk anchor for this turn
         lastPcmAtMsRef.current = null;     // reset last-chunk anchor for this turn
@@ -1775,9 +1802,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (nowSpeakTimerRef.current) { clearTimeout(nowSpeakTimerRef.current); nowSpeakTimerRef.current = null; }
         setStatus("Linda is speaking...");
         startRevealingTokens();
-        // Clear stale expired timer when Linda starts speaking the next question
+        // Clear stale expired timer when Linda starts speaking the NEXT question
         // so "TIME UP" doesn't linger while she's asking Q2.
-        if (questionTimerExpired) {
+        // Guard: skip this during silence-nudge turns (isSilencePromptRef).
+        // If the question timer expired while the candidate was silent and the
+        // backend fires a nudge TTS ("Are you there?"), its speaking_started
+        // would clear the timer to null — but no question_timer_started follows
+        // because we're still on the same question. The timer then disappears
+        // entirely. Only clear when a genuine new turn starts.
+        if (questionTimerExpired && !isSilencePromptRef.current) {
           setQuestionTimerSeconds(null);
           setQuestionTimerExpired(false);
           questionTimerExpiredRef.current = false;
@@ -1994,7 +2027,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 setQuestionTimerSeconds(prev => {
                   if (prev === null || prev <= 1) {
                     if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
-                    setTimeout(() => { setQuestionTimerExpired(true); questionTimerExpiredRef.current = true; setStatus("Time's up — moving to the next question..."); stopRecordingSilentRef.current(); }, 0);
+                    setTimeout(() => {
+                      setQuestionTimerExpired(true); questionTimerExpiredRef.current = true;
+                      setStatus("Time's up — moving to the next question...");
+                      stopRecordingSilentRef.current();
+                      if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
+                        wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
+                      }
+                    }, 0);
                     return 0;
                   }
                   return prev - 1;
@@ -2047,6 +2087,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       case "question_timer_started": {
         console.log(`[WS ${timestamp}] Question timer started:`, data);
+        backendExpiredRef.current = false; // new question — reset backend-expired guard
         // Use data.seconds — the actual candidate answer window sent by the backend.
         // data.total_seconds is the full slot (e.g. 120s) but data.seconds is what
         // the backend's auto-skip is calibrated to, so they must match.
@@ -2122,6 +2163,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                     isProcessingRef.current = false;
                     clearNoResponseTimer();
                     stopRecordingSilentRef.current();
+                    if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
+                      wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
+                    }
                   }, 0);
                   return 0;
                 }
@@ -2252,6 +2296,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 isProcessingRef.current = false;
                 clearNoResponseTimer();
                 stopRecordingSilentRef.current();
+                if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
+                  wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
+                }
               }, 0);
             }
           }, 1000);
@@ -2271,6 +2318,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         questionTimerReceivedAtRef.current = null;
         break;
       case "question_timer_expired":
+        backendExpiredRef.current = true; // backend already handling skip — don't send client skip_question
         setQuestionTimerExpired(true);
         questionTimerExpiredRef.current = true;
         setQuestionTimerSeconds(0);
@@ -2329,6 +2377,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           clearInterval(silenceCountdownRef.current);
           silenceCountdownRef.current = null;
         }
+        // Kill the client-side no-response timer — the BACKEND is now driving
+        // the silence flow. If we leave the 15 s client timer armed it races
+        // with the backend's interstitial_prompt and produces a duplicate
+        // "Are you there?" via handleNoResponse → speakViaTTS.
+        clearNoResponseTimer();
         break;
       }
       case "question_timer_nudge":
@@ -2517,22 +2570,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       recorder.stop();
     });
   }, [token]);
-
-  // Clear no-response timer helper
-  const clearNoResponseTimer = useCallback(() => {
-    if (noResponseTimerRef.current) {
-      clearTimeout(noResponseTimerRef.current);
-      noResponseTimerRef.current = null;
-    }
-  }, []);
-
-  // Clear max recording timer helper
-  const clearMaxRecordingTimer = useCallback(() => {
-    if (maxRecordingTimerRef.current) {
-      clearTimeout(maxRecordingTimerRef.current);
-      maxRecordingTimerRef.current = null;
-    }
-  }, []);
 
   // Recording
   const stopRecording = useCallback(() => {
@@ -3204,6 +3241,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   }, []);
 
   const handleNoResponse = useCallback(() => {
+    // If the backend is already driving the silence-nudge flow (silence_detected
+    // was received and interstitial_prompt is playing), skip the client-side
+    // "Are you there?" to avoid stacking duplicate prompts.
+    if (isSilencePromptRef.current) return;
+
     if (noResponseRetryRef.current === 0) {
       // First timeout: Linda asks "Are you there?"
       stopRecordingSilent();

@@ -336,6 +336,12 @@ export default function AIInterview() {
   }, [openMenuId]);
 
   const handleDeleteConfig = async (config: AIInterviewResponse) => {
+    // Prevent deletion if candidates have started
+    if (config.invitations_count && config.invitations_count > 0) {
+      toast.error('Cannot delete — candidates have already started this interview');
+      setOpenMenuId(null);
+      return;
+    }
     setConfirmAction({
       title: 'Delete Configuration',
       message: 'Delete this AI interview configuration? This cannot be undone.',
@@ -347,7 +353,7 @@ export default function AIInterview() {
           loadData();
         } catch (error) {
           console.error('Failed to delete:', error);
-          toast.error('Failed to delete configuration');
+          toast.error(error instanceof Error ? error.message : 'Failed to delete configuration');
         }
         setConfirmAction(null);
         setOpenMenuId(null);
@@ -988,7 +994,13 @@ export default function AIInterview() {
                                 {canDeleteAIInterviews && (
                                   <button
                                     onClick={() => handleDeleteConfig(config)}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                    disabled={!!config.invitations_count && config.invitations_count > 0}
+                                    title={config.invitations_count && config.invitations_count > 0 ? 'Cannot delete — candidates have already started this interview' : ''}
+                                    className={`w-full flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm ${
+                                      config.invitations_count && config.invitations_count > 0
+                                        ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                        : 'text-red-600 hover:bg-red-50'
+                                    } transition-colors`}
                                   >
                                     <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                     Delete
