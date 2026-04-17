@@ -10,7 +10,7 @@ import {
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
   Download,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend,
@@ -3153,14 +3153,16 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         download(new Blob(['\uFEFF' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' }), `${baseName}.csv`);
                         setExportMenuOpen(false);
                       };
-                      const exportXLSX = () => {
+                      const exportXLSX = async () => {
                         const rows = buildRows();
                         if (rows.length === 0) return;
-                        const ws = XLSX.utils.json_to_sheet(rows);
-                        ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 10 }, { wch: 50 }, { wch: 50 }, { wch: 50 }, { wch: 10 }, { wch: 12 }];
-                        const wb = XLSX.utils.book_new();
-                        XLSX.utils.book_append_sheet(wb, ws, 'Transcript');
-                        XLSX.writeFile(wb, `${baseName}.xlsx`);
+                        const wb = new ExcelJS.Workbook();
+                        const ws = wb.addWorksheet('Transcript');
+                        const headers = Object.keys(rows[0]);
+                        ws.columns = headers.map((h, i) => ({ header: h, key: h, width: [6, 14, 10, 50, 50, 50, 10, 12][i] || 14 }));
+                        for (const r of rows) ws.addRow(r);
+                        const buf = await wb.xlsx.writeBuffer();
+                        download(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `${baseName}.xlsx`);
                         setExportMenuOpen(false);
                       };
 

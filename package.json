@@ -52,6 +52,7 @@
     "docx": "^9.6.1",
     "docx-preview": "^0.3.7",
     "embla-carousel-react": "^8.6.0",
+    "exceljs": "^4.4.0",
     "face-api.js": "^0.20.0",
     "fflate": "^0.8.2",
     "html2pdf.js": "^0.14.0",
@@ -78,8 +79,7 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.183.1",
     "util-deprecate": "^1.0.2",
-    "vaul": "^1.1.2",
-    "xlsx": "^0.18.5"
+    "vaul": "^1.1.2"
   },
   "overrides": {
     "node-fetch": "^2.7.0",
