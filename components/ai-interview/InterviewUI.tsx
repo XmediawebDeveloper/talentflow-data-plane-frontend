@@ -108,6 +108,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [questionCount, setQuestionCount] = useState(0);
   const [duration, setDuration] = useState(0);
   const shouldDisconnectAfterAudioRef = useRef(false);
+  // Defer the completion modal until Linda's farewell audio actually ends.
+  // Backend sends `interview_completion_message` right after `interview_ended`
+  // without waiting for TTS playback to drain — if we show the modal
+  // immediately it pops up while Linda is still speaking.
+  const pendingCompletionModalRef = useRef(false);
 
   // 5-minute buffer state (MOM: buffer when allocated time expires)
   const [isInBuffer, setIsInBuffer] = useState(false);
@@ -183,6 +188,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // Follow-ups: timer runs continuously (remaining time already accounts for Linda's speech).
   const isFollowUpRef = useRef(false);
 
+  // When true, the per-question countdown is frozen at its initial duration
+  // until the candidate actually starts speaking (detected via VAD or Web
+  // Speech API). Flipped false inside the speech_started paths. This makes
+  // the displayed timer reflect RESPONSE time, not wall-clock since question
+  // was asked — candidates no longer lose seconds while thinking.
+  const questionTimerAwaitingSpeechRef = useRef<boolean>(false);
+
   // Skill coverage (real-time, timed mode only)
   const [skillCoverage, setSkillCoverage] = useState<{
     round: string;
@@ -219,6 +231,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [isFullscreenExited, setIsFullscreenExited] = useState(false);
+  // Seconds left in the 10s grace window before the session hard-pauses.
+  // null = no grace period active (either before any exit, or after the
+  // grace elapsed and the session is fully paused).
+  const [gracePeriodRemaining, setGracePeriodRemaining] = useState<number | null>(null);
   // Ref mirror so timer setIntervals (which close over stale state) can
   // read the current value synchronously.
   const isFullscreenExitedRef = useRef(false);
@@ -299,11 +315,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // own clock but the candidate must not be charged for that lost
       // time on the visible global timer.
       if (isFullscreenExitedRef.current) return;
-      // Timed/fixed mode: global timer must tick NON-STOP (the 30-min budget
-      // is a hard cap and Linda's speech counts against it). Only flexible
-      // mode pauses during Linda speaking so between-question TTS doesn't
-      // burn the candidate's budget.
-      if (isFlexibleMode && isAiSpeakingRef.current && !isSilencePromptRef.current) return;
+      // Both global AND per-question timer only tick during the candidate's
+      // turn (when they can actually speak). Pause during Linda's regular
+      // speech. EXCEPTION: keep ticking during the silence nudge ("Are you
+      // there?") — candidate is still "on the clock" even while Linda prompts
+      // them. Combined with the slot-deduct logic in stopRecording (which
+      // jumps global to the next 2-min boundary on answer), this gives the
+      // slot-based global semantics: 30:00 → 28:00 → 26:00 per Q.
+      if (isAiSpeakingRef.current && !isSilencePromptRef.current) return;
       setRemainingSeconds(prev => Math.max(0, prev - 1));
     }, 1000);
     return () => {
@@ -367,8 +386,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => {
     if (isRecording && !isAiSpeaking && !isProcessing && !isClosing && isConnected) {
       if (!nowSpeakShownForSessionRef.current) {
-        nowSpeakShownForSessionRef.current = true;
-        setShowNowSpeakBanner(true);
+        // Defer by 250ms and re-check refs before showing. Without this, a
+        // follow-up or next-question `speaking_started` that arrives in the
+        // same React batch as the isRecording=true transition would flash the
+        // banner WHILE Linda is already speaking (state updates haven't
+        // committed yet). Refs are synchronous so they reflect the truth.
+        if (nowSpeakTimerRef.current) clearTimeout(nowSpeakTimerRef.current);
+        nowSpeakTimerRef.current = setTimeout(() => {
+          if (
+            isRecordingRef.current &&
+            !isAiSpeakingRef.current &&
+            !isProcessingRef.current &&
+            !isClosingRef.current
+          ) {
+            nowSpeakShownForSessionRef.current = true;
+            setShowNowSpeakBanner(true);
+          }
+        }, 250);
       }
     }
     if (!isRecording) {
@@ -379,6 +413,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRecording, isAiSpeaking, isProcessing, isClosing, isConnected]);
+
+  // Bulletproof hide: whenever Linda starts speaking (any path — greeting,
+  // follow-up, clarification, interstitial), tear down the banner AND the
+  // pending show-timer. This is the last line of defence against the
+  // "Your turn — speak now" popup appearing while Linda is mid-sentence.
+  useEffect(() => {
+    if (isAiSpeaking) {
+      setShowNowSpeakBanner(false);
+      if (nowSpeakTimerRef.current) {
+        clearTimeout(nowSpeakTimerRef.current);
+        nowSpeakTimerRef.current = null;
+      }
+    }
+  }, [isAiSpeaking]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -743,6 +791,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       src.connect(gain).connect(ctx.destination);
       const startAt = Math.max(ctx.currentTime, playbackScheduledEndAtRef.current);
       src.start(startAt);
+      // First chunk of this turn: anchor the reveal's audible-start to the
+      // actual scheduled start time (not ctx.currentTime in queueAudio). This
+      // is the spec-correct anchor — the ctx second when this buffer begins
+      // playing through TalkingHead after its ~700ms internal buffering.
+      if (audibleStartCtxSecRef.current === null) {
+        audibleStartCtxSecRef.current = startAt + TALKING_HEAD_BUFFER_MS / 1000;
+      }
       playbackScheduledEndAtRef.current = startAt + buf.duration;
       playbackTrackerPendingRef.current += 1;
       trackedThisTurnRef.current = true;
@@ -866,6 +921,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   // the tracker path working, this margin is rarely reached — it's the
   // safety net, not the primary signal.
   const AUDIO_TAIL_MARGIN_MS = 3000;
+  // TalkingHead buffers incoming PCM before its speaker goes audible.
+  // Text reveal must wait this long after the first chunk arrives, else
+  // the bubble paints while Linda is still silent. 1500ms gives generous
+  // headroom for network jitter + TalkingHead's internal codec init.
+  const TALKING_HEAD_BUFFER_MS = 1500;
+  // Set to true to pipe reveal timing to the browser console — invaluable
+  // for diagnosing text-before-voice reports from candidates.
+  const REVEAL_DEBUG = true;
+  // AudioContext clock (in seconds) at which Linda's audio is expected to
+  // become audible. Stamped when the first PCM chunk is received:
+  //   audibleStartCtxSec = ctx.currentTime + (TALKING_HEAD_BUFFER_MS / 1000)
+  // The reveal loop uses this — NOT wall-clock, NOT chunk rates — as the
+  // single source of truth for "how far into Linda's voice are we".
+  const audibleStartCtxSecRef = useRef<number | null>(null);
 
   // Token reveal system
   const tokenBufferRef = useRef("");
@@ -1097,30 +1166,54 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       const audioMs = currentTurnAudioMsRef.current;
       let target = revealedCharsRef.current;
 
-      if (audioEndReceivedRef.current && firstPcmAt !== null && audioMs > 0) {
-        // Phase B: audio_end received → we know the true end time.
-        // Use lastPcmAt + tail margin as the wall-clock end anchor so the
-        // reveal finishes exactly when playback does (not when streaming
-        // does). Start time stays firstPcmAt so the text keeps advancing
-        // steadily from the beginning.
-        const lastPcmAt = lastPcmAtMsRef.current ?? firstPcmAt;
-        const endMs = lastPcmAt + AUDIO_TAIL_MARGIN_MS;
-        const totalMs = Math.max(1, endMs - firstPcmAt);
-        const elapsedMs = Math.max(0, Date.now() - firstPcmAt);
-        const progress = Math.min(1, elapsedMs / totalMs);
-        target = Math.min(fullText.length, Math.floor(progress * fullText.length));
+      // Reveal progress. Primary clock: AudioContext's scheduled timeline.
+      // Fallback: wall-clock (used when the tracker context is suspended,
+      // which happens post-fullscreen-exit / cold start — the exact failure
+      // mode where "text appears only after Linda finishes speaking").
+      const pbCtx = playbackTrackerCtxRef.current;
+      const ctxStart = audibleStartCtxSecRef.current;
+      const ctxEnd = playbackScheduledEndAtRef.current;
+      const ctxAvailable =
+        !!pbCtx &&
+        pbCtx.state === "running" &&
+        ctxStart !== null &&
+        Number.isFinite(ctxEnd) &&
+        ctxEnd > ctxStart;
+
+      let progress: number | null = null;
+
+      if (ctxAvailable) {
+        const now = pbCtx!.currentTime;
+        if (now < ctxStart!) {
+          if (REVEAL_DEBUG) console.debug(`[Reveal] ctx-wait now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)}`);
+          return;  // inside buffer delay
+        }
+        progress = (now - ctxStart!) / (ctxEnd - ctxStart!);
+        if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} prog=${progress.toFixed(3)}`);
+      } else if (firstPcmAt !== null) {
+        // Fallback: wall-clock math so streaming reveal works even when the
+        // tracker AudioContext is stalled. `audibleStartMs` waits out the
+        // TalkingHead buffer; the denominator is the ACCUMULATED audio
+        // duration received so far (a reliable estimate of total playback).
+        const audibleStartMs = firstPcmAt + TALKING_HEAD_BUFFER_MS;
+        const elapsedMs = Date.now() - audibleStartMs;
+        if (elapsedMs < 0) {
+          if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
+          return;
+        }
+        const receivedMs = currentTurnAudioMsRef.current;
+        if (receivedMs <= 0) return;
+        progress = elapsedMs / receivedMs;
+        if (REVEAL_DEBUG) console.debug(`[Reveal] wc elapsed=${elapsedMs} received=${receivedMs} prog=${progress.toFixed(3)} ctxState=${pbCtx?.state} ctxStart=${ctxStart}`);
       } else {
-        // Phase A: still streaming OR no audio yet. Conservative CPS pacing.
-        // Cap at 80% of the buffer length so the bubble cannot outrun the
-        // text that has actually streamed in — the remaining 20% is reserved
-        // for the post-audio_end finalisation in Phase B.
-        const cpsStep = Math.max(1, Math.round(CONSERVATIVE_REVEAL_CPS * 0.08));
-        const cap = Math.max(0, Math.floor(fullText.length * 0.8));
-        target = Math.min(
-          cap,
-          revealedCharsRef.current + cpsStep
-        );
+        if (REVEAL_DEBUG) console.debug(`[Reveal] no-anchor firstPcmAt=${firstPcmAt} ctxAvailable=${ctxAvailable}`);
+        return;
       }
+
+      if (progress === null) return;
+      const cap = audioEndReceivedRef.current ? 1 : 0.85;
+      progress = Math.max(0, Math.min(cap, progress));
+      target = Math.floor(progress * fullText.length);
       if (target > revealedCharsRef.current) {
         revealedCharsRef.current = target;
         const revealedText = fullText.substring(0, target);
@@ -1205,7 +1298,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // the finalized buffer OR the live "speaking…" bubble. This is what was
       // showing "what strategies do you use to" (verbatim echo of Linda's
       // question) under the candidate's live transcript.
-      if (isAiSpeakingRef.current && !isSilencePromptRef.current) return;
+      //
+      // Also drop during the silence nudge ("Are you there?") — per spec,
+      // candidate's answer must only be captured AFTER the nudge finishes.
+      if (isAiSpeakingRef.current) return;
       if (Date.now() < playbackEchoGuardUntilRef.current) return;
 
       // Use event.resultIndex so we only process NEW results in this event.
@@ -1232,9 +1328,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
       }
       // Show everything: all finalized segments + current interim.
-      // Require > 3 chars to suppress ghost results from background noise.
+      // Lowered threshold from 3 → 0 so short words ("yes", "ok", "hi") stream live
+      // instead of sitting hidden until the buffer grows — makes the bubble feel real-time.
       const fullText = (webSpeechFinalizedRef.current + (interimText ? ' ' + interimText : '')).trim();
-      if (fullText.length > 3) {
+      if (fullText.length > 0) {
         setCurrentTranscript(fullText);
         // Bridge: Web Speech API detected real speech — also set the VAD's
         // speechDetectedRef and send speech_started to the backend. This
@@ -1248,6 +1345,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           speechDetectedRef.current = true;
           speechDetectedAtRef.current = Date.now();
           postSpeechNoiseCountRef.current = MIN_RESPEECH_FRAMES;
+          // Unfreeze the per-question timer — candidate is talking now.
+          questionTimerAwaitingSpeechRef.current = false;
           if (!speechStartSentRef.current) {
             speechStartSentRef.current = true;
             if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -1385,6 +1484,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       isAiSpeakingRef.current = false;
       setIsAiSpeaking(false);
       avatarState.onAiStopSpeaking();
+      // Linda finished — re-enable mic audio tracks (disabled during her speech).
+      // If the stream has been torn down between turns this is a safe no-op.
+      if (mediaStreamRef.current && !isMutedRef.current) {
+        mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = true; });
+      }
       saveAiMessage();
 
       // Notify backend that audio finished playing so _auto_skip starts the
@@ -1470,8 +1574,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     lastPcmAtMsRef.current = Date.now();
 
     if (!isPlayingRef.current) {
-      // First chunk of this turn — stamp the wall-clock so we can later
-      // compute the expected end-of-playback moment as firstPcmAt + totalMs.
+      // First chunk of this turn — stamp the wall-clock anchor (still used
+      // by a few legacy code paths for timeouts). The authoritative audio-
+      // clock anchor (audibleStartCtxSecRef) is stamped inside
+      // trackPlaybackChunk, which has the real scheduled start time.
       firstPcmAtMsRef.current = Date.now();
       isPlayingRef.current = true;
       isAiSpeakingRef.current = true;
@@ -1558,30 +1664,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             return restored;
           });
         }
-        // Auto-advance the displayed question number based on elapsed / slot.
-        // Mirrors the backend auto-skip logic in send_resume_continuation:
-        //   expected_prior_q = floor(elapsed_seconds / slot_seconds)
-        //   next question    = expected_prior_q + 1
-        // so a candidate who left at Q2 and returns 10 minutes later sees
-        // "Question 6/15" instead of "Question 2/15". The authoritative
-        // count will be overwritten by the next QuestionTimerStartedMessage
-        // when Linda speaks Q(expected_prior_q + 1), but we show the
-        // advanced number immediately so the "continuing from question N"
-        // status line is correct.
-        if (!(isFlexibleMode || isNewFlexibleMode) && data.elapsed_seconds && data.elapsed_seconds > 0) {
-          const slotSec = 120; // QUESTION_DURATION_SECONDS on backend
+        // Trust the backend's authoritative `prior_question_count` (the number
+        // of questions Linda actually asked) instead of deriving it from
+        // `elapsed_seconds / 120`. The elapsed-based formula over-counts by
+        // assuming every question consumes the full 2-min slot, which is why
+        // candidates saw "Q12/15" after only 7 real questions: elapsed was
+        // 24 min but actual asked count was 7.
+        if (!(isFlexibleMode || isNewFlexibleMode) && typeof data.prior_question_count === "number") {
           const maxQ = totalQuestions ?? interviewInfo.total_questions ?? 15;
-          const expectedPriorQ = Math.min(maxQ, Math.floor(data.elapsed_seconds / slotSec));
-          const nextQ = Math.min(maxQ, expectedPriorQ + 1);
+          const nextQ = Math.min(maxQ, Math.max(1, data.prior_question_count + 1));
           if (nextQ > (questionNumber ?? 0)) {
             setQuestionNumber(nextQ);
             questionNumberRef.current = nextQ;
           }
         }
-        const _priorDisplay = Math.max(
-          data.prior_question_count ?? 0,
-          !isFlexibleMode && data.elapsed_seconds ? Math.floor(data.elapsed_seconds / 120) : 0
-        );
+        const _priorDisplay = data.prior_question_count ?? 0;
         setStatus(`Session resumed — continuing from question ${_priorDisplay + 1}`);
         break;
       }
@@ -1689,17 +1786,32 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         tokenBufferRef.current += data.token;
         // Feed updated text for word-level phoneme lip sync
         talkingHeadRef.current?.setText(tokenBufferRef.current);
-        // Start (or restart) the reveal loop the moment tokens arrive —
-        // NOT gated on isAiSpeakingRef. If we wait for speaking_started, the
-        // buffer silently accumulates and then paints all at once when the
-        // reveal finally begins; the bubble "jumps". Starting now also means
-        // the audio-synced pacing will take over as soon as the first PCM
-        // chunk arrives (firstPcmAtMsRef becomes non-null), and until then
-        // the fallback CPS path keeps the text moving smoothly.
+        // Mark Linda as speaking the moment she starts *generating* text.
+        // Without this, there's a 1-3s gap between the last LLM token and
+        // `speaking_started` (TTS synthesis latency) during which
+        // isAiSpeaking flips false → the "Your turn — speak now" banner
+        // flashes before Linda's voice actually begins. Holding this true
+        // from first-token closes that window.
+        if (!isAiSpeakingRef.current) {
+          isAiSpeakingRef.current = true;
+          setIsAiSpeaking(true);
+          audioEndReceivedRef.current = false;
+          candidatePlaybackEndedRef.current = false;
+          setCandidatePlaybackEnded(false);
+          // Reset turn-scoped audio anchors so Fix 2's reveal gate works for
+          // THIS turn. Without this, `firstPcmAtMsRef` stays set from the
+          // previous question's audio — Phase A sees it as non-null, runs
+          // immediately with CPS pacing, and Q2+ text races ahead of Linda's
+          // voice while Q1 correctly waits.
+          firstPcmAtMsRef.current = null;
+          lastPcmAtMsRef.current = null;
+          currentTurnAudioMsRef.current = 0;
+          audibleStartCtxSecRef.current = null;
+        }
         if (!revealTimerRef.current) {
           startRevealingTokens();
         }
-        if (!isPlayingRef.current && !isAiSpeakingRef.current) {
+        if (!isPlayingRef.current) {
           setStatus("Linda is thinking...");
         }
         break;
@@ -1722,6 +1834,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (startRecordingTimerRef.current) {
           clearTimeout(startRecordingTimerRef.current);
           startRecordingTimerRef.current = null;
+        }
+        // Belt-and-suspenders: hard-disable the mic audio track while Linda
+        // speaks so even if the stream is still held somewhere, nothing can
+        // be captured or streamed upstream. Re-enabled when her audio ends
+        // (handleAllAudioFinished / audio_end path) or the next mic open.
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getAudioTracks().forEach(t => { t.enabled = false; });
         }
         // Issue 3 fix (belt-and-suspenders): explicitly reset VAD state here
         // even if stopRecordingSilent already ran. If the mic had already been
@@ -1776,6 +1895,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         currentTurnAudioMsRef.current = 0; // reset audio duration counter for this turn
         firstPcmAtMsRef.current = null;    // reset first-chunk anchor for this turn
         lastPcmAtMsRef.current = null;     // reset last-chunk anchor for this turn
+        audibleStartCtxSecRef.current = null; // reset audio-clock anchor for this turn
         // Reset the playback tracker's per-turn counters. We deliberately
         // DO NOT reset `playbackScheduledEndAtRef` — that's the AudioContext
         // clock position. Each new chunk is scheduled at
@@ -1866,6 +1986,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             avatarState.onAiStopSpeaking();
             candidatePlaybackEndedRef.current = true;
             setCandidatePlaybackEnded(true);
+            // Flush any deferred "Interview Completed" modal that arrived
+            // from the backend before Linda's farewell finished playing.
+            if (pendingCompletionModalRef.current) {
+              pendingCompletionModalRef.current = false;
+              setShowCompletionModal(true);
+            }
             // Fix 3: arm echo guard — VAD ignores speech input for
             // PLAYBACK_ECHO_GUARD_MS after Linda's real end-of-playback so TTS
             // tail / reverb can't register as candidate speech.
@@ -2240,6 +2366,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
         if (isAiSpeakingRef.current) {
           // Linda is still speaking — store duration and wait until she stops.
+          // Do NOT display the timer yet: candidate wants it to surface ONLY
+          // after Linda finishes her question. handleAllAudioFinished reads
+          // questionTimerPendingRef at the true end-of-audio and starts the
+          // visible countdown from that exact moment.
           console.log(`[Timer ${timestamp}] Linda still speaking, storing pending timer: ${dur}s`);
           questionTimerPendingRef.current = dur;
           questionTimerTotalRef.current = dur;
@@ -2254,6 +2384,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           questionTimerStartedAtMsRef.current = performance.now();
           questionTimerPausedMsRef.current = 0;
           questionTimerPausedAtRef.current = null;
+          // User spec: per-question timer ticks throughout the candidate's
+          // turn (including silence nudge), not just when they actually
+          // speak. Awaiting-speech gate removed so the 2-min slot counts
+          // down continuously from the moment Linda stops.
+          questionTimerAwaitingSpeechRef.current = false;
           setQuestionTimerSeconds(dur);
           questionTimerIntervalRef.current = setInterval(() => {
             // Per-question timer runs CONTINUOUSLY once the question starts.
@@ -2263,7 +2398,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             // Acks, follow-ups, and next-question TTS all keep the clock
             // running so the displayed value stays in sync with the
             // backend's monotonic per-question timer AND the global timer.
-            if (isClarificationRef.current || isFullscreenExitedRef.current) {
+            if (isClarificationRef.current || isFullscreenExitedRef.current || questionTimerAwaitingSpeechRef.current) {
               // Enter pause bookkeeping once so cumulative paused time is correct.
               if (questionTimerPausedAtRef.current === null) {
                 questionTimerPausedAtRef.current = performance.now();
@@ -2392,9 +2527,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
         break;
       case "interview_completion_message":
-        // Show the official completion message before disconnect (Req 16)
+        // Show the official completion message (Req 16) — but ONLY after
+        // Linda's farewell has finished playing. Backend sends this event
+        // immediately after `interview_ended` without waiting for TTS
+        // playback to drain. If we flip the modal on now, it appears while
+        // Linda is still audibly speaking. Defer via pendingCompletionModalRef
+        // which finalizePlayback flushes at the true end-of-audio.
         setCompletionMessage(data.message || "Thank you for completing the interview. Your responses have been recorded successfully.");
-        setShowCompletionModal(true);
+        if (candidatePlaybackEndedRef.current) {
+          setShowCompletionModal(true);
+        } else {
+          pendingCompletionModalRef.current = true;
+        }
         break;
       case "interview_closing":
         setIsClosing(true); isClosingRef.current = true;
@@ -2898,9 +3042,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // them into a flag that gates only NEW speech_started detection. Once
         // speech is in progress, frames keep flowing so the candidate's
         // answer reaches the backend.
+        // Suppress new speech detection during ANY Linda speech, including
+        // the silence nudge. Per spec: candidate's response must only be
+        // captured AFTER "Are you there?" finishes speaking.
         const suppressNewSpeechDetection =
           Date.now() < playbackEchoGuardUntilRef.current ||
-          (isAiSpeakingRef.current && !isSilencePromptRef.current);
+          isAiSpeakingRef.current;
 
         // Log every 20th frame to confirm audio is flowing
         speechFrameCountRef.current;
@@ -2922,6 +3069,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
               speechDetectedRef.current = true;
               speechDetectedAtRef.current = Date.now();
               postSpeechNoiseCountRef.current = MIN_RESPEECH_FRAMES; // start confirmed
+              // Unfreeze the per-question timer on VAD-confirmed speech as well.
+              questionTimerAwaitingSpeechRef.current = false;
               if (!speechStartSentRef.current) {
                 speechStartSentRef.current = true;
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -2986,17 +3135,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         // Uses simple fixed threshold (no adaptive calibration) so speech is
         // reliably detected even in noisy environments.
         //
-        // Issue 3 fix: ALSO block PCM transmission while Linda is actively
-        // speaking. Previously, if the mic was open and `speechDetectedRef`
-        // was already `true` from the previous turn, every audio frame kept
-        // flowing to the backend even while Linda's TTS was playing —
-        // Whisper then transcribed Linda's own voice (echoing through the
-        // speakers into the mic) as the candidate's answer ("how do you
-        // crying" while Linda asked "How do you prioritize tasks…"). The
-        // silence-prompt case is exempted because during the silence nudge
-        // the candidate's mic must stay active so their real response can
-        // still reach the backend.
-        const lindaHoldingTurn = isAiSpeakingRef.current && !isSilencePromptRef.current;
+        // Block PCM transmission while Linda is speaking at all — including
+        // during the "Are you there?" silence nudge. Per spec: candidate's
+        // response must only be captured AFTER the nudge finishes, so even
+        // if the mic is open, no audio frames should reach the backend
+        // while Linda is mid-prompt.
+        const lindaHoldingTurn = isAiSpeakingRef.current;
         if (
           speechDetectedRef.current &&
           !lindaHoldingTurn &&
@@ -3309,7 +3453,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       const timestamp = new Date().toISOString();
       console.log(`[WS ${timestamp}] WebSocket connected successfully`);
       setIsConnected(true);
-      setStatus("Connected - Linda is greeting you...");
+      // Immediate feedback so the candidate sees SOMETHING while the backend's
+      // LLM greeting + TTS warms up (can take 2-4s). Without this the chat
+      // sits blank and the candidate thinks the page is frozen — which is
+      // exactly the "first message appears late" complaint.
+      setStatus("Linda is joining your interview...");
+      isAiSpeakingRef.current = true;
+      setIsAiSpeaking(true);
       reconnectAttemptsRef.current = 0;
       // Keepalive ping every 5 s — prevents proxy/nginx from closing idle connections
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
@@ -3364,6 +3514,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     ws.onmessage = (event) => {
       if (event.data instanceof ArrayBuffer) {
         console.log(`[WS ${new Date().toISOString()}] Audio chunk received: size=${event.data.byteLength} bytes`);
+        // CRITICAL: call our bookkeeping (queueAudio + trackPlaybackChunk)
+        // BEFORE streamAudio. TalkingHead's streamAudio transfers/detaches the
+        // ArrayBuffer internally (postMessage to an AudioWorklet), so any
+        // consumer that runs AFTER it sees byteLength=0 and counts zero
+        // duration. That's what made currentTurnAudioMs stall at ~500ms and
+        // made the reveal loop paint to 85% cap instantly.
+        // Take a copy first so streamAudio still gets a valid buffer.
+        const pcmCopy = event.data.slice(0);
+        queueAudioRef.current(pcmCopy);
+        trackPlaybackChunkRef.current(pcmCopy);
         // On the first chunk of each turn: call streamStart now that the buffer is non-empty.
         // Deferred from speaking_started to avoid TalkingHead firing onAudioEnd immediately
         // on Q1 (cold AudioContext / empty buffer race condition).
@@ -3373,13 +3533,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           talkingHeadRef.current?.streamStart(24000, cb);
         }
         // TalkingHead handles audio playback (gain:1) AND lip sync natively.
-        // Also feed our AudioContext for pendingBuffers state tracking.
+        // Now safe to pass the original — we've already copied the data.
         talkingHeadRef.current?.streamAudio(event.data);
-        queueAudioRef.current(event.data);
-        // And mirror the chunk on our own silent tracker context so we know
-        // the AUTHORITATIVE audio-clock end-of-playback moment (see
-        // `trackPlaybackChunk` / `whenTrackedPlaybackEnds`).
-        trackPlaybackChunkRef.current(event.data);
       } else {
         const data = JSON.parse(event.data);
         handleMessageRef.current(data);
@@ -3590,56 +3745,100 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
     // Wall-clock timestamp of when the pause started, so the paired
     // session_resumed proctor event can include the total pause duration.
     let pausedAtMs: number | null = null;
+    // Grace period: if candidate returns to fullscreen within 10s, DON'T
+    // fully pause the session — just log a minor violation and continue.
+    // This prevents accidental Esc presses from killing ongoing interviews.
+    // Professional interview platforms (HackerRank, HireVue) use this pattern.
+    const GRACE_PERIOD_MS = 10000;
+    let graceTimerId: ReturnType<typeof setTimeout> | null = null;
+    let graceCountdownId: ReturnType<typeof setInterval> | null = null;
+    let graceExitAtMs: number | null = null;
+
+    const clearGrace = () => {
+      if (graceTimerId !== null) { clearTimeout(graceTimerId); graceTimerId = null; }
+      if (graceCountdownId !== null) { clearInterval(graceCountdownId); graceCountdownId = null; }
+      setGracePeriodRemaining(null);
+    };
+
+    const executeHardPause = () => {
+      // This is the OLD immediate-pause behavior, now run ONLY after the
+      // grace period expires. Triggers: full stop of Linda's TTS, mic
+      // muted, backend notified to pause silence watchers / timers.
+      pausedAtMs = Date.now();
+      frozenGlobalSecondsRef.current = remainingSeconds;
+      frozenQuestionSecondsRef.current = questionTimerSecondsRef.current;
+      candidateAIInterviewService.reportProctorEvent(token, {
+        event_type: 'session_paused',
+        severity: 'low',
+        details: { reason: 'fullscreen_exit', paused_at: new Date().toISOString() },
+      }).catch(() => { /* best-effort */ });
+      try { talkingHeadRef.current?.streamStop(); } catch { /* ignore */ }
+      isPlayingRef.current = false;
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        try { wsRef.current.send(JSON.stringify({ type: 'session_pause', reason: 'fullscreen_exit' })); } catch { /* best-effort */ }
+      }
+      if (preExitMuteState === null) {
+        preExitMuteState = isMutedRef.current;
+      }
+      if (!isMutedRef.current) {
+        isMutedRef.current = true;
+        setIsMuted(true);
+      }
+    };
 
     const handleFullscreenChange = async () => {
       if (!document.fullscreenElement) {
+        // FULLSCREEN EXIT detected. Show overlay immediately (existing
+        // behavior) but DO NOT hard-pause yet — give the candidate a 10s
+        // grace window to return. Log the exit itself as a minor event now
+        // (recruiter sees every exit regardless of recovery).
         setIsFullscreenExited(true);
         isFullscreenExitedRef.current = true;
-        pausedAtMs = Date.now();
-        // Snapshot the timers at the exact moment fullscreen is lost so
-        // they can be restored verbatim on return. This is what keeps the
-        // visible timer from "jumping forward" when a reconnect fires the
-        // session_resumed handler mid-pause.
-        frozenGlobalSecondsRef.current = remainingSeconds;
-        frozenQuestionSecondsRef.current = questionTimerSecondsRef.current;
-        // Report fullscreen exit as a proctor event immediately so the
-        // recruiter sees it in the violation feed regardless of whether
-        // the candidate comes back or not.
+        graceExitAtMs = Date.now();
         candidateAIInterviewService.reportProctorEvent(token, {
           event_type: 'fullscreen_exit',
           severity: 'low',
-          details: { phase: 'in_interview' },
+          details: { phase: 'in_interview', grace_period_ms: GRACE_PERIOD_MS },
         }).catch(() => { /* best-effort */ });
-        // ALSO record an explicit session_paused event so the recruiter's
-        // violation timeline shows the exact moment the interview was frozen
-        // (distinct from the fullscreen_exit trigger — the pause is the
-        // downstream effect on the session, and the recruiter needs it to
-        // compute "how long was the candidate away" when paired with the
-        // matching session_resumed entry).
-        candidateAIInterviewService.reportProctorEvent(token, {
-          event_type: 'session_paused',
-          severity: 'low',
-          details: { reason: 'fullscreen_exit', paused_at: new Date().toISOString() },
-        }).catch(() => { /* best-effort */ });
-        // Freeze the session: stop Linda's TTS playback, close the mic,
-        // and tell the backend to pause so it doesn't advance follow-ups /
-        // silence clocks / etc. while the candidate is outside fullscreen.
-        try { talkingHeadRef.current?.streamStop(); } catch { /* ignore */ }
-        isPlayingRef.current = false;
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          try { wsRef.current.send(JSON.stringify({ type: 'session_pause', reason: 'fullscreen_exit' })); } catch { /* best-effort */ }
-        }
-        // Only capture the pre-exit state on the FIRST exit (not on repeated
-        // fullscreenchange fires while still out).
-        if (preExitMuteState === null) {
-          preExitMuteState = isMutedRef.current;
-        }
-        if (!isMutedRef.current) {
-          isMutedRef.current = true;
-          setIsMuted(true);
-        }
+        // Arm the grace timer — if the candidate doesn't return in time,
+        // escalate to the full pause.
+        clearGrace();
+        setGracePeriodRemaining(Math.ceil(GRACE_PERIOD_MS / 1000));
+        graceCountdownId = setInterval(() => {
+          if (graceExitAtMs === null) return;
+          const left = Math.max(0, Math.ceil((GRACE_PERIOD_MS - (Date.now() - graceExitAtMs)) / 1000));
+          setGracePeriodRemaining(left);
+        }, 200);
+        graceTimerId = setTimeout(() => {
+          if (graceCountdownId !== null) { clearInterval(graceCountdownId); graceCountdownId = null; }
+          setGracePeriodRemaining(null);
+          graceTimerId = null;
+          if (!document.fullscreenElement) executeHardPause();
+        }, GRACE_PERIOD_MS);
       } else {
         // RETURNING TO FULLSCREEN.
+        //
+        // FAST PATH: if the grace timer is still armed, the candidate came
+        // back within 10s — tear down the overlay WITHOUT hard-pausing.
+        // Log a minor "recovered" violation for the recruiter timeline but
+        // don't send session_pause / session_resume (they never paused).
+        if (graceTimerId !== null) {
+          clearGrace();
+          const recoveredMs = graceExitAtMs !== null ? Date.now() - graceExitAtMs : null;
+          graceExitAtMs = null;
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'fullscreen_exit_recovered',
+            severity: 'low',
+            details: {
+              recovered_within_ms: recoveredMs,
+              grace_period_ms: GRACE_PERIOD_MS,
+            },
+          }).catch(() => { /* best-effort */ });
+          setIsFullscreenExited(false);
+          isFullscreenExitedRef.current = false;
+          return;
+        }
+        graceExitAtMs = null;
         // Before doing anything else, re-check mic/camera permission — if the
         // candidate blocked it while the browser UI was visible, arm the
         // media block NOW and log an additional proctor violation that the
@@ -3716,6 +3915,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       // ref. setIsMuted is a no-op here (component gone) so just null out
       // the local pointer.
       preExitMuteState = null;
+      clearGrace();
     };
   }, [isConnected, probeMediaPermissions, armMediaBlock, token]);
 
@@ -4557,6 +4757,24 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                 Your interview is still running. Please return to fullscreen to continue.
               </p>
             </div>
+            {/* Grace-period countdown. Visible only while we're still within
+                the 10s return window. Once it expires, this collapses and the
+                UI falls through to the full "Interview paused" state. */}
+            {gracePeriodRemaining !== null && (
+              <div className="w-full rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-center">
+                <span className="block text-[11px] font-semibold text-amber-200 uppercase tracking-wider mb-1">
+                  Auto-pause in
+                </span>
+                <span className={`font-mono font-bold text-3xl tabular-nums ${
+                  gracePeriodRemaining <= 3 ? 'text-red-300' : 'text-amber-200'
+                }`}>
+                  {gracePeriodRemaining}s
+                </span>
+                <span className="block text-[10px] text-amber-300/80 mt-1">
+                  Return now to continue without interruption
+                </span>
+              </div>
+            )}
             {/* Timer display */}
             <div className="w-full grid grid-cols-2 gap-3">
               {/* Global timer */}
@@ -4642,6 +4860,30 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       )}
 
       <InterviewProctoringWarnings />
+
+      {/* TESTER MUTE DOT — small button in bottom-right, subtle for real
+          candidates but findable for QA. Click to toggle mic mute for silence
+          scenarios ("Are you there?" trigger, VAD testing). Red = muted,
+          gray ring = live. Size bumped from 8px → 14px so testers can find
+          it; still easy to miss at a glance unless you know to look. */}
+      {isConnected && !isClosing && (
+        <button
+          onClick={toggleMute}
+          title={isMuted ? "MUTED — click to unmute mic" : "MIC LIVE — click to mute"}
+          aria-label="Tester mute toggle"
+          className="fixed bottom-2 right-2 z-[400] rounded-full transition-all duration-200 flex items-center justify-center"
+          style={{
+            width: "14px",
+            height: "14px",
+            background: isMuted ? "#ef4444" : "rgba(148, 163, 184, 0.35)",
+            border: isMuted ? "1px solid #fca5a5" : "1px solid rgba(148, 163, 184, 0.5)",
+            boxShadow: isMuted ? "0 0 10px rgba(239, 68, 68, 0.8)" : "0 0 4px rgba(148, 163, 184, 0.3)",
+            cursor: "pointer",
+          }}
+        >
+          {isMuted && <span style={{ color: "white", fontSize: "8px", fontWeight: "bold", lineHeight: 1 }}>M</span>}
+        </button>
+      )}
     </>
   );
 }

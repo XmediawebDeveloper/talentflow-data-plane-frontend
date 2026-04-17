@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
-import { modeFromDuration, durationFromMode } from '@/lib/constants/aiInterviewMode';
+import { modeFromConfig, durationFromMode } from '@/lib/constants/aiInterviewMode';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Step indicator constants                                               */
@@ -1144,10 +1144,26 @@ export default function AIInterviewConfig() {
           ) ?? null;
         }
 
+        // Mode + SI-backed settings restore on ANY existing draft (even if
+        // rounds_config is temporarily empty) — the Interview Mode toggle
+        // must reflect what the user picked, not silently default to 'fixed'
+        // when the user navigates back from the Clusters page.
+        if (existingDraft) {
+          existingDraftIdRef.current = existingDraft.id;
+          setMode(modeFromConfig(
+            (existingDraft as any).special_instructions,
+            existingDraft.duration_minutes ?? 30,
+          ));
+          if ((existingDraft as any).available_languages?.length) {
+            setAvailableLanguages((existingDraft as any).available_languages);
+          }
+          if ((existingDraft as any).introduction_video_url) {
+            setIntroVideoUrl((existingDraft as any).introduction_video_url);
+          }
+        }
+
         if (existingDraft?.rounds_config?.length) {
           // Restore state from saved draft
-          existingDraftIdRef.current = existingDraft.id;
-
           const mthRound = existingDraft.rounds_config.find((r: AIInterviewRoundConfig) => r.type === 'must_have_skills');
           const nthRound = existingDraft.rounds_config.find((r: AIInterviewRoundConfig) => r.type === 'nice_to_have_skills');
           const hrRound  = existingDraft.rounds_config.find((r: AIInterviewRoundConfig) => r.type === 'hr');
@@ -1198,21 +1214,6 @@ export default function AIInterviewConfig() {
             }
           } else {
             setHrEnabled(false);
-          }
-
-          // Detect mode from stored duration.
-          // Convention: duration_minutes === 0 means flexible mode.
-          // See lib/constants/aiInterviewMode.ts for the rationale.
-          setMode(modeFromDuration(existingDraft.duration_minutes ?? 30));
-
-          // Restore available languages
-          if ((existingDraft as any).available_languages?.length) {
-            setAvailableLanguages((existingDraft as any).available_languages);
-          }
-
-          // Restore introduction video URL
-          if ((existingDraft as any).introduction_video_url) {
-            setIntroVideoUrl((existingDraft as any).introduction_video_url);
           }
 
           // Restore clusters, skill comments, and skill types from special_instructions
@@ -1271,9 +1272,8 @@ export default function AIInterviewConfig() {
           }
 
         } else if (existingDraft) {
-          // Config exists but has no rounds_config yet — still register the ID
-          // so subsequent saves update it rather than creating a duplicate.
-          existingDraftIdRef.current = existingDraft.id;
+          // Config exists but has no rounds_config yet — populate skills from
+          // JD defaults. Mode + SI-backed settings were already restored above.
           setMth(prev => ({
             ...prev,
             skills: jd.must_have_skills?.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType })) ?? [],
@@ -1492,7 +1492,32 @@ export default function AIInterviewConfig() {
   const totalPct = mth.percentage + (nth.enabled ? nth.percentage : 0) + (hrEnabled ? hrPct : 0);
   const pctValid = totalPct === 100;
   const hrPctInvalid = mode === 'flexible' && hrEnabled && hrPct < 10;
-  const canContinueToClusters = (mode === 'flexible' ? pctValid && !hrPctInvalid : true) && !savingDraft && !generatingClusters;
+
+  // HR question selection validation — must be satisfied before continuing to clusters.
+  // Keeps the same rules enforced inside handleContinueToClusters but surfaces them
+  // as a disabled-state reason instead of a post-click toast.
+  const HR_MIN_QUESTIONS = 3;
+  const hrRequiredCount = mode === 'fixed' && hrEnabled ? (timedAllocation.hrQuestions ?? 0) : 0;
+  const continueDisabledReason = (() => {
+    if (savingDraft) return 'Saving draft…';
+    if (generatingClusters) return 'Generating clusters…';
+    if (mode === 'flexible' && !pctValid) return `Scoring weights must total 100% (currently ${totalPct}%).`;
+    if (hrPctInvalid) return 'HR weight must be at least 10% in Flexible mode.';
+    if (hrEnabled && hrSelectedIds.length === 0) {
+      return 'HR round is enabled — please select HR questions to continue.';
+    }
+    if (hrEnabled && hrSelectedIds.length < HR_MIN_QUESTIONS) {
+      return `Please select at least ${HR_MIN_QUESTIONS} HR questions (${hrSelectedIds.length} selected).`;
+    }
+    if (mode === 'fixed' && hrEnabled && hrRequiredCount > 0 && hrSelectedIds.length !== hrRequiredCount) {
+      return `Please select exactly ${hrRequiredCount} HR question${hrRequiredCount !== 1 ? 's' : ''} (${hrSelectedIds.length} selected).`;
+    }
+    if (mth.skills.length === 0) {
+      return 'At least one Must-Have skill is required before generating clusters.';
+    }
+    return '';
+  })();
+  const canContinueToClusters = !continueDisabledReason;
   const experienceRange =
     selectedJd?.experience_min != null && selectedJd?.experience_max != null
       ? `${selectedJd.experience_min}–${selectedJd.experience_max} yrs`
@@ -2651,18 +2676,28 @@ export default function AIInterviewConfig() {
 
               {/* Actions */}
               <div className="space-y-2">
-                <button
-                  onClick={handleContinueToClusters}
-                  disabled={!canContinueToClusters}
-                  className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
-                    canContinueToClusters
-                      ? 'bg-gray-900 text-white hover:bg-gray-800'
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  }`}
-                >
-                  {(savingDraft || generatingClusters) ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-                  {savingDraft ? 'Saving…' : generatingClusters ? 'Generating Clusters…' : 'Continue to Clusters'}
-                </button>
+                <div className="relative group">
+                  <button
+                    onClick={handleContinueToClusters}
+                    disabled={!canContinueToClusters}
+                    title={continueDisabledReason || undefined}
+                    aria-disabled={!canContinueToClusters}
+                    className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
+                      canContinueToClusters
+                        ? 'bg-gray-900 text-white hover:bg-gray-800'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {(savingDraft || generatingClusters) ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+                    {savingDraft ? 'Saving…' : generatingClusters ? 'Generating Clusters…' : 'Continue to Clusters'}
+                  </button>
+                  {!canContinueToClusters && continueDisabledReason && (
+                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal w-max max-w-xs z-10">
+                      {continueDisabledReason}
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={handleSaveAsDraft}
                   disabled={savingDraft}

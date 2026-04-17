@@ -17,19 +17,21 @@ import {
 } from 'recharts';
 import EvaluationTab from './tabs/EvaluationTab';
 import EvaluationDashboardTab from './tabs/EvaluationDashboardTab';
-import SkillCoverageTab from './tabs/SkillCoverageTab';
+import EvaluationReportTab from './tabs/EvaluationReportTab';
+import CoverageTab from './tabs/CoverageTab';
+import { OverviewSection } from './evaluation-dashboard/OverviewSection';
+import { buildDashboardData } from './evaluation-dashboard/adapter';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import ClusterInsightsTab from './ClusterInsightsTab';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
   onBack: () => void;
 }
 
-type TabKey = 'overview' | 'evaluation' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'clusters' | 'violations' | 'skill_coverage';
+type TabKey = 'overview' | 'evaluation' | 'eval_report' | 'eval_dashboard' | 'sentiment' | 'qa' | 'recording' | 'transcript' | 'coverage' | 'violations';
 
 /* ─── Proctoring helpers ─────────────────────────────────────────── */
 interface ViolationRecord {
@@ -948,12 +950,13 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     { key: 'overview',       label: 'Overview',        icon: <BarChart3 className="w-4 h-4" /> },
     ...((isCompleted || isPartial)
       ? [
-          { key: 'evaluation' as TabKey, label: 'Evaluation', icon: <Award className="w-4 h-4" /> },
+          // 'evaluation' tab hidden per product requirement — its data is now shown
+          // via the Evaluation Dashboard tab's Analysis view.
+          { key: 'eval_report' as TabKey, label: 'Evaluation Report', icon: <FileText className="w-4 h-4" /> },
           { key: 'eval_dashboard' as TabKey, label: 'Evaluation Dashboard', icon: <Target className="w-4 h-4" /> },
         ]
       : []),
-    { key: 'skill_coverage', label: 'Skill Coverage',  icon: <Activity className="w-4 h-4" />, live: isInProgress },
-    { key: 'clusters',       label: 'Cluster Insights', icon: <Layers className="w-4 h-4" />, live: isInProgress },
+    { key: 'coverage',       label: 'Coverage',         icon: <Activity className="w-4 h-4" />, live: isInProgress },
     { key: 'sentiment',      label: 'Sentiment',        icon: <Brain className="w-4 h-4" /> },
     { key: 'qa',             label: 'Q&A',              icon: <MessageSquare className="w-4 h-4" /> },
     { key: 'recording',      label: 'Recording',        icon: <Video className="w-4 h-4" /> },
@@ -992,8 +995,8 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
   const getPlaceholderMessage = (tabKey?: string) => {
     // While evaluation is being generated, all tabs show the spinner
     if (evaluationPending) return null; // handled by renderEvaluationSpinner below
-    // Skill Coverage and Clusters handle their own in-progress state — don't block them
-    if (isInProgress && tabKey !== 'skill_coverage' && tabKey !== 'clusters') {
+    // Coverage tab handles its own in-progress state — don't block it
+    if (isInProgress && tabKey !== 'coverage') {
       return 'Interview in progress — data will appear once completed';
     }
     if (!isInProgress && !isCompleted && !isPartial) return 'Interview not yet started — no data available';
@@ -1128,1210 +1131,51 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             {/* Evaluation pending spinner — shown for ALL tabs while batch eval runs */}
             {evaluationPending && renderEvaluationSpinner()}
 
-            {/* Skill Coverage Tab */}
-            {!evaluationPending && activeTab === 'skill_coverage' && (
-              <SkillCoverageTab
-                sessionId={liveSession.id}
-                aiEvaluation={eval_}
-                isCompleted={liveSession.status === 'completed'}
-                clusterConfig={clusterConfig}
-              />
-            )}
-
-            {/* Legacy skill_coverage block removed — replaced by SkillCoverageTab above.
-              Original inline block handled: live WS-derived coverage, cluster-organized skills,
-              ratchet logic, question mapping strategies. Now all handled by SkillCoverageTab
-              with v2 coverage_trail + download buttons.
-            */}
-            {false && (() => {
-              const rawMap = eval_.skill_coverage_map as Record<string, string> | undefined;
-              const buildFromEval = rawMap && Object.keys(rawMap).length > 0
-                ? (() => {
-                    const allSkills = Object.keys(rawMap);
-                    return {
-                      covered:             allSkills.filter(s => rawMap[s] === 'covered'),
-                      medium_covered:      allSkills.filter(s => rawMap[s] === 'medium'),
-                      low_covered:         allSkills.filter(s => rawMap[s] === 'low' || rawMap[s] === 'skipped'),
-                      uncovered:           allSkills.filter(s => !rawMap[s] || rawMap[s] === 'not_started'),
-                      nice_to_have_skills: (eval_.nice_to_have_skills as string[] | undefined) || [],
-                      total_questions:     (eval_.total_questions as number | undefined) || liveSession.total_questions || 0,
-                      questions_asked:     (liveSession.skill_coverage as any)?.questions_asked || (eval_.questions_asked as number | undefined) || 0,
-                      hr_topics:           (eval_.hr_topics as Record<string, string> | undefined) || undefined,
-                      round_name:          undefined as string | undefined,
-                    };
-                  })()
-                : null;
-
-              // Determine whether eval-derived data has any meaningful coverage.
-              // If skill_coverage_map came back all-zero/not_started (backend eval issue),
-              // fall back to the live skill_coverage field which the backend also persists.
-              const hasMeaningfulCoverage = (sc: typeof buildFromEval) =>
-                !!sc && (sc.covered.length + sc.medium_covered.length + sc.low_covered.length) > 0;
-              const liveSkillCoverage = liveSession.skill_coverage ?? null;
-              const rawSc = isInProgress
-                ? (liveSkillCoverage || buildFromEval || null)
-                : (hasMeaningfulCoverage(buildFromEval)
-                    ? buildFromEval
-                    : liveSkillCoverage || bestSeenSkillCoverageRef.current || buildFromEval || null);
-
-              // If no coverage data yet during in-progress, build an initial state from
-              // cluster config so the skill grid shows immediately instead of a placeholder.
-              const clusterSkills = [...new Set([
-                ...clusterConfig.mth.flatMap(c => c.skills),
-                ...clusterConfig.nth.flatMap(c => c.skills),
-              ])];
-              const initialFromClusters = !rawSc && isInProgress && clusterSkills.length > 0
-                ? {
-                    covered: [] as string[], medium_covered: [] as string[],
-                    low_covered: [] as string[], uncovered: clusterSkills,
-                    nice_to_have_skills: [] as string[],
-                    total_questions: liveSession.total_questions || clusterSkills.length,
-                    questions_asked: 0,
-                    round_name: undefined as string | undefined,
-                    hr_topics: undefined as Record<string, string> | undefined,
-                  }
-                : null;
-
-              const scBase = rawSc || initialFromClusters;
-              const sc = scBase;
-              const allSkills = [
-                ...(sc?.covered || []),
-                ...(sc?.medium_covered || []),
-                ...(sc?.low_covered || []),
-                ...(sc?.uncovered || []),
-              ];
-              const total = allSkills.length;
-              // "Touched" = any level of coverage (strong + medium + low).
-              // This matches what Cluster Insights counts as "addressed".
-              const touchedCount = (sc?.covered.length || 0) + (sc?.medium_covered.length || 0) + (sc?.low_covered.length || 0);
-              const touchedPct = total > 0 ? Math.round((touchedCount / total) * 100) : 0;
-              // "Strong" = covered + medium_covered only (properly demonstrated)
-              const strongCount = (sc?.covered.length || 0) + (sc?.medium_covered.length || 0);
-              const strongPct = total > 0 ? Math.round((strongCount / total) * 100) : 0;
-              // Ring shows "touched" so it matches Cluster Insights; goal tracks "strong"
-              const coveragePct = touchedPct;
-
-              if (!sc && !isInProgress) {
-                return renderPlaceholder('Skill coverage data not available for this session');
-              }
-
-              const stronglyCoveredCount = sc?.covered.length || 0;
-              const allCoveredGoalPct = total > 0 ? Math.round((stronglyCoveredCount / total) * 100) : 0;
-              const remainingUncovered = (sc?.uncovered.length || 0);
-              const remainingToStrengthen = (sc?.low_covered.length || 0) + (sc?.medium_covered.length || 0);
-              const isGoalMet = total > 0 && stronglyCoveredCount === total;
-
-              const getLastUpdatedLabel = () => {
-                if (!lastUpdatedAt) return null;
-                const secs = Math.floor((Date.now() - lastUpdatedAt.getTime()) / 1000);
-                if (secs < 5) return 'just now';
-                if (secs < 60) return `${secs}s ago`;
-                return `${Math.floor(secs / 60)}m ago`;
-              };
-
+            {/* Overview Tab — candidate profile + performance summary (new design) */}
+            {!evaluationPending && activeTab === 'overview' && (() => {
+              const placeholderMsg = getPlaceholderMessage('overview');
+              if (placeholderMsg) return renderPlaceholder(placeholderMsg);
+              const data = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: {
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                },
+                interview: {
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                },
+              });
               return (
-                <div className="space-y-5">
-                  {/* Header with live indicator */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Skill Coverage</h3>
-                      {sc?.round_name && (
-                        <p className="text-sm text-gray-500 mt-0.5">{sc.round_name}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {isInProgress && (
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-500 text-white text-xs font-bold rounded-full">
-                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                          {liveWsConnected ? 'LIVE — WebSocket' : 'LIVE — polling'}
-                        </span>
-                      )}
-                      {isInProgress && lastUpdatedAt && (
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
-                          <RefreshCw className="w-3 h-3" />
-                          Updated {getLastUpdatedLabel()}
-                        </span>
-                      )}
-                      {sc && (
-                        <span className="text-sm text-gray-500">
-                          <span className="font-semibold text-gray-800">
-                            {/* During live interview, show max of answered count and current Q number
-                                so the display updates immediately when a new question starts,
-                                not only after the candidate's answer is evaluated. */}
-                            {isInProgress && currentQuestion
-                              ? Math.max(sc.questions_asked || 0, currentQuestion.qNum)
-                              : (sc.questions_asked || 0)}
-                          </span> / {sc.total_questions} questions asked
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Coverage summary banner */}
-                  {sc && (
-                    <div className={`rounded-xl border p-3.5 ${isGoalMet ? 'bg-green-50 border-green-300' : touchedCount === total ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'}`}>
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="flex-shrink-0">
-                          {isGoalMet ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <Activity className="w-5 h-5 text-blue-500" />}
-                        </div>
-                        <span className={`text-sm font-semibold flex-1 ${isGoalMet ? 'text-green-800' : 'text-gray-800'}`}>
-                          {isGoalMet ? 'All skills strongly covered!' : touchedCount === total ? `All ${total} skills touched — depth varies` : `${touchedCount}/${total} skills touched`}
-                        </span>
-                      </div>
-                      {/* Two-row progress: touched vs strongly covered */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500 w-28 flex-shrink-0">Skills touched</span>
-                          <div className="flex-1 h-1.5 bg-white rounded-full overflow-hidden">
-                            <div className="h-1.5 bg-blue-400 rounded-full transition-[width] duration-700" style={{ width: `${touchedPct}%` }} />
-                          </div>
-                          <span className="text-xs font-bold text-blue-700 w-8 text-right">{touchedPct}%</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500 w-28 flex-shrink-0">Strong coverage</span>
-                          <div className="flex-1 h-1.5 bg-white rounded-full overflow-hidden">
-                            <div className="h-1.5 bg-green-500 rounded-full transition-[width] duration-700" style={{ width: `${strongPct}%` }} />
-                          </div>
-                          <span className="text-xs font-bold text-green-700 w-8 text-right">{strongPct}%</span>
-                        </div>
-                      </div>
-                      {!isGoalMet && isInProgress && remainingUncovered > 0 && (
-                        <p className="text-xs text-amber-600 mt-1.5">
-                          {remainingUncovered} skill{remainingUncovered !== 1 ? 's' : ''} not yet touched
-                        </p>
-                      )}
-                      {!isGoalMet && isInProgress && remainingToStrengthen > 0 && remainingUncovered === 0 && (
-                        <p className="text-xs text-blue-600 mt-1.5">
-                          All skills touched — {remainingToStrengthen} need deeper coverage
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* No data yet — only shows if no cluster config available to pre-populate */}
-                  {!sc && isInProgress && (
-                    <div className="border border-dashed border-gray-300 rounded-xl p-8 text-center">
-                      <RefreshCw className="w-8 h-8 text-gray-400 mx-auto mb-3 animate-spin" />
-                      <p className="text-gray-500 font-medium">Waiting for first answer…</p>
-                      <p className="text-sm text-gray-400 mt-1">Coverage updates as the candidate answers each question</p>
-                    </div>
-                  )}
-
-                  {/* Explanatory note — shown when completed with low strong coverage */}
-                  {!isInProgress && sc && strongPct <= 30 && (
-                    <div className="flex items-start gap-2.5 p-3 bg-orange-50 border border-orange-200 rounded-xl text-xs text-orange-700">
-                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                      <span>
-                        <strong>Why low strong coverage?</strong> Skills move to "Strongly Covered" only when the candidate gives a detailed, correct answer. Brief or partial answers are recorded as Low Coverage (skill was touched but not demonstrated deeply).
-                      </span>
-                    </div>
-                  )}
-
-                  {sc && (() => {
-                    // Build cluster + skill data structured by section (MTH first, then NTH)
-                    const skillLevel: Record<string, 'covered' | 'medium' | 'low' | 'uncovered'> = {};
-                    for (const s of sc.covered        || []) skillLevel[s.toLowerCase()] = 'covered';
-                    for (const s of sc.medium_covered || []) skillLevel[s.toLowerCase()] = 'medium';
-                    for (const s of sc.low_covered    || []) skillLevel[s.toLowerCase()] = 'low';
-                    for (const s of sc.uncovered      || []) skillLevel[s.toLowerCase()] = 'uncovered';
-
-                    // Apply ratchet: if a skill was covered in a previous round but the current
-                    // sc snapshot (which may only contain the new round's skills) shows it as
-                    // uncovered, restore the best-ever level so MTH skills don't disappear when
-                    // the interview transitions to the NTH round.
-                    if (isInProgress) {
-                      const ratchet = skillLevelRatchetRef.current;
-                      const pr: Record<string, number> = { covered: 3, medium: 2, low: 1, skipped: 1, uncovered: 0 };
-                      for (const [k, bestLevel] of Object.entries(ratchet)) {
-                        const cur = skillLevel[k];
-                        // Map 'skipped' to 'low' for display purposes (both = low coverage tier)
-                        const displayLevel = bestLevel === 'skipped' ? 'low' : bestLevel;
-                        if (!cur || (pr[cur] ?? 0) < pr[bestLevel]) {
-                          skillLevel[k] = displayLevel;
-                        }
-                      }
-                    }
-
-                    const levelCfg = {
-                      covered:   { label: 'Strong', short: '✓', bar: 'bg-green-500', text: 'text-green-700', chip: 'bg-green-100 text-green-700 border-green-200', pct: 100 },
-                      medium:    { label: 'Partial', short: '◑', bar: 'bg-yellow-400', text: 'text-yellow-700', chip: 'bg-yellow-100 text-yellow-700 border-yellow-200', pct: 65 },
-                      low:       { label: 'Low', short: '◷', bar: 'bg-orange-400', text: 'text-orange-600', chip: 'bg-orange-100 text-orange-600 border-orange-200', pct: 30 },
-                      uncovered: { label: 'Not Covered', short: '○', bar: 'bg-gray-200', text: 'text-gray-400', chip: 'bg-gray-100 text-gray-400 border-gray-200', pct: 0 },
-                    };
-
-                    // Build skill → question-number mapping from coverage_events.
-                    //
-                    // Strategy A+ (newest): 'assigned' events from question_timer_started.current_skill
-                    //   — ground truth: backend explicitly says which skill Linda is asking.
-                    //   isFollowUp is stamped directly at event creation.
-                    // Strategy A  (intermediate): coverage events with qNum stamped at creation,
-                    //   and isFollowUp stamped from currentQuestionRef (no assigned events present).
-                    // Strategy B  (legacy): timestamp ordering (no qNum stamps at all).
-                    const skillToQuestions: Record<string, Array<{qNum: number; isFollowUp: boolean}>> = {};
-                    if (liveEvents.length > 0) {
-                      // Strategy A+: 'assigned' events (question_timer_started.current_skill)
-                      const hasAssignedEvents = liveEvents.some(ev => ev.kind === 'assigned');
-
-                      // Strategy A: coverage events with qNum stamped at creation time
-                      const hasStampedQNum = liveEvents.some(
-                        ev => (ev.kind === 'covered' || ev.kind === 'medium' || ev.kind === 'low') && ev.qNum != null
-                      );
-
-                      if (hasAssignedEvents) {
-                        // Primary: use assigned events (exact skill Linda was targeting each Q)
-                        for (const ev of liveEvents) {
-                          if (ev.kind === 'assigned') {
-                            const key = ev.skill;  // already lowercased at creation
-                            if (!skillToQuestions[key]) skillToQuestions[key] = [];
-                            // Each {qNum, isFollowUp} combo is a distinct entry
-                            if (!skillToQuestions[key].some(q => q.qNum === ev.qNum && q.isFollowUp === ev.isFollowUp)) {
-                              skillToQuestions[key].push({ qNum: ev.qNum, isFollowUp: ev.isFollowUp });
-                            }
-                          }
-                        }
-                        // Supplemental: coverage events for skills not captured by assigned
-                        // (e.g. second skill in a combined question that evaluator detected)
-                        for (const ev of liveEvents) {
-                          if ((ev.kind === 'covered' || ev.kind === 'medium' || ev.kind === 'low') && ev.qNum) {
-                            const key = ev.skill.toLowerCase();
-                            const qNum = ev.qNum;
-                            // Only add if this qNum isn't already recorded for this skill via assigned
-                            if (!skillToQuestions[key]?.some(q => q.qNum === qNum)) {
-                              const isFollowUp = ev.isFollowUp ?? false;
-                              if (!skillToQuestions[key]) skillToQuestions[key] = [];
-                              skillToQuestions[key].push({ qNum, isFollowUp });
-                            }
-                          }
-                        }
-                        for (const key of Object.keys(skillToQuestions)) {
-                          skillToQuestions[key].sort((a, b) => a.qNum - b.qNum);
-                        }
-                      } else if (hasStampedQNum) {
-                        // Strategy A: use qNum + isFollowUp stamped directly on each skill event
-                        for (const ev of liveEvents) {
-                          if ((ev.kind === 'covered' || ev.kind === 'medium' || ev.kind === 'low') && ev.qNum) {
-                            const key = ev.skill.toLowerCase();
-                            const qNum = ev.qNum;
-                            // isFollowUp was stamped at event creation — trust it directly
-                            const isFollowUp = ev.isFollowUp ?? false;
-                            if (!skillToQuestions[key]) skillToQuestions[key] = [];
-                            if (!skillToQuestions[key].some(q => q.qNum === qNum)) {
-                              skillToQuestions[key].push({ qNum, isFollowUp });
-                            }
-                          }
-                        }
-                        for (const key of Object.keys(skillToQuestions)) {
-                          skillToQuestions[key].sort((a, b) => a.qNum - b.qNum);
-                        }
-                      } else {
-                        // Strategy B: legacy — timestamp ordering, pair each skill with the
-                        // question event that immediately precedes it.
-                        const sorted = [...liveEvents].sort((a, b) => a.ts - b.ts);
-                        const qEvents = sorted.filter(e => e.kind === 'question') as Array<{ kind: 'question'; qNum: number; isFollowUp: boolean; ts: number }>;
-                        for (const ev of sorted) {
-                          if (ev.kind === 'covered' || ev.kind === 'medium' || ev.kind === 'low') {
-                            let matched = qEvents.filter(q => q.ts <= ev.ts).pop() ?? qEvents[0] ?? null;
-                            if (matched) {
-                              const key = ev.skill.toLowerCase();
-                              if (!skillToQuestions[key]) skillToQuestions[key] = [];
-                              if (!skillToQuestions[key].some(q => q.qNum === matched!.qNum)) {
-                                skillToQuestions[key].push({ qNum: matched.qNum, isFollowUp: matched.isFollowUp });
-                              }
-                            }
-                          }
-                        }
-                        for (const key of Object.keys(skillToQuestions)) {
-                          skillToQuestions[key].sort((a, b) => a.qNum - b.qNum);
-                        }
-                      }
-                    }
-
-                    const toggleSkill = (name: string) => setExpandedSkills(prev => {
-                      const next = new Set(prev);
-                      next.has(name) ? next.delete(name) : next.add(name);
-                      return next;
-                    });
-
-                    // Group by section, sort by priority (high → low)
-                    const mthClusters = clusterConfig.mth
-                      .map(c => ({ ...c, section: 'mth' as const, skills: c.skills.map(s => ({ name: s, level: (skillLevel[s.toLowerCase()] || 'uncovered') as keyof typeof levelCfg })) }))
-                      .sort((a, b) => b.priority - a.priority);
-                    const nthClusters = clusterConfig.nth
-                      .map(c => ({ ...c, section: 'nth' as const, skills: c.skills.map(s => ({ name: s, level: (skillLevel[s.toLowerCase()] || 'uncovered') as keyof typeof levelCfg })) }))
-                      .sort((a, b) => b.priority - a.priority);
-                    const hasClusters = mthClusters.length + nthClusters.length > 0;
-
-                    // Find "currently being asked" — reverse-lookup skillToQuestions using currentQuestion.qNum.
-                    // Falls back to first uncovered/low skill only when no question mapping exists yet.
-                    const currentlyAskedSkillSet = new Set<string>();
-                    if (isInProgress && currentQuestion) {
-                      for (const [skill, qs] of Object.entries(skillToQuestions)) {
-                        if (qs.some(q => q.qNum === currentQuestion.qNum)) currentlyAskedSkillSet.add(skill);
-                      }
-                    }
-                    const fallbackTarget = currentlyAskedSkillSet.size === 0
-                      ? (sc.uncovered[0]?.toLowerCase() || sc.low_covered[0]?.toLowerCase() || null)
-                      : null;
-
-                    const renderSection = (label: string, color: string, clusters: Array<{ id: string; name: string; priority: number; section: 'mth' | 'nth'; skills: Array<{ name: string; level: keyof typeof levelCfg }> }>) => {
-                      if (clusters.length === 0) return null;
-                      const sectionTouched = clusters.reduce((sum, c) => sum + c.skills.filter(s => s.level !== 'uncovered').length, 0);
-                      const sectionTotal = clusters.reduce((sum, c) => sum + c.skills.length, 0);
-                      const sectionPct = sectionTotal > 0 ? Math.round((sectionTouched / sectionTotal) * 100) : 0;
-
-                      return (
-                        <div className="border border-gray-200 rounded-xl overflow-hidden">
-                          {/* Section header */}
-                          <div className={`flex items-center justify-between px-4 py-2.5 border-b border-gray-200 ${color}`}>
-                            <span className="text-sm font-bold">{label}</span>
-                            <div className="flex items-center gap-3">
-                              <div className="flex items-center gap-1.5">
-                                <div className="w-16 h-1.5 bg-white/40 rounded-full overflow-hidden">
-                                  <div className="h-1.5 rounded-full bg-white transition-[width] duration-700" style={{ width: `${sectionPct}%` }} />
-                                </div>
-                                <span className="text-xs font-bold">{sectionPct}%</span>
-                              </div>
-                              <span className="text-xs">{sectionTouched}/{sectionTotal} skills</span>
-                            </div>
-                          </div>
-
-                          {/* Clusters */}
-                          <div className="divide-y divide-gray-50">
-                            {clusters.map(c => {
-                              const cov = c.skills.filter(s => s.level !== 'uncovered').length;
-                              return (
-                                <div key={c.id} className="px-4 py-3">
-                                  {/* Cluster name + priority */}
-                                  <div className="flex items-center justify-between mb-2.5">
-                                    <div className="flex items-center gap-1.5 min-w-0">
-                                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 flex-shrink-0">P{c.priority}</span>
-                                      <span className="text-xs font-semibold text-gray-800 truncate">{c.name}</span>
-                                    </div>
-                                    <span className={`text-xs font-bold flex-shrink-0 ml-2 ${cov === c.skills.length ? 'text-green-600' : cov > 0 ? 'text-orange-500' : 'text-gray-400'}`}>
-                                      {cov}/{c.skills.length}
-                                    </span>
-                                  </div>
-
-                                  {/* Skills as rows with bars + question dropdown */}
-                                  <div className="space-y-1.5">
-                                    {c.skills.map(({ name, level }) => {
-                                      const cfg = levelCfg[level];
-                                      const isCurrent = isInProgress && (currentlyAskedSkillSet.has(name.toLowerCase()) || fallbackTarget === name.toLowerCase());
-                                      const qs = skillToQuestions[name.toLowerCase()] || [];
-                                      const isExpanded = expandedSkills.has(name);
-
-                                      // Split into main questions and follow-ups for separate counts
-                                      const mainQs = qs.filter(q => !q.isFollowUp);
-                                      const fuQs   = qs.filter(q => q.isFollowUp);
-
-                                      // Collapsed button label: "Q3" or "Q3, Q5" + "+2 FU" separately
-                                      const mainLabel = mainQs.length > 0
-                                        ? mainQs.map(q => `Q${q.qNum}`).join(', ')
-                                        : null;
-
-                                      return (
-                                        <div key={name} className={`rounded-lg border transition-colors duration-300 ${isCurrent ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300' : 'border-gray-100 hover:border-gray-200'}`}>
-                                          {/* Header row */}
-                                          <div className="flex items-center gap-2 px-2 py-1.5">
-                                            {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />}
-                                            {/* Full skill name — no truncation */}
-                                            <span className={`text-[11px] font-medium flex-1 min-w-0 leading-snug ${isCurrent ? 'text-blue-700' : cfg.text}`}>
-                                              {name}
-                                            </span>
-                                            {/* Status chip */}
-                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border flex-shrink-0 ${cfg.chip}`}>
-                                              {cfg.label}
-                                            </span>
-                                            {/* Question badges — main Q in blue, follow-up in violet */}
-                                            {qs.length > 0 && (
-                                              <button
-                                                onClick={() => toggleSkill(name)}
-                                                className="flex items-center gap-1 flex-shrink-0"
-                                                title="Show questions asked for this skill"
-                                              >
-                                                {mainQs.map(q => (
-                                                  <span key={q.qNum} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
-                                                    Q{q.qNum}
-                                                  </span>
-                                                ))}
-                                                {fuQs.map(q => (
-                                                  <span key={`fu-${q.qNum}`} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
-                                                    Q{q.qNum} ↩
-                                                  </span>
-                                                ))}
-                                                <ChevronDown className={`w-2.5 h-2.5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                                              </button>
-                                            )}
-                                          </div>
-                                          {/* Progress bar */}
-                                          <div className="px-2 pb-1.5">
-                                            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                              <div className={`h-1.5 rounded-full transition-[width] duration-700 ease-out ${cfg.bar}`} style={{ width: `${cfg.pct}%` }} />
-                                            </div>
-                                          </div>
-                                          {/* Expanded: all Qs in order — main (blue) and follow-ups (violet) */}
-                                          {isExpanded && qs.length > 0 && (
-                                            <div className="px-2 pb-2 border-t border-gray-100 pt-1.5">
-                                              <div className="flex items-center gap-1.5 flex-wrap">
-                                                <span className="text-[9px] text-gray-400 font-medium flex-shrink-0">Asked at:</span>
-                                                {[...qs].sort((a, b) => a.qNum - b.qNum).map(q => (
-                                                  <span
-                                                    key={`${q.qNum}-${q.isFollowUp}`}
-                                                    className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                                                      q.isFollowUp
-                                                        ? 'bg-violet-50 text-violet-700 border-violet-200'
-                                                        : 'bg-blue-50 text-blue-700 border-blue-200'
-                                                    }`}
-                                                    title={q.isFollowUp ? `Q${q.qNum} — follow-up question` : `Q${q.qNum} — main question`}
-                                                  >
-                                                    Q{q.qNum}{q.isFollowUp ? ' ↩' : ''}
-                                                  </span>
-                                                ))}
-                                              </div>
-                                              {fuQs.length > 0 && (
-                                                <p className="text-[9px] text-violet-500 mt-1">↩ = follow-up question</p>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    };
-
-                    return (
-                      <>
-                        {/* Must-Have Skills section */}
-                        {renderSection('Must-Have Skills', 'bg-purple-600 text-white', mthClusters)}
-
-                        {/* Nice-to-Have Skills section */}
-                        {renderSection('Nice-to-Have Skills', 'bg-indigo-500 text-white', nthClusters)}
-
-                        {/* Fallback: no cluster config — show flat skill list */}
-                        {!hasClusters && (
-                          <div className="border border-gray-200 rounded-xl p-4 space-y-2">
-                            <h4 className="text-sm font-semibold text-gray-800 mb-3">All Skills</h4>
-                            {[...sc.covered, ...sc.medium_covered, ...sc.low_covered, ...sc.uncovered].map(skill => {
-                              const level = skillLevel[skill.toLowerCase()] || 'uncovered';
-                              const cfg = levelCfg[level];
-                              const isCurrent = isInProgress && (currentlyAskedSkillSet.has(skill.toLowerCase()) || fallbackTarget === skill.toLowerCase());
-                              const qs = skillToQuestions[skill.toLowerCase()] || [];
-                              const isExpanded = expandedSkills.has(skill);
-                              return (
-                                <div key={skill} className={`rounded-lg border transition-colors ${isCurrent ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300' : 'border-gray-100 hover:border-gray-200'}`}>
-                                  <div className="flex items-center gap-2 px-2 py-1.5">
-                                    {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />}
-                                    <span className={`text-[11px] font-medium flex-1 min-w-0 leading-snug ${isCurrent ? 'text-blue-700' : cfg.text}`}>{skill}</span>
-                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border flex-shrink-0 ${cfg.chip}`}>{cfg.label}</span>
-                                    {qs.length > 0 && (
-                                      <button
-                                        onClick={() => toggleSkill(skill)}
-                                        className="flex items-center gap-1 flex-shrink-0"
-                                        title="Show questions asked for this skill"
-                                      >
-                                        {qs.filter(q => !q.isFollowUp).map(q => (
-                                          <span key={q.qNum} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
-                                            Q{q.qNum}
-                                          </span>
-                                        ))}
-                                        {qs.filter(q => q.isFollowUp).map(q => (
-                                          <span key={`fu-${q.qNum}`} className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200">
-                                            Q{q.qNum} ↩
-                                          </span>
-                                        ))}
-                                        <ChevronDown className={`w-2.5 h-2.5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div className="px-2 pb-1.5">
-                                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                      <div className={`h-1.5 rounded-full transition-[width] duration-700 ease-out ${cfg.bar}`} style={{ width: `${cfg.pct}%` }} />
-                                    </div>
-                                  </div>
-                                  {isExpanded && qs.length > 0 && (
-                                    <div className="px-2 pb-2 border-t border-gray-100 pt-1.5">
-                                      <div className="flex flex-wrap gap-1">
-                                        {[...qs].sort((a, b) => a.qNum - b.qNum).map(q => (
-                                          <span key={`${q.qNum}-${q.isFollowUp}`} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${q.isFollowUp ? 'bg-violet-50 text-violet-700 border-violet-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                            Q{q.qNum}{q.isFollowUp ? ' ↩' : ''}
-                                          </span>
-                                        ))}
-                                      </div>
-                                      {qs.some(q => q.isFollowUp) && <p className="text-[9px] text-violet-500 mt-1">↩ = follow-up question</p>}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        {/* HR Topics */}
-                        {sc.hr_topics && Object.keys(sc.hr_topics).length > 0 && (
-                          <div className="border border-purple-200 rounded-xl p-4">
-                            <div className="flex items-center gap-2 mb-3">
-                              <span className="w-2 h-2 rounded-full bg-purple-400" />
-                              <h4 className="text-sm font-semibold text-purple-800">HR Topics</h4>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {Object.entries(sc.hr_topics).map(([topic, status]) => (
-                                <div key={topic} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-50 border border-purple-100">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-purple-500 flex-shrink-0" />
-                                  <span className="text-xs font-medium text-purple-800 truncate">{topic}</span>
-                                  <span className="ml-auto text-[10px] text-purple-500 font-medium">{String(status)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    );
-                  })()}
-                </div>
-              );
-            })()}
-
-            {/* Overview Tab */}
-            {!evaluationPending && activeTab === 'overview' && (
-              placeholderMsg ? renderPlaceholder(placeholderMsg) : (
-                <div className="space-y-6">
-                  {/* Final Capability Score — flexible mode only (Report Section 5) */}
-                  {isFlexibleMode && eval_.capability_score != null && eval_.capability_score > 0 && (
-                    <div className="border border-indigo-200 rounded-xl overflow-hidden">
-                      <div className="flex items-center justify-between bg-indigo-600 text-white px-5 py-4">
-                        <div>
-                          <div className="text-sm font-semibold">Overall Capability Score</div>
-                          <div className="text-xs text-indigo-200 mt-0.5">Final weighted score across all sections</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-4xl font-bold">{eval_.capability_score}</div>
-                          <div className="text-xs text-indigo-300">out of 100</div>
-                        </div>
-                      </div>
-                      {eval_.capability_score_reasoning && (
-                        <div className="px-5 py-3 bg-indigo-50 border-t border-indigo-100">
-                          <p className="text-[11px] text-indigo-700 leading-relaxed">{eval_.capability_score_reasoning}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Stat Cards */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gray-50 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {eval_.total_questions ?? (evaluations.length || 'N/A')}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">Questions Asked</div>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-semibold text-gray-900">
-                        {formatDuration(eval_.duration_minutes)}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">Duration</div>
-                    </div>
-                  </div>
-
-                  {/* Identity Verification Card */}
-                  {(interview.identity_name || interview.identity_verified != null) && (
-                    <div className="border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
-                        <Shield className="w-4 h-4 text-gray-600" />
-                        <h3 className="text-sm font-semibold text-gray-900">Candidate Identity Verification</h3>
-                        <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                          interview.identity_verified
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-red-50 text-red-600'
-                        }`}>
-                          {interview.identity_verified
-                            ? <><CheckCircle2 className="w-3 h-3" /> Verified</>
-                            : <><XCircle className="w-3 h-3" /> Not Verified</>
-                          }
-                        </span>
-                      </div>
-                      <div className="p-4 flex items-start gap-4">
-                        {/* Photo */}
-                        <div className="flex-shrink-0">
-                          {identityPhotoUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={identityPhotoUrl}
-                              alt="Candidate identity photo"
-                              className="w-20 h-20 rounded-lg object-cover border border-gray-200 shadow-sm"
-                            />
-                          ) : interview.identity_photo_path && !identityPhotoError ? (
-                            <div className="w-20 h-20 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center">
-                              <Camera className="w-6 h-6 text-gray-400" />
-                            </div>
-                          ) : interview.identity_photo_path && identityPhotoError ? (
-                            <div className="w-20 h-20 rounded-lg bg-red-50 border border-red-100 flex flex-col items-center justify-center gap-1">
-                              <Camera className="w-5 h-5 text-red-300" />
-                              <span className="text-[10px] text-red-400">Load failed</span>
-                            </div>
-                          ) : (
-                            <div className="w-20 h-20 rounded-lg bg-gray-50 border border-dashed border-gray-200 flex items-center justify-center">
-                              <User className="w-6 h-6 text-gray-300" />
-                            </div>
-                          )}
-                        </div>
-                        {/* Details */}
-                        <div className="flex-1 min-w-0 space-y-2">
-                          <div>
-                            <p className="text-xs text-gray-500">Submitted Name</p>
-                            <p className="text-sm font-semibold text-gray-900">
-                              {interview.identity_name || <span className="text-gray-400 font-normal">Not provided</span>}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Email</p>
-                            <p className="text-sm text-gray-700">{interview.candidate_email || '—'}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500">Photo Captured</p>
-                            <p className="text-sm text-gray-700">
-                              {interview.identity_photo_path ? 'Yes — liveness verified' : 'No photo captured'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Round Performance Bar Chart */}
-                  {roundScores.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-900 mb-3">Round Performance</h3>
-                      <div className="space-y-3">
-                        {roundScores.map((r, idx) => (
-                          <div key={idx}>
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm text-gray-700">{r.name}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-400">weight {r.weight}%</span>
-                                <span className={`text-sm font-semibold ${
-                                  r.percentage >= 70 ? 'text-green-600' :
-                                  r.percentage >= 50 ? 'text-yellow-600' : 'text-red-600'
-                                }`}>{r.percentage}%</span>
-                              </div>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2.5">
-                              <div
-                                className={`h-2.5 rounded-full ${
-                                  r.percentage >= 70 ? 'bg-green-500' :
-                                  r.percentage >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                                }`}
-                                style={{ width: `${r.percentage}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Skill Coverage */}
-                  {eval_.skill_coverage_map && Object.keys(eval_.skill_coverage_map).length > 0 && (() => {
-                    const coverageMap: Record<string, string> = eval_.skill_coverage_map;
-                    const priorityMap: Record<string, string> = eval_.skill_priority_map || {};
-                    const allSkills = Object.keys(coverageMap).sort((a, b) => a.localeCompare(b));
-                    const covered   = allSkills.filter(s => coverageMap[s] === 'covered');
-                    const medium    = allSkills.filter(s => coverageMap[s] === 'medium');
-                    const low       = allSkills.filter(s => coverageMap[s] === 'low');
-                    const notStarted = allSkills.filter(s => coverageMap[s] === 'not_started' || !coverageMap[s]);
-                    const total = allSkills.length;
-                    const coveredCount = covered.length + medium.length + low.length;
-
-                    const TAG_STYLE: Record<string, string> = {
-                      covered:     'bg-green-50 border-green-200 text-green-700',
-                      medium:      'bg-amber-50 border-amber-200 text-amber-700',
-                      low:         'bg-orange-50 border-orange-200 text-orange-700',
-                      not_started: 'bg-gray-50 border-gray-200 text-gray-500',
-                    };
-                    const TAG_LABEL: Record<string, string> = {
-                      covered: '✓', medium: '~', low: '≈', not_started: '·',
-                    };
-
-                    return (
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-                          <div className="flex items-center gap-2">
-                            <Bot className="w-4 h-4 text-gray-600" />
-                            <h3 className="text-sm font-semibold text-gray-900">Skill Coverage</h3>
-                          </div>
-                          <span className="text-xs text-gray-500 font-medium">
-                            {coveredCount}/{total} skills covered
-                          </span>
-                        </div>
-                        <div className="p-4 space-y-4">
-                          {/* Progress bar */}
-                          <div>
-                            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden flex">
-                              <div className="h-full bg-green-500 transition-[width] duration-700" style={{ width: total > 0 ? `${(covered.length / total) * 100}%` : '0%' }} />
-                              <div className="h-full bg-amber-400 transition-[width] duration-700" style={{ width: total > 0 ? `${(medium.length / total) * 100}%` : '0%' }} />
-                              <div className="h-full bg-orange-400 transition-[width] duration-700" style={{ width: total > 0 ? `${(low.length / total) * 100}%` : '0%' }} />
-                            </div>
-                            <div className="flex items-center gap-4 mt-1.5 flex-wrap">
-                              {covered.length > 0 && <span className="flex items-center gap-1 text-xs text-green-700"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />High ({covered.length})</span>}
-                              {medium.length > 0 && <span className="flex items-center gap-1 text-xs text-amber-700"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Medium ({medium.length})</span>}
-                              {low.length > 0 && <span className="flex items-center gap-1 text-xs text-orange-700"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />Low ({low.length})</span>}
-                              {notStarted.length > 0 && <span className="flex items-center gap-1 text-xs text-gray-500"><span className="w-2 h-2 rounded-full bg-gray-300 inline-block" />Not covered ({notStarted.length})</span>}
-                            </div>
-                          </div>
-
-                          {/* Skill tags */}
-                          <div className="flex flex-wrap gap-1.5">
-                            {allSkills.map(skill => {
-                              const level = coverageMap[skill] || 'not_started';
-                              const isPriority = priorityMap[skill] === 'must_have';
-                              return (
-                                <span
-                                  key={skill}
-                                  title={`${isPriority ? 'Must-have · ' : 'Nice-to-have · '}${level.replace(/_/g, ' ')}`}
-                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-xs font-medium ${TAG_STYLE[level] || TAG_STYLE.not_started}`}
-                                >
-                                  <span className="font-bold">{TAG_LABEL[level] || '·'}</span>
-                                  {skill}
-                                  {isPriority && <span className="ml-0.5 text-[9px] opacity-60">★</span>}
-                                </span>
-                              );
-                            })}
-                          </div>
-
-                          <p className="text-[11px] text-gray-400">★ = must-have skill &nbsp;·&nbsp; ✓ high &nbsp;·&nbsp; ~ medium &nbsp;·&nbsp; ≈ low &nbsp;·&nbsp; · not covered</p>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Sentiment Overview */}
-                  {sentimentSummary.avg_confidence != null && (
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-900 mb-3">Sentiment Overview</h3>
-                      <div className="space-y-3">
-                        {[
-                          { label: 'Confidence', value: sentimentSummary.avg_confidence, color: 'bg-green-500' },
-                          { label: 'Nervousness', value: sentimentSummary.avg_nervousness, color: 'bg-red-500' },
-                          { label: 'Engagement', value: sentimentSummary.avg_engagement, color: 'bg-blue-500' },
-                        ].map(item => (
-                          <div key={item.label} className="flex items-center gap-3">
-                            <span className="text-sm text-gray-600 w-28">{item.label}</span>
-                            <div className="flex-1 bg-gray-200 rounded-full h-2.5">
-                              <div
-                                className={`h-2.5 rounded-full ${item.color}`}
-                                style={{ width: `${((item.value || 0) / 5) * 100}%` }}
-                              />
-                            </div>
-                            <span className="text-sm font-medium text-gray-700 w-10 text-right">
-                              {(item.value || 0).toFixed(1)}/5
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Key Strengths & Concerns */}
-                  {(summary.key_strengths?.length > 0 || summary.key_concerns?.length > 0) && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {summary.key_strengths?.length > 0 && (
-                        <div className="border border-green-200 rounded-lg p-4 bg-green-50/50">
-                          <div className="flex items-center gap-2 mb-3">
-                            <ThumbsUp className="w-4 h-4 text-green-600" />
-                            <h4 className="text-sm font-medium text-green-800">Key Strengths</h4>
-                          </div>
-                          <ul className="space-y-1.5">
-                            {summary.key_strengths.map((s: string, i: number) => (
-                              <li key={i} className="text-sm text-green-700 flex items-start gap-2">
-                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
-                                {s}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                      {summary.key_concerns?.length > 0 && (
-                        <div className="border border-red-200 rounded-lg p-4 bg-red-50/50">
-                          <div className="flex items-center gap-2 mb-3">
-                            <ThumbsDown className="w-4 h-4 text-red-600" />
-                            <h4 className="text-sm font-medium text-red-800">Key Concerns</h4>
-                          </div>
-                          <ul className="space-y-1.5">
-                            {summary.key_concerns.map((c: string, i: number) => (
-                              <li key={i} className="text-sm text-red-700 flex items-start gap-2">
-                                <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
-                                {c}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Summary */}
-                  {summary.summary && (
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-900 mb-2">AI Summary</h3>
-                      <p className="text-sm text-gray-600 leading-relaxed">{summary.summary}</p>
-                      {/* Interview quality note — flexible mode only (AC8 Explainability) */}
-                      {isFlexibleMode && summary.interview_quality_note && (
-                        <p className="text-xs text-gray-400 mt-2 italic border-t border-gray-100 pt-2">
-                          {summary.interview_quality_note}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Training Suggestions */}
-                  {summary.training_suggestions?.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-900 mb-2">Training Suggestions</h3>
-                      <ul className="space-y-1.5">
-                        {summary.training_suggestions.map((s: string, i: number) => (
-                          <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
-                            {s}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Closing reason note */}
-                  {eval_.closing_reason && eval_.closing_reason !== 'normal' && (
-                    <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                      <span className="text-xs text-gray-500">
-                        Interview ended: <span className="font-medium text-gray-700">{eval_.closing_reason.replace(/_/g, ' ')}</span>
-                      </span>
-                    </div>
-                  )}
-
-                  {/* No evaluation data */}
-                  {!eval_.round_scores && !summary.key_strengths && interview.score == null && (
-                    renderPlaceholder('No evaluation data available')
-                  )}
-                </div>
-              )
-            )}
-
-            {/* Cluster Insights Tab */}
-            {!evaluationPending && activeTab === 'clusters' && (() => {
-              const clusterPlaceholder = getPlaceholderMessage('clusters');
-              if (clusterPlaceholder) return renderPlaceholder(clusterPlaceholder);
-
-              // Show live/post-completion cluster coverage when cluster_insights is absent.
-              // This covers: in-progress sessions AND completed timed-mode sessions (cluster_insights
-              // is only generated for flexible mode — timed mode must derive it from skill_coverage).
-              // Also fall back when cluster_insights are all-Weak/zero (backend eval returned bad data).
-              const ciAllWeakOrZero = Array.isArray(eval_.cluster_insights) &&
-                eval_.cluster_insights.length > 0 &&
-                (eval_.cluster_insights as any[]).every((ci: any) =>
-                  !ci.band_score || ci.band_score === 'Weak' || ci.band_score === 'Not Covered' ||
-                  ci.band_score === 'Not Evaluated' || ci.band === 0);
-              const hasClusterInsights = eval_.cluster_insights && eval_.cluster_insights.length > 0 && !ciAllWeakOrZero;
-              const hasClusterConfig = clusterConfig.mth.length + clusterConfig.nth.length > 0;
-              // Build eval-derived coverage (always, so we can check whether it exists)
-              const clusterRawMap = eval_.skill_coverage_map as Record<string, string> | undefined;
-              const scFromEvalRaw = clusterRawMap && Object.keys(clusterRawMap).length > 0 ? {
-                covered:          Object.keys(clusterRawMap).filter(s => clusterRawMap[s] === 'covered'),
-                medium_covered:   Object.keys(clusterRawMap).filter(s => clusterRawMap[s] === 'medium'),
-                low_covered:      Object.keys(clusterRawMap).filter(s => clusterRawMap[s] === 'low'),
-                uncovered:        Object.keys(clusterRawMap).filter(s => !clusterRawMap[s] || clusterRawMap[s] === 'not_started'),
-                nice_to_have_skills: [],
-                total_questions: eval_.total_questions ?? 0,
-                questions_asked: eval_.total_questions ?? 0,
-              } : null;
-              // If eval coverage is all-zero, use live field or best-seen as fallback
-              const evalCovMeaningful = scFromEvalRaw &&
-                (scFromEvalRaw.covered.length + scFromEvalRaw.medium_covered.length + scFromEvalRaw.low_covered.length) > 0;
-              const scFromEval = evalCovMeaningful
-                ? scFromEvalRaw
-                : (liveSession.skill_coverage || bestSeenSkillCoverageRef.current
-                    ? { ...(liveSession.skill_coverage || bestSeenSkillCoverageRef.current)!, nice_to_have_skills: [], total_questions: eval_.total_questions ?? 0, questions_asked: eval_.total_questions ?? 0 }
-                    : scFromEvalRaw);
-              // If no coverage data yet during in-progress but cluster config exists,
-              // bootstrap an empty state so cluster bars are immediately visible (all 0%).
-              const clusterInitial = isInProgress && !scFromEval && !liveSession.skill_coverage && hasClusterConfig
-                ? { covered: [] as string[], medium_covered: [] as string[], low_covered: [] as string[],
-                    uncovered: [...clusterConfig.mth, ...clusterConfig.nth].flatMap(c => c.skills),
-                    nice_to_have_skills: [] as string[], total_questions: 0, questions_asked: 0 }
-                : null;
-              const hasEvalCoverage = scFromEval !== null || clusterInitial !== null;
-              // When completed with cluster config + coverage data but no backend cluster_insights,
-              // build cluster insight entries and show the ClusterInsightsTab instead of the
-              // live-coverage fallback. This ensures timed-mode interviews get the same rich
-              // cluster-drill-down view that flexible mode gets from the backend.
-              if (!hasClusterInsights && isCompleted && hasClusterConfig && clusterRawMap && Object.keys(clusterRawMap).length > 0) {
-                const scoreLookup = eval_?.skill_scores_map as Record<string, number> | undefined;
-                const bandFromLevel = (lvl: string, sc010: number | null): string => {
-                  if (sc010 == null || sc010 <= 0) return 'Not Covered';
-                  if (lvl === 'covered') return 'High';
-                  if (lvl === 'medium') return 'Medium';
-                  return 'Low';
-                };
-                const buildEntries = (clusters: typeof clusterConfig.mth, cat: 'mth' | 'nth') =>
-                  clusters.map(c => {
-                    const rows = c.skills.map(sk => {
-                      const lvl = clusterRawMap[sk] || clusterRawMap[Object.keys(clusterRawMap).find(k => k.toLowerCase() === sk.toLowerCase()) || ''] || 'not_started';
-                      const sc010 = scoreLookup?.[sk] ?? scoreLookup?.[Object.keys(scoreLookup || {}).find(k => k.toLowerCase() === sk.toLowerCase()) || ''] ?? null;
-                      const score100 = sc010 != null ? Math.round(sc010 * 10) : null;
-                      return { skill: sk, score: score100, band: bandFromLevel(lvl, score100), note: '' };
-                    });
-                    const scored = rows.filter(r => r.score != null && r.score > 0);
-                    const avg = scored.length > 0 ? Math.round(scored.reduce((s, r) => s + r.score!, 0) / scored.length) : null;
-                    return {
-                      cluster_name: c.name,
-                      category: cat,
-                      section_name: cat === 'mth' ? 'Must Have Skills' : 'Nice To Have Skills',
-                      section_pct: 0,
-                      priority: c.priority,
-                      priority_label: c.priority >= 3 ? 'High' : c.priority === 2 ? 'Medium' : 'Low',
-                      weight: 0,
-                      band_score: avg,
-                      band: avg == null ? 'Not Covered' : avg >= 70 ? 'High' : avg >= 40 ? 'Medium' : 'Low',
-                      skill_scores: rows,
-                      evaluated: scored.length,
-                      total: c.skills.length,
-                      cluster_note: '',
-                    };
-                  });
-                const derivedInsights = [
-                  ...buildEntries(clusterConfig.mth, 'mth'),
-                  ...buildEntries(clusterConfig.nth, 'nth'),
-                ];
-                return (
-                  <ClusterInsightsTab
-                    clusterInsights={derivedInsights}
-                    capabilityScore={eval_.capability_score ?? null}
-                    sectionScores={eval_.section_scores ?? null}
-                    capabilityScoreReasoning={eval_.capability_score_reasoning ?? null}
-                    questionHistory={eval_.question_history || []}
-                  />
-                );
-              }
-
-              // Enter the derived view when:
-              //   • interview is in-progress (live), OR
-              //   • completed but no cluster_insights — either cluster config or eval coverage data exists
-              if (!hasClusterInsights && (isInProgress || hasClusterConfig || hasEvalCoverage)) {
-                // For in-progress: prefer live WebSocket data, then scFromEval, then initial bootstrap.
-                // For completed: scFromEval already resolves to live/best-seen if eval was zero.
-                const sc = isInProgress
-                  ? (liveSession.skill_coverage ?? scFromEval ?? clusterInitial)
-                  : (scFromEval ?? liveSession.skill_coverage ?? bestSeenSkillCoverageRef.current ?? null);
-
-                // Use resolved cluster config (session special_instructions → fetched config fallback)
-                // Keep the original config order — MustHave clusters first, then NiceToHave,
-                // skills within each cluster in the order they were configured.
-                const allClusters = [
-                  ...clusterConfig.mth.map(c => ({ ...c, section: 'mth' as const })),
-                  ...clusterConfig.nth.map(c => ({ ...c, section: 'nth' as const })),
-                ];
-
-                // Case-insensitive sets for skill matching
-                const coveredLower = new Set([...(sc?.covered || []), ...(sc?.medium_covered || []), ...(sc?.low_covered || [])].map(s => s.toLowerCase()));
-                const strongLower = new Set((sc?.covered || []).map(s => s.toLowerCase()));
-                const medLower = new Set((sc?.medium_covered || []).map(s => s.toLowerCase()));
-
-                // Per-cluster stats
-                const clusterStats = allClusters.map(c => {
-                  const covered = c.skills.filter(s => coveredLower.has(s.toLowerCase())).length;
-                  const pct = c.skills.length > 0 ? Math.round((covered / c.skills.length) * 100) : 0;
-                  return { ...c, skillTotal: c.skills.length, covered, pct };
-                });
-
-                const touchedClusters = clusterStats.filter(c => c.covered > 0);
-
-                // Priority adherence: group clusters by priority level, compare group averages
-                const priorityGroups = clusterStats.reduce((acc, c) => {
-                  (acc[c.priority] = acc[c.priority] || []).push(c);
-                  return acc;
-                }, {} as Record<number, typeof clusterStats>);
-                const sortedPris = Object.keys(priorityGroups).map(Number).sort((a, b) => b - a);
-                let adherencePass = 0, adherenceTotal = 0;
-                for (let i = 0; i < sortedPris.length - 1; i++) {
-                  const hiAvg = priorityGroups[sortedPris[i]].reduce((s, c) => s + c.pct, 0) / priorityGroups[sortedPris[i]].length;
-                  const loAvg = priorityGroups[sortedPris[i + 1]].reduce((s, c) => s + c.pct, 0) / priorityGroups[sortedPris[i + 1]].length;
-                  adherenceTotal++;
-                  if (hiAvg >= loAvg) adherencePass++;
-                }
-                const adherencePct = adherenceTotal > 0 ? Math.round((adherencePass / adherenceTotal) * 100) : 100;
-                const isAdherent = adherencePct >= 70;
-
-                const totalSkills = (sc?.covered.length ?? 0) + (sc?.medium_covered.length ?? 0) + (sc?.low_covered.length ?? 0) + (sc?.uncovered.length ?? 0);
-                const overallPct = totalSkills > 0 ? Math.round(((sc?.covered.length ?? 0) + (sc?.medium_covered.length ?? 0)) / totalSkills * 100) : 0;
-                const questionsAsked = sc?.questions_asked ?? 0;
-
-                return (
-                  <div className="space-y-4">
-                    {/* Status banner */}
-                    {isInProgress ? (
-                      <div className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-xl">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                          <span className="text-sm font-semibold text-red-700">LIVE</span>
-                          <span className="text-xs text-red-600">Full cluster insights available after completion</span>
-                        </div>
-                        <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
-                          {liveWsConnected ? 'WebSocket' : 'reconnecting…'}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-xl">
-                        <CheckCircle2 className="w-4 h-4 text-green-500" />
-                        <span className="text-sm font-semibold text-gray-700">Completed</span>
-                        <span className="text-xs text-gray-500">Skill coverage derived from evaluation results</span>
-                      </div>
-                    )}
-
-                    {/* Stats row */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-                        <p className="text-2xl font-bold text-gray-900">{questionsAsked}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Questions Asked</p>
-                      </div>
-                      <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-                        <p className="text-2xl font-bold text-blue-700">{touchedClusters.length}<span className="text-base text-gray-400">/{allClusters.length || '—'}</span></p>
-                        <p className="text-xs text-gray-500 mt-0.5">Clusters Touched</p>
-                      </div>
-                      <div className={`rounded-xl p-3 text-center border ${isAdherent ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
-                        <p className={`text-2xl font-bold ${isAdherent ? 'text-green-700' : 'text-yellow-700'}`}>{adherencePct}%</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Priority Adherence</p>
-                      </div>
-                    </div>
-
-                    {/* Cross-cluster events — delta-based: only fires when a single answer touched 2+ clusters */}
-                    {crossClusterEvents.length > 0 && (
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Activity className="w-4 h-4 text-blue-600" />
-                          <span className="text-xs font-semibold text-blue-800">Cross-Cluster Events Detected</span>
-                          <span className="ml-auto text-xs text-blue-600">{crossClusterEvents.length} event{crossClusterEvents.length > 1 ? 's' : ''}</span>
-                        </div>
-                        {crossClusterEvents.slice(-3).map((ev, i) => (
-                          <div key={i} className="bg-white rounded-lg px-3 py-2 border border-blue-100">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="text-[10px] text-gray-400">Q{ev.qNum}</span>
-                              {ev.clusters.map(cn => (
-                                <span key={cn} className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">{cn}</span>
-                              ))}
-                              <span className="text-[10px] text-gray-400 ml-auto">{ev.skills.length} skill{ev.skills.length > 1 ? 's' : ''} newly covered</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {/* Also show "X clusters active" summary even without delta events */}
-                    {crossClusterEvents.length === 0 && touchedClusters.length > 1 && (
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Activity className="w-4 h-4 text-blue-600" />
-                          <span className="text-xs font-semibold text-blue-800">Cross-Cluster Coverage Active</span>
-                          <span className="ml-auto text-xs text-blue-600">{touchedClusters.length} clusters addressed</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {touchedClusters.map(c => (
-                            <span key={c.id} className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
-                              {c.name} — {c.covered}/{c.skillTotal}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Per-cluster coverage bars */}
-                    {allClusters.length > 0 ? (
-                      <div className="space-y-2.5">
-                        <p className="text-sm font-semibold text-gray-700">Cluster Coverage (Priority Order)</p>
-                        {clusterStats.map(c => (
-                          <div key={c.id} className="bg-white border border-gray-200 rounded-xl p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className={`text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${c.section === 'mth' ? 'bg-purple-100 text-purple-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                                  P{c.priority}
-                                </span>
-                                <span className="text-sm font-medium text-gray-900 truncate">{c.name}</span>
-                                <span className="text-xs text-gray-400 flex-shrink-0">{c.section === 'mth' ? 'MTH' : 'NTH'}</span>
-                              </div>
-                              <span className={`text-sm font-bold flex-shrink-0 ml-2 ${c.pct >= 70 ? 'text-green-600' : c.pct >= 40 ? 'text-yellow-600' : c.pct > 0 ? 'text-orange-500' : 'text-gray-400'}`}>
-                                {c.pct}%
-                              </span>
-                            </div>
-                            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-2 rounded-full transition-[width] duration-700 ease-out ${c.pct >= 70 ? 'bg-green-500' : c.pct >= 40 ? 'bg-yellow-500' : c.pct > 0 ? 'bg-orange-400' : 'bg-gray-200'}`}
-                                style={{ width: `${c.pct}%` }}
-                              />
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                              <span className="text-xs text-gray-400">{c.covered}/{c.skillTotal} skills addressed</span>
-                              <div className="flex flex-wrap gap-1 justify-end">
-                                {c.skills.slice(0, 5).map(s => {
-                                  const sl = s.toLowerCase();
-                                  const isStrong = strongLower.has(sl);
-                                  const isMed = medLower.has(sl);
-                                  const isCov = coveredLower.has(sl);
-                                  return (
-                                    <span key={s} className={`text-xs px-1.5 py-0.5 rounded-full ${isStrong ? 'bg-green-100 text-green-700' : isMed ? 'bg-yellow-100 text-yellow-700' : isCov ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-400'}`}>
-                                      {s}
-                                    </span>
-                                  );
-                                })}
-                                {c.skills.length > 5 && <span className="text-xs text-gray-400">+{c.skills.length - 5}</span>}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : sc ? (
-                      /* Fallback when no cluster config — simple 4-quadrant grid */
-                      <div className="grid grid-cols-2 gap-3">
-                        {[
-                          { label: 'Strongly Covered', skills: sc.covered, color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
-                          { label: 'Partially Covered', skills: sc.medium_covered, color: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-200' },
-                          { label: 'Low Coverage', skills: sc.low_covered, color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200' },
-                          { label: 'Not Covered', skills: sc.uncovered, color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200' },
-                        ].map(({ label, skills, color, bg, border }) => (
-                          <div key={label} className={`${bg} ${border} border rounded-xl p-4`}>
-                            <p className={`text-xs font-semibold ${color} mb-2`}>{label} ({skills.length})</p>
-                            <div className="flex flex-wrap gap-1">
-                              {skills.map(s => <span key={s} className={`text-xs px-2 py-0.5 rounded-full ${bg} ${border} border ${color}`}>{s}</span>)}
-                              {skills.length === 0 && <span className="text-xs text-gray-400">—</span>}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="border border-dashed border-gray-300 rounded-xl p-8 text-center">
-                        {isInProgress
-                          ? <RefreshCw className="w-8 h-8 text-gray-400 mx-auto mb-3 animate-spin" />
-                          : <Activity className="w-8 h-8 text-gray-400 mx-auto mb-3" />}
-                        <p className="text-gray-500 font-medium">{isInProgress ? 'Interview in progress' : 'No coverage data yet'}</p>
-                        <p className="text-sm text-gray-400 mt-1">{isInProgress ? 'Coverage will appear here as questions are asked' : 'Cluster coverage data will appear once scoring completes'}</p>
-                      </div>
-                    )}
-
-                    <p className="text-xs text-gray-400 text-center">{questionsAsked}/{sc?.total_questions ?? 0} questions asked · {overallPct}% overall skill coverage</p>
-                  </div>
-                );
-              }
-
-              return (
-                <ClusterInsightsTab
-                  clusterInsights={eval_.cluster_insights || []}
-                  capabilityScore={eval_.capability_score ?? null}
-                  sectionScores={eval_.section_scores ?? null}
-                  capabilityScoreReasoning={eval_.capability_score_reasoning ?? null}
-                  questionHistory={eval_.question_history || []}
+                <OverviewSection
+                  data={data}
+                  livenessVerified={!!interview.identity_verified}
                 />
               );
             })()}
+
+            {/* Coverage Tab — unified Skill Coverage + Cluster Insights in one view */}
+            {!evaluationPending && activeTab === 'coverage' && (
+              <CoverageTab
+                sessionId={liveSession.id}
+                aiEvaluation={eval_}
+                isInProgress={isInProgress}
+                isCompleted={isCompleted || isPartial}
+                clusterConfig={clusterConfig}
+                liveSkillCoverage={liveSession.skill_coverage ?? bestSeenSkillCoverageRef.current ?? null}
+                liveWsConnected={liveWsConnected}
+                crossClusterEvents={crossClusterEvents}
+                clusterInsights={eval_.cluster_insights || []}
+                capabilityScore={eval_.capability_score ?? null}
+                sectionScores={eval_.section_scores ?? null}
+                capabilityScoreReasoning={eval_.capability_score_reasoning ?? null}
+              />
+            )}
 
             {/* Sentiment Tab */}
             {!evaluationPending && activeTab === 'sentiment' && (
@@ -3267,12 +2111,47 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
               />
             )}
 
-            {/* Evaluation Dashboard Tab */}
+            {/* Evaluation Report Tab — Final report with PDF/Excel/JSON downloads */}
+            {!evaluationPending && activeTab === 'eval_report' && (
+              <EvaluationReportTab
+                sessionId={liveSession.id}
+                aiEvaluation={eval_}
+                isCompleted={liveSession.status === 'completed'}
+                clusterConfig={clusterConfig}
+                candidate={{
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                }}
+                interview={{
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                }}
+              />
+            )}
+
+            {/* Evaluation Dashboard Tab — Analysis / Timeline / Table views */}
             {!evaluationPending && activeTab === 'eval_dashboard' && (
               <EvaluationDashboardTab
                 sessionId={liveSession.id}
                 aiEvaluation={eval_}
                 isCompleted={liveSession.status === 'completed'}
+                clusterConfig={clusterConfig}
+                candidate={{
+                  name: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                  role: (interview as any).job_title || (interview as any).role || interview.position || 'Candidate',
+                  email: interview.candidate_email || liveSession.candidate_email,
+                }}
+                interview={{
+                  mode: (interview as any).special_instructions
+                    ? (() => { try { const si = JSON.parse((interview as any).special_instructions); return si.interview_mode; } catch { return undefined; } })()
+                    : undefined,
+                  completed_at: liveSession.completed_at,
+                  created_at: liveSession.created_at,
+                }}
               />
             )}
 

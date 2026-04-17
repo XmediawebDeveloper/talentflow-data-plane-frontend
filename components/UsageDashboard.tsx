@@ -901,9 +901,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       return (
                         <>
                           <div className="text-3xl font-bold text-gray-900">
-                            ₹{subscriptionSummary.subscription.price?.toFixed(0) || subscriptionSummary.plan?.price?.toFixed(0) || '0'}
+                            ₹{(subscriptionSummary.subscription.price ?? subscriptionSummary.plan?.price ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             <span className="text-sm font-normal text-gray-500">
-                              /{subscriptionSummary.subscription.billing_interval || 'mo'}
+                              /{subscriptionSummary.subscription.billing_interval === 'monthly' ? 'month' : subscriptionSummary.subscription.billing_interval === 'yearly' ? 'year' : (subscriptionSummary.subscription.billing_interval || 'mo')}
                             </span>
                           </div>
                           {!remaining.isExpired && (

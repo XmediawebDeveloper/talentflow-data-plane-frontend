@@ -82,6 +82,11 @@ export function CandidateAIInterviewPortal({ token }: Props) {
 
   // Fullscreen state — tracked during interview for exit-detection overlay
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
+  // Grace-period countdown. When fullscreen exits, we give the candidate 10s
+  // to return before showing the hard-pause overlay. Professional interview
+  // platforms use this pattern so accidental Esc presses don't kill the
+  // interview. null = not in grace period.
+  const [fullscreenGraceRemaining, setFullscreenGraceRemaining] = useState<number | null>(null);
   const [timerSnapshot, setTimerSnapshot] = useState<InterviewTimerSnapshot | null>(null);
 
   // Identity photo blob — stored here so onRegisterFace can use it AFTER system-check
@@ -688,15 +693,61 @@ export function CandidateAIInterviewPortal({ token }: Props) {
     }
   }, [startSubmitting, token]);
 
-  // Fullscreen enforcement during interview
+  // Fullscreen enforcement during interview — with 10s grace period so
+  // accidental Esc presses don't immediately slap the hard-pause overlay
+  // on the candidate. If they return within 10s, we silently restore
+  // without ever showing the blocking UI.
   useEffect(() => {
     if (step !== 'interview') return;
     const eventName = getFullscreenChangeEvent();
-    const handleFsChange = () => setIsFullscreenActive(isFullscreen());
+    const GRACE_MS = 10000;
+    let graceTimer: ReturnType<typeof setTimeout> | null = null;
+    let graceCountdown: ReturnType<typeof setInterval> | null = null;
+    let graceExitAt: number | null = null;
+
+    const clearGrace = () => {
+      if (graceTimer !== null) { clearTimeout(graceTimer); graceTimer = null; }
+      if (graceCountdown !== null) { clearInterval(graceCountdown); graceCountdown = null; }
+      setFullscreenGraceRemaining(null);
+    };
+
+    const handleFsChange = () => {
+      const nowFs = isFullscreen();
+      if (!nowFs) {
+        // EXIT: don't flip isFullscreenActive false immediately — give grace.
+        // The hard-pause overlay gates on !isFullscreenActive, so leaving it
+        // true during grace keeps the overlay hidden.
+        graceExitAt = Date.now();
+        clearGrace();
+        setFullscreenGraceRemaining(Math.ceil(GRACE_MS / 1000));
+        graceCountdown = setInterval(() => {
+          if (graceExitAt === null) return;
+          const left = Math.max(0, Math.ceil((GRACE_MS - (Date.now() - graceExitAt)) / 1000));
+          setFullscreenGraceRemaining(left);
+        }, 200);
+        graceTimer = setTimeout(() => {
+          graceTimer = null;
+          if (graceCountdown !== null) { clearInterval(graceCountdown); graceCountdown = null; }
+          setFullscreenGraceRemaining(null);
+          if (!isFullscreen()) setIsFullscreenActive(false);  // hard-pause now
+        }, GRACE_MS);
+      } else {
+        // RETURN: if grace still active, cancel it — never showed the overlay.
+        if (graceTimer !== null) {
+          clearGrace();
+          graceExitAt = null;
+          setIsFullscreenActive(true);
+          return;
+        }
+        setIsFullscreenActive(true);
+      }
+    };
+
     setIsFullscreenActive(isFullscreen());
     document.addEventListener(eventName, handleFsChange);
     return () => {
       document.removeEventListener(eventName, handleFsChange);
+      clearGrace();
       if (isFullscreen()) exitFullscreen().catch(() => {});
     };
   }, [step]);
@@ -1128,7 +1179,36 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             </div>
           </div>
         )}
-        {/* Fullscreen exit overlay — only shown when screen share is active */}
+        {/* Grace-period countdown — shown while candidate has 10s to return
+            before the hard-pause overlay kicks in. Silent otherwise. */}
+        {!screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
+          <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
+            <div className="bg-white border-2 border-amber-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
+              <Maximize2 className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
+              <p className="text-gray-600 mb-4 text-sm">
+                Your interview is still running.
+              </p>
+              <div className="mb-5 rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3">
+                <span className="block text-[11px] font-semibold text-amber-700 uppercase tracking-widest mb-1">
+                  Auto-pause in
+                </span>
+                <span className={`font-mono font-bold text-4xl tabular-nums ${
+                  fullscreenGraceRemaining <= 3 ? 'text-red-500' : 'text-amber-600'
+                }`}>
+                  {fullscreenGraceRemaining}s
+                </span>
+              </div>
+              <button
+                onClick={() => requestFullscreen().catch(() => {})}
+                className="w-full px-6 py-3 bg-amber-500 hover:bg-amber-600 rounded-xl font-bold text-white transition-colors"
+              >
+                Return Now
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Hard-pause overlay — shown only after grace period expires */}
         {!screenShareStopped && !isFullscreenActive && (
           <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white border-2 border-yellow-400 rounded-2xl p-8 max-w-sm w-full mx-4 text-center shadow-2xl">
