@@ -807,9 +807,20 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
     return () => { cancelled = true; clearInterval(poll); };
   }, [evaluationPending, liveSession.id]);
 
-  // Flexible/conversational mode is identified by the presence of capability_score_reasoning,
-  // which is generated only for flexible mode interviews (AC — Mode Indicator).
-  const isFlexibleMode = !!eval_.capability_score_reasoning;
+  // Flexible/conversational mode is read from the authoritative source:
+  // special_instructions.interview_mode ('flexible' = conversational, 'fixed' = timed).
+  // The old heuristic (presence of capability_score_reasoning) was unreliable because
+  // the field is now populated for both modes.
+  const isFlexibleMode = useMemo(() => {
+    const si = (interview as any).special_instructions || (liveSession as any).special_instructions;
+    if (!si) return false;
+    try {
+      const parsed = typeof si === 'string' ? JSON.parse(si) : si;
+      return parsed?.interview_mode === 'flexible';
+    } catch {
+      return false;
+    }
+  }, [(interview as any).special_instructions, (liveSession as any).special_instructions]);
 
   // Build round performance data for display (0-100 scale)
   // Prefer section_scores (cluster-weighted, already 0-100) over legacy round_scores (1-5 scale)
@@ -1038,12 +1049,14 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(interview.status)}`}>
                       {getStatusLabel(interview.status)}
                     </span>
-                    {/* Interview mode badge — only shown for flexible/conversational mode */}
-                    {isFlexibleMode && (
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 border border-indigo-200">
-                        Conversational Mode
-                      </span>
-                    )}
+                    {/* Interview mode badge — reads from config (special_instructions.interview_mode) */}
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                      isFlexibleMode
+                        ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
+                        : 'bg-amber-100 text-amber-700 border-amber-200'
+                    }`}>
+                      {isFlexibleMode ? 'Conversational Mode' : 'Fixed Mode'}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
                     {interview.candidate_email && <span>{interview.candidate_email}</span>}
@@ -1155,6 +1168,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 <OverviewSection
                   data={data}
                   livenessVerified={!!interview.identity_verified}
+                  candidateImage={identityPhotoUrl}
                 />
               );
             })()}
@@ -1599,8 +1613,21 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                 the transcript even when the recruiter opened the view mid-interview */}
             {!evaluationPending && activeTab === 'transcript' && (
               placeholderMsg ? renderPlaceholder(placeholderMsg) : (() => {
+                // Silence prompts ("Are you there?…") and closing thank-yous are
+                // meta-messages from Linda, not real questions. They must not
+                // count toward Q#/F# numbering or the message total — match
+                // the backend's _is_silence_or_closing_prompt filter.
+                const _isMetaAssistant = (msg: any) => {
+                  if (msg.role !== 'assistant') return false;
+                  const c = (msg.content || '').toLowerCase().trim();
+                  return c.startsWith('are you there')
+                    || c.startsWith('thank you for taking the time')
+                    || c.startsWith('thanks for taking the time')
+                    || c.startsWith('thank you for speaking')
+                    || c.startsWith('it was great chatting');
+                };
                 const messages = (liveSession.conversation_transcript || interview.conversation_transcript || [])
-                  .filter((msg: any) => msg.role !== 'system' && msg.content?.trim());
+                  .filter((msg: any) => msg.role !== 'system' && msg.content?.trim() && !_isMetaAssistant(msg));
 
                 if (messages.length === 0) return renderPlaceholder('No transcript available');
 

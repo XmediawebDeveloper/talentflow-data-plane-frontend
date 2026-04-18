@@ -417,6 +417,8 @@ export default function CoverageTab({
   const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
+  // Tab view toggle inside Coverage: 'overview' (default cluster/skill view) or 'table' (flat detailed skills table)
+  const [coverageView, setCoverageView] = useState<'overview' | 'table'>('overview');
 
   const coverageMap: Record<string, string> = eval_?.skill_coverage_map || {};
   const skillScoresMap: Record<string, number> = eval_?.skill_scores_map || {};
@@ -705,6 +707,68 @@ export default function CoverageTab({
           </div>
         )}
       </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          VIEW TOGGLE — Overview (default) vs. Table (detailed skills table)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {isCompleted && (
+        <div className="flex justify-end">
+          <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-1 shadow-sm">
+            <button
+              onClick={() => setCoverageView('overview')}
+              className={`px-5 py-2 rounded-md flex items-center gap-2 text-sm font-medium transition-all ${
+                coverageView === 'overview'
+                  ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Activity className="w-4 h-4" />
+              Overview
+            </button>
+            <button
+              onClick={() => setCoverageView('table')}
+              className={`px-5 py-2 rounded-md flex items-center gap-2 text-sm font-medium transition-all ${
+                coverageView === 'table'
+                  ? 'bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              Table View
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          TABLE VIEW — Detailed Skills Table (when toggled on)
+          ═══════════════════════════════════════════════════════════════════ */}
+      {isCompleted && coverageView === 'table' && (() => {
+        const data = buildDashboardData({
+          ai_evaluation: eval_,
+          cluster_config: clusterConfig,
+          candidate: { name: 'Candidate' },
+          interview: {},
+        });
+        if (data.mustHaveClusters.length === 0 && data.niceToHaveClusters.length === 0) {
+          return (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 border border-gray-200 dark:border-gray-700 text-center text-gray-500">
+              No cluster data available for table view.
+            </div>
+          );
+        }
+        return (
+          <DetailedSkillsTable
+            mustHaveClusters={data.mustHaveClusters}
+            niceToHaveClusters={data.niceToHaveClusters}
+          />
+        );
+      })()}
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          OVERVIEW VIEW (default) — KPI + Sections + Cluster drill-downs
+          ═══════════════════════════════════════════════════════════════════ */}
+      {coverageView === 'overview' && <>
 
       {/* ═══════════════════════════════════════════════════════════════════
           KPI STRIP + STACKED PROGRESS
@@ -1086,24 +1150,7 @@ export default function CoverageTab({
         );
       })}
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          DETAILED SKILLS TABLE — moved from Evaluation Dashboard
-          ═══════════════════════════════════════════════════════════════════ */}
-      {isCompleted && (() => {
-        const data = buildDashboardData({
-          ai_evaluation: eval_,
-          cluster_config: clusterConfig,
-          candidate: { name: 'Candidate' },
-          interview: {},
-        });
-        if (data.mustHaveClusters.length === 0 && data.niceToHaveClusters.length === 0) return null;
-        return (
-          <DetailedSkillsTable
-            mustHaveClusters={data.mustHaveClusters}
-            niceToHaveClusters={data.niceToHaveClusters}
-          />
-        );
-      })()}
+      </>}{/* close overview-view fragment */}
 
       {/* ═══════════════════════════════════════════════════════════════════
           IN-PROGRESS FOOTER NOTE
