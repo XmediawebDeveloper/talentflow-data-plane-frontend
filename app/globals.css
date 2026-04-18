@@ -189,6 +189,14 @@
   --ring: #374151;
   --input: #e5e7eb;
   --input-background: #ffffff;
+  /* Evaluation Dashboard — score bands (High / Medium / Low) */
+  --score-high: #10b981;
+  --score-high-bg: #d1fae5;
+  --score-medium: #f59e0b;
+  --score-medium-bg: #fef3c7;
+  --score-low: #ef4444;
+  --score-low-bg: #fee2e2;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   color-scheme: light;
 }
 
@@ -442,6 +450,13 @@
   --ring: #9ca3af;
   --input: #374151;
   --input-background: #1f2937;
+  /* Evaluation Dashboard — score bands (dark mode) */
+  --score-high: #34d399;
+  --score-high-bg: rgba(16, 185, 129, 0.15);
+  --score-medium: #fbbf24;
+  --score-medium-bg: rgba(245, 158, 11, 0.15);
+  --score-low: #f87171;
+  --score-low-bg: rgba(239, 68, 68, 0.15);
 
   color-scheme: dark;
 }

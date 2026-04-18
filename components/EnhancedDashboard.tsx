@@ -143,46 +143,57 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
       setLoadingJDs(true);
       try {
-        // Fetch published JDs (filtered by logged-in user)
-        const publishedResponse = await jdService.list({
-          status: 'published',
-          page_size: 5,
-          page: 1,
-          source: 'my-jds',
-        });
-        if (controller.signal.aborted) return;
-        setPublishedJDs(publishedResponse.items || []);
+        // Kick off the independent, bounded fetches in parallel:
+        //   - preview lists (published/draft top 5)
+        //   - first page of all JDs for aggregation
+        //   - resume total count
+        // The remaining JD pages (if any) are fetched after, but capped to avoid runaway loops.
+        const FIRST_PAGE_SIZE = 100;
+        const MAX_JD_PAGES = 10; // hard cap: never fetch more than 1000 JDs on the dashboard
 
-        // Fetch draft JDs (filtered by logged-in user)
-        const draftResponse = await jdService.list({
-          status: 'draft',
-          page_size: 5,
-          page: 1,
-          source: 'my-jds',
-        });
+        const [publishedResult, draftResult, firstPageResult, resumeResult] =
+          await Promise.allSettled([
+            jdService.list({ status: 'published', page_size: 5, page: 1, source: 'my-jds' }),
+            jdService.list({ status: 'draft', page_size: 5, page: 1, source: 'my-jds' }),
+            jdService.list({ page_size: FIRST_PAGE_SIZE, page: 1, source: 'my-jds' }),
+            resumeService.list({ page_size: 1, page: 1 }),
+          ]);
         if (controller.signal.aborted) return;
+
+        const publishedResponse =
+          publishedResult.status === 'fulfilled'
+            ? publishedResult.value
+            : { items: [], total: 0, page: 1, page_size: 5, total_pages: 0 };
+        const draftResponse =
+          draftResult.status === 'fulfilled'
+            ? draftResult.value
+            : { items: [], total: 0, page: 1, page_size: 5, total_pages: 0 };
+
+        setPublishedJDs(publishedResponse.items || []);
         setDraftJDs(draftResponse.items || []);
 
-        // Fetch all JDs for stats and status counts (fetch multiple pages if needed, filtered by user)
         let allJDs: JDResponse[] = [];
-        let currentPage = 1;
-        let hasMore = true;
+        let totalPages = 0;
+        if (firstPageResult.status === 'fulfilled') {
+          allJDs = [...firstPageResult.value.items];
+          totalPages = firstPageResult.value.total_pages || 0;
+        } else {
+          console.error('Failed to fetch JDs first page:', firstPageResult.reason);
+        }
 
-        while (hasMore) {
-          const response = await jdService.list({
-            page_size: 100,
-            page: currentPage,
-            source: 'my-jds',
-          });
+        // Fetch any remaining pages in parallel, capped at MAX_JD_PAGES total.
+        const lastPage = Math.min(totalPages, MAX_JD_PAGES);
+        if (lastPage > 1) {
+          const remainingPages = [];
+          for (let p = 2; p <= lastPage; p++) {
+            remainingPages.push(
+              jdService.list({ page_size: FIRST_PAGE_SIZE, page: p, source: 'my-jds' })
+            );
+          }
+          const rest = await Promise.allSettled(remainingPages);
           if (controller.signal.aborted) return;
-
-          allJDs = [...allJDs, ...response.items];
-
-          // Check if there are more pages
-          if (currentPage >= response.total_pages) {
-            hasMore = false;
-          } else {
-            currentPage++;
+          for (const r of rest) {
+            if (r.status === 'fulfilled') allJDs = allJDs.concat(r.value.items);
           }
         }
 
@@ -216,17 +227,10 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           0
         );
 
-        // Fetch total resume count from resume API
-        let totalResumes = 0;
-        try {
-          const resumeResponse = await resumeService.list({
-            page_size: 1,
-            page: 1,
-          });
-          if (controller.signal.aborted) return;
-          totalResumes = resumeResponse.total || 0;
-        } catch (resumeError) {
-          console.error('Failed to fetch resume count:', resumeError);
+        const totalResumes =
+          resumeResult.status === 'fulfilled' ? resumeResult.value.total || 0 : 0;
+        if (resumeResult.status === 'rejected') {
+          console.error('Failed to fetch resume count:', resumeResult.reason);
         }
 
         const newStats = {
@@ -279,6 +283,8 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     }
 
     const controller = new AbortController();
+    // Abort the quota request if it hangs for more than 15s so the dashboard never freezes.
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     const fetchQuotaStatus = async () => {
       hasFetchedQuotaStatus.current = true;
@@ -389,6 +395,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           toast.error('Failed to load quota data');
         }
       } finally {
+        clearTimeout(timeoutId);
         if (!controller.signal.aborted) {
           setLoadingQuota(false);
         }
@@ -398,6 +405,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     fetchQuotaStatus();
 
     return () => {
+      clearTimeout(timeoutId);
       controller.abort();
     };
   }, [user?.id]);

@@ -331,12 +331,12 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                     <div>
                       <h4 className="text-sm font-bold">{section.name}</h4>
                       <p className="text-[11px] opacity-60 mt-0.5">
-                        Weight: {section.weight}% of final score · Contributes {section.contribution.toFixed(1)} to overall
+                        Weight: {section.weight}% of final score · Contributes {Math.round(section.contribution)} to overall
                       </p>
                     </div>
                     <div className="text-right">
                       <div className="flex items-baseline gap-1">
-                        <span className={`text-2xl font-bold ${sColor}`}>{section.score.toFixed(1)}</span>
+                        <span className={`text-2xl font-bold ${sColor}`}>{Math.round(section.score)}</span>
                         <span className="text-xs text-gray-400">/ 100</span>
                       </div>
                     </div>
@@ -371,7 +371,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                               <span className="text-[11px] text-gray-400">{clSkills.length} skill{clSkills.length !== 1 ? 's' : ''}</span>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className={`text-sm font-bold ${scoreColor(clPct, 100)}`}>{clScore010.toFixed(1)}<span className="text-[10px] text-gray-400 font-normal">/10</span></span>
+                              <span className={`text-sm font-bold ${scoreColor(clPct, 100)}`}>{Math.round(clScore010)}<span className="text-[10px] text-gray-400 font-normal">/10</span></span>
                               {cOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                             </div>
                           </button>
@@ -417,9 +417,9 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                                                 </div>
                                               )}
                                             </td>
-                                            <td className="px-3 py-2.5 text-center font-mono text-gray-700">{card.base_score.toFixed(1)}</td>
+                                            <td className="px-3 py-2.5 text-center font-mono text-gray-700">{Math.round(card.base_score)}</td>
                                             <td className="px-3 py-2.5 text-center text-gray-500">{modStr}</td>
-                                            <td className="px-3 py-2.5 text-center font-bold text-gray-900">{card.final_score.toFixed(1)}</td>
+                                            <td className="px-3 py-2.5 text-center font-bold text-gray-900">{Math.round(card.final_score)}</td>
                                             <td className={`px-3 py-2.5 text-center font-bold ${pctColor}`}>{card.final_pct}%</td>
                                           </tr>
                                         );
@@ -475,9 +475,9 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                                       </div>
                                     )}
                                   </td>
-                                  <td className="px-3 py-2.5 text-center font-mono text-gray-700">{card.base_score.toFixed(1)}</td>
+                                  <td className="px-3 py-2.5 text-center font-mono text-gray-700">{Math.round(card.base_score)}</td>
                                   <td className="px-3 py-2.5 text-center text-gray-500">{modStr}</td>
-                                  <td className="px-3 py-2.5 text-center font-bold text-gray-900">{card.final_score.toFixed(1)}</td>
+                                  <td className="px-3 py-2.5 text-center font-bold text-gray-900">{Math.round(card.final_score)}</td>
                                   <td className={`px-3 py-2.5 text-center font-bold ${pctColor}`}>{card.final_pct}%</td>
                                 </tr>
                               );

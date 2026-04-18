@@ -429,6 +429,52 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
     return map;
   }, [questionGroups]);
 
+  // Fuzzy skill→questions lookup — handles config typos (e.g. "selinieum" vs "Selenium")
+  // and multi-word mismatches ("Selenium" vs "Selenium Testing Expertise").
+  // Falls back to: exact match → substring → token-overlap → edit-distance.
+  const getQuestionsForSkill = useMemo(() => {
+    const keys = Object.keys(skillQuestionMap);
+    // Simple Levenshtein-style ratio — good enough for typo detection
+    const sim = (a: string, b: string): number => {
+      if (a === b) return 1;
+      if (!a || !b) return 0;
+      const la = a.length, lb = b.length;
+      if (Math.abs(la - lb) / Math.max(la, lb) > 0.5) return 0;
+      let matches = 0;
+      const shorter = la <= lb ? a : b;
+      const longer = la <= lb ? b : a;
+      for (let i = 0; i < shorter.length; i++) {
+        if (longer.includes(shorter[i])) matches++;
+      }
+      return (2 * matches) / (la + lb);
+    };
+    return (configSkill: string): QuestionGroup[] => {
+      const sl = configSkill.toLowerCase();
+      // 1. Exact match
+      if (skillQuestionMap[sl]) return skillQuestionMap[sl];
+      // 2. Substring match (either direction)
+      for (const k of keys) {
+        if (sl.includes(k) || k.includes(sl)) return skillQuestionMap[k];
+      }
+      // 3. Token overlap — "selenium" ↔ "selenium testing expertise"
+      const slTokens = new Set(sl.split(/[\s(),]+/).filter(t => t.length > 2));
+      if (slTokens.size > 0) {
+        for (const k of keys) {
+          const kTokens = new Set(k.split(/[\s(),]+/).filter(t => t.length > 2));
+          for (const t of slTokens) { if (kTokens.has(t)) return skillQuestionMap[k]; }
+        }
+      }
+      // 4. Fuzzy similarity ≥ 0.75 — catches "selinieum" → "selenium"
+      let best = { key: '', score: 0 };
+      for (const k of keys) {
+        const s = sim(sl, k);
+        if (s > best.score) best = { key: k, score: s };
+      }
+      if (best.score >= 0.75) return skillQuestionMap[best.key];
+      return [];
+    };
+  }, [skillQuestionMap]);
+
   // Order skills following the cluster config (same order as when clusters were created).
   // MustHave clusters first, then NiceToHave — within each cluster skills stay in config order.
   // Skills present in coverageMap but absent from cluster config are appended at the end.
@@ -599,17 +645,23 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
         const sectionStats = (sectionKey: string, sectionSkills: string[]) => {
           const rt = ROUND_TYPE_MAP[sectionKey] || '';
           const tracking = roundTracking.find(r => r.type === rt);
-          // Count main Qs and follow-ups from question_groups for this section's skills
-          const sectionGroups = sectionKey === 'hr'
+          // Count main Qs and follow-ups from question_groups for this section's skills.
+          // Use the fuzzy skill-lookup so config-skill typos (e.g. "selinieum" vs
+          // evaluator topic "Selenium") still aggregate correctly.
+          const seenGroupKeys = new Set<string>();
+          const sectionGroups: QuestionGroup[] = sectionKey === 'hr'
             ? hrGroups
-            : questionGroups.filter(g => {
-                const sk = (g.skill || '').toLowerCase();
-                return sectionSkills.some(s => s.toLowerCase() === sk);
+            : sectionSkills.flatMap(s => getQuestionsForSkill(s)).filter(g => {
+                const key = `${g.q_num}-${(g.skill || '').toLowerCase()}`;
+                if (seenGroupKeys.has(key)) return false;
+                seenGroupKeys.add(key);
+                return true;
               });
           const totalQs = sectionGroups.length;
           const totalFu = sectionGroups.reduce((s, g) => s + (g.follow_ups?.length || 0), 0);
           const allocatedQs = tracking?.planned_questions ?? 0;
-          const askedQs = tracking?.actual_questions_asked ?? totalQs;
+          // Prefer actual question_groups count over tracking (which may be stale/0)
+          const askedQs = Math.max(tracking?.actual_questions_asked ?? 0, totalQs);
           const allocatedMin = tracking?.budget_minutes ?? 0;
           const takenMin = tracking?.actual_duration_minutes ?? 0;
           return { totalQs, totalFu, allocatedQs, askedQs, allocatedMin, takenMin };
@@ -690,7 +742,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
                   <div className="divide-y divide-gray-100 bg-white">
                     {section.skills.map(skill => {
                       const level = coverageMap[skill] || 'not_started';
-                      const groups = skillQuestionMap[skill.toLowerCase()] || [];
+                      const groups = getQuestionsForSkill(skill);
                       const isExpanded = expandedSkills.has(skill);
                       const cfg = LEVEL_CONFIG[level] || LEVEL_CONFIG.not_started;
                       const qNums = groups.map(g => g.q_num).filter(Boolean);

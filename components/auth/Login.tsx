@@ -243,9 +243,8 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       }
 
       // Normal login success — tokens are now stored.
-      // Call /auth/me to get authoritative must_reset_password flag.
-      const meData = await authService.getCurrentUser();
-      if (meData.must_reset_password) {
+      // must_reset_password is already in the login response; no need for a second /auth/me roundtrip.
+      if (response.must_reset_password) {
         localStorage.setItem('pending_password_reset', 'true');
         window.location.href = '/set-password';
         return;
@@ -306,9 +305,8 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     try {
       const response = await authService.verify2FALogin(tempToken, code);
 
-      // Tokens are now stored. Check /auth/me for must_reset_password.
-      const meData = await authService.getCurrentUser();
-      if (meData.must_reset_password) {
+      // Tokens are now stored. must_reset_password comes directly from the 2FA response.
+      if (response.must_reset_password) {
         localStorage.setItem('pending_password_reset', 'true');
         window.location.href = '/set-password';
         return;
