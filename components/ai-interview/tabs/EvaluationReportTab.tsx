@@ -5,6 +5,7 @@ import { Download, FileText, Loader2, Layers } from 'lucide-react';
 import { ReportView } from '../evaluation-dashboard/ReportView';
 import { OverallSummary } from '../evaluation-dashboard/OverallSummary';
 import { buildDashboardData } from '../evaluation-dashboard/adapter';
+import { generateEvaluationPDF } from '../evaluation-dashboard/generatePDF';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 
 interface ClusterDef {
@@ -46,10 +47,35 @@ export default function EvaluationReportTab({
   const handleDownload = async (format: 'pdf' | 'excel' | 'json') => {
     setDownloading(format);
     try {
-      const blob = await aiInterviewService.downloadReport(sessionId, 'evaluation', format);
-      const ext = format === 'excel' ? 'xlsx' : format;
-      const safeName = (candidate?.name || 'Candidate').replace(/[^a-z0-9]+/gi, '_');
-      aiInterviewService.triggerBlobDownload(blob, `Evaluation_Report_${safeName}.${ext}`);
+      if (format === 'pdf' && data) {
+        // Client-side visual PDF (jsPDF + autotable). Violation Summary is
+        // appended as the final section using proctoring_summary from the
+        // backend's ai_evaluation.
+        const proct = aiEvaluation?.proctoring_summary || {};
+        const riskLevel = (proct.risk_level || 'Low') as 'Low' | 'Medium' | 'High';
+        generateEvaluationPDF({
+          candidate: { name: data.candidate.name, email: data.candidate.email, role: data.candidate.role },
+          interview: { mode: data.interview.mode, duration: data.interview.duration, date: data.interview.date },
+          scores: data.scores,
+          mustHaveClusters: data.mustHaveClusters,
+          niceToHaveClusters: data.niceToHaveClusters,
+          strengths: data.strengths,
+          weaknesses: data.weaknesses,
+          recommendation: data.recommendation,
+          aiSummary: data.aiSummary,
+          proctoring: {
+            riskLevel,
+            totalViolations: Number(proct.total_violations ?? 0),
+            highSeverityCount: Number(proct.high_severity_count ?? 0),
+            autoTerminated: !!proct.auto_terminated,
+          },
+        });
+      } else {
+        const blob = await aiInterviewService.downloadReport(sessionId, 'evaluation', format);
+        const ext = format === 'excel' ? 'xlsx' : format;
+        const safeName = (candidate?.name || 'Candidate').replace(/[^a-z0-9]+/gi, '_');
+        aiInterviewService.triggerBlobDownload(blob, `Evaluation_Report_${safeName}.${ext}`);
+      }
     } catch {
       /* silent — surfacing handled by toast elsewhere */
     }

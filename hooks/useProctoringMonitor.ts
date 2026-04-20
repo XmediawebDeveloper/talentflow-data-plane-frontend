@@ -16,6 +16,8 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { ProctoringEventBus, ProctoringEventType } from '@/lib/ProctoringEventBus';
+// Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
+import '@/lib/tfjs-rejection-guard';
 
 // Re-export for consumers that import from here
 export type { ProctoringEventType } from '@/lib/ProctoringEventBus';

@@ -21,6 +21,7 @@ export interface ProctoringSettings {
   violation_low_threshold: number;
   violation_medium_threshold: number;
   recording_retention_days: number;
+  email_masking_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +39,7 @@ export interface ProctoringSettingsUpdate {
   violation_low_threshold?: number;
   violation_medium_threshold?: number;
   recording_retention_days?: number;
+  email_masking_enabled?: boolean;
 }
 
 export interface ProctoringEvent {

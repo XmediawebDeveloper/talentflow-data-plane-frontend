@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+// Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
+import '@/lib/tfjs-rejection-guard';
 import {
   Camera,
   Mic,
@@ -227,7 +229,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   };
 
   // GitHub CDN hosts the actual weight files (npm package does not include them)
-  const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights/';
+  const FACE_API_MODEL_URL = '/models/';
 
   // Apply face-count rules: exactly 1 face → pass, 0 or 2+ → fail
   const applyFaceCountResult = (count: number) => {

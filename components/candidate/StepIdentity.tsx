@@ -6,6 +6,8 @@ import {
   CheckCircle, RefreshCw, Loader2, Smile, Eye, ArrowRight, KeyRound,
 } from 'lucide-react';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
+// Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
+import '@/lib/tfjs-rejection-guard';
 
 interface StepIdentityProps {
   token: string;
@@ -91,12 +93,13 @@ export default function StepIdentity({
     }
   }, [isEmailValid, otpSending, token, email, startCooldown]);
 
-  const handleVerifyOtp = useCallback(async () => {
-    if (otpCode.length < 4 || otpVerifying) return;
+  const handleVerifyOtp = useCallback(async (codeOverride?: string) => {
+    const code = (codeOverride ?? otpCode).trim();
+    if (code.length < 4 || otpVerifying) return;
     setOtpVerifying(true);
     setOtpError(null);
     try {
-      const res = await candidateAIInterviewService.verifyOtp(token, email.trim(), otpCode.trim());
+      const res = await candidateAIInterviewService.verifyOtp(token, email.trim(), code);
       if (res.verified) {
         setOtpVerified(true);
         setOtpError(null);
@@ -132,7 +135,7 @@ export default function StepIdentity({
 
   // Load face-api.js in the background so it's ready when the user starts the liveness check
   useEffect(() => {
-    const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights/';
+    const FACE_API_MODEL_URL = '/models/';
     import('face-api.js').then(async (fa) => {
       if (!fa.nets.tinyFaceDetector.isLoaded) {
         await fa.nets.tinyFaceDetector.loadFromUri(FACE_API_MODEL_URL);
@@ -457,13 +460,28 @@ export default function StepIdentity({
                       maxLength={6}
                       value={otpCode}
                       onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError(null); }}
-                      onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const live = (e.currentTarget.value || '').replace(/\D/g, '');
+                          handleVerifyOtp(live);
+                        }
+                      }}
+                      onPaste={e => {
+                        const pasted = (e.clipboardData?.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+                        if (pasted.length >= 4) {
+                          e.preventDefault();
+                          setOtpCode(pasted);
+                          setOtpError(null);
+                          handleVerifyOtp(pasted);
+                        }
+                      }}
                       placeholder="Enter 6-digit OTP"
                       className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 tracking-widest font-mono"
                     />
                     <button
                       type="button"
-                      onClick={handleVerifyOtp}
+                      onClick={() => handleVerifyOtp()}
                       disabled={otpCode.length < 4 || otpVerifying}
                       className="flex-shrink-0 flex items-center gap-1.5 bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >

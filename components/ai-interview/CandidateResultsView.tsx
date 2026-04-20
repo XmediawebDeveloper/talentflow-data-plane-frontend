@@ -641,9 +641,15 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             currentQuestionRef.current = { qNum, isFollowUp };
             setCurrentQuestion({ qNum, isFollowUp });
           } else if (msg.type === 'interview_closing' || msg.type === 'interview_complete' || msg.type === 'interview_ended') {
-            // Interview finished — refresh from REST to update status display.
+            // Interview finished — clear the active-question marker so the
+            // SkillCoveragePanel stops rendering the "live" pulse / ring on
+            // the in-progress skill. Without this, the recruiter monitor
+            // keeps animating the last active skill long after the candidate
+            // has finished. Then refresh from REST to update status display.
             // NOTE: ai_evaluation may not be saved yet (backend saves after this event).
             // The evaluation_ready event below triggers the definitive refresh once saved.
+            currentQuestionRef.current = null;
+            setCurrentQuestion(null);
             aiInterviewService.get(liveSession.id)
               .then(updated => setLiveSession(updated))
               .catch(() => {});
@@ -836,8 +842,18 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
         };
       });
     }
-    // Fallback: legacy round_scores on 1-5 scale
-    return (eval_.round_scores || []).map((r: any) => {
+    // Fallback: legacy round_scores. Historically this was stored as a list
+    // of {type, score, percentage}, but some older sessions stored it as a
+    // map of {round_type: {score, percentage}}. Normalize both shapes to an
+    // array before mapping — a plain `|| []` guard accepts a non-array
+    // object and blows up on `.map`.
+    const rs = eval_.round_scores;
+    const rsArray: any[] = Array.isArray(rs)
+      ? rs
+      : rs && typeof rs === 'object'
+        ? Object.entries(rs).map(([type, v]: [string, any]) => ({ type, ...(v || {}) }))
+        : [];
+    return rsArray.map((r: any) => {
       const raw = r.score ?? 0;
       const pct = raw > 0 ? Math.round((raw / 5) * 100) : 0;
       return {
@@ -1055,7 +1071,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                         ? 'bg-indigo-100 text-indigo-700 border-indigo-200'
                         : 'bg-amber-100 text-amber-700 border-amber-200'
                     }`}>
-                      {isFlexibleMode ? 'Conversational Mode' : 'Fixed Mode'}
+                      {isFlexibleMode ? 'Conversational Mode' : 'Timed Mode'}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
@@ -1099,6 +1115,60 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
             Interview disconnected — showing partial results
           </div>
         )}
+
+        {/* Auto-close reason banner — tells the recruiter *why* the interview
+            ended when it wasn't a normal wrap-up. The closing_reason string is
+            set by the backend in app/ai_engine/connection_manager.py
+            check_closing_conditions() and persisted to ai_evaluation.closing_reason. */}
+        {(() => {
+          const rawReason: string = (eval_.closing_reason || '').toString();
+          if (!rawReason) return null;
+
+          // Normal completions — no banner needed.
+          const normal = new Set(['all_rounds_completed', 'candidate_ended', 'max_questions', '']);
+          if (normal.has(rawReason.toLowerCase().split(':')[0].trim())) return null;
+
+          // Auto-close reasons we want to surface prominently.
+          const lower = rawReason.toLowerCase();
+          let title = 'Interview auto-closed';
+          let detail = rawReason;
+          let tone: 'amber' | 'red' = 'amber';
+
+          if (lower.startsWith('consecutive_silence')) {
+            // Reason format: "consecutive_silence: 3 skipped questions"
+            const match = rawReason.match(/(\d+)/);
+            const count = match ? match[1] : '3';
+            title = 'Auto-closed — candidate was silent';
+            detail = `The interview ended because the candidate did not respond to ${count} consecutive questions. This is distinct from clicking "Next Q" — only complete silence triggers this auto-close.`;
+            tone = 'amber';
+          } else if (lower.startsWith('proctor_auto_terminate') || lower.includes('proctoring')) {
+            title = 'Auto-terminated — proctoring violation';
+            detail = 'The interview was cut short because proctoring detected a severe integrity violation.';
+            tone = 'red';
+          } else if (lower.startsWith('time_limit')) {
+            title = 'Auto-closed — time limit reached';
+            detail = rawReason;
+            tone = 'amber';
+          } else if (lower.startsWith('disconnect') || lower.includes('disconnected')) {
+            title = 'Interview disconnected mid-way';
+            detail = rawReason;
+            tone = 'amber';
+          }
+
+          const toneClasses = tone === 'red'
+            ? 'bg-red-50 border-red-200 text-red-800'
+            : 'bg-amber-50 border-amber-200 text-amber-900';
+
+          return (
+            <div className={`mb-4 flex items-start gap-2 px-4 py-3 border rounded-lg text-sm ${toneClasses}`}>
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="font-semibold">{title}</div>
+                <div className="mt-0.5">{detail}</div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Tabs */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -1337,6 +1407,13 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       </div>
                       <div style="font-size:13px;font-weight:600;color:#111;margin-bottom:6px">${escapeHtml(it.question || '')}</div>
                       <div style="font-size:12px;color:#374151"><b>Candidate Answer:</b> ${escapeHtml(it.answer || '—')}</div>`;
+                    (it.clarifications || []).forEach((cl: any, ci: number) => {
+                      inner += `<div style="margin-top:8px;padding-left:10px;border-left:2px solid #fcd34d">
+                        <div style="font-size:10px;color:#b45309;margin-bottom:2px"><b>CL${cl.clarification_number ?? ci + 1}</b></div>
+                        <div style="font-size:12px;font-weight:600;color:#111;margin-bottom:4px">${escapeHtml(cl.question || '')}</div>
+                        <div style="font-size:12px;color:#374151"><b>Candidate Answer:</b> ${escapeHtml(cl.answer || '—')}</div>
+                      </div>`;
+                    });
                     g.followUps.forEach((fu: any, fi: number) => {
                       inner += `<div style="margin-top:8px;padding-left:10px;border-left:2px solid #c4b5fd">
                         <div style="font-size:10px;color:#7c3aed;margin-bottom:2px"><b>F${fi + 1}</b></div>
@@ -1395,6 +1472,25 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       ],
                       spacing: { after: 120 },
                     }));
+                    (it.clarifications || []).forEach((cl: any, ci: number) => {
+                      children.push(new Paragraph({
+                        indent: { left: 360 },
+                        children: [new TextRun({ text: `CL${cl.clarification_number ?? ci + 1}`, bold: true, color: 'b45309', size: 18 })],
+                      }));
+                      children.push(new Paragraph({
+                        indent: { left: 360 },
+                        children: [new TextRun({ text: cl.question || '', bold: true, size: 22 })],
+                        spacing: { after: 40 },
+                      }));
+                      children.push(new Paragraph({
+                        indent: { left: 360 },
+                        children: [
+                          new TextRun({ text: 'Candidate Answer: ', bold: true, size: 22 }),
+                          new TextRun({ text: cl.answer || '—', size: 22 }),
+                        ],
+                        spacing: { after: 120 },
+                      }));
+                    });
                     g.followUps.forEach((fu: any, fi: number) => {
                       children.push(new Paragraph({
                         indent: { left: 360 },
@@ -1541,6 +1637,27 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                               {renderAnswer(item, `q-${idx}`)}
                             </div>
                           </div>
+
+                          {Array.isArray(item.clarifications) && item.clarifications.length > 0 && (
+                            <div className="ml-9 mt-3 space-y-3 pl-3 border-l-2 border-amber-200">
+                              {item.clarifications.map((cl: any, cIdx: number) => {
+                                const clKey = `q-${idx}-cl-${cIdx}`;
+                                return (
+                                  <div key={clKey}>
+                                    <div className="flex items-start gap-2">
+                                      <span className="flex-shrink-0 text-[10px] font-semibold rounded px-1.5 py-0.5 mt-0.5 text-amber-700 bg-amber-100">
+                                        CL{cl.clarification_number ?? cIdx + 1}
+                                      </span>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium text-gray-800 leading-snug">{cl.question}</p>
+                                        {renderAnswer({ answer: cl.answer, response_type: 'answered' }, clKey)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
 
                           {followUps.length > 0 && (() => {
                             let _qaFuC = 0, _qaDdC = 0;

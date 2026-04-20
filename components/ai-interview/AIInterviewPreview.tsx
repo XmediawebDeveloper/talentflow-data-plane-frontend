@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, CheckCircle2, Loader2, Clock, Shield, Users,
   Brain, Video, Globe, Zap, Timer, Layers, Settings,
-  ChevronRight, FileText, BarChart3, CheckCircle,
+  ChevronRight, FileText, CheckCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -31,6 +31,7 @@ interface ParsedInstructions {
   nth_clusters?: Cluster[];
   skill_weights?: Record<string, 'high' | 'medium' | 'low'>;
   interview_mode?: 'fixed' | 'flexible';
+  buffer_enabled?: boolean;
   [key: string]: unknown;
 }
 
@@ -153,6 +154,7 @@ export default function AIInterviewPreview() {
   const [nthClusters, setNthClusters] = useState<Cluster[]>([]);
   const [skillWeights, setSkillWeights] = useState<Record<string, 'high' | 'medium' | 'low'>>({});
   const [interviewMode, setInterviewMode] = useState<'fixed' | 'flexible'>('fixed');
+  const [bufferEnabled, setBufferEnabled] = useState<boolean>(false);
   const [publishing, setPublishing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -177,6 +179,7 @@ export default function AIInterviewPreview() {
           setNthClusters(parsed.nth_clusters ?? []);
           setSkillWeights(parsed.skill_weights ?? {});
           setInterviewMode(parsed.interview_mode === 'flexible' ? 'flexible' : 'fixed');
+          setBufferEnabled(!!parsed.buffer_enabled);
         } catch {
           setInterviewMode(modeFromDuration(data.duration_minutes));
         }
@@ -206,7 +209,6 @@ export default function AIInterviewPreview() {
 
   const enabledRounds = rounds.filter(r => r.enabled);
   const timedAllocation = getTimedModeAllocation(!!(nthRound && nthRound.enabled), !!(hrRound && hrRound.enabled));
-  const timedPercentages = getTimedModePercentages(!!(nthRound && nthRound.enabled), !!(hrRound && hrRound.enabled));
   const timedPreviewDurations = React.useMemo<Record<string, number>>(() => {
     if (mode !== 'fixed') return {};
     const map: Record<string, number> = {};
@@ -223,15 +225,6 @@ export default function AIInterviewPreview() {
     if (hrRound?.enabled) map[hrRound.type] = timedAllocation.hrQuestions;
     return map;
   }, [mode, mthRound, nthRound, hrRound, timedAllocation]);
-  const roundPercentage = React.useCallback((round: AIInterviewRoundConfig) => {
-    if (mode !== 'fixed') return round.percentage;
-    if (round.type === 'must_have_skills' || round.type === 'must_to_have' || round.type === 'technical') return timedPercentages.mth;
-    if (round.type === 'nice_to_have_skills' || round.type === 'nice_to_have') return timedPercentages.nth;
-    if (round.type === 'hr') return timedPercentages.hr;
-    return round.percentage;
-  }, [mode, timedPercentages]);
-  const totalPercentage = enabledRounds.reduce((sum, round) => sum + roundPercentage(round), 0);
-
   const languages = interview?.available_languages ?? (interview?.ai_voice_language ? [interview.ai_voice_language] : ['English']);
 
   /* Publish handler */
@@ -399,65 +392,21 @@ export default function AIInterviewPreview() {
                 <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
                   <Zap className="w-5 h-5 text-blue-600" />
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Flexible</p>
-                  <p className="text-xs text-gray-500">Adaptive interview with dynamic pacing</p>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-semibold text-gray-900">Flexible — {bufferEnabled ? 35 : 30} min</p>
+                    {bufferEnabled && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                        <Timer className="w-3 h-3" />
+                        +5 min buffer
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Adaptive interview with dynamic pacing{bufferEnabled ? ' · buffer time enabled' : ''}
+                  </p>
                 </div>
               </>
-            )}
-          </div>
-        </SectionCard>
-
-        {/* ── Scoring Distribution Card ── */}
-        <SectionCard title="Scoring Distribution" icon={BarChart3}>
-          <div className="space-y-4">
-            {mthRound && mthRound.enabled && (
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm text-gray-700 font-medium">Must-To-Have</span>
-                  <span className="text-sm font-semibold text-gray-900">{roundPercentage(mthRound)}%</span>
-                </div>
-                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gray-700 rounded-full transition-all"
-                    style={{ width: `${totalPercentage > 0 ? (roundPercentage(mthRound) / totalPercentage) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {nthRound && nthRound.enabled && (
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm text-gray-700 font-medium">Nice-To-Have</span>
-                  <span className="text-sm font-semibold text-gray-900">{roundPercentage(nthRound)}%</span>
-                </div>
-                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-500 rounded-full transition-all"
-                    style={{ width: `${totalPercentage > 0 ? (roundPercentage(nthRound) / totalPercentage) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {hrRound && hrRound.enabled && (
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm text-gray-700 font-medium">HR Round</span>
-                  <span className="text-sm font-semibold text-gray-900">{roundPercentage(hrRound)}%</span>
-                </div>
-                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-blue-500 rounded-full transition-all"
-                    style={{ width: `${totalPercentage > 0 ? (roundPercentage(hrRound) / totalPercentage) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {enabledRounds.length === 0 && (
-              <p className="text-sm text-gray-400 italic">No rounds configured</p>
             )}
           </div>
         </SectionCard>
@@ -470,7 +419,6 @@ export default function AIInterviewPreview() {
                 <thead>
                   <tr className="bg-gray-50 text-left">
                     <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
-                    <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Weight</th>
                     <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
                     <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
                     <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
@@ -487,7 +435,6 @@ export default function AIInterviewPreview() {
                     return (
                       <tr key={r.type}>
                         <td className="px-4 py-2.5 text-gray-900">{roundLabel}</td>
-                        <td className="px-4 py-2.5 text-gray-700 text-right">{roundPercentage(r)}%</td>
                         <td className="px-4 py-2.5 text-gray-700 text-right">{previewQuestions}</td>
                         <td className="px-4 py-2.5 text-gray-700 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
                         <td className="px-4 py-2.5 text-gray-700 text-right">{previewMin} min</td>
@@ -498,7 +445,6 @@ export default function AIInterviewPreview() {
                 <tfoot>
                   <tr className="bg-gray-50 font-semibold">
                     <td className="px-4 py-2.5 text-gray-900">Total</td>
-                    <td className="px-4 py-2.5 text-gray-900 text-right">{totalPercentage}%</td>
                     <td className="px-4 py-2.5 text-gray-900 text-right">
                       {enabledRounds.reduce((s, r) => s + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0)}
                     </td>

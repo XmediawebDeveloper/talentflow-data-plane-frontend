@@ -2,11 +2,10 @@
 
 import { useState, useMemo } from 'react';
 import {
-  ChevronDown, ChevronRight, ChevronUp, Download, Layers, Clock, MessageSquare,
+  ChevronDown, ChevronRight, ChevronUp, Layers, Clock, MessageSquare,
   CheckCircle2, AlertCircle, MinusCircle, HelpCircle, ArrowRight, XCircle,
   Activity, Award, Target, Zap, Sparkles, TrendingUp, RefreshCw,
 } from 'lucide-react';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { DetailedSkillsTable } from '../evaluation-dashboard/DetailedSkillsTable';
 import { buildDashboardData } from '../evaluation-dashboard/adapter';
 
@@ -416,7 +415,6 @@ export default function CoverageTab({
 }: Props) {
   const [expandedSkills, setExpandedSkills] = useState<Set<string>>(new Set());
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
-  const [downloading, setDownloading] = useState(false);
   // Tab view toggle inside Coverage: 'overview' (default cluster/skill view) or 'table' (flat detailed skills table)
   const [coverageView, setCoverageView] = useState<'overview' | 'table'>('overview');
 
@@ -564,15 +562,6 @@ export default function CoverageTab({
     });
   };
 
-  const handleDownload = async (format: 'pdf' | 'excel' | 'json') => {
-    setDownloading(true);
-    try {
-      const blob = await aiInterviewService.downloadReport(sessionId, 'coverage', format);
-      const ext = format === 'excel' ? 'xlsx' : format;
-      aiInterviewService.triggerBlobDownload(blob, `Coverage_Report.${ext}`);
-    } catch { /* silent */ }
-    setDownloading(false);
-  };
 
   // ─── Not started placeholder ───────────────────────────────────────────────
   if (!isInProgress && !isCompleted) {
@@ -681,22 +670,6 @@ export default function CoverageTab({
                   <span className="text-sm text-gray-400">/100</span>
                 </div>
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider">Capability Score</p>
-              </div>
-            )}
-            {isCompleted && (
-              <div className="flex items-center gap-1.5">
-                {(['pdf', 'excel', 'json'] as const).map(fmt => (
-                  <button
-                    key={fmt}
-                    onClick={() => handleDownload(fmt)}
-                    disabled={downloading}
-                    title={`Download coverage report (${fmt.toUpperCase()})`}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-white transition-colors disabled:opacity-50"
-                  >
-                    <Download className="w-3 h-3" />
-                    {fmt.toUpperCase()}
-                  </button>
-                ))}
               </div>
             )}
           </div>

@@ -1016,29 +1016,28 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         </div>
 
         {/* AS-23: Search and Filter Bar */}
-        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 mb-3 sm:mb-4">
-          <div className="flex flex-col md:flex-row gap-3 sm:gap-4 items-stretch md:items-center">
-            {/* Search Input */}
-            <div className="flex-1 relative">
-              <label htmlFor="assessment-results-search" className="sr-only">
-                Search candidate results
-              </label>
-              <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                id="assessment-results-search"
-                type="text"
-                placeholder="Search by name, email, phone, or JD title..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-9 sm:pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm sm:text-base text-black"
-              />
-            </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 mb-3 sm:mb-4 space-y-3 sm:space-y-4">
+          {/* Search Input - full width row */}
+          <div className="relative">
+            <label htmlFor="assessment-results-search" className="sr-only">
+              Search candidate results
+            </label>
+            <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              id="assessment-results-search"
+              type="text"
+              placeholder="Search by name, email, phone, or JD title..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-9 sm:pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm sm:text-base text-black"
+            />
+          </div>
 
-            {/* Filters Row - wraps on mobile */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* Filters Row - wraps when needed, aligned baseline */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Status Filter */}
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <label htmlFor="assessment-results-status-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Status:</label>
@@ -1217,7 +1216,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 )}
               </div>
             </div>
-          </div>
         </div>
 
         {/* Candidates Results Table */}

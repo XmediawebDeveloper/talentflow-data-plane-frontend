@@ -1,9 +1,11 @@
-import { Table2 } from 'lucide-react';
+import { Table2, Download } from 'lucide-react';
 import type { Cluster, Level } from './types';
 
 interface Props {
   mustHaveClusters: Cluster[];
   niceToHaveClusters: Cluster[];
+  /** Optional filename stem for exports (defaults to "Skill_Coverage"). */
+  exportName?: string;
 }
 
 function getLevelStyle(level: Level) {
@@ -14,9 +16,88 @@ function getLevelStyle(level: Level) {
   }
 }
 
-export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters }: Props) {
-  const allClusters = [...mustHaveClusters, ...niceToHaveClusters];
-  const allSkills = allClusters.flatMap(c => c.skills.map(s => ({ ...s, clusterName: c.name, clusterPriority: c.priority })));
+type SkillType = 'Must Have' | 'Nice To Have' | 'HR';
+
+function skillTypeStyle(t: SkillType) {
+  if (t === 'Must Have') return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' };
+  if (t === 'Nice To Have') return { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' };
+  return { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' };
+}
+
+const EXPORT_HEADERS = ['Skill Type', 'Skill Name', 'Cluster', 'Cluster Priority', 'Score (0-10)', 'Level', 'AI Feedback'];
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function toCsv(rows: (string | number)[][]): string {
+  return rows
+    .map(r =>
+      r
+        .map(v => {
+          const s = v == null ? '' : String(v);
+          return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        })
+        .join(','),
+    )
+    .join('\n');
+}
+
+export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, exportName = 'Skill_Coverage' }: Props) {
+  const allSkills = [
+    ...mustHaveClusters.flatMap(c =>
+      c.skills.map(s => ({ ...s, clusterName: c.name, clusterPriority: c.priority, skillType: 'Must Have' as SkillType })),
+    ),
+    ...niceToHaveClusters.flatMap(c =>
+      c.skills.map(s => ({ ...s, clusterName: c.name, clusterPriority: c.priority, skillType: 'Nice To Have' as SkillType })),
+    ),
+  ];
+
+  const buildExportRows = (): (string | number)[][] => {
+    return [
+      EXPORT_HEADERS,
+      ...allSkills.map(s => [
+        s.skillType,
+        s.name,
+        s.clusterName,
+        `${s.clusterPriority} Priority`,
+        Math.round(s.score * 10) / 10,
+        s.level,
+        (s.feedback || '').replace(/\s+/g, ' ').trim(),
+      ]),
+    ];
+  };
+
+  const exportCsv = () => {
+    const csv = toCsv(buildExportRows());
+    triggerBlobDownload(
+      new Blob([csv], { type: 'text/csv;charset=utf-8;' }),
+      `${exportName}.csv`,
+    );
+  };
+
+  const exportXlsx = async () => {
+    const XLSX = await import('xlsx');
+    const rows = buildExportRows();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [
+      { wch: 14 }, { wch: 28 }, { wch: 28 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 60 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Skill Coverage');
+    const ab = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    triggerBlobDownload(
+      new Blob([ab], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+      `${exportName}.xlsx`,
+    );
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
@@ -24,9 +105,25 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters }: Pr
         <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
           <Table2 size={20} className="text-purple-600" />
         </div>
-        <div>
+        <div className="flex-1">
           <h2 className="text-2xl font-bold">Detailed Skills Table</h2>
           <p className="text-sm text-gray-500">Comprehensive view of all evaluated skills</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportCsv}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-white border border-gray-200 hover:bg-gray-50 text-gray-700"
+          >
+            <Download className="w-3.5 h-3.5" />
+            CSV
+          </button>
+          <button
+            onClick={exportXlsx}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-gray-900 hover:bg-gray-800 text-white"
+          >
+            <Download className="w-3.5 h-3.5" />
+            XLSX
+          </button>
         </div>
       </div>
 
@@ -34,6 +131,7 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters }: Pr
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-700">
             <tr>
+              <th className="text-left p-4 text-xs text-gray-500 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skill Type</th>
               <th className="text-left p-4 text-xs text-gray-500 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skill Name</th>
               <th className="text-left p-4 text-xs text-gray-500 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
               <th className="text-center p-4 text-xs text-gray-500 uppercase tracking-wider font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
@@ -45,8 +143,14 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters }: Pr
             {allSkills.map((skill, idx) => {
               const ls = getLevelStyle(skill.level);
               const cs = getLevelStyle(skill.clusterPriority);
+              const ts = skillTypeStyle(skill.skillType);
               return (
                 <tr key={idx} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors">
+                  <td className="p-4">
+                    <span className={`inline-block px-2.5 py-1 text-[11px] font-semibold rounded-full border ${ts.bg} ${ts.text} ${ts.border}`}>
+                      {skill.skillType}
+                    </span>
+                  </td>
                   <td className="p-4"><div className="font-medium">{skill.name}</div></td>
                   <td className="p-4">
                     <div className="text-sm text-gray-600 dark:text-gray-400">{skill.clusterName}</div>
