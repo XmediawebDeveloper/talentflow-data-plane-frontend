@@ -34,7 +34,7 @@ import { toast } from 'sonner';
 import { User, Tenant } from '@/lib/types/tenant';
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 
 // Module-level cache to prevent duplicate API calls across remounts
 const dashboardCache = {
@@ -443,6 +443,23 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
     return <Activity className="h-4 w-4 text-gray-400" />;
   };
 
+  const getActivityAccent = (action: string): string => {
+    if (action.includes('login')) return 'bg-blue-50 ring-blue-100';
+    if (action.includes('jd_create') || action.includes('jd_publish')) return 'bg-green-50 ring-green-100';
+    if (action.includes('jd_update')) return 'bg-yellow-50 ring-yellow-100';
+    if (action.includes('resume_upload')) return 'bg-purple-50 ring-purple-100';
+    if (action.includes('scoring')) return 'bg-orange-50 ring-orange-100';
+    if (action.includes('assessment')) return 'bg-teal-50 ring-teal-100';
+    if (action.includes('ai_match')) return 'bg-indigo-50 ring-indigo-100';
+    return 'bg-gray-50 ring-gray-100';
+  };
+
+  // Only show activity from the last 24 hours
+  const recentActivity24h = userActivity.filter((a) => {
+    const ts = new Date(a.created_at).getTime();
+    return !isNaN(ts) && ts >= Date.now() - 24 * 60 * 60 * 1000;
+  });
+
   const handleViewJobDetails = (jd: JDResponse) => {
     if (jd.status === 'draft') {
       const stage = jd.creation_stage || 'create';
@@ -803,63 +820,88 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
       )}
 
       {/* Recent Activity */}
-      <Card className="border-gray-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-            <Clock className="h-5 w-5 text-gray-600" />
-            Recent Activity
-          </CardTitle>
-          <CardDescription className="text-gray-600">
-            Your latest actions and updates
-          </CardDescription>
+      <Card className="border-gray-200 overflow-hidden">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4 border-b border-gray-100 bg-gray-50/50">
+          <div className="min-w-0">
+            <CardTitle className="flex items-center gap-2 text-lg font-semibold text-gray-900">
+              <Clock className="h-5 w-5 text-gray-600" />
+              Recent Activity
+            </CardTitle>
+            <CardDescription className="text-gray-600 mt-1">
+              Your latest actions and updates
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <span className="relative flex h-2 w-2" aria-hidden="true">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
+              Last 24 hours
+            </span>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {loadingActivity ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
             </div>
-          ) : userActivity.length === 0 ? (
-            <div className="text-center py-8">
-              <Activity className="h-10 w-10 text-gray-400 mx-auto mb-3" />
-              <p className="text-sm text-gray-600">No recent activity</p>
+          ) : recentActivity24h.length === 0 ? (
+            <div className="text-center py-12 px-6">
+              <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                <Activity className="h-6 w-6 text-gray-400" />
+              </div>
+              <p className="text-sm font-medium text-gray-900">No activity in the last 24 hours</p>
+              <p className="text-xs text-gray-500 mt-1">Your recent actions will appear here</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left py-2 px-3 font-medium text-gray-600 w-8"></th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-600">Action</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-600">Details</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-600 whitespace-nowrap">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {userActivity.map((activity) => {
-                    const detail = activity.details as Record<string, any> | null;
-                    const detailText = detail?.title || detail?.name || detail?.email || activity.entity_type || '';
-                    return (
-                      <tr key={activity.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                        <td className="py-3 px-3">
-                          <div className="p-1.5 bg-gray-100 rounded-lg inline-flex">
-                            {getActivityIcon(activity.action)}
-                          </div>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className="font-medium text-gray-900">{activity.action_display}</span>
-                        </td>
-                        <td className="py-3 px-3 text-gray-600 max-w-xs truncate">
-                          {detailText || '—'}
-                        </td>
-                        <td className="py-3 px-3 text-gray-500 whitespace-nowrap">
+            <ul className="relative divide-y divide-gray-100">
+              {recentActivity24h.map((activity) => {
+                const detail = activity.details as Record<string, any> | null;
+                const detailText =
+                  detail?.title ||
+                  detail?.name ||
+                  detail?.email ||
+                  detail?.candidate_name ||
+                  detail?.jd_number ||
+                  activity.entity_type ||
+                  '';
+                const fullTime = formatIST(activity.created_at);
+                return (
+                  <li
+                    key={activity.id}
+                    className="group flex items-start gap-4 px-5 py-4 hover:bg-gray-50/70 transition-colors"
+                  >
+                    <div
+                      className={`flex h-9 w-9 items-center justify-center rounded-full ring-4 ring-white ${getActivityAccent(activity.action)} flex-shrink-0`}
+                    >
+                      {getActivityIcon(activity.action)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {activity.action_display}
+                          </p>
+                          {detailText && (
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">
+                              {detailText}
+                            </p>
+                          )}
+                        </div>
+                        <time
+                          className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0 group-hover:text-gray-600 transition-colors"
+                          title={fullTime}
+                          dateTime={activity.created_at}
+                        >
                           {activity.time_ago}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                        </time>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </CardContent>
       </Card>

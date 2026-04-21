@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { DetailedSkillsTable } from '../evaluation-dashboard/DetailedSkillsTable';
 import { buildDashboardData } from '../evaluation-dashboard/adapter';
+import { ExportMenu } from '../evaluation-dashboard/ExportMenu';
+import { exportCoverageCsv, exportCoverageXlsx, flattenCoverageRows } from '../evaluation-dashboard/coverageExport';
 
 // ── Shared Types ─────────────────────────────────────────────────────────────
 
@@ -672,6 +674,23 @@ export default function CoverageTab({
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider">Capability Score</p>
               </div>
             )}
+            {isCompleted && (() => {
+              const dashData = buildDashboardData({
+                ai_evaluation: eval_,
+                cluster_config: clusterConfig,
+                candidate: { name: 'Candidate' },
+                interview: {},
+              });
+              const rows = flattenCoverageRows(dashData.mustHaveClusters, dashData.niceToHaveClusters);
+              if (rows.length === 0) return null;
+              return (
+                <ExportMenu
+                  variant="dark"
+                  onExportCsv={() => exportCoverageCsv(rows, 'Skill_Coverage')}
+                  onExportXlsx={() => exportCoverageXlsx(rows, 'Skill_Coverage')}
+                />
+              );
+            })()}
           </div>
         </div>
         {capabilityScoreReasoning && (

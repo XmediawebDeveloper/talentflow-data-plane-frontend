@@ -3353,9 +3353,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
       }, 15000);
 
-      // Hard cap: fixed/timed mode stays short to avoid endless recording, but
-      // conversational mode must allow long answers without cutting the candidate off.
-      const maxRecordingMs = (isFlexibleMode || isNewFlexibleMode) ? 120000 : 30000;
+      // Hard cap on a single recording segment. Previously this was 30 s in
+      // timed mode — which silently cut off candidates who tried to give a
+      // continuous 60-120 s answer within their 2-min per-question slot.
+      // Symptoms the candidate sees:
+      //   * answer-time timer appears to freeze / disappear mid-speech (mic
+      //     actually stopped, banner still shows the frozen value)
+      //   * ASR returns a partial transcript — only the first 30 s of speech
+      //   * "continuously speak for 2 min → UI transcript not full"
+      // Raised to 130 s in BOTH modes so the cap always exceeds the 120-s
+      // per-question window. The backend's own auto-skip fires at the true
+      // window boundary, so this client cap is just a safety net against an
+      // infinite stuck recording — it should never be the thing that ends
+      // a normal answer.
+      const maxRecordingMs = 130000;
       clearMaxRecordingTimer();
       maxRecordingTimerRef.current = setTimeout(() => {
         if (isRecordingRef.current) {

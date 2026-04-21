@@ -1392,7 +1392,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
           <div
             ref={tableScrollRef}
-            className="hidden 2xl:block overflow-x-auto"
+            className="hidden xl:block overflow-x-auto"
             onScroll={() => syncHorizontalScroll('table')}
           >
             <table className="w-full min-w-[1480px] table-fixed">
@@ -1785,7 +1785,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
         {showStickyScrollbar && (
           <div
-            className="hidden 2xl:block fixed bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
+            className="hidden xl:block fixed bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
             style={{ left: stickyScrollbarPosition.left, width: stickyScrollbarPosition.width }}
           >
             <div

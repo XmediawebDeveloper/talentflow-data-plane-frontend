@@ -10,7 +10,7 @@ import {
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
-import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 
 interface AIInterviewResultsProps {
   configId: string;
@@ -371,6 +371,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Duration</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Started At</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Completed At</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Actions</th>
@@ -462,7 +463,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, onB
                           {formatDuration(session)}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-gray-600">
-                          {session.completed_at ? formatISTDate(session.completed_at) : '—'}
+                          {session.started_at ? formatIST(session.started_at) : '—'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                          {session.completed_at ? formatIST(session.completed_at) : '—'}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {session.status === 'completed' ? (

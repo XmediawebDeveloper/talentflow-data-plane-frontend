@@ -99,6 +99,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [proctoringError, setProctoringError] = useState<string | null>(null);
   const [proctoringEvents, setProctoringEvents] = useState<ProctoringEvent[]>([]);
   const [proctoringEventsTotal, setProctoringEventsTotal] = useState(0);
+  const [isLoadingProctoringEvents, setIsLoadingProctoringEvents] = useState(false);
   const [flaggedCount, setFlaggedCount] = useState(0);
 
   // Topic settings state
@@ -477,34 +478,33 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  // Load proctoring settings and events from API
+  // Load proctoring settings and events from API.
+  // Settings and events load independently so the toggles paint as soon as
+  // the (fast) settings call returns; the recent-events list is the slow
+  // part and fills in afterwards.
   const loadProctoringData = async () => {
     setIsLoadingProctoring(true);
     setProctoringError(null);
-
     try {
-      const [settingsResult, eventsResult] = await Promise.allSettled([
-        proctoringService.getSettings(),
-        proctoringService.getEvents({ page_size: 10 }),
-      ]);
-
-      if (settingsResult.status === 'fulfilled') {
-        setProctoringSettings(settingsResult.value);
-      } else {
-        console.error('Failed to load proctoring settings:', settingsResult.reason);
-        setProctoringError('Failed to load proctoring settings');
-      }
-
-      if (eventsResult.status === 'fulfilled') {
-        setProctoringEvents(eventsResult.value.items);
-        setProctoringEventsTotal(eventsResult.value.total);
-        setFlaggedCount(eventsResult.value.flagged_attempts);
-      }
+      const settings = await proctoringService.getSettings();
+      setProctoringSettings(settings);
     } catch (error) {
-      console.error('Failed to load proctoring data:', error);
-      setProctoringError('Failed to load proctoring data');
+      console.error('Failed to load proctoring settings:', error);
+      setProctoringError('Failed to load proctoring settings');
     } finally {
       setIsLoadingProctoring(false);
+    }
+
+    setIsLoadingProctoringEvents(true);
+    try {
+      const events = await proctoringService.getEvents({ page_size: 10 });
+      setProctoringEvents(events.items);
+      setProctoringEventsTotal(events.total);
+      setFlaggedCount(events.flagged_attempts);
+    } catch (error) {
+      console.error('Failed to load proctoring events:', error);
+    } finally {
+      setIsLoadingProctoringEvents(false);
     }
   };
 
@@ -1835,7 +1835,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <h3 className="text-sm font-medium text-gray-900">Recent Proctoring Events</h3>
                         <span className="text-xs text-gray-500">{proctoringEventsTotal} total events</span>
                       </div>
-                      {proctoringEvents.length === 0 ? (
+                      {isLoadingProctoringEvents ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mr-2" />
+                          <span className="text-sm text-gray-500">Loading events...</span>
+                        </div>
+                      ) : proctoringEvents.length === 0 ? (
                         <div className="text-center py-8">
                           <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                           <p className="text-sm text-gray-500">No proctoring events recorded yet</p>
