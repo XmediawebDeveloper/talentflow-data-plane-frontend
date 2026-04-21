@@ -73,16 +73,17 @@ export function exportCoverageCsv(rows: FlatSkillRow[], baseName: string) {
 }
 
 export async function exportCoverageXlsx(rows: FlatSkillRow[], baseName: string) {
-  const XLSX = await import('xlsx');
-  const ws = XLSX.utils.aoa_to_sheet(rowsAsMatrix(rows));
-  ws['!cols'] = [
-    { wch: 14 }, { wch: 28 }, { wch: 28 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 60 },
-  ];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Skill Coverage');
-  const ab = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const ExcelJS = (await import('exceljs')).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Skill Coverage');
+  const widths = [14, 28, 28, 16, 10, 10, 60];
+  ws.columns = HEADERS.map((h, i) => ({ header: h, key: h, width: widths[i] }));
+  for (const r of rows) {
+    ws.addRow([r.skillType, r.name, r.clusterName, r.clusterPriority, r.score, r.level, r.feedback]);
+  }
+  const buf = await wb.xlsx.writeBuffer();
   triggerBlobDownload(
-    new Blob([ab], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
     `${baseName}.xlsx`,
   );
 }
