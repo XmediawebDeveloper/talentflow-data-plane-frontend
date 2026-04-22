@@ -1541,7 +1541,7 @@ export default function AIInterviewClusters() {
                 onRemoveSkill={removeSkillFromCluster}
                 onAddCluster={addCluster}
                 maxClusters={mthMaxClusters}
-                isReadOnly={isFlexible && isFinalized}
+                isReadOnly={true}
                 skills={mthSkills}
                 onAddSkill={name => addSkillToCategory('mth', name)}
                 onRemoveSkillFromPool={name => removeSkillFromPool('mth', name)}
@@ -1564,7 +1564,7 @@ export default function AIInterviewClusters() {
                   onRemoveSkill={removeSkillFromCluster}
                   onAddCluster={addCluster}
                   maxClusters={nthMaxClusters}
-                  isReadOnly={isFlexible && isFinalized}
+                  isReadOnly={true}
                   skills={nthSkills}
                   onAddSkill={name => addSkillToCategory('nth', name)}
                   onRemoveSkillFromPool={name => removeSkillFromPool('nth', name)}

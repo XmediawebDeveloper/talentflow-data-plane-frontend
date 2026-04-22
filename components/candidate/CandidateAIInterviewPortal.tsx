@@ -1390,6 +1390,15 @@ export function CandidateAIInterviewPortal({ token }: Props) {
             return faceVerification.registerFace(video);
           }}
           onVerifyFace={faceVerification.hasBaseline() ? faceVerification.verifyCurrentFace : undefined}
+          onEnrollVoice={async (stream) => {
+            // Record 10 s of the candidate's voice from the live mic stream
+            // already open for the noise check. Without this baseline,
+            // InterviewVoiceVerification.verifyVoice() silently no-ops during
+            // the interview — so a friend speaking on the mic instead of the
+            // candidate would never trigger a voice_identity_changed event.
+            if (voiceVerification.hasBaseline()) return true;
+            return voiceVerification.enrollVoice(stream, 10000);
+          }}
         />
       </PreInterviewLayout>
     );

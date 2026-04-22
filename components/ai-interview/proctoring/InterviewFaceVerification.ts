@@ -18,6 +18,9 @@
  */
 
 import { useRef, useCallback } from 'react';
+// Side-effect import: installs the global unhandledrejection guard for
+// face-api.js / TF.js WebGL backend crashes. Safe to import anywhere.
+import '@/lib/tfjs-rejection-guard';
 
 // face-api.js types (dynamically loaded)
 type FaceApiModule = typeof import('face-api.js');
@@ -27,12 +30,22 @@ interface FaceVerificationCallbacks {
   onFaceIdentityChanged?: (distance: number) => void;
 }
 
-const MODELS_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
+// Models are self-hosted under /public/models/ (tiny_face_detector,
+// face_landmark_68, face_recognition) — loading from the CDN caused
+// intermittent enrollment failures when jsdelivr was slow or blocked by a
+// candidate's network (15 s timeout → no baseline → face verification never
+// starts → no events ever fire, face proctoring appears completely broken).
+// '/models' is served by Next.js from the public/ folder.
+const MODELS_URL = '/models';
 const VERIFICATION_INTERVAL_MS = 10000; // 10 seconds
 const MISMATCH_THRESHOLD = 0.6;
 const IDENTITY_CHANGED_THRESHOLD = 0.8;
 const REGISTRATION_CAPTURES = 3;
 const CAPTURE_DELAY_MS = 1500; // delay between registration captures
+
+// Global TF.js/face-api rejection guard lives in @/lib/tfjs-rejection-guard
+// (imported at the top of this file as a side effect). Idempotent and safe
+// to import from every face-api caller.
 
 export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbacks) {
   const faceApiRef = useRef<FaceApiModule | null>(null);
@@ -84,22 +97,56 @@ export function useInterviewFaceVerification(callbacks?: FaceVerificationCallbac
 
   /**
    * Extract a face descriptor from the current video frame.
+   *
+   * Guards against:
+   *  - Concurrent TF.js calls (isDetectingRef lock).
+   *  - Page hidden / WebGL context suspended — tensor ops fail with
+   *    "Cannot read properties of undefined (reading 'backend')" because
+   *    the TF.js backend is reset on context loss.
+   *  - Un-awaited internal tensor tasks that surface as
+   *    "Uncaught (in promise)" — we swap them onto the current async
+   *    context by chaining .catch() on the raw promise.
    */
   const extractDescriptor = useCallback(async (): Promise<Float32Array | null> => {
-    if (isDetectingRef.current) return null; // skip if a detection is already in flight
+    if (isDetectingRef.current) return null;
     const faceapi = faceApiRef.current;
     const video = videoElementRef.current;
     if (!faceapi || !video || video.paused || video.videoWidth === 0) return null;
+    // Skip when tab is hidden — the WebGL context may have been
+    // suspended/lost and the next tensor call will throw.
+    if (typeof document !== 'undefined' && document.hidden) return null;
 
     isDetectingRef.current = true;
     try {
-      const detection = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
+      // Wrap the face-api task in Promise.resolve so any rejection — even
+      // one emitted from an internal microtask — can be caught here and
+      // does not bubble up as "Uncaught (in promise)".
+      const detection = await Promise.resolve(
+        faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+          .withFaceLandmarks()
+          .withFaceDescriptor()
+      ).catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (
+          msg.includes("reading 'backend'") ||
+          msg.includes('backend') ||
+          msg.includes('moveData') ||
+          msg.includes('WebGL') ||
+          msg.includes('context')
+        ) {
+          return null;
+        }
+        console.warn('[FaceVerification] extractDescriptor inner error:', msg);
+        return null;
+      });
 
-      return detection?.descriptor || null;
-    } catch {
+      return (detection && (detection as { descriptor?: Float32Array }).descriptor) || null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('backend') && !msg.includes('moveData')) {
+        console.warn('[FaceVerification] extractDescriptor outer error:', msg);
+      }
       return null;
     } finally {
       isDetectingRef.current = false;

@@ -99,6 +99,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [proctoringError, setProctoringError] = useState<string | null>(null);
   const [proctoringEvents, setProctoringEvents] = useState<ProctoringEvent[]>([]);
   const [proctoringEventsTotal, setProctoringEventsTotal] = useState(0);
+  const [isLoadingProctoringEvents, setIsLoadingProctoringEvents] = useState(false);
   const [flaggedCount, setFlaggedCount] = useState(0);
 
   // Topic settings state
@@ -477,34 +478,33 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  // Load proctoring settings and events from API
+  // Load proctoring settings and events from API.
+  // Settings and events load independently so the toggles paint as soon as
+  // the (fast) settings call returns; the recent-events list is the slow
+  // part and fills in afterwards.
   const loadProctoringData = async () => {
     setIsLoadingProctoring(true);
     setProctoringError(null);
-
     try {
-      const [settingsResult, eventsResult] = await Promise.allSettled([
-        proctoringService.getSettings(),
-        proctoringService.getEvents({ page_size: 10 }),
-      ]);
-
-      if (settingsResult.status === 'fulfilled') {
-        setProctoringSettings(settingsResult.value);
-      } else {
-        console.error('Failed to load proctoring settings:', settingsResult.reason);
-        setProctoringError('Failed to load proctoring settings');
-      }
-
-      if (eventsResult.status === 'fulfilled') {
-        setProctoringEvents(eventsResult.value.items);
-        setProctoringEventsTotal(eventsResult.value.total);
-        setFlaggedCount(eventsResult.value.flagged_attempts);
-      }
+      const settings = await proctoringService.getSettings();
+      setProctoringSettings(settings);
     } catch (error) {
-      console.error('Failed to load proctoring data:', error);
-      setProctoringError('Failed to load proctoring data');
+      console.error('Failed to load proctoring settings:', error);
+      setProctoringError('Failed to load proctoring settings');
     } finally {
       setIsLoadingProctoring(false);
+    }
+
+    setIsLoadingProctoringEvents(true);
+    try {
+      const events = await proctoringService.getEvents({ page_size: 10 });
+      setProctoringEvents(events.items);
+      setProctoringEventsTotal(events.total);
+      setFlaggedCount(events.flagged_attempts);
+    } catch (error) {
+      console.error('Failed to load proctoring events:', error);
+    } finally {
+      setIsLoadingProctoringEvents(false);
     }
   };
 
@@ -1752,6 +1752,40 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
                     </div>
 
+                    {/* Masking */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                      <h3 className="text-sm font-medium text-gray-900 mb-4">Masking</h3>
+                      <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center flex-shrink-0 border border-gray-200">
+                            <Mail className="w-4 h-4 text-gray-600" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">Email Masking in PDF</div>
+                            <div className="text-xs text-gray-500">
+                              When enabled, candidate emails are masked (e.g. j******e@example.com) in downloaded Assessment PDFs.
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-center gap-1">
+                          <button
+                            onClick={() => updateProctoringSettings({ email_masking_enabled: !proctoringSettings.email_masking_enabled })}
+                            disabled={isSavingProctoring}
+                            className={`relative w-14 h-7 rounded-full transition-colors ${
+                              proctoringSettings.email_masking_enabled ? 'bg-green-500' : 'bg-gray-300'
+                            } ${isSavingProctoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
+                              proctoringSettings.email_masking_enabled ? 'translate-x-7' : 'translate-x-0.5'
+                            }`} />
+                          </button>
+                          <span className="text-xs text-gray-500 font-medium">
+                            {proctoringSettings.email_masking_enabled ? 'ON' : 'OFF'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Threshold Settings */}
                     <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
                       <h3 className="text-sm font-medium text-gray-900 mb-4">Threshold Settings</h3>
@@ -1801,7 +1835,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <h3 className="text-sm font-medium text-gray-900">Recent Proctoring Events</h3>
                         <span className="text-xs text-gray-500">{proctoringEventsTotal} total events</span>
                       </div>
-                      {proctoringEvents.length === 0 ? (
+                      {isLoadingProctoringEvents ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mr-2" />
+                          <span className="text-sm text-gray-500">Loading events...</span>
+                        </div>
+                      ) : proctoringEvents.length === 0 ? (
                         <div className="text-center py-8">
                           <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                           <p className="text-sm text-gray-500">No proctoring events recorded yet</p>
@@ -2734,10 +2773,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         if (s === 'bounced' || inv.bounced_at) {
                           return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Bounced</span>;
                         }
-                        // Client-side expiry check: catch invitations where the DB status
-                        // hasn't been updated yet but expires_at has already passed.
-                        const notYetStarted = !inv.started_at && !inv.completed_at && s !== 'completed';
-                        if (s === 'expired' || (notYetStarted && inv.expires_at && new Date(inv.expires_at) < new Date())) {
+                        if (s === 'expired') {
                           return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
                         }
                         if (s === 'abandoned') {
@@ -2753,6 +2789,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
                         }
                         return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
+                      };
+
+                      // Show an additional "Expired" badge alongside the base status
+                      // when the invitation has passed its expiry but hasn't reached a
+                      // terminal state. Covers the case where a candidate started the
+                      // system check but never started the assessment. Once a unit has
+                      // been consumed (candidate actually started the assessment),
+                      // expiry no longer applies.
+                      const isInvExpired = (inv: any): boolean => {
+                        const s = inv.status;
+                        if (['completed', 'failed', 'bounced', 'abandoned', 'expired'].includes(s) || inv.completed_at || inv.bounced_at) return false;
+                        if (inv.unit_consumed) return false;
+                        return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
                       };
 
                       const initials = invitation.candidate_name
@@ -2782,7 +2831,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </td>
                           <td className="py-3 px-4">
                             <div>
-                              {getStatusBadge(invitation)}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {getStatusBadge(invitation)}
+                                {isInvExpired(invitation) && (
+                                  <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1">
+                                    <Clock className="w-3 h-3" /> Expired
+                                  </span>
+                                )}
+                              </div>
                               {invitation.status === 'failed' && (
                                 <p className="text-xs text-red-500 mt-1">Incorrect Email</p>
                               )}

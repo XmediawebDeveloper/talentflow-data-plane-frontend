@@ -123,6 +123,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const [questionTimerSeconds, setQuestionTimerSeconds] = useState<number | null>(null);
   const [questionTimerExpired, setQuestionTimerExpired] = useState(false);
   const questionTimerExpiredRef = useRef(false); // sync ref — avoids stale closure in setTimeout/setInterval callbacks
+  // Bumped whenever questionTimerPendingRef is set to a new duration. The
+  // pending-timer useEffect uses this as a dependency so it re-fires even
+  // when isAiSpeaking doesn't transition (covers the race where
+  // question_timer_started arrives just AFTER audio_end flipped isAiSpeaking
+  // to false — previously the effect saw nothing changed and the pending
+  // value just sat there, producing the "no timer on Q3" bug).
+  const [questionTimerPendingTick, setQuestionTimerPendingTick] = useState(0);
+  // Next-Q debounce: set true the moment the candidate clicks Next Q (so the
+  // button disables immediately and rapid double-clicks can't send multiple
+  // skip_question messages). Cleared when the backend sends the next question's
+  // question_timer_started event, confirming the skip was processed.
+  const [nextSkipInFlight, setNextSkipInFlight] = useState(false);
+  const nextSkipInFlightRef = useRef(false);
   // Tracks whether the BACKEND already sent question_timer_expired for the current
   // question. When true, the client must NOT send its own skip_question — the
   // backend's _auto_skip already called handle_skip_question. Cleared when the
@@ -1029,7 +1042,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }, 0);
       }
     }, 1000);
-  }, [isAiSpeaking, computeQuestionRemaining]);
+  }, [isAiSpeaking, computeQuestionRemaining, questionTimerPendingTick]);
 
   // When the per-question timer expires, the client sends skip_question to the
   // backend (see the timer-expiry block above). The backend's handle_skip_question
@@ -2029,9 +2042,53 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       case "silent_discard":
         // Backend silently discarded the transcript (noise, non-English, hallucination).
-        // Clear processing and reopen mic — do NOT touch the timer or speaking state.
+        // Clear processing and reopen mic. Resume the per-question timer (it was
+        // paused by question_timer_stopped on end_turn — since the response was
+        // discarded, the candidate is still on the same question and the answer
+        // window should keep ticking down from where it froze).
         setIsProcessing(false);
         isProcessingRef.current = false;
+        if (
+          questionTimerSecondsRef.current !== null
+          && questionTimerSecondsRef.current > 0
+          && !questionTimerExpiredRef.current
+          && questionTimerIntervalRef.current === null
+        ) {
+          // The frozen value lives in questionTimerSecondsRef — keep ticking it
+          // down with simple decrement. We do NOT use computeQuestionRemaining()
+          // here because the audio_end path that originally started this timer
+          // doesn't set the monotonic anchor (questionTimerStartedAtMsRef stays
+          // null), and the anchor function would return null → the display
+          // would freeze visibly even though the interval is running.
+          if (questionTimerPausedAtRef.current !== null) {
+            questionTimerPausedAtRef.current = null;
+          }
+          questionTimerIntervalRef.current = setInterval(() => {
+            if (isClarificationRef.current || isFullscreenExitedRef.current) return;
+            setQuestionTimerSeconds(prev => {
+              if (prev === null || prev <= 1) {
+                if (questionTimerIntervalRef.current) {
+                  clearInterval(questionTimerIntervalRef.current);
+                  questionTimerIntervalRef.current = null;
+                }
+                setTimeout(() => {
+                  setQuestionTimerExpired(true);
+                  questionTimerExpiredRef.current = true;
+                  setStatus("Time's up — moving to the next question...");
+                  stopRecordingSilentRef.current();
+                  if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
+                    wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
+                  }
+                }, 0);
+                questionTimerSecondsRef.current = 0;
+                return 0;
+              }
+              const next = prev - 1;
+              questionTimerSecondsRef.current = next;
+              return next;
+            });
+          }, 1000);
+        }
         if (!isAiSpeakingRef.current && !isRecordingRef.current && !isFaceBlockedRef.current && !isMutedRef.current) {
           setTimeout(() => {
             if (wsRef.current?.readyState === WebSocket.OPEN && !isAiSpeakingRef.current) {
@@ -2080,10 +2137,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
         if (startRecordingTimerRef.current) { clearTimeout(startRecordingTimerRef.current); startRecordingTimerRef.current = null; }
         stopRecordingSilentRef.current();
-        // Clear question timer — skip will start a fresh one via on_speaking_done
+        // Pause the per-question timer — do NOT null the displayed value.
+        // Backend sends `interrupted` for skip-triggered events (verbal IDK,
+        // silence auto-skip, Next Q). Those are always followed by a fresh
+        // `question_timer_started` that resets the value correctly. Nulling
+        // here made the timer vanish mid-answer when the candidate said
+        // "I don't know" (backend fires interrupted → frontend nulled →
+        // user observed "timer gone" even though nothing was actually wrong).
+        // Freezing the display keeps it visible across the brief gap until
+        // the next question's timer arrives and resets it.
         if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
         questionTimerPendingRef.current = null;
-        setQuestionTimerSeconds(null);
         setQuestionTimerExpired(false);
         questionTimerExpiredRef.current = false;
         break;
@@ -2214,6 +2278,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       case "question_timer_started": {
         console.log(`[WS ${timestamp}] Question timer started:`, data);
         backendExpiredRef.current = false; // new question — reset backend-expired guard
+        // Clear the Next-Q in-flight guard: the backend has processed the prior
+        // skip (or is starting a fresh question) and re-enables the button.
+        if (nextSkipInFlightRef.current) {
+          nextSkipInFlightRef.current = false;
+          setNextSkipInFlight(false);
+        }
         // Use data.seconds — the actual candidate answer window sent by the backend.
         // data.total_seconds is the full slot (e.g. 120s) but data.seconds is what
         // the backend's auto-skip is calibrated to, so they must match.
@@ -2321,10 +2391,19 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           }
           break;
         }
-        // New question — clear clarification + follow-up, start fresh countdown
+        // New question — clear clarification + follow-up, start fresh countdown.
+        // Also clear any frozen value left behind by the previous question's
+        // question_timer_stopped (we no longer null it there to keep the banner
+        // visible during silent_discard) — otherwise the NEW question would
+        // briefly display the OLD answer's leftover seconds while Linda speaks
+        // her next question.
         setIsClarification(false);
         isClarificationRef.current = false;
         setIsFollowUp(false);
+        setQuestionTimerSeconds(null);
+        questionTimerSecondsRef.current = null;
+        questionTimerPausedAtRef.current = null;
+        questionTimerPausedMsRef.current = 0;
 
         // Clamp question number — never exceed totalQuestions (safety net for Q15 follow-up edge cases)
         if (incomingQNum != null) setQuestionNumber(Math.min(incomingQNum, totalQuestions ?? incomingQNum));
@@ -2374,6 +2453,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           questionTimerPendingRef.current = dur;
           questionTimerTotalRef.current = dur;
           questionTimerReceivedAtRef.current = Date.now();
+          // Bump the tick so the pending-timer useEffect re-fires if
+          // isAiSpeaking transitions to false between storing and the
+          // useEffect firing (otherwise the effect's dep array wouldn't
+          // detect a change and the pending value would just sit there).
+          setQuestionTimerPendingTick(t => t + 1);
         } else {
           console.log(`[Timer ${timestamp}] Linda not speaking, starting timer immediately: ${dur}s`);
           questionTimerPendingRef.current = null;
@@ -2441,16 +2525,29 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         break;
       }
       case "question_timer_stopped":
-        // Candidate ended their turn — clear the per-question timer.
-        // Backend fires this after end_turn before starting the next Q's timer.
+        // Candidate ended their turn — pause the visible per-question timer,
+        // do NOT zero out questionTimerSeconds. Reason: the backend fires
+        // question_timer_stopped on EVERY end_turn, including ones that get
+        // silent_discarded a moment later. If we wipe the value here, the
+        // banner disappears and never comes back when the mic reopens — the
+        // candidate sees the answer-time timer flicker out and then nothing,
+        // which makes the 2-min slot invisible. Freezing the displayed value
+        // (clear the interval only) keeps the banner visible at its last
+        // value; the silent_discard handler resumes the tick if needed, and
+        // the next question_timer_started fully resets the value.
         if (questionTimerIntervalRef.current) {
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
         }
-        setQuestionTimerSeconds(null);
-        questionTimerSecondsRef.current = null;
-        questionTimerPendingRef.current = null;
-        questionTimerReceivedAtRef.current = null;
+        // Pause-stamp the monotonic anchor so the resume in silent_discard can
+        // fold the paused interval into questionTimerPausedMsRef.
+        if (questionTimerPausedAtRef.current === null) {
+          questionTimerPausedAtRef.current = performance.now();
+        }
+        // Note: questionTimerSeconds / questionTimerSecondsRef intentionally NOT
+        // cleared. questionTimerPendingRef is also kept — if Linda hadn't yet
+        // finished speaking when end_turn fired (rare), the next audio_end will
+        // still pick it up.
         break;
       case "question_timer_expired":
         backendExpiredRef.current = true; // backend already handling skip — don't send client skip_question
@@ -2551,6 +2648,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setStatus("Linda is saying goodbye...");
         shouldDisconnectAfterAudioRef.current = true;
         setIsClosing(true); isClosingRef.current = true;
+        // Tear down the per-question timer — interview is over, no more answer
+        // window. Without this clear, the frozen-on-stop change above would
+        // leave the answer-time banner visible during Linda's farewell.
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        setQuestionTimerSeconds(null);
+        questionTimerSecondsRef.current = null;
+        questionTimerPendingRef.current = null;
         // Disconnect ONLY if finalizePlayback has already confirmed the
         // true end of audio (candidatePlaybackEndedRef === true). The
         // flags isPlayingRef / isAiSpeakingRef can go false prematurely
@@ -2575,6 +2682,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         setIsClosing(true); isClosingRef.current = true;
         shouldDisconnectAfterAudioRef.current = true;
         setStatus("Interview completed. Thank you!");
+        if (questionTimerIntervalRef.current) {
+          clearInterval(questionTimerIntervalRef.current);
+          questionTimerIntervalRef.current = null;
+        }
+        setQuestionTimerSeconds(null);
+        questionTimerSecondsRef.current = null;
+        questionTimerPendingRef.current = null;
         if (candidatePlaybackEndedRef.current) {
           setTimeout(() => { disconnect(); }, 500);
         }
@@ -3239,9 +3353,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         }
       }, 15000);
 
-      // Hard cap: fixed/timed mode stays short to avoid endless recording, but
-      // conversational mode must allow long answers without cutting the candidate off.
-      const maxRecordingMs = (isFlexibleMode || isNewFlexibleMode) ? 120000 : 30000;
+      // Hard cap on a single recording segment. Previously this was 30 s in
+      // timed mode — which silently cut off candidates who tried to give a
+      // continuous 60-120 s answer within their 2-min per-question slot.
+      // Symptoms the candidate sees:
+      //   * answer-time timer appears to freeze / disappear mid-speech (mic
+      //     actually stopped, banner still shows the frozen value)
+      //   * ASR returns a partial transcript — only the first 30 s of speech
+      //   * "continuously speak for 2 min → UI transcript not full"
+      // Raised to 130 s in BOTH modes so the cap always exceeds the 120-s
+      // per-question window. The backend's own auto-skip fires at the true
+      // window boundary, so this client cap is just a safety net against an
+      // infinite stuck recording — it should never be the thing that ends
+      // a normal answer.
+      const maxRecordingMs = 130000;
       clearMaxRecordingTimer();
       maxRecordingTimerRef.current = setTimeout(() => {
         if (isRecordingRef.current) {
@@ -4578,14 +4703,54 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
                   <span className="text-red-500 text-[11px] font-semibold">REC</span>
                 </div>
 
-                {/* Next Question button */}
+                {/* Next Question button.
+                    Disabled when:
+                      - questionTimerExpired (existing)
+                      - Last question (existing — candidate must actually answer Q N/N)
+                      - Linda is still speaking the question (answer window hasn't opened yet)
+                      - No answer timer is running (questionTimerSeconds === null — nothing
+                        to skip; prevents clicks during the gap between turns)
+                      - A previous Next-Q click is still in flight (single-click guarantee —
+                        cleared by the next question_timer_started event)
+                    These guards together ensure: enabled ONLY when the 2-min timer is
+                    ticking, and a candidate cannot fire multiple skip_question messages
+                    by clicking rapidly. */}
                 {isConnected && !isClosing && (
                   <button
-                    disabled={questionTimerExpired || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions)}
+                    disabled={
+                      questionTimerExpired
+                      || (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions)
+                      || isAiSpeaking
+                      || questionTimerSeconds === null
+                      || nextSkipInFlight
+                    }
                     onClick={() => {
                       if (questionTimerExpired) return;
                       // Disable on last question — candidate must answer Q15/15, not skip it
                       if (questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions) return;
+                      // Re-entry guard: if another skip is still in flight (no new
+                      // question_timer_started has arrived yet), ignore the click
+                      // completely. This mirrors the disabled prop but covers the
+                      // race where React hasn't repainted yet.
+                      if (nextSkipInFlightRef.current) return;
+                      // Guard: don't allow skip until the answer timer has started.
+                      // If Linda hasn't finished speaking, there's no open answer
+                      // window — skipping now would queue behind her TTS and look
+                      // like a ghost skip.
+                      if (isAiSpeakingRef.current && questionTimerSeconds === null) return;
+                      // Mark in-flight immediately so rapid re-clicks are no-ops.
+                      nextSkipInFlightRef.current = true;
+                      setNextSkipInFlight(true);
+                      // Safety-net: auto-release the in-flight guard after 15 s in
+                      // case the backend never sends question_timer_started (WS
+                      // hiccup, processing stall, etc.). Without this, one stuck
+                      // skip would disable the button for the rest of the interview.
+                      setTimeout(() => {
+                        if (nextSkipInFlightRef.current) {
+                          nextSkipInFlightRef.current = false;
+                          setNextSkipInFlight(false);
+                        }
+                      }, 15000);
 
                       // 0. If Linda is speaking, stop her immediately
                       if (isAiSpeakingRef.current) {

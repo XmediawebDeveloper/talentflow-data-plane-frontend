@@ -1431,6 +1431,17 @@ export default function AIInterview() {
           return inv.status;
         };
 
+        // Expired indicator — shown alongside the base status badge when the invitation
+        // has passed its expiry but hasn't reached a terminal state. Covers the case
+        // where a candidate started the system check but never started the interview.
+        // Once a unit has been consumed (candidate actually started the interview),
+        // expiry no longer applies.
+        const isInvExpired = (inv: any): boolean => {
+          if (['completed', 'cancelled', 'expired'].includes(inv.status)) return false;
+          if (inv.unit_consumed) return false;
+          return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
+        };
+
         const invTotal = invitationTotal;
         const invInvited = Math.max(0, invitationTotal - invitationSummary.completed - invitationSummary.inProgress);
         const invInProgress = invitationSummary.inProgress;
@@ -1547,7 +1558,12 @@ export default function AIInterview() {
                         {/* Status + Score + Timeline */}
                         <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-10 sm:pl-0">
                           {/* Status badge */}
-                          {getInvStatusBadge(resolveStatus(inv))}
+                          {getInvStatusBadge(inv.status)}
+                          {isInvExpired(inv) && (
+                            <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> Expired
+                            </span>
+                          )}
 
                           {/* Score — prefer ai_evaluation.capability_score (matches evaluation page) */}
                           {(() => {
@@ -1585,7 +1601,7 @@ export default function AIInterview() {
                           </div>
 
                           {/* Copy Link — available while session is still active */}
-                          {inv.interview_token && !['completed', 'cancelled', 'expired'].includes(resolveStatus(inv)) && (
+                          {inv.interview_token && !['completed', 'cancelled', 'expired'].includes(resolveStatus(inv)) && !isInvExpired(inv) && (
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation();

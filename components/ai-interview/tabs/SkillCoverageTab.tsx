@@ -28,6 +28,12 @@ interface FollowUp {
   timestamp: string;
 }
 
+interface Clarification {
+  clarification_number: number;
+  question: string;
+  answer: string;
+}
+
 interface QuestionGroup {
   q_num: number;
   skill: string;
@@ -38,6 +44,7 @@ interface QuestionGroup {
   timestamp: string;
   response_type: string;
   follow_ups: FollowUp[];
+  clarifications?: Clarification[];
 }
 
 interface ClusterDef {
@@ -210,6 +217,8 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
             const mainLevel = qCoverage(g.score);
             const fus = g.follow_ups || [];
             const hasFu = fus.length > 0;
+            const clarifs = g.clarifications || [];
+            const hasClarif = clarifs.length > 0;
             const isOpen = openRow.has(i);
             return (
               <tr key={i} className="align-top">
@@ -222,6 +231,30 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                   <div className="text-[12px] font-medium text-gray-800 leading-snug break-words">
                     <TruncatedText text={g.question || ''} limit={160} />
                   </div>
+                  {hasClarif && isOpen && (
+                    <div className="mt-2 pl-3 border-l-2 border-amber-200 space-y-2">
+                      {clarifs.map((cl, ci) => (
+                        <div key={`cl-${ci}`}>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">
+                              CL{cl.clarification_number}
+                            </span>
+                          </div>
+                          <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
+                            <TruncatedText text={cl.question || ''} limit={140} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {hasClarif && !isOpen && !hasFu && (
+                    <div className="mt-2 pl-3 border-l-2 border-amber-200">
+                      <button onClick={() => toggle(i)} className="text-[10px] text-amber-700 hover:text-amber-900 flex items-center gap-1">
+                        <ChevronDown className="w-3 h-3" />
+                        {clarifs.length} clarification{clarifs.length > 1 ? 's' : ''}
+                      </button>
+                    </div>
+                  )}
                   {hasFu && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200">
                       {!isOpen ? (
@@ -266,6 +299,16 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                   <div className="text-[12px] text-gray-700 leading-snug whitespace-pre-wrap break-words">
                     <TruncatedText text={g.answer || ''} limit={220} />
                   </div>
+                  {hasClarif && isOpen && (
+                    <div className="mt-2 pl-3 border-l-2 border-amber-200 space-y-2">
+                      {clarifs.map((cl, ci) => (
+                        <div key={`cl-a-${ci}`} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                          <span className="text-[10px] font-semibold text-amber-700 mr-1">CL{cl.clarification_number}:</span>
+                          <TruncatedText text={cl.answer || ''} limit={180} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {hasFu && isOpen && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
                       {(() => {

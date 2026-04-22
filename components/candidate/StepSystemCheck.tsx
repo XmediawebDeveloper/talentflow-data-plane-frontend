@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+// Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
+import '@/lib/tfjs-rejection-guard';
 import {
   Monitor,
   Globe,
@@ -39,6 +41,13 @@ interface StepSystemCheckProps {
    * If the person doesn't match, the Face Detection check is failed with an identity mismatch message.
    */
   onVerifyFace?: (videoElement: HTMLVideoElement) => Promise<{ matched: boolean; distance: number } | null>;
+  /**
+   * Called in parallel with onRegisterFace — enrolls the candidate's voice from
+   * the live mic stream as a baseline for voice-identity verification during
+   * the interview. Uses the same MediaStream already obtained for the noise
+   * check, so no extra permission prompt is shown.
+   */
+  onEnrollVoice?: (stream: MediaStream) => Promise<boolean>;
 }
 
 type Phase = 'browser_check' | 'browser_results' | 'system_checks' | 'env_scan';
@@ -276,6 +285,7 @@ export default function StepSystemCheck({
   onAllPassed,
   onRegisterFace,
   onVerifyFace,
+  onEnrollVoice,
 }: StepSystemCheckProps) {
   const [phase, setPhase] = useState<Phase>('browser_check');
   const [deviceInfo, setDeviceInfo] = useState<DeviceInfo | null>(null);
@@ -770,7 +780,7 @@ export default function StepSystemCheck({
       updateSystemCheck('face', { status: 'checking', detail: 'Detecting face...' });
       updateSystemCheck('multiple', { status: 'checking', detail: 'Checking for multiple people...' });
 
-      const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights/';
+      const FACE_API_MODEL_URL = '/models/';
 
       const applyFaceCount = (count: number) => {
         if (count === 1) {
@@ -896,7 +906,7 @@ export default function StepSystemCheck({
     const frameMultiPersonFlags: boolean[] = []; // true = multiple people in this frame
     let framesCapured = 0;
 
-    const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights/';
+    const FACE_API_MODEL_URL = '/models/';
 
     // Face detector setup — Path A: native FaceDetector (Chrome/Edge), Path B: face-api.js (Firefox/Safari)
     let nativeFaceDetector: any = null;
@@ -1129,6 +1139,20 @@ export default function StepSystemCheck({
               new Promise<boolean>((resolve) => setTimeout(() => resolve(false), FACE_REGISTRATION_TIMEOUT_MS)),
             ])
           : Promise.resolve(true),
+
+        // 3. Enroll voice baseline for proctoring (best-effort — 10 s sample
+        //    of the candidate's mic during the system-check noise sweep so
+        //    the voice pattern is stored ALONGSIDE the face pattern.
+        //    Without this, verifyVoice() during the interview has no baseline
+        //    to compare against and silently no-ops → friend-speaking-on-mic
+        //    goes undetected. Timed-out at 12 s (slightly more than the
+        //    10 s enrollment window) so a hang can't block the proceed button.
+        onEnrollVoice && streamRef.current
+          ? Promise.race([
+              onEnrollVoice(streamRef.current).catch(() => false),
+              new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 12000)),
+            ])
+          : Promise.resolve(true),
       ]);
 
       // Stop remaining streams and intervals
@@ -1148,7 +1172,7 @@ export default function StepSystemCheck({
     } finally {
       if (mountedRef.current) setIsProceedLoading(false);
     }
-  }, [token, systemChecks, onAllPassed, isProceedLoading, onRegisterFace]);
+  }, [token, systemChecks, onAllPassed, isProceedLoading, onRegisterFace, onEnrollVoice]);
 
   // ────────────────────────────────────────
   // Render helpers
