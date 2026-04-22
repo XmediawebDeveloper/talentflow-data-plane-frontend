@@ -424,6 +424,11 @@ export default function CoverageTab({
   const skillScoresMap: Record<string, number> = eval_?.skill_scores_map || {};
   const coverageTrail: Record<string, TrailEntry[]> = eval_?.coverage_trail || {};
   const questionGroups: QuestionGroup[] = eval_?.question_groups || [];
+  // Per-skill evidence from the backend — lists which questions produced
+  // evidence for each skill, including multi-skill turns and safety-net hits
+  // (e.g. "AWS EKS" mention in an answer that was primarily tagged NoSQL).
+  const skillEvidenceMap: Record<string, { q_num: number; score: number; note: string }[]> =
+    eval_?.skill_question_map || {};
 
   // Build skill → question groups mapping (case-insensitive)
   const skillQuestionMap = useMemo(() => {
@@ -437,6 +442,26 @@ export default function CoverageTab({
     }
     return map;
   }, [questionGroups]);
+
+  // Fuzzy lookup of evidence rows for a skill from the backend
+  // skill_question_map (case-insensitive + substring + token-overlap).
+  const getEvidenceForSkill = useMemo(() => {
+    const keys = Object.keys(skillEvidenceMap);
+    return (configSkill: string) => {
+      const sl = configSkill.toLowerCase();
+      for (const k of keys) if (k.toLowerCase() === sl) return skillEvidenceMap[k];
+      for (const k of keys) {
+        const kl = k.toLowerCase();
+        if (kl.includes(sl) || sl.includes(kl)) return skillEvidenceMap[k];
+      }
+      const slTokens = new Set(sl.split(/[\s(),]+/).filter(t => t.length > 2));
+      for (const k of keys) {
+        const kTokens = new Set(k.toLowerCase().split(/[\s(),]+/).filter(t => t.length > 2));
+        for (const t of slTokens) if (kTokens.has(t)) return skillEvidenceMap[k];
+      }
+      return [];
+    };
+  }, [skillEvidenceMap]);
 
   // Fuzzy skill lookup
   const getQuestionsForSkill = useMemo(() => {
@@ -1104,11 +1129,40 @@ export default function CoverageTab({
                                           </div>
                                           <QuestionTable groups={groups} />
                                         </div>
-                                      ) : trail.length === 0 ? (
-                                        <div className="text-xs text-gray-400 italic py-3 text-center">
-                                          No questions recorded for this skill
-                                        </div>
-                                      ) : null}
+                                      ) : (() => {
+                                        // Fallback: show evidence from the backend skill_question_map
+                                        // (covers skills picked up via multi-skill extraction or
+                                        // keyword safety-net — not just primary question tags).
+                                        const evidence = getEvidenceForSkill(skill);
+                                        if (evidence.length > 0) {
+                                          return (
+                                            <div>
+                                              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                                <MessageSquare className="w-3 h-3" /> Evidence
+                                              </div>
+                                              <div className="space-y-1.5">
+                                                {evidence.map((e, i) => (
+                                                  <div key={i} className="flex items-start gap-2 text-[11px]">
+                                                    <span className="flex-shrink-0 font-mono font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
+                                                      Q{e.q_num}
+                                                    </span>
+                                                    <ScorePill score={e.score} />
+                                                    {e.note && <span className="text-gray-600 leading-snug">{e.note}</span>}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                        if (trail.length === 0) {
+                                          return (
+                                            <div className="text-xs text-gray-400 italic py-3 text-center">
+                                              No questions recorded for this skill
+                                            </div>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
                                       {/* Skill note (from cluster insights) */}
                                       {ciSkill?.note && (
                                         <div className="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded px-2.5 py-1.5">

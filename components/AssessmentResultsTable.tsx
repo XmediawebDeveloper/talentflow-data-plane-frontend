@@ -130,39 +130,6 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     }
   }, [columns]);
 
-  useEffect(() => {
-    const updateStickyScrollbar = () => {
-      const tableEl = tableScrollRef.current;
-      const innerEl = stickyScrollbarInnerRef.current;
-      if (!tableEl || !innerEl) return;
-
-      const hasHorizontalOverflow = tableEl.scrollWidth > tableEl.clientWidth;
-      setShowStickyScrollbar(hasHorizontalOverflow);
-      innerEl.style.width = `${tableEl.scrollWidth}px`;
-    };
-
-    updateStickyScrollbar();
-
-    const tableEl = tableScrollRef.current;
-    if (!tableEl || typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateStickyScrollbar);
-      return () => window.removeEventListener('resize', updateStickyScrollbar);
-    }
-
-    const resizeObserver = new ResizeObserver(updateStickyScrollbar);
-    resizeObserver.observe(tableEl);
-    const tableChild = tableEl.firstElementChild;
-    if (tableChild) {
-      resizeObserver.observe(tableChild);
-    }
-    window.addEventListener('resize', updateStickyScrollbar);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', updateStickyScrollbar);
-    };
-  }, [enabledColumns.length, filteredResults.length, selectedResultDetail, selectedResults.length]);
-
   const [selectedResultDetail, setSelectedResultDetail] = useState<string | null>(null);
 
   // AS-25/AS-26: PDF download states
@@ -279,6 +246,39 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
     return matchesSearch && matchesPassFail && matchesStatus && matchesTech && matchesCoding;
   });
+
+  useEffect(() => {
+    const updateStickyScrollbar = () => {
+      const tableEl = tableScrollRef.current;
+      const innerEl = stickyScrollbarInnerRef.current;
+      if (!tableEl || !innerEl) return;
+
+      const hasHorizontalOverflow = tableEl.scrollWidth > tableEl.clientWidth;
+      setShowStickyScrollbar(hasHorizontalOverflow);
+      innerEl.style.width = `${tableEl.scrollWidth}px`;
+    };
+
+    updateStickyScrollbar();
+
+    const tableEl = tableScrollRef.current;
+    if (!tableEl || typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateStickyScrollbar);
+      return () => window.removeEventListener('resize', updateStickyScrollbar);
+    }
+
+    const resizeObserver = new ResizeObserver(updateStickyScrollbar);
+    resizeObserver.observe(tableEl);
+    const tableChild = tableEl.firstElementChild;
+    if (tableChild) {
+      resizeObserver.observe(tableChild);
+    }
+    window.addEventListener('resize', updateStickyScrollbar);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateStickyScrollbar);
+    };
+  }, [enabledColumns.length, filteredResults.length, selectedResultDetail, selectedResults.length]);
 
   const handleSelectAll = () => {
     if (selectedResults.length === filteredResults.length) {

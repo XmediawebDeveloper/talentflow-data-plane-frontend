@@ -10,7 +10,6 @@ import {
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
   Download,
 } from 'lucide-react';
-import ExcelJS from 'exceljs';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend,
@@ -2144,6 +2143,7 @@ export default function CandidateResultsView({ interview, onBack }: CandidateRes
                       const exportXLSX = async () => {
                         const rows = buildRows();
                         if (rows.length === 0) return;
+                        const ExcelJS = (await import('exceljs')).default;
                         const wb = new ExcelJS.Workbook();
                         const ws = wb.addWorksheet('Transcript');
                         const headers = Object.keys(rows[0]);
