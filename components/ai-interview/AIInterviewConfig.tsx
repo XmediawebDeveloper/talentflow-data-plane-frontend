@@ -1824,9 +1824,14 @@ export default function AIInterviewConfig() {
       const nthSkillNames = nth.enabled ? nth.skills.map(s => s.name.trim()).filter(Boolean) : [];
       const mthQ = timedAllocation.mthQuestions ?? 0;
       const nthQ = nth.enabled ? (timedAllocation.nthQuestions ?? 0) : 0;
-      // Trigger expansion when recruiter input < target (2 skills per question)
+      // target = 2 skills per question. Trigger expansion when input < target,
+      // and trigger refine (preserve-names) when input either expanded OR
+      // input > target (overflow needs trimming via the relevance + budget rules).
       const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ * 2;
       const nthShort = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length < nthQ * 2;
+      const mthOverflow = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length > mthQ * 2;
+      const nthOverflow = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length > nthQ * 2;
+
       if (mthShort || nthShort) {
         setGeneratingClusters(true);
         try {
@@ -1860,23 +1865,30 @@ export default function AIInterviewConfig() {
           const mthOverride = mthFlat.length > 0 ? buildEntries(mth.skills, mthFlat) : undefined;
           const nthOverride = nth.enabled && nthFlat.length > 0 ? buildEntries(nth.skills, nthFlat) : undefined;
 
-          await proceedToClusters({ fromExpansion: true, mthOverride, nthOverride });
+          await proceedToClusters({ applyRefine: true, mthOverride, nthOverride });
         } catch (e: any) {
           toast.error(e?.message || 'Failed to expand skills');
           setGeneratingClusters(false);
         }
         return;
       }
+
+      // No shortage but overflow on either bucket → run refine to trim/rebalance.
+      // Skip expansion; pass through input skills untouched, refine handles the rest.
+      if (mthOverflow || nthOverflow) {
+        await proceedToClusters({ applyRefine: true });
+        return;
+      }
     }
 
-    await proceedToClusters({ fromExpansion: false });
+    await proceedToClusters({ applyRefine: false });
   };
 
   const proceedToClusters = async (
-    opts: { fromExpansion?: boolean; mthOverride?: SkillEntry[]; nthOverride?: SkillEntry[] } = {},
+    opts: { applyRefine?: boolean; mthOverride?: SkillEntry[]; nthOverride?: SkillEntry[] } = {},
   ) => {
     if (!selectedJd) return;
-    const { fromExpansion = false, mthOverride, nthOverride } = opts;
+    const { applyRefine = false, mthOverride, nthOverride } = opts;
     const effMth: SkillEntry[] = mthOverride ?? mth.skills;
     const effNth: SkillEntry[] = nth.enabled ? (nthOverride ?? nth.skills) : [];
     isNavigatingRef.current = true;
@@ -1983,9 +1995,11 @@ export default function AIInterviewConfig() {
           // Phase 2: Refine in PRESERVE-NAMES mode — applies the 2 rules
           // (skill relevance check + question-limit optimization) but
           // forbids rename/merge so the input skill names appear verbatim
-          // in the output clusters (1:1 mapping). Best-effort: on failure,
-          // keep raw generated clusters.
-          if (fromExpansion) {
+          // in the output clusters (1:1 mapping). Triggered after expansion
+          // OR when recruiter input overflows the target (relevance pass
+          // trims over-supplied skills). Best-effort: on failure, keep
+          // raw generated clusters.
+          if (applyRefine) {
             try {
               const refineResult = await aiInterviewService.refineClusters({
                 mthClusters: mthClustersOut,
