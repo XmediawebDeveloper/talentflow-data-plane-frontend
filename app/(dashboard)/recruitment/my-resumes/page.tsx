@@ -439,6 +439,8 @@ export default function MyResumesPage() {
   useEffect(() => {
     fetchData();
     fetchUploadHistory();
+    // Self-heal admin-API resume usage on mount (fire-and-forget — capped at ±200).
+    resumeService.reconcileUsage();
     hasMountedRef.current = true; // Mark as mounted
 
     // Cleanup: Stop all polling intervals when component unmounts
@@ -534,6 +536,7 @@ export default function MyResumesPage() {
         const history = response.batches.map((batch: any) => ({
           id: batch.id,
           date: batch.date,
+          completedAt: batch.completed_at,
           fileName: batch.batch_name,
           totalFiles: batch.total_files,
           completed: batch.completed,
@@ -3411,9 +3414,33 @@ export default function MyResumesPage() {
                                         {record.date && (
                                           <span className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                                             <Calendar className="w-3 h-3 flex-shrink-0" />
-                                            <span className="truncate">{formatDateTimeIST(record.date)}</span>
+                                            <span className="truncate">Started {formatDateTimeIST(record.date)}</span>
                                           </span>
                                         )}
+                                        {record.completedAt && record.pending === 0 && (() => {
+                                          const start = new Date(record.date).getTime();
+                                          const end = new Date(record.completedAt).getTime();
+                                          const ms = Math.max(0, end - start);
+                                          const totalSec = Math.round(ms / 1000);
+                                          const h = Math.floor(totalSec / 3600);
+                                          const m = Math.floor((totalSec % 3600) / 60);
+                                          const s = totalSec % 60;
+                                          const duration = h > 0
+                                            ? `${h}h ${m}m ${s}s`
+                                            : m > 0
+                                              ? `${m}m ${s}s`
+                                              : `${s}s`;
+                                          return (
+                                            <span className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                              <CheckCircle className="w-3 h-3 flex-shrink-0 text-green-500" />
+                                              <span className="truncate">
+                                                Finished {formatDateTimeIST(record.completedAt)}
+                                                <span className="ml-1.5 text-gray-400">·</span>
+                                                <span className="ml-1.5 text-gray-700 font-medium">{duration}</span>
+                                              </span>
+                                            </span>
+                                          );
+                                        })()}
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2 sm:gap-3 ml-10 sm:ml-0">

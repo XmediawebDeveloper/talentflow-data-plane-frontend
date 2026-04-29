@@ -256,6 +256,12 @@ export default function ResumeDatabasePage() {
     fetchData();
   }, [fetchData]);
 
+  // Self-heal admin-API resume usage on page mount. Fire-and-forget — never
+  // blocks rendering. The backend caps deltas at ±200 to keep this safe.
+  useEffect(() => {
+    resumeService.reconcileUsage();
+  }, []);
+
   // Reset to page 1 when filters or search change
   useEffect(() => {
     if (initialLoadDone.current) {

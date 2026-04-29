@@ -282,6 +282,7 @@ interface ApiUser {
   permissions: UserPermissions;
   is_active: boolean;
   last_login?: string;
+  created_at?: string;
   permission_ids?: number[];
 }
 
@@ -1041,6 +1042,7 @@ export default function UserManagement() {
         permissions: user.permissions || defaultPermissions,
         is_active: user.is_active ?? true,
         last_login: user.last_login,
+        created_at: user.created_at,
         permission_ids: Array.isArray(user.permission_ids) ? user.permission_ids : undefined,
       }));
 
@@ -1991,6 +1993,9 @@ export default function UserManagement() {
                   Status
                 </th>
                 <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                  Created At
+                </th>
+                <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
                   Last Login
                 </th>
                 <th className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -2085,6 +2090,12 @@ export default function UserManagement() {
                         {user.is_active ? 'Active' : 'Inactive'}
                       </span>
                     )}
+                  </td>
+                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <Calendar className="w-4 h-4" />
+                      {formatIST(user.created_at)}
+                    </div>
                   </td>
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
                     <div className="flex items-center gap-2 text-sm text-gray-500">

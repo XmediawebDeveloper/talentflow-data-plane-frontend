@@ -1824,8 +1824,9 @@ export default function AIInterviewConfig() {
       const nthSkillNames = nth.enabled ? nth.skills.map(s => s.name.trim()).filter(Boolean) : [];
       const mthQ = timedAllocation.mthQuestions ?? 0;
       const nthQ = nth.enabled ? (timedAllocation.nthQuestions ?? 0) : 0;
-      const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ;
-      const nthShort = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length < nthQ;
+      // Trigger expansion when recruiter input < target (2 skills per question)
+      const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ * 2;
+      const nthShort = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length < nthQ * 2;
       if (mthShort || nthShort) {
         setGeneratingClusters(true);
         try {
@@ -1833,7 +1834,7 @@ export default function AIInterviewConfig() {
             mthShort
               ? aiInterviewService.expandSkills({
                   mainSkills: mthSkillNames,
-                  targetSkillCount: mthSkillNames.length * (mthQ + 1),
+                  targetSkillCount: mthQ * 2,
                   bucket: 'MTH',
                   jdTitle: selectedJd.title,
                   jdDescription: selectedJd.description,
@@ -1842,7 +1843,7 @@ export default function AIInterviewConfig() {
             nthShort
               ? aiInterviewService.expandSkills({
                   mainSkills: nthSkillNames,
-                  targetSkillCount: nthSkillNames.length * (nthQ + 1),
+                  targetSkillCount: nthQ * 2,
                   bucket: 'NTH',
                   jdTitle: selectedJd.title,
                   jdDescription: selectedJd.description,
