@@ -180,7 +180,11 @@ export default function AIInterview() {
     try {
       setLoading(true);
       const [configsRes, statsRes] = await Promise.allSettled([
-        aiInterviewService.listConfigs({ page_size: 100 }),
+        aiInterviewService.listConfigs({ page_size: 1 }).then((probe) =>
+          probe.total > probe.items.length
+            ? aiInterviewService.listConfigs({ page_size: probe.total })
+            : probe
+        ),
         aiInterviewService.getConfigStats(),
       ]);
 
@@ -210,7 +214,10 @@ export default function AIInterview() {
 
   const loadArchivedConfigs = useCallback(async () => {
     try {
-      const result = await aiInterviewService.listConfigs({ status: 'archived', page_size: 100 });
+      const probe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1 });
+      const result = probe.total > probe.items.length
+        ? await aiInterviewService.listConfigs({ status: 'archived', page_size: probe.total })
+        : probe;
       setArchivedConfigs(result.items);
     } catch (error) {
       console.error('Failed to load archived configs:', error);
@@ -237,7 +244,10 @@ export default function AIInterview() {
   const loadProcessingSessions = useCallback(async () => {
     setProcessingLoading(true);
     try {
-      const result = await aiInterviewService.list({ status: 'in_progress', page_size: 100 });
+      const probe = await aiInterviewService.list({ status: 'in_progress', page_size: 1 });
+      const result = probe.total > probe.items.length
+        ? await aiInterviewService.list({ status: 'in_progress', page_size: probe.total })
+        : probe;
       setProcessingSessions(result.items);
     } catch (error) {
       console.error('Failed to load processing sessions:', error);

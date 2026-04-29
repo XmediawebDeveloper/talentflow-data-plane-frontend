@@ -940,11 +940,23 @@ export default function MyResumesPage() {
         }
       }
 
+      // The current API call may be filtered by folder/search/skills — its
+      // total reflects the filtered view, not the user's whole library. Only
+      // refresh the pinned global count when no such filters are applied.
+      const isUnfiltered =
+        (!folderId || folderId === 'all') &&
+        !searchTerm?.trim() &&
+        !currentFilters;
+      const nextAllTotal = isUnfiltered ? resumeResponse.total : allResumesTotal;
+      if (isUnfiltered) {
+        setAllResumesTotal(resumeResponse.total);
+      }
+
       // Add "All Resumes" virtual folder at the top
       const allResumesFolder: FolderType = {
         id: 'all',
         name: 'All Resumes',
-        count: resumeResponse.total,
+        count: nextAllTotal,
       };
       const convertedFolders: FolderType[] = [allResumesFolder, ...apiFolders];
 
@@ -1562,11 +1574,12 @@ export default function MyResumesPage() {
       });
       const apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
 
-      // Add "All Resumes" virtual folder at the top
+      // Add "All Resumes" virtual folder at the top — use the pinned global
+      // total, not the currently loaded list (which may be filtered/paginated).
       const allResumesFolder: FolderType = {
         id: 'all',
         name: 'All Resumes',
-        count: resumes.length,
+        count: allResumesTotal,
       };
       setFolders([allResumesFolder, ...apiFolders]);
 
@@ -1744,11 +1757,11 @@ export default function MyResumesPage() {
           } catch { /* ignore */ }
         }
 
-        // Ensure "All Resumes" virtual folder
+        // Ensure "All Resumes" virtual folder uses the pinned global total
         const allResumesFolder: FolderType = {
           id: 'all',
           name: 'All Resumes',
-          count: 0,
+          count: allResumesTotal,
           children: [],
         };
         setFolders([allResumesFolder, ...apiFolders]);
@@ -2288,7 +2301,7 @@ export default function MyResumesPage() {
         <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
           {canViewMyResumes && (
             <button
-              onClick={() => setIsUploadHistoryModalOpen(true)}
+              onClick={openUploadHistoryModal}
               className="relative flex items-center justify-center gap-1.5 sm:gap-2 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors text-xs sm:text-sm flex-1 sm:flex-initial"
             >
               <History className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -3214,17 +3227,99 @@ export default function MyResumesPage() {
               <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-gray-50">
                 {(() => {
                   const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
-                  const processingCount = myResumesHistory.filter(r => r.status === 'processing' || r.pending > 0).length;
+                  const isActive = (r: any) => r.status === 'processing' || r.pending > 0;
+                  const activeRecords = myResumesHistory.filter(isActive);
+                  const completedRecords = myResumesHistory.filter(r => !isActive(r));
+
                   const completedCount = myResumesHistory.reduce((sum, r) => sum + (r.completed || 0), 0);
                   const duplicatedCount = myResumesHistory.reduce((sum, r) => sum + (r.duplicated || 0), 0);
                   const versionedCount = myResumesHistory.reduce((sum, r) => sum + (r.versioned || 0), 0);
                   const failedCount = myResumesHistory.reduce((sum, r) => sum + (r.errors || 0), 0);
-                  const pendingCount = myResumesHistory.reduce((sum, r) => sum + (r.pending || 0), 0);
+                  const pendingCount = activeRecords.reduce((sum, r) => sum + (r.pending || 0), 0);
                   const totalFiles = myResumesHistory.reduce((sum, r) => sum + (r.totalFiles || 0), 0);
                   const successRate = totalFiles > 0 ? Math.round((completedCount / totalFiles) * 100) : 0;
+                  const activeProcessed = activeRecords.reduce(
+                    (sum, r) => sum + (r.completed || 0) + (r.errors || 0) + (r.duplicated || 0) + (r.versioned || 0),
+                    0
+                  );
+
+                  const displayRecords = uploadHistoryTab === 'current' ? activeRecords : completedRecords;
 
                   return (
                     <>
+                      {/* Tabs */}
+                      <div className="inline-flex items-center bg-white border border-gray-200 rounded-lg p-1 mb-4 sm:mb-6 shadow-sm">
+                        <button
+                          onClick={() => setUploadHistoryTab('current')}
+                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                            uploadHistoryTab === 'current'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeRecords.length > 0 && uploadHistoryTab !== 'current' ? 'text-blue-500 animate-spin' : ''}`} />
+                          Currently Processing
+                          {activeRecords.length > 0 && (
+                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${
+                              uploadHistoryTab === 'current' ? 'bg-white text-blue-600' : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {activeRecords.length}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setUploadHistoryTab('completed')}
+                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                            uploadHistoryTab === 'completed'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          Completed
+                          {completedRecords.length > 0 && (
+                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${
+                              uploadHistoryTab === 'completed' ? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {completedRecords.length}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Currently Processing tab — compact live stats */}
+                      {uploadHistoryTab === 'current' && activeRecords.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                          <div className="bg-white border border-blue-200 rounded-xl p-3 sm:p-4">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 animate-spin" />
+                              <span className="text-[10px] sm:text-xs text-gray-700">In&nbsp;Progress</span>
+                            </div>
+                            <div className="text-lg sm:text-2xl font-bold text-blue-700">{activeRecords.length}</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">batch{activeRecords.length !== 1 ? 'es' : ''}</div>
+                          </div>
+                          <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-4">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />
+                              <span className="text-[10px] sm:text-xs text-gray-700">Queued</span>
+                            </div>
+                            <div className="text-lg sm:text-2xl font-bold text-gray-700">{pendingCount}</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">file{pendingCount !== 1 ? 's' : ''} left</div>
+                          </div>
+                          <div className="bg-white border border-green-200 rounded-xl p-3 sm:p-4">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" />
+                              <span className="text-[10px] sm:text-xs text-gray-700">Processed</span>
+                            </div>
+                            <div className="text-lg sm:text-2xl font-bold text-green-700">{activeProcessed}</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">so far</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Completed tab — lifetime stats grid */}
+                      {uploadHistoryTab === 'completed' && (
+                      <>
                       {/* Status Summary Cards - 6 Column Grid (Clickable Filters) */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
                         {/* Completed */}
@@ -3344,9 +3439,11 @@ export default function MyResumesPage() {
                           </button>
                         </div>
                       )}
+                        </>
+                      )}
 
-                      {/* Overall ETA Banner */}
-                      {(() => {
+                      {/* Overall ETA Banner — only relevant on the Currently Processing tab */}
+                      {uploadHistoryTab === 'current' && (() => {
                         // Only show for batches that still have genuinely active items
                         const activeBatches = myResumesHistory.filter(r =>
                           r.pending > 0 && r.date &&
@@ -3387,21 +3484,39 @@ export default function MyResumesPage() {
 
                       {/* Upload History List */}
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-semibold text-gray-900">Recent Uploads</h3>
-                        <span className="text-xs text-gray-500">{myResumesHistory.length} batch{myResumesHistory.length !== 1 ? 'es' : ''}</span>
+                        <h3 className="text-sm font-semibold text-gray-900">
+                          {uploadHistoryTab === 'current' ? 'Active Uploads' : 'Recent Uploads'}
+                        </h3>
+                        <span className="text-xs text-gray-500">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
                       </div>
 
-                      {myResumesHistory.length === 0 ? (
+                      {displayRecords.length === 0 ? (
                         <div className="flex flex-col items-center justify-center text-center py-8 sm:py-12">
-                          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-blue-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
-                            <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-blue-600" />
+                          <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-3 sm:mb-4 ${
+                            uploadHistoryTab === 'current' ? 'bg-green-100' : 'bg-blue-100'
+                          }`}>
+                            {uploadHistoryTab === 'current' ? (
+                              <CheckCircle className="w-7 h-7 sm:w-10 sm:h-10 text-green-600" />
+                            ) : (
+                              <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-blue-600" />
+                            )}
                           </div>
-                          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-1.5 sm:mb-2">No Upload History</h3>
-                          <p className="text-xs sm:text-sm text-gray-500 max-w-sm px-4">Bulk upload reports will appear here. Upload multiple resumes to see detailed status reports.</p>
+                          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-1.5 sm:mb-2">
+                            {uploadHistoryTab === 'current'
+                              ? 'No uploads in progress'
+                              : myResumesHistory.length === 0 ? 'No upload history' : 'Nothing here yet'}
+                          </h3>
+                          <p className="text-xs sm:text-sm text-gray-500 max-w-sm px-4">
+                            {uploadHistoryTab === 'current'
+                              ? 'All your uploads are processed. Start a new bulk upload to see live progress here.'
+                              : myResumesHistory.length === 0
+                                ? 'Bulk upload reports will appear here. Upload multiple resumes to see detailed status reports.'
+                                : 'Active uploads will appear in the Currently Processing tab until they finish.'}
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          {myResumesHistory
+                          {displayRecords
                             .slice(0, 20)
                             .map(record => {
                               const processed = record.completed + record.errors + record.duplicated + (record.versioned || 0);

@@ -25,16 +25,14 @@ export default function AssessmentDetailsPage() {
   useEffect(() => {
     const fetchAllIds = async () => {
       try {
-        const ids: string[] = [];
-        let page = 1;
-        while (true) {
-          const res = await assessmentService.list({ page_size: 100, page });
-          const items = res.items ?? res ?? [];
-          ids.push(...items.map((a: any) => a.id));
-          if (ids.length >= (res.total ?? items.length) || items.length < 100) break;
-          page++;
-        }
-        setAllAssessmentIds(ids);
+        const probe: any = await assessmentService.list({ page_size: 1, page: 1 });
+        const probeItems: any[] = Array.isArray(probe) ? probe : (probe.items ?? []);
+        const total: number = (probe && typeof probe === 'object' && 'total' in probe ? probe.total : probeItems.length) ?? probeItems.length;
+        const res: any = total > 0
+          ? await assessmentService.list({ page_size: total, page: 1 })
+          : probe;
+        const items: any[] = Array.isArray(res) ? res : (res.items ?? []);
+        setAllAssessmentIds(items.map((a: any) => a.id));
       } catch { /* ignore */ }
     };
     fetchAllIds();
