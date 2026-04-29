@@ -6,6 +6,7 @@ import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
+import ListPagination from '@/components/ListPagination';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -106,9 +107,18 @@ export default function UnitDisputesPage() {
   const [logTotal, setLogTotal] = useState(0);
   const LOG_PAGE_SIZE = 10;
 
+  // Pagination state for the main disputes list
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   useEffect(() => {
     fetchDisputes();
   }, []);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, startDate, endDate]);
 
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('accessToken');
@@ -284,6 +294,11 @@ export default function UnitDisputesPage() {
       return matchesSearch && matchesStatus && matchesDate;
     });
   }, [disputes, searchQuery, statusFilter, startDate, endDate]);
+
+  const paginatedDisputes = useMemo(
+    () => filteredDisputes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage),
+    [filteredDisputes, currentPage, itemsPerPage]
+  );
 
   // --- Helpers ---
 
@@ -570,7 +585,7 @@ export default function UnitDisputesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredDisputes.map((dispute, index) => (
+                  {paginatedDisputes.map((dispute, index) => (
                     <tr key={dispute.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-1.5">
@@ -622,6 +637,18 @@ export default function UnitDisputesPage() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && !error && filteredDisputes.length > 0 && (
+          <ListPagination
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={filteredDisputes.length}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemLabel="disputes"
+          />
         )}
 
         {/* Detail Modal */}

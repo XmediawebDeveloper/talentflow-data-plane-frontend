@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketPriority } from '@/lib/services';
+import ListPagination from '@/components/ListPagination';
 
 // Main API - Local backend handles everything including support tickets
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
@@ -102,6 +103,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
   const [replyMessage, setReplyMessage] = useState('');
+
+  // Pagination state — separate per tab
+  const [myCurrentPage, setMyCurrentPage] = useState(1);
+  const [myItemsPerPage, setMyItemsPerPage] = useState(10);
+  const [teamCurrentPage, setTeamCurrentPage] = useState(1);
+  const [teamItemsPerPage, setTeamItemsPerPage] = useState(10);
 
   // Form states
   const [title, setTitle] = useState('');
@@ -454,6 +461,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     return matchesSearch;
   });
 
+  const paginatedInternalTickets = filteredInternalTickets.slice(
+    (teamCurrentPage - 1) * teamItemsPerPage,
+    teamCurrentPage * teamItemsPerPage
+  );
+
   const handleSubmitTicket = async () => {
     if (!title.trim() || !description.trim()) {
       toast.error('Please fill in all required fields');
@@ -673,6 +685,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
     return matchesSearch;
   });
+
+  const paginatedTickets = filteredTickets.slice(
+    (myCurrentPage - 1) * myItemsPerPage,
+    myCurrentPage * myItemsPerPage
+  );
+
+  // Reset pagination on filter / tab changes
+  useEffect(() => {
+    setMyCurrentPage(1);
+  }, [searchQuery, filterStatus, filterPriority, activeTab]);
+
+  useEffect(() => {
+    setTeamCurrentPage(1);
+  }, [searchQuery, filterStatus, filterPriority, internalFilterAssignment, activeTab]);
 
 
   // Use stats from API or calculate from tickets
@@ -1178,7 +1204,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <>
                   {/* Mobile Card Layout */}
                   <div className="md:hidden divide-y divide-gray-200">
-                    {filteredTickets.map(ticket => {
+                    {paginatedTickets.map(ticket => {
                       const CategoryIcon = getCategoryIcon(ticket.category);
                       return (
                         <button
@@ -1225,7 +1251,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {filteredTickets.map(ticket => {
+                        {paginatedTickets.map(ticket => {
                           const CategoryIcon = getCategoryIcon(ticket.category);
                           return (
                             <tr key={ticket.id} className="hover:bg-gray-50">
@@ -1278,6 +1304,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 </>
               )}
             </div>
+
+            {/* Pagination — My Support Tickets */}
+            {!loading && filteredTickets.length > 0 && (
+              <ListPagination
+                currentPage={myCurrentPage}
+                itemsPerPage={myItemsPerPage}
+                totalItems={filteredTickets.length}
+                onPageChange={setMyCurrentPage}
+                onItemsPerPageChange={setMyItemsPerPage}
+                itemLabel="tickets"
+              />
+            )}
           </div>
         )}
 
@@ -1763,7 +1801,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <>
                   {/* Mobile Card Layout */}
                   <div className="md:hidden divide-y divide-gray-200">
-                    {filteredInternalTickets.map(ticket => {
+                    {paginatedInternalTickets.map(ticket => {
                       const CategoryIcon = getInternalCategoryIcon(ticket.category);
                       return (
                         <button
@@ -1825,7 +1863,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {filteredInternalTickets.map(ticket => {
+                        {paginatedInternalTickets.map(ticket => {
                           const CategoryIcon = getInternalCategoryIcon(ticket.category);
                           return (
                             <tr key={ticket.id} className="hover:bg-gray-50">
@@ -1893,6 +1931,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 </>
               )}
             </div>
+
+            {/* Pagination — Team Support Tickets */}
+            {!internalLoading && filteredInternalTickets.length > 0 && (
+              <ListPagination
+                currentPage={teamCurrentPage}
+                itemsPerPage={teamItemsPerPage}
+                totalItems={filteredInternalTickets.length}
+                onPageChange={setTeamCurrentPage}
+                onItemsPerPageChange={setTeamItemsPerPage}
+                itemLabel="tickets"
+              />
+            )}
           </div>
         )}
 

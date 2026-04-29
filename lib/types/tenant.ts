@@ -68,6 +68,7 @@ export interface Permission {
   canViewApiManagement?: boolean;
   canViewBranding?: boolean;
   canViewSecuritySettings?: boolean;
+  canViewSupport?: boolean;
 
   // Granular Action Permissions — Billing
   canUpgradePlan?: boolean;

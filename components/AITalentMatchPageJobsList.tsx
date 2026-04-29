@@ -1,6 +1,7 @@
 import { Sparkles, MapPin, Briefcase, User, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import ListPagination from '@/components/ListPagination';
 
 interface Job {
   id: string;
@@ -45,6 +46,12 @@ export default function AITalentMatchPageJobsList({
   const [employmentTypeFilter, setEmploymentTypeFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, departmentFilter, locationFilter, employmentTypeFilter]);
 
   // Filter jobs: Only show Published/Active jobs, exclude Disabled jobs
   const publishedJobs = jobs.filter(j =>
@@ -95,6 +102,11 @@ export default function AITalentMatchPageJobsList({
       setSelectedJobs(filteredJobs.map(j => j.id));
     }
   };
+
+  const paginatedJobs = filteredJobs.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-blue-50 to-white">
@@ -243,7 +255,7 @@ export default function AITalentMatchPageJobsList({
           </div>
 
           <div className="grid gap-3 sm:gap-4">
-            {filteredJobs.map((job) => {
+            {paginatedJobs.map((job) => {
               const jobHistory = getJobMatchHistory(job.id);
               const hasHistory = jobHistory.length > 0;
               const latestMatch = hasHistory ? jobHistory[jobHistory.length - 1] : null;
@@ -369,6 +381,15 @@ export default function AITalentMatchPageJobsList({
               );
             })}
           </div>
+
+          <ListPagination
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={filteredJobs.length}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemLabel="jobs"
+          />
         </>
       ) : publishedJobs.length === 0 ? (
         <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-8 sm:p-12 lg:p-16 text-center">

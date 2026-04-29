@@ -16,6 +16,7 @@ import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import ListPagination from '@/components/ListPagination';
 
 // Returns the effective interview duration string.
 // New configs store the real 30 / 35 / N value in duration_minutes.
@@ -87,7 +88,9 @@ export default function AIInterview() {
     inProgress: 0,
   });
   const [configListPage, setConfigListPage] = useState(1);
+  const [configListItemsPerPage, setConfigListItemsPerPage] = useState(10);
   const [processingPage, setProcessingPage] = useState(1);
+  const [processingItemsPerPage, setProcessingItemsPerPage] = useState(10);
   const [invitationPage, setInvitationPage] = useState(1);
 
   // Candidate detail view (from Track Invites modal)
@@ -508,15 +511,15 @@ export default function AIInterview() {
       return modeFilter === 'timed' ? mode === 'fixed' : mode === 'flexible';
     });
   })();
-  const configTotalPages = Math.max(1, Math.ceil(filteredConfigs.length / CONFIG_PAGE_SIZE));
+  const configTotalPages = Math.max(1, Math.ceil(filteredConfigs.length / configListItemsPerPage));
   const paginatedConfigs = filteredConfigs.slice(
-    (configListPage - 1) * CONFIG_PAGE_SIZE,
-    configListPage * CONFIG_PAGE_SIZE,
+    (configListPage - 1) * configListItemsPerPage,
+    configListPage * configListItemsPerPage,
   );
-  const processingTotalPages = Math.max(1, Math.ceil(processingSessions.length / PROCESSING_PAGE_SIZE));
+  const processingTotalPages = Math.max(1, Math.ceil(processingSessions.length / processingItemsPerPage));
   const paginatedProcessingSessions = processingSessions.slice(
-    (processingPage - 1) * PROCESSING_PAGE_SIZE,
-    processingPage * PROCESSING_PAGE_SIZE,
+    (processingPage - 1) * processingItemsPerPage,
+    processingPage * processingItemsPerPage,
   );
 
   const getStatusBadge = (status: string) => {
@@ -1016,34 +1019,17 @@ export default function AIInterview() {
                       </div>
                     );
                   })}
-                  {configTotalPages > 1 && (
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="text-sm text-gray-500">
-                        Showing {((configListPage - 1) * CONFIG_PAGE_SIZE) + 1}–{Math.min(configListPage * CONFIG_PAGE_SIZE, filteredConfigs.length)} of {filteredConfigs.length}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setConfigListPage((p) => Math.max(1, p - 1))}
-                          disabled={configListPage === 1}
-                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <span className="text-sm text-gray-700 font-medium px-2">
-                          {configListPage} / {configTotalPages}
-                        </span>
-                        <button
-                          onClick={() => setConfigListPage((p) => Math.min(configTotalPages, p + 1))}
-                          disabled={configListPage === configTotalPages}
-                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
+
+              <ListPagination
+                currentPage={configListPage}
+                itemsPerPage={configListItemsPerPage}
+                totalItems={filteredConfigs.length}
+                onPageChange={setConfigListPage}
+                onItemsPerPageChange={setConfigListItemsPerPage}
+                itemLabel="interviews"
+              />
             </div>
           )}
 
@@ -1085,34 +1071,17 @@ export default function AIInterview() {
                       </div>
                     </div>
                   ))}
-                  {processingTotalPages > 1 && (
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="text-sm text-gray-500">
-                        Showing {((processingPage - 1) * PROCESSING_PAGE_SIZE) + 1}–{Math.min(processingPage * PROCESSING_PAGE_SIZE, processingSessions.length)} of {processingSessions.length}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setProcessingPage((p) => Math.max(1, p - 1))}
-                          disabled={processingPage === 1}
-                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <span className="text-sm text-gray-700 font-medium px-2">
-                          {processingPage} / {processingTotalPages}
-                        </span>
-                        <button
-                          onClick={() => setProcessingPage((p) => Math.min(processingTotalPages, p + 1))}
-                          disabled={processingPage === processingTotalPages}
-                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
+
+              <ListPagination
+                currentPage={processingPage}
+                itemsPerPage={processingItemsPerPage}
+                totalItems={processingSessions.length}
+                onPageChange={setProcessingPage}
+                onItemsPerPageChange={setProcessingItemsPerPage}
+                itemLabel="interviews"
+              />
             </div>
           )}
 

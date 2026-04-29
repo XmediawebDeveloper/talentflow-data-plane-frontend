@@ -731,6 +731,34 @@ export const aiInterviewService = {
   },
 
   /**
+   * Expand a small main-skill list into JD-grounded sub-skills (timed mode only).
+   * Called silently from Configure page when parents < Q for a bucket.
+   */
+  async expandSkills(args: {
+    mainSkills: string[];
+    targetSkillCount: number;
+    bucket: 'MTH' | 'NTH';
+    jdTitle?: string;
+    jdDescription?: string;
+  }): Promise<{
+    expanded_skills: { parent: string; sub_skills: string[] }[];
+    flat_skills: string[];
+  }> {
+    try {
+      const response = await api.post('/ai-interview/expand-skills', {
+        main_skills: args.mainSkills,
+        target_skill_count: args.targetSkillCount,
+        bucket: args.bucket,
+        jd_title: args.jdTitle,
+        jd_description: args.jdDescription,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Generate AI-powered skill clusters
    */
   async generateClusters(mthSkills: string[], nthSkills: string[], jdTitle?: string, jdDescription?: string, mthTimeMin?: number, nthTimeMin?: number, mthMaxClusters?: number, nthMaxClusters?: number): Promise<{
@@ -747,6 +775,45 @@ export const aiInterviewService = {
         nth_time_min: nthTimeMin,
         mth_max_clusters: mthMaxClusters,
         nth_max_clusters: nthMaxClusters,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Refine existing clusters — applies skill relevance + question-limit rules.
+   * Server returns refined clusters per bucket (capacity field unused here).
+   */
+  async refineClusters(args: {
+    mthClusters: { id?: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    nthClusters: { id?: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    mthQuestions: number;
+    nthQuestions: number;
+    mthMaxClusters?: number;
+    nthMaxClusters?: number;
+    jdTitle?: string;
+    jdDescription?: string;
+    /** When true, forbid the LLM from renaming/merging skills — only drop
+     * irrelevant + rebalance allowed. Used by the silent post-expansion
+     * flow so all input skills appear verbatim in the refined clusters. */
+    preserveSkillNames?: boolean;
+  }): Promise<{
+    mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+  }> {
+    try {
+      const response = await api.post('/ai-interview/refine-clusters', {
+        mth_clusters: args.mthClusters,
+        nth_clusters: args.nthClusters,
+        mth_questions: args.mthQuestions,
+        nth_questions: args.nthQuestions,
+        mth_max_clusters: args.mthMaxClusters,
+        nth_max_clusters: args.nthMaxClusters,
+        jd_title: args.jdTitle,
+        jd_description: args.jdDescription,
+        preserve_skill_names: args.preserveSkillNames ?? false,
       });
       return response.data;
     } catch (error) {

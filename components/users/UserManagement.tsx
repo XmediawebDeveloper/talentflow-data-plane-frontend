@@ -38,6 +38,7 @@ import DependencyMatrix from './DependencyMatrix';
 import { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
 import AddSeatsModal from './AddSeatsModal';
+import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuota } from '@/contexts/QuotaContext';
 import { usePlanFeaturesContext } from '@/components/providers/PlanFeaturesProvider';
@@ -472,6 +473,8 @@ export default function UserManagement() {
   const [users, setUsers] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -1059,6 +1062,16 @@ export default function UserManagement() {
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
 
   const handleRoleChange = (role: string) => {
     let permissions = { ...defaultPermissions };
@@ -1986,7 +1999,7 @@ export default function UserManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredUsers.map((user) => (
+              {paginatedUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden sm:table-cell">
                     {user.user_display_id ? (
@@ -2122,6 +2135,18 @@ export default function UserManagement() {
           </div>
         )}
       </div>
+
+      {/* Pagination */}
+      {!isLoading && filteredUsers.length > 0 && (
+        <ListPagination
+          currentPage={currentPage}
+          itemsPerPage={itemsPerPage}
+          totalItems={filteredUsers.length}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={setItemsPerPage}
+          itemLabel="users"
+        />
+      )}
 
       {/* Create User Modal */}
       {isCreateModalOpen && (
@@ -2796,7 +2821,6 @@ export default function UserManagement() {
                                           </div>
                                           <div className="flex-1 min-w-0">
                                             <div className="font-medium text-xs sm:text-sm text-gray-900">{action.label}</div>
-                                            <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{action.code}</div>
                                           </div>
                                         </div>
                                       );
@@ -2963,7 +2987,6 @@ export default function UserManagement() {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-xs sm:text-sm text-gray-900">{perm.name}</div>
-                              <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{perm.code}</div>
                             </div>
                           </div>
                         ))}

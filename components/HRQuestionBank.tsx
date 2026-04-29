@@ -5,6 +5,7 @@ import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Tag, Clock, Filter
 import api from '@/lib/services/api';
 import { toast } from '@/components/ui/enhanced-toast';
 import { useAuth } from '@/lib/hooks/useAuth';
+import ListPagination from '@/components/ListPagination';
 
 // Question categories for HR round
 const HR_CATEGORIES = [
@@ -195,6 +196,12 @@ export default function HRQuestionBank() {
   const [formData, setFormData] = useState(EMPTY_QUESTION);
   const [saving, setSaving] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterCategory, filterDifficulty]);
 
   // Load questions from API
   useEffect(() => {
@@ -325,6 +332,11 @@ export default function HRQuestionBank() {
   const filteredQuestions = questions.filter(q => {
     return !searchQuery || q.question_text.toLowerCase().includes(searchQuery.toLowerCase());
   });
+
+  const paginatedQuestions = filteredQuestions.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -520,7 +532,7 @@ export default function HRQuestionBank() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredQuestions.map((question) => (
+          {paginatedQuestions.map((question) => (
             <div
               key={question.id}
               className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 transition-colors"
@@ -569,6 +581,15 @@ export default function HRQuestionBank() {
           ))}
         </div>
       )}
+
+      <ListPagination
+        currentPage={currentPage}
+        itemsPerPage={itemsPerPage}
+        totalItems={filteredQuestions.length}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={setItemsPerPage}
+        itemLabel="questions"
+      />
         </>
       )}
     </div>

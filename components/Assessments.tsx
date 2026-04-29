@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import AssessmentCreation from './AssessmentCreation';
+import ListPagination from './ListPagination';
 import AssessmentResults from './AssessmentResults';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import AssessmentAuditTrail from './AssessmentAuditTrail';
@@ -26,7 +27,6 @@ import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 
-const ASSESSMENTS_PAGE_SIZE = 12;
 const INVITATIONS_PAGE_SIZE = 10;
 
 interface AssessmentsProps {
@@ -85,6 +85,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [assessmentCurrentPage, setAssessmentCurrentPage] = useState(1);
+  const [assessmentItemsPerPage, setAssessmentItemsPerPage] = useState(10);
   const [assessmentTotalItems, setAssessmentTotalItems] = useState(0);
   const [assessmentTotalPages, setAssessmentTotalPages] = useState(1);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
@@ -214,7 +215,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     try {
       const filters: any = {
         page,
-        page_size: ASSESSMENTS_PAGE_SIZE,
+        page_size: assessmentItemsPerPage,
       };
       if (preSelectedJdId) {
         filters.jd_id = preSelectedJdId;
@@ -226,7 +227,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       const response = await assessmentService.list(filters);
       const mapped = (response.items || []).map((a: any, index: number) =>
-        mapAssessmentFromApi(a, (page - 1) * ASSESSMENTS_PAGE_SIZE + index)
+        mapAssessmentFromApi(a, (page - 1) * assessmentItemsPerPage + index)
       );
 
       setApiAssessments(mapped);
@@ -416,11 +417,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     loadAssessmentsPage(assessmentCurrentPage);
-  }, [activeTab, preSelectedJdId, assessmentCurrentPage]);
+  }, [activeTab, preSelectedJdId, assessmentCurrentPage, assessmentItemsPerPage]);
 
   useEffect(() => {
     setAssessmentCurrentPage(1);
-  }, [activeTab, preSelectedJdId]);
+  }, [activeTab, preSelectedJdId, assessmentItemsPerPage]);
 
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
@@ -967,9 +968,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (activeTab === 'archived') return assessment.status === 'Archived';
     return true;
   });
-  const assessmentPaginationVisible = !['audit', 'consent', 'settings'].includes(activeTab) && assessmentTotalPages > 1;
-  const assessmentStartIndex = assessmentTotalItems === 0 ? 0 : (assessmentCurrentPage - 1) * ASSESSMENTS_PAGE_SIZE + 1;
-  const assessmentEndIndex = Math.min(assessmentCurrentPage * ASSESSMENTS_PAGE_SIZE, assessmentTotalItems);
+  const assessmentPaginationVisible = !['audit', 'consent', 'settings'].includes(activeTab) && assessmentTotalItems > 5;
+  const assessmentStartIndex = assessmentTotalItems === 0 ? 0 : (assessmentCurrentPage - 1) * assessmentItemsPerPage + 1;
+  const assessmentEndIndex = Math.min(assessmentCurrentPage * assessmentItemsPerPage, assessmentTotalItems);
   const trackingPaginationVisible = trackingTotalPages > 1;
   const trackingStartIndex = trackingTotalItems === 0 ? 0 : (trackingCurrentPage - 1) * INVITATIONS_PAGE_SIZE + 1;
   const trackingEndIndex = Math.min(trackingCurrentPage * INVITATIONS_PAGE_SIZE, trackingTotalItems);
@@ -2620,44 +2621,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             )}
 
             {assessmentPaginationVisible && (
-              <div className="mt-6 flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-gray-500">
-                  Showing <strong>{assessmentStartIndex}</strong> to <strong>{assessmentEndIndex}</strong> of <strong>{assessmentTotalItems}</strong> assessments
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setAssessmentCurrentPage(1)}
-                    disabled={assessmentCurrentPage === 1}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    First
-                  </button>
-                  <button
-                    onClick={() => setAssessmentCurrentPage(assessmentCurrentPage - 1)}
-                    disabled={assessmentCurrentPage === 1}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Prev
-                  </button>
-                  <span className="px-3 py-1.5 text-sm text-gray-600">
-                    Page {assessmentCurrentPage} of {assessmentTotalPages}
-                  </span>
-                  <button
-                    onClick={() => setAssessmentCurrentPage(assessmentCurrentPage + 1)}
-                    disabled={assessmentCurrentPage === assessmentTotalPages}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Next
-                  </button>
-                  <button
-                    onClick={() => setAssessmentCurrentPage(assessmentTotalPages)}
-                    disabled={assessmentCurrentPage === assessmentTotalPages}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Last
-                  </button>
-                </div>
-              </div>
+              <ListPagination
+                currentPage={assessmentCurrentPage}
+                itemsPerPage={assessmentItemsPerPage}
+                totalItems={assessmentTotalItems}
+                onPageChange={setAssessmentCurrentPage}
+                onItemsPerPageChange={setAssessmentItemsPerPage}
+                itemLabel="assessments"
+              />
             )}
           </div>
         </div>

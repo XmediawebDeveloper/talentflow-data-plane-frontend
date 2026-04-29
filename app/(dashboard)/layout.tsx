@@ -56,6 +56,7 @@ const routePermissionRules: Array<{
   { prefix: '/settings/branding', permissions: ['canViewBranding'] },
   { prefix: '/settings/security', permissions: ['canViewSecuritySettings'] },
   { prefix: '/settings/legal', permissions: ['canManageSettings'] },
+  { prefix: '/support-tickets', permissions: ['canViewSupport'] },
 ];
 
 // Paths allowed when subscription is expired/inactive
