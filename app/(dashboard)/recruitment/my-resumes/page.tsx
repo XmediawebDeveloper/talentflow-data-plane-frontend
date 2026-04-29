@@ -350,6 +350,8 @@ export default function MyResumesPage() {
   // Upload history modal state
   const [isUploadHistoryModalOpen, setIsUploadHistoryModalOpen] = useState(false);
   const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
+  const [uploadHistoryTab, setUploadHistoryTab] = useState<'current' | 'completed'>('current');
+  const [allResumesTotal, setAllResumesTotal] = useState(0);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
   const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | null>(null);
   const [retryingBatches, setRetryingBatches] = useState<Set<string>>(new Set());
@@ -523,7 +525,7 @@ export default function MyResumesPage() {
 
     if (batchIdFromUrl) {
       // Show upload history filtered by batch
-      setIsUploadHistoryModalOpen(true);
+      openUploadHistoryModal();
       // Clear the query parameter
       router.replace('/recruitment/my-resumes', { scroll: false });
     }
@@ -560,6 +562,16 @@ export default function MyResumesPage() {
     } catch (error) {
       console.error('Failed to fetch upload history:', error);
     }
+  };
+
+  const openUploadHistoryModal = () => {
+    const hasActive = uploadHistory.some(
+      r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)
+    );
+    setUploadHistoryTab(hasActive ? 'current' : 'completed');
+    setUploadHistoryFilter(null);
+    setIsUploadHistoryModalOpen(true);
+    setIsUploadHistoryMinimized(false);
   };
 
   const handleCloseUploadHistory = async () => {
@@ -1838,6 +1850,8 @@ export default function MyResumesPage() {
     // Auto-open upload history panel immediately when upload starts (for multiple files)
     if (files.length > 1) {
       console.log('[UPLOAD] Auto-opening upload history panel for', files.length, 'files');
+      // New batch is about to start processing — land on Currently Processing tab
+      setUploadHistoryTab('current');
       setIsUploadHistoryModalOpen(true);
       setIsUploadHistoryMinimized(false);
 
