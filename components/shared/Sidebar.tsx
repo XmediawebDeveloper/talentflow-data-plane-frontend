@@ -295,7 +295,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       id: 'support',
       label: 'SUPPORT',
       items: [
-        { id: 'support-tickets', label: 'Support Tickets', icon: HelpCircle, href: '/support-tickets', adminOnly: true },
+        { id: 'support-tickets', label: 'Support Tickets', icon: HelpCircle, href: '/support-tickets', permission: 'canViewSupport' },
         { id: 'help-desk', label: 'Help Desk', icon: Headphones, href: '/help-desk', internalUserOnly: true },
       ]
     },

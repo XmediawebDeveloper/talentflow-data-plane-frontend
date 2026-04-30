@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import AssessmentCreation from './AssessmentCreation';
+import ListPagination from './ListPagination';
 import AssessmentResults from './AssessmentResults';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import AssessmentAuditTrail from './AssessmentAuditTrail';
@@ -23,9 +24,9 @@ import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 
-const ASSESSMENTS_PAGE_SIZE = 12;
 const INVITATIONS_PAGE_SIZE = 10;
 
 interface AssessmentsProps {
@@ -78,9 +79,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [newEmailValue, setNewEmailValue] = useState('');
   const [isSendingChangeEmail, setIsSendingChangeEmail] = useState(false);
+  // Resend confirmation dialog state
+  const [resendTargetInvitation, setResendTargetInvitation] = useState<any | null>(null);
+  const [isResending, setIsResending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [assessmentCurrentPage, setAssessmentCurrentPage] = useState(1);
+  const [assessmentItemsPerPage, setAssessmentItemsPerPage] = useState(10);
   const [assessmentTotalItems, setAssessmentTotalItems] = useState(0);
   const [assessmentTotalPages, setAssessmentTotalPages] = useState(1);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
@@ -210,7 +215,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     try {
       const filters: any = {
         page,
-        page_size: ASSESSMENTS_PAGE_SIZE,
+        page_size: assessmentItemsPerPage,
       };
       if (preSelectedJdId) {
         filters.jd_id = preSelectedJdId;
@@ -222,7 +227,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       const response = await assessmentService.list(filters);
       const mapped = (response.items || []).map((a: any, index: number) =>
-        mapAssessmentFromApi(a, (page - 1) * ASSESSMENTS_PAGE_SIZE + index)
+        mapAssessmentFromApi(a, (page - 1) * assessmentItemsPerPage + index)
       );
 
       setApiAssessments(mapped);
@@ -412,11 +417,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
     loadAssessmentsPage(assessmentCurrentPage);
-  }, [activeTab, preSelectedJdId, assessmentCurrentPage]);
+  }, [activeTab, preSelectedJdId, assessmentCurrentPage, assessmentItemsPerPage]);
 
   useEffect(() => {
     setAssessmentCurrentPage(1);
-  }, [activeTab, preSelectedJdId]);
+  }, [activeTab, preSelectedJdId, assessmentItemsPerPage]);
 
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
@@ -766,17 +771,53 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const isValidInviteEmail = (email: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-  // Resend invitation to same candidate (uses resend endpoint, not invite — preserves same invitation record)
+  // Preview the new expiry the backend will produce. Mirrors backend logic:
+  // reuses the original invitation's configured duration (expires_at - created_at).
+  const computeResendExpiryPreview = (invitation: any): { dateLabel: string; durationLabel: string } | null => {
+    if (!invitation) return null;
+    const createdMs = invitation.created_at ? new Date(invitation.created_at).getTime() : NaN;
+    const expiresMs = invitation.expires_at ? new Date(invitation.expires_at).getTime() : NaN;
+    let durationMs = 24 * 60 * 60 * 1000; // default 1 day
+    if (Number.isFinite(createdMs) && Number.isFinite(expiresMs) && expiresMs > createdMs) {
+      durationMs = expiresMs - createdMs;
+    }
+    const newExpiry = new Date(Date.now() + durationMs);
+    const totalMinutes = Math.max(1, Math.round(durationMs / 60000));
+    let durationLabel: string;
+    if (totalMinutes >= 60 * 24) {
+      const days = Math.round(totalMinutes / (60 * 24));
+      durationLabel = days === 1 ? '1 day' : `${days} days`;
+    } else if (totalMinutes >= 60) {
+      const hours = Math.round(totalMinutes / 60);
+      durationLabel = hours === 1 ? '1 hour' : `${hours} hours`;
+    } else {
+      durationLabel = `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
+    }
+    return { dateLabel: formatIST(newExpiry.toISOString()), durationLabel };
+  };
+
+  // Revoke current link and resend with a freshly generated link.
+  // The backend regenerates invitation_token and refreshes expires_at using
+  // the original configured duration. Confirmation dialog handles user intent.
   const handleResendInvitation = async (invitation: any) => {
+    setIsResending(true);
     try {
       await api.post(
         `/assessments/${selectedAssessmentForTracking.id}/invitations/${invitation.id}/resend`
       );
-      toast.success('Invitation resent successfully!');
+      toast.success('New invitation link generated and emailed!');
       await loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to resend invitation:', error);
-      toast.error('Failed to resend invitation. Please try again.');
+      const detail = error?.response?.data?.detail;
+      const msg =
+        (typeof detail === 'object' && detail?.message) ||
+        (typeof detail === 'string' && detail) ||
+        'Failed to resend invitation. Please try again.';
+      toast.error(msg);
+    } finally {
+      setIsResending(false);
+      setResendTargetInvitation(null);
     }
   };
 
@@ -927,9 +968,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (activeTab === 'archived') return assessment.status === 'Archived';
     return true;
   });
-  const assessmentPaginationVisible = !['audit', 'consent', 'settings'].includes(activeTab) && assessmentTotalPages > 1;
-  const assessmentStartIndex = assessmentTotalItems === 0 ? 0 : (assessmentCurrentPage - 1) * ASSESSMENTS_PAGE_SIZE + 1;
-  const assessmentEndIndex = Math.min(assessmentCurrentPage * ASSESSMENTS_PAGE_SIZE, assessmentTotalItems);
+  const assessmentPaginationVisible = !['audit', 'consent', 'settings'].includes(activeTab) && assessmentTotalItems > 5;
+  const assessmentStartIndex = assessmentTotalItems === 0 ? 0 : (assessmentCurrentPage - 1) * assessmentItemsPerPage + 1;
+  const assessmentEndIndex = Math.min(assessmentCurrentPage * assessmentItemsPerPage, assessmentTotalItems);
   const trackingPaginationVisible = trackingTotalPages > 1;
   const trackingStartIndex = trackingTotalItems === 0 ? 0 : (trackingCurrentPage - 1) * INVITATIONS_PAGE_SIZE + 1;
   const trackingEndIndex = Math.min(trackingCurrentPage * INVITATIONS_PAGE_SIZE, trackingTotalItems);
@@ -2580,44 +2621,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             )}
 
             {assessmentPaginationVisible && (
-              <div className="mt-6 flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-gray-500">
-                  Showing <strong>{assessmentStartIndex}</strong> to <strong>{assessmentEndIndex}</strong> of <strong>{assessmentTotalItems}</strong> assessments
-                </p>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setAssessmentCurrentPage(1)}
-                    disabled={assessmentCurrentPage === 1}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    First
-                  </button>
-                  <button
-                    onClick={() => setAssessmentCurrentPage(assessmentCurrentPage - 1)}
-                    disabled={assessmentCurrentPage === 1}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Prev
-                  </button>
-                  <span className="px-3 py-1.5 text-sm text-gray-600">
-                    Page {assessmentCurrentPage} of {assessmentTotalPages}
-                  </span>
-                  <button
-                    onClick={() => setAssessmentCurrentPage(assessmentCurrentPage + 1)}
-                    disabled={assessmentCurrentPage === assessmentTotalPages}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Next
-                  </button>
-                  <button
-                    onClick={() => setAssessmentCurrentPage(assessmentTotalPages)}
-                    disabled={assessmentCurrentPage === assessmentTotalPages}
-                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Last
-                  </button>
-                </div>
-              </div>
+              <ListPagination
+                currentPage={assessmentCurrentPage}
+                itemsPerPage={assessmentItemsPerPage}
+                totalItems={assessmentTotalItems}
+                onPageChange={setAssessmentCurrentPage}
+                onItemsPerPageChange={setAssessmentItemsPerPage}
+                itemLabel="assessments"
+              />
             )}
           </div>
         </div>
@@ -2765,7 +2776,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       const getStatusBadge = (inv: any) => {
                         const s = inv.status;
                         if (s === 'completed' || inv.completed_at) {
-                          return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Completed</span>;
+                          const autoCompleted = inv.termination_code === 'TENANT_SESSION_TIMEOUT';
+                          return (
+                            <span
+                              className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1"
+                              title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined}
+                            >
+                              <CheckCircle className="w-3 h-3" />
+                              Completed
+                              {autoCompleted && <span className="text-green-600/80">(Auto)</span>}
+                            </span>
+                          );
                         }
                         if (s === 'failed') {
                           return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Failed</span>;
@@ -2972,10 +2993,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Change Email
                                 </button>
                               )
-                            ) : invitation.status === 'failed' ? (
+                            ) : (['sent', 'opened', 'failed'].includes(invitation.status) && !invitation.started_at && !invitation.completed_at) ? (
                               <button
-                                onClick={() => handleResendInvitation(invitation)}
-                                className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
+                                onClick={() => setResendTargetInvitation(invitation)}
+                                title="Revoke old link and send a new invitation"
+                                className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                                  invitation.status === 'failed'
+                                    ? 'bg-red-600 text-white hover:bg-red-700'
+                                    : 'border border-gray-400 text-gray-700 hover:bg-gray-50'
+                                }`}
                               >
                                 <Mail className="w-3.5 h-3.5" />
                                 Resend
@@ -3042,6 +3068,39 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </div>
         </div>
       )}
+
+      {/* Resend confirmation — regenerates token, invalidates old link */}
+      <ConfirmationDialog
+        isOpen={!!resendTargetInvitation}
+        onClose={() => { if (!isResending) setResendTargetInvitation(null); }}
+        onConfirm={() => resendTargetInvitation && handleResendInvitation(resendTargetInvitation)}
+        title="Invalidate old link & send new invitation?"
+        description={
+          resendTargetInvitation
+            ? `A fresh invitation will be emailed to ${resendTargetInvitation.candidate_email}. The previous link will stop working immediately.`
+            : ''
+        }
+        confirmText={isResending ? 'Sending…' : 'Yes, send new link'}
+        cancelText="Cancel"
+        variant="warning"
+      >
+        {resendTargetInvitation && (() => {
+          const preview = computeResendExpiryPreview(resendTargetInvitation);
+          if (!preview) return null;
+          return (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+              <p className="text-amber-900 font-medium mb-1">New link expiry</p>
+              <p className="text-amber-800">
+                Valid for <strong>{preview.durationLabel}</strong> from now — expires on{' '}
+                <strong>{preview.dateLabel}</strong>.
+              </p>
+              <p className="text-amber-700 text-xs mt-2">
+                Same duration as the original invitation.
+              </p>
+            </div>
+          );
+        })()}
+      </ConfirmationDialog>
     </div>
   );
 }

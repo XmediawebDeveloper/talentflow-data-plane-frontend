@@ -634,15 +634,10 @@ function CategorySection({
         {skills.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-3">
             {skills.map(skill => {
-              const isAssigned = assignedSkillNames.has(skill.name.toLowerCase().trim());
               return (
                 <span
                   key={skill.name}
-                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
-                    isAssigned
-                      ? 'bg-purple-50 text-purple-700 border-purple-200'
-                      : 'bg-amber-50 text-amber-700 border-amber-200'
-                  }`}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-purple-50 text-purple-700 border-purple-200"
                 >
                   {skill.name}
                   {!isReadOnly && (
@@ -1334,8 +1329,12 @@ export default function AIInterviewClusters() {
   // Case-insensitive matching: LLM may return skill names with different casing
   const allAssignedMth = new Set(mthClusters.flatMap(c => c.skills.map(s => s.toLowerCase().trim())));
   const allAssignedNth = new Set(activeNthClusters.flatMap(c => c.skills.map(s => s.toLowerCase().trim())));
-  const unassignedMth = hasClusters ? mthSkills.filter(s => !allAssignedMth.has(s.name.toLowerCase().trim())) : [];
-  const unassignedNth = hasClusters && nthEnabled ? nthSkills.filter(s => !allAssignedNth.has(s.name.toLowerCase().trim())) : [];
+  // Unassigned-skill detection is intentionally disabled — refine renames skills
+  // ("JUnit" → "Testing Frameworks"), so exact-name comparison against the
+  // bucket list produces noisy false positives. The interview engine uses the
+  // cluster's own skill list, so the mismatch is cosmetic.
+  const unassignedMth: SkillEntry[] = [];
+  const unassignedNth: SkillEntry[] = [];
   const emptyClusters = [...mthClusters, ...activeNthClusters].filter(c => c.skills.length === 0);
   const hasIssues = unassignedMth.length > 0 || unassignedNth.length > 0 || emptyClusters.length > 0;
 

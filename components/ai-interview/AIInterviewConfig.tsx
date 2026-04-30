@@ -1611,7 +1611,12 @@ export default function AIInterviewConfig() {
   };
 
   /* ── Build rounds config for API ── */
-  const buildRounds = (isDraft = false): AIInterviewRoundConfig[] => {
+  const buildRounds = (
+    isDraft = false,
+    overrides?: { mth?: SkillEntry[]; nth?: SkillEntry[] },
+  ): AIInterviewRoundConfig[] => {
+    const mthSkillsSrc = overrides?.mth ?? mth.skills;
+    const nthSkillsSrc = overrides?.nth ?? nth.skills;
     const rounds: AIInterviewRoundConfig[] = [];
     const dur = (cat: 'mth' | 'nth' | 'hr') => {
       if (mode === 'flexible') {
@@ -1627,8 +1632,8 @@ export default function AIInterviewConfig() {
     // MTH round
     {
       const jdSet = new Set((selectedJd?.must_have_skills || []).map(s => s.toLowerCase()));
-      const jdSkills = mth.skills.filter(s => jdSet.has(s.name.toLowerCase())).map(s => s.name);
-      const customSkills = mth.skills.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
+      const jdSkills = mthSkillsSrc.filter(s => jdSet.has(s.name.toLowerCase())).map(s => s.name);
+      const customSkills = mthSkillsSrc.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
       // Clusters → topics + topic_weights + topic_time_minutes + topic_skills
       const topics = mth.clusters.map(c => c.name).filter(Boolean);
       const topicWeights: Record<string, number> = {};
@@ -1660,8 +1665,8 @@ export default function AIInterviewConfig() {
     // NTH round
     if (nth.enabled) {
       const jdSet = new Set((selectedJd?.nice_to_have_skills || []).map(s => s.toLowerCase()));
-      const jdSkills = nth.skills.filter(s => jdSet.has(s.name.toLowerCase())).map(s => s.name);
-      const customSkills = nth.skills.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
+      const jdSkills = nthSkillsSrc.filter(s => jdSet.has(s.name.toLowerCase())).map(s => s.name);
+      const customSkills = nthSkillsSrc.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
       const topics = nth.clusters.map(c => c.name).filter(Boolean);
       const topicWeights: Record<string, number> = {};
       const topicSkills: Record<string, string[]> = {};
@@ -1735,7 +1740,10 @@ export default function AIInterviewConfig() {
   });
 
   /* ── Save / Publish ── */
-  const saveDraft = async (silent = false): Promise<boolean> => {
+  const saveDraft = async (
+    silent = false,
+    overrides?: { mth?: SkillEntry[]; nth?: SkillEntry[] },
+  ): Promise<boolean> => {
     if (!selectedJd) return false;
     setSavingDraft(true);
     try {
@@ -1743,7 +1751,7 @@ export default function AIInterviewConfig() {
         position: selectedJd.title,
         jd_id: selectedJd.id,
         duration_minutes: mode === 'flexible' ? 30 : totalFixed,
-        rounds_config: buildRounds(true),
+        rounds_config: buildRounds(true, overrides),
         recording_enabled: recordingEnabled,
         available_languages: availableLanguages,
         title: `${selectedJd.title} - AI Interview`,
@@ -1805,10 +1813,89 @@ export default function AIInterviewConfig() {
       return;
     }
 
+    // Phase 0: Skill-shortage detection (timed mode only) — runs silently.
+    // When the recruiter-supplied skill list is too small for the planned
+    // question count, expand it via JD-grounded sub-skills and pass the
+    // expanded list as an override into the rest of the pipeline. The
+    // Configure page's visible skill list is NOT modified — expanded skills
+    // surface only on the Clusters page.
+    if (mode === 'fixed') {
+      const mthSkillNames = mth.skills.map(s => s.name.trim()).filter(Boolean);
+      const nthSkillNames = nth.enabled ? nth.skills.map(s => s.name.trim()).filter(Boolean) : [];
+      const mthQ = timedAllocation.mthQuestions ?? 0;
+      const nthQ = nth.enabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+      // target = 2 skills per question. Trigger expansion when input < target,
+      // and trigger refine (preserve-names) when input either expanded OR
+      // input > target (overflow needs trimming via the relevance + budget rules).
+      const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ * 2;
+      const nthShort = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length < nthQ * 2;
+      const mthOverflow = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length > mthQ * 2;
+      const nthOverflow = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length > nthQ * 2;
+
+      if (mthShort || nthShort) {
+        setGeneratingClusters(true);
+        try {
+          const [mthFlat, nthFlat] = await Promise.all([
+            mthShort
+              ? aiInterviewService.expandSkills({
+                  mainSkills: mthSkillNames,
+                  targetSkillCount: mthQ * 2,
+                  bucket: 'MTH',
+                  jdTitle: selectedJd.title,
+                  jdDescription: selectedJd.description,
+                }).then(r => r.flat_skills)
+              : Promise.resolve(mthSkillNames),
+            nthShort
+              ? aiInterviewService.expandSkills({
+                  mainSkills: nthSkillNames,
+                  targetSkillCount: nthQ * 2,
+                  bucket: 'NTH',
+                  jdTitle: selectedJd.title,
+                  jdDescription: selectedJd.description,
+                }).then(r => r.flat_skills)
+              : Promise.resolve(nthSkillNames),
+          ]);
+
+          // Build SkillEntry[] for override; preserve metadata for parents
+          // already in state, default-fill for new sub-skills.
+          const buildEntries = (existing: SkillEntry[], names: string[]): SkillEntry[] => {
+            const byName = new Map(existing.map(e => [e.name.toLowerCase(), e]));
+            return names.map(n => byName.get(n.toLowerCase()) ?? { name: n, comment: '', type: 'Skill' as SkillType });
+          };
+          const mthOverride = mthFlat.length > 0 ? buildEntries(mth.skills, mthFlat) : undefined;
+          const nthOverride = nth.enabled && nthFlat.length > 0 ? buildEntries(nth.skills, nthFlat) : undefined;
+
+          await proceedToClusters({ applyRefine: true, mthOverride, nthOverride });
+        } catch (e: any) {
+          toast.error(e?.message || 'Failed to expand skills');
+          setGeneratingClusters(false);
+        }
+        return;
+      }
+
+      // No shortage but overflow on either bucket → run refine to trim/rebalance.
+      // Skip expansion; pass through input skills untouched, refine handles the rest.
+      if (mthOverflow || nthOverflow) {
+        await proceedToClusters({ applyRefine: true });
+        return;
+      }
+    }
+
+    await proceedToClusters({ applyRefine: false });
+  };
+
+  const proceedToClusters = async (
+    opts: { applyRefine?: boolean; mthOverride?: SkillEntry[]; nthOverride?: SkillEntry[] } = {},
+  ) => {
+    if (!selectedJd) return;
+    const { applyRefine = false, mthOverride, nthOverride } = opts;
+    const effMth: SkillEntry[] = mthOverride ?? mth.skills;
+    const effNth: SkillEntry[] = nth.enabled ? (nthOverride ?? nth.skills) : [];
     isNavigatingRef.current = true;
 
-    // 1. Save draft first
-    const ok = await saveDraft(true);
+    // 1. Save draft first (with overrides if expansion ran, so rounds_config
+    //    contains expanded skills before the Clusters page reads them).
+    const ok = await saveDraft(true, mthOverride || nthOverride ? { mth: mthOverride, nth: nthOverride } : undefined);
     if (!ok || !existingDraftIdRef.current) {
       isNavigatingRef.current = false;
       toast.error('Please save your configuration first');
@@ -1819,10 +1906,10 @@ export default function AIInterviewConfig() {
     // Rule: only regenerate when skills ACTUALLY changed since last save, or when no clusters exist yet.
     // Never regenerate just because the user navigated back without making changes.
     const currentMthSet = new Set(
-      mth.skills.map(s => s.name.toLowerCase().trim()).filter(Boolean)
+      effMth.map(s => s.name.toLowerCase().trim()).filter(Boolean)
     );
     const currentNthSet = new Set(
-      nth.enabled ? nth.skills.map(s => s.name.toLowerCase().trim()).filter(Boolean) : []
+      nth.enabled ? effNth.map(s => s.name.toLowerCase().trim()).filter(Boolean) : []
     );
 
     // Snapshot = skills at the time clusters were last generated or saved from the Clusters page.
@@ -1855,8 +1942,8 @@ export default function AIInterviewConfig() {
     // If no snapshot yet, backfill it now (non-blocking) so future visits use snapshot comparison
     if (!hasSnapshot && !needsRegeneration && existingDraftIdRef.current) {
       const siBackfill = JSON.parse(buildClusterJson());
-      siBackfill.mth_skills_snapshot = mth.skills.map(s => s.name);
-      siBackfill.nth_skills_snapshot = nth.enabled ? nth.skills.map(s => s.name) : [];
+      siBackfill.mth_skills_snapshot = effMth.map(s => s.name);
+      siBackfill.nth_skills_snapshot = nth.enabled ? effNth.map(s => s.name) : [];
       loadedSiRef.current = { ...loadedSiRef.current, ...siBackfill };
       aiInterviewService.update(existingDraftIdRef.current, {
         special_instructions: JSON.stringify(siBackfill),
@@ -1866,11 +1953,11 @@ export default function AIInterviewConfig() {
     if (needsRegeneration) {
       setGeneratingClusters(true);
       try {
-        const mthSkillNames = mth.skills
+        const mthSkillNames = effMth
           .map(s => s.name.trim())
           .filter(Boolean);
         const nthSkillNames = nth.enabled
-          ? nth.skills.map(s => s.name.trim()).filter(Boolean)
+          ? effNth.map(s => s.name.trim()).filter(Boolean)
           : [];
 
         if (mthSkillNames.length > 0 || nthSkillNames.length > 0) {
@@ -1894,19 +1981,61 @@ export default function AIInterviewConfig() {
           const nthMax = effectiveNthMax;
           const rawMth = mthSkillNames.length > 0 ? result.mth_clusters : [];
           const rawNth = nthSkillNames.length > 0 ? result.nth_clusters : [];
-          siObj.mth_clusters = (mthMax > 0 ? rawMth.slice(0, mthMax) : rawMth).map(c => ({
+          let mthClustersOut = (mthMax > 0 ? rawMth.slice(0, mthMax) : rawMth).map(c => ({
             ...c,
             priority: c.priority as Cluster['priority'],
             reason: c.reason || '',
           }));
-          siObj.nth_clusters = (nthMax > 0 ? rawNth.slice(0, nthMax) : rawNth).map(c => ({
+          let nthClustersOut = (nthMax > 0 ? rawNth.slice(0, nthMax) : rawNth).map(c => ({
             ...c,
             priority: c.priority as Cluster['priority'],
             reason: c.reason || '',
           }));
+
+          // Phase 2: Refine in PRESERVE-NAMES mode — applies the 2 rules
+          // (skill relevance check + question-limit optimization) but
+          // forbids rename/merge so the input skill names appear verbatim
+          // in the output clusters (1:1 mapping). Triggered after expansion
+          // OR when recruiter input overflows the target (relevance pass
+          // trims over-supplied skills). Best-effort: on failure, keep
+          // raw generated clusters.
+          if (applyRefine) {
+            try {
+              const refineResult = await aiInterviewService.refineClusters({
+                mthClusters: mthClustersOut,
+                nthClusters: nth.enabled ? nthClustersOut : [],
+                mthQuestions: mode === 'fixed' ? (timedAllocation.mthQuestions ?? 0) : 0,
+                nthQuestions: mode === 'fixed' && nth.enabled ? (timedAllocation.nthQuestions ?? 0) : 0,
+                mthMaxClusters: effectiveMthMax,
+                nthMaxClusters: nth.enabled ? effectiveNthMax : 0,
+                jdTitle: selectedJd.title,
+                jdDescription: selectedJd.description,
+                preserveSkillNames: true,
+              });
+              if (refineResult.mth_clusters?.length) {
+                mthClustersOut = refineResult.mth_clusters.map(c => ({
+                  ...c,
+                  priority: c.priority as Cluster['priority'],
+                  reason: c.reason || '',
+                }));
+              }
+              if (nth.enabled && refineResult.nth_clusters?.length) {
+                nthClustersOut = refineResult.nth_clusters.map(c => ({
+                  ...c,
+                  priority: c.priority as Cluster['priority'],
+                  reason: c.reason || '',
+                }));
+              }
+            } catch {
+              // Refine failed — keep raw generated clusters
+            }
+          }
+
+          siObj.mth_clusters = mthClustersOut;
+          siObj.nth_clusters = nthClustersOut;
           // Save skill snapshot so future visits don't trigger false regeneration
-          siObj.mth_skills_snapshot = mth.skills.map(s => s.name);
-          siObj.nth_skills_snapshot = nth.enabled ? nth.skills.map(s => s.name) : [];
+          siObj.mth_skills_snapshot = effMth.map(s => s.name);
+          siObj.nth_skills_snapshot = nth.enabled ? effNth.map(s => s.name) : [];
           loadedSiRef.current = { ...loadedSiRef.current, ...siObj };
           await aiInterviewService.update(existingDraftIdRef.current, {
             special_instructions: JSON.stringify(siObj),

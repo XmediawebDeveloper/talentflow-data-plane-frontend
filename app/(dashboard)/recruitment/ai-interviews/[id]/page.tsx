@@ -19,16 +19,11 @@ export default function AIInterviewDetailsPage() {
   useEffect(() => {
     const fetchAllIds = async () => {
       try {
-        const ids: string[] = [];
-        let page = 1;
-        while (true) {
-          const res = await aiInterviewService.listConfigs({ status: 'published', page_size: 100, page });
-          const items = res.items;
-          ids.push(...items.map((a: any) => a.id));
-          if (ids.length >= res.total || items.length < 100) break;
-          page++;
-        }
-        setAllIds(ids);
+        const probe = await aiInterviewService.listConfigs({ status: 'published', page_size: 1, page: 1 });
+        const res = probe.total > probe.items.length
+          ? await aiInterviewService.listConfigs({ status: 'published', page_size: probe.total, page: 1 })
+          : probe;
+        setAllIds(res.items.map((a: any) => a.id));
       } catch { /* ignore */ }
     };
     fetchAllIds();

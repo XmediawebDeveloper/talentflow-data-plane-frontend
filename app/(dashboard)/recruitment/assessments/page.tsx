@@ -37,8 +37,12 @@ export default function AssessmentsRoute() {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        // Fetch only published JDs from the API
-        const response = await jdService.list({ status: 'published', page_size: 100, source: 'my-jds' });
+        // Fetch only published JDs from the API — probe for total then pull all
+        const baseParams = { status: 'published' as const, source: 'my-jds' as const };
+        const probe = await jdService.list({ ...baseParams, page_size: 1 });
+        const response = probe.total > probe.items.length
+          ? await jdService.list({ ...baseParams, page_size: probe.total })
+          : probe;
         const realJobs: Job[] = (response.items || []).map((jd: any) => ({
           id: jd.id,
           job_id: jd.job_id,

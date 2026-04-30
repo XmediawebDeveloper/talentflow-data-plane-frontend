@@ -15,6 +15,8 @@ import CandidateResultsView from '@/components/ai-interview/CandidateResultsView
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import ListPagination from '@/components/ListPagination';
 
 // Returns the effective interview duration string.
 // New configs store the real 30 / 35 / N value in duration_minutes.
@@ -77,6 +79,8 @@ export default function AIInterview() {
   const [invitations, setInvitations] = useState<AIInterviewResponse[]>([]);
   const [loadingInvitations, setLoadingInvitations] = useState(false);
   const [resendingEmailFor, setResendingEmailFor] = useState<string | null>(null); // session id
+  // Resend-with-new-link confirmation dialog target
+  const [resendInviteTarget, setResendInviteTarget] = useState<any | null>(null);
   const [invitationTotal, setInvitationTotal] = useState(0);
   const [invitationTotalPages, setInvitationTotalPages] = useState(1);
   const [invitationSummary, setInvitationSummary] = useState({
@@ -84,7 +88,9 @@ export default function AIInterview() {
     inProgress: 0,
   });
   const [configListPage, setConfigListPage] = useState(1);
+  const [configListItemsPerPage, setConfigListItemsPerPage] = useState(10);
   const [processingPage, setProcessingPage] = useState(1);
+  const [processingItemsPerPage, setProcessingItemsPerPage] = useState(10);
   const [invitationPage, setInvitationPage] = useState(1);
 
   // Candidate detail view (from Track Invites modal)
@@ -174,7 +180,11 @@ export default function AIInterview() {
     try {
       setLoading(true);
       const [configsRes, statsRes] = await Promise.allSettled([
-        aiInterviewService.listConfigs({ page_size: 100 }),
+        aiInterviewService.listConfigs({ page_size: 1 }).then((probe) =>
+          probe.total > probe.items.length
+            ? aiInterviewService.listConfigs({ page_size: probe.total })
+            : probe
+        ),
         aiInterviewService.getConfigStats(),
       ]);
 
@@ -204,7 +214,10 @@ export default function AIInterview() {
 
   const loadArchivedConfigs = useCallback(async () => {
     try {
-      const result = await aiInterviewService.listConfigs({ status: 'archived', page_size: 100 });
+      const probe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1 });
+      const result = probe.total > probe.items.length
+        ? await aiInterviewService.listConfigs({ status: 'archived', page_size: probe.total })
+        : probe;
       setArchivedConfigs(result.items);
     } catch (error) {
       console.error('Failed to load archived configs:', error);
@@ -231,7 +244,10 @@ export default function AIInterview() {
   const loadProcessingSessions = useCallback(async () => {
     setProcessingLoading(true);
     try {
-      const result = await aiInterviewService.list({ status: 'in_progress', page_size: 100 });
+      const probe = await aiInterviewService.list({ status: 'in_progress', page_size: 1 });
+      const result = probe.total > probe.items.length
+        ? await aiInterviewService.list({ status: 'in_progress', page_size: probe.total })
+        : probe;
       setProcessingSessions(result.items);
     } catch (error) {
       console.error('Failed to load processing sessions:', error);
@@ -505,15 +521,15 @@ export default function AIInterview() {
       return modeFilter === 'timed' ? mode === 'fixed' : mode === 'flexible';
     });
   })();
-  const configTotalPages = Math.max(1, Math.ceil(filteredConfigs.length / CONFIG_PAGE_SIZE));
+  const configTotalPages = Math.max(1, Math.ceil(filteredConfigs.length / configListItemsPerPage));
   const paginatedConfigs = filteredConfigs.slice(
-    (configListPage - 1) * CONFIG_PAGE_SIZE,
-    configListPage * CONFIG_PAGE_SIZE,
+    (configListPage - 1) * configListItemsPerPage,
+    configListPage * configListItemsPerPage,
   );
-  const processingTotalPages = Math.max(1, Math.ceil(processingSessions.length / PROCESSING_PAGE_SIZE));
+  const processingTotalPages = Math.max(1, Math.ceil(processingSessions.length / processingItemsPerPage));
   const paginatedProcessingSessions = processingSessions.slice(
-    (processingPage - 1) * PROCESSING_PAGE_SIZE,
-    processingPage * PROCESSING_PAGE_SIZE,
+    (processingPage - 1) * processingItemsPerPage,
+    processingPage * processingItemsPerPage,
   );
 
   const getStatusBadge = (status: string) => {
@@ -1013,34 +1029,17 @@ export default function AIInterview() {
                       </div>
                     );
                   })}
-                  {configTotalPages > 1 && (
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="text-sm text-gray-500">
-                        Showing {((configListPage - 1) * CONFIG_PAGE_SIZE) + 1}–{Math.min(configListPage * CONFIG_PAGE_SIZE, filteredConfigs.length)} of {filteredConfigs.length}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setConfigListPage((p) => Math.max(1, p - 1))}
-                          disabled={configListPage === 1}
-                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <span className="text-sm text-gray-700 font-medium px-2">
-                          {configListPage} / {configTotalPages}
-                        </span>
-                        <button
-                          onClick={() => setConfigListPage((p) => Math.min(configTotalPages, p + 1))}
-                          disabled={configListPage === configTotalPages}
-                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
+
+              <ListPagination
+                currentPage={configListPage}
+                itemsPerPage={configListItemsPerPage}
+                totalItems={filteredConfigs.length}
+                onPageChange={setConfigListPage}
+                onItemsPerPageChange={setConfigListItemsPerPage}
+                itemLabel="interviews"
+              />
             </div>
           )}
 
@@ -1082,34 +1081,17 @@ export default function AIInterview() {
                       </div>
                     </div>
                   ))}
-                  {processingTotalPages > 1 && (
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="text-sm text-gray-500">
-                        Showing {((processingPage - 1) * PROCESSING_PAGE_SIZE) + 1}–{Math.min(processingPage * PROCESSING_PAGE_SIZE, processingSessions.length)} of {processingSessions.length}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setProcessingPage((p) => Math.max(1, p - 1))}
-                          disabled={processingPage === 1}
-                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <span className="text-sm text-gray-700 font-medium px-2">
-                          {processingPage} / {processingTotalPages}
-                        </span>
-                        <button
-                          onClick={() => setProcessingPage((p) => Math.min(processingTotalPages, p + 1))}
-                          disabled={processingPage === processingTotalPages}
-                          className="p-1.5 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
+
+              <ListPagination
+                currentPage={processingPage}
+                itemsPerPage={processingItemsPerPage}
+                totalItems={processingSessions.length}
+                onPageChange={setProcessingPage}
+                onItemsPerPageChange={setProcessingItemsPerPage}
+                itemLabel="interviews"
+              />
             </div>
           )}
 
@@ -1617,25 +1599,15 @@ export default function AIInterview() {
                             </button>
                           )}
 
-                          {/* Resend Email — only for invited (not yet started) */}
-                          {resolveStatus(inv) === 'invited' && (
+                          {/* Resend Email — only for invited AND not yet started/completed. Regenerates token. */}
+                          {resolveStatus(inv) === 'invited' && !inv.started_at && !inv.completed_at && (
                             <button
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation();
-                                setResendingEmailFor(inv.id);
-                                try {
-                                  await aiInterviewService.sendSessionEmail(inv.id, {
-                                    base_url: window.location.origin,
-                                  });
-                                  toast.success(`Invitation email resent to ${inv.candidate_email}`);
-                                } catch (err: any) {
-                                  toast.error(err?.message || 'Failed to resend email');
-                                } finally {
-                                  setResendingEmailFor(null);
-                                }
+                                setResendInviteTarget(inv);
                               }}
                               disabled={resendingEmailFor === inv.id}
-                              title="Resend invitation email"
+                              title="Revoke old link and send a new invitation"
                               className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors disabled:opacity-50"
                             >
                               {resendingEmailFor === inv.id
@@ -1768,6 +1740,78 @@ export default function AIInterview() {
           </div>
         </div>
       )}
+
+      {/* Resend confirmation — regenerates interview_token, invalidates old link */}
+      <ConfirmationDialog
+        isOpen={!!resendInviteTarget}
+        onClose={() => { if (resendingEmailFor !== resendInviteTarget?.id) setResendInviteTarget(null); }}
+        onConfirm={async () => {
+          const inv = resendInviteTarget;
+          if (!inv) return;
+          setResendingEmailFor(inv.id);
+          try {
+            await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
+            toast.success(`New invitation link sent to ${inv.candidate_email}`);
+            // refresh invitations list so the new expires_at is reflected
+            if (viewInvitationsConfig) {
+              await loadInvitations(viewInvitationsConfig.id, invitationPage);
+            }
+          } catch (err: any) {
+            const detail = err?.response?.data?.detail;
+            const msg =
+              (typeof detail === 'object' && detail?.message) ||
+              (typeof detail === 'string' && detail) ||
+              err?.message ||
+              'Failed to resend email';
+            toast.error(msg);
+          } finally {
+            setResendingEmailFor(null);
+            setResendInviteTarget(null);
+          }
+        }}
+        title="Invalidate old link & send new invitation?"
+        description={
+          resendInviteTarget
+            ? `A fresh interview link will be emailed to ${resendInviteTarget.candidate_email}. The previous link will stop working immediately.`
+            : ''
+        }
+        confirmText={resendingEmailFor && resendingEmailFor === resendInviteTarget?.id ? 'Sending…' : 'Yes, send new link'}
+        cancelText="Cancel"
+        variant="warning"
+      >
+        {resendInviteTarget && (() => {
+          const createdMs = resendInviteTarget.created_at ? new Date(resendInviteTarget.created_at).getTime() : NaN;
+          const expiresMs = resendInviteTarget.expires_at ? new Date(resendInviteTarget.expires_at).getTime() : NaN;
+          let durationMs = 24 * 60 * 60 * 1000;
+          if (Number.isFinite(createdMs) && Number.isFinite(expiresMs) && expiresMs > createdMs) {
+            durationMs = expiresMs - createdMs;
+          }
+          const newExpiry = new Date(Date.now() + durationMs);
+          const totalMinutes = Math.max(1, Math.round(durationMs / 60000));
+          let durationLabel: string;
+          if (totalMinutes >= 60 * 24) {
+            const days = Math.round(totalMinutes / (60 * 24));
+            durationLabel = days === 1 ? '1 day' : `${days} days`;
+          } else if (totalMinutes >= 60) {
+            const hours = Math.round(totalMinutes / 60);
+            durationLabel = hours === 1 ? '1 hour' : `${hours} hours`;
+          } else {
+            durationLabel = `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
+          }
+          return (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+              <p className="text-amber-900 font-medium mb-1">New link expiry</p>
+              <p className="text-amber-800">
+                Valid for <strong>{durationLabel}</strong> from now — expires on{' '}
+                <strong>{formatIST(newExpiry.toISOString())}</strong>.
+              </p>
+              <p className="text-amber-700 text-xs mt-2">
+                Same duration as the original invitation.
+              </p>
+            </div>
+          );
+        })()}
+      </ConfirmationDialog>
     </div>
   );
 }

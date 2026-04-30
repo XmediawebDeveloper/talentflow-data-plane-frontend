@@ -6,6 +6,7 @@ import api from '@/lib/services/api';
 import { generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import ListPagination from '@/components/ListPagination';
 
 interface LineItem {
   description: string;
@@ -100,10 +101,21 @@ export default function BillingHistoryPage() {
   const [addonTransactions, setAddonTransactions] = useState<AddonTransaction[]>([]);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
+  // Pagination state
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [invoicePageSize, setInvoicePageSize] = useState(10);
+  const [addonPage, setAddonPage] = useState(1);
+  const [addonPageSize, setAddonPageSize] = useState(10);
+
   useEffect(() => {
     fetchBillingData();
     fetchAddonTransactions();
   }, []);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setInvoicePage(1);
+  }, [searchQuery]);
 
   const fetchBillingData = async () => {
     setLoading(true);
@@ -166,6 +178,16 @@ export default function BillingHistoryPage() {
     inv.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (inv.plan_name && inv.plan_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
     getDescription(inv).toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const paginatedInvoices = filteredInvoices.slice(
+    (invoicePage - 1) * invoicePageSize,
+    invoicePage * invoicePageSize
+  );
+
+  const paginatedAddonTransactions = addonTransactions.slice(
+    (addonPage - 1) * addonPageSize,
+    addonPage * addonPageSize
   );
 
   const formatAmount = (amount: number) =>
@@ -330,7 +352,7 @@ export default function BillingHistoryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredInvoices.map((inv, index) => (
+                  {paginatedInvoices.map((inv, index) => (
                     <tr key={inv.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
@@ -409,6 +431,18 @@ export default function BillingHistoryPage() {
           </div>
         )}
 
+        {/* Invoices Pagination */}
+        {!loading && !error && filteredInvoices.length > 0 && (
+          <ListPagination
+            currentPage={invoicePage}
+            itemsPerPage={invoicePageSize}
+            totalItems={filteredInvoices.length}
+            onPageChange={setInvoicePage}
+            onItemsPerPageChange={setInvoicePageSize}
+            itemLabel="invoices"
+          />
+        )}
+
         {/* Purchase History (addons, seats, subscriptions) */}
         {addonTransactions.length > 0 && (
           <div className="mt-8">
@@ -430,7 +464,7 @@ export default function BillingHistoryPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {addonTransactions.map((txn, index) => (
+                    {paginatedAddonTransactions.map((txn, index) => (
                       <tr key={txn.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
@@ -497,6 +531,14 @@ export default function BillingHistoryPage() {
                 </table>
               </div>
             </div>
+            <ListPagination
+              currentPage={addonPage}
+              itemsPerPage={addonPageSize}
+              totalItems={addonTransactions.length}
+              onPageChange={setAddonPage}
+              onItemsPerPageChange={setAddonPageSize}
+              itemLabel="transactions"
+            />
           </div>
         )}
 

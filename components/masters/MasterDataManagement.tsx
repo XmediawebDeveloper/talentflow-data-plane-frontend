@@ -12,6 +12,7 @@ import {
   EducationLevelCreate,
   IndustryTypeCreate,
 } from '@/lib/services';
+import ListPagination from '@/components/ListPagination';
 
 type MasterDataType = 'experience' | 'education' | 'industry';
 
@@ -57,6 +58,8 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
   const [editingItem, setEditingItem] = useState<BaseItem | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -75,7 +78,11 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
   // Fetch data
   useEffect(() => {
     fetchData();
+    setCurrentPage(1);
   }, [type]);
+
+  const paginatedItems = items.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const itemLabel = type === 'industry' ? 'types' : 'levels';
 
   const fetchData = async () => {
     setLoading(true);
@@ -307,7 +314,7 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {items.map((item) => (
+              {paginatedItems.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <span className="font-medium text-gray-900">{item.label}</span>
@@ -373,6 +380,15 @@ export default function MasterDataManagement({ type }: MasterDataManagementProps
           </table>
         )}
       </div>
+
+      <ListPagination
+        currentPage={currentPage}
+        itemsPerPage={itemsPerPage}
+        totalItems={items.length}
+        onPageChange={setCurrentPage}
+        onItemsPerPageChange={setItemsPerPage}
+        itemLabel={itemLabel}
+      />
 
       {/* Create/Edit Modal */}
       {showModal && (

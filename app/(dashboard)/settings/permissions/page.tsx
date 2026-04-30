@@ -384,7 +384,6 @@ export default function PermissionsPage() {
                             >
                               <div className="min-w-0 flex-1">
                                 <p className="font-medium text-gray-900 text-xs sm:text-sm">{permission.name}</p>
-                                <p className="text-[10px] sm:text-xs text-gray-500 truncate">{permission.code}</p>
                               </div>
                               {isEditing && !selectedRole.is_system && selectedRole.code !== 'recruiter' ? (
                                 <button

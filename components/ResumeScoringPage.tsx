@@ -4,6 +4,7 @@ import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone,
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
+import ListPagination from './ListPagination';
 import ResumeSelectionModal from './ResumeSelectionModal';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
@@ -322,6 +323,12 @@ export default function ResumeScoringPage({
 
   // History view mode and selection
   const [historyViewMode, setHistoryViewMode] = useState<'grid' | 'list'>('list');
+  const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
+  const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    setHistoryCurrentPage(1);
+  }, [historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo, historyLocation, historyJobType, historyIndustry]);
   const [selectedHistoryItems, setSelectedHistoryItems] = useState<Set<string>>(new Set());
 
   // Bulk download state for scored resumes
@@ -1799,8 +1806,9 @@ export default function ResumeScoringPage({
 
         {/* History List or Empty State */}
         {displayHistory.length > 0 ? (
+          <>
           <div className={historyViewMode === 'grid' ? 'grid gap-5' : 'space-y-4'}>
-            {displayHistory.map((item) => {
+            {displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const avgScore = item.scoredResumes.length > 0
                 ? Math.round(item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length)
                 : 0;
@@ -2202,6 +2210,15 @@ export default function ResumeScoringPage({
               );
             })}
           </div>
+          <ListPagination
+            currentPage={historyCurrentPage}
+            itemsPerPage={historyItemsPerPage}
+            totalItems={displayHistory.length}
+            onPageChange={setHistoryCurrentPage}
+            onItemsPerPageChange={setHistoryItemsPerPage}
+            itemLabel="jobs"
+          />
+          </>
         ) : scoredHistory.length === 0 ? (
           <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-16 text-center">
             <div className="max-w-md mx-auto">

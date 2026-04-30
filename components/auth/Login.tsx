@@ -26,6 +26,28 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   // Get plan and email from URL params (from signup redirect)
   const encodedPlanFromUrl = searchParams.get('plan');
   const emailFromUrl = searchParams.get('email');
+  // ?force_relogin=1 — sent in the welcome email after an admin changes a
+  // user's login email. The recipient may still be authenticated as their
+  // OLD email in this browser; without clearing cookies/storage AuthProvider
+  // would skip /login and redirect straight to /set-password, letting them
+  // bypass the temp-password challenge.
+  const forceRelogin = searchParams.get('force_relogin');
+
+  useEffect(() => {
+    if (!forceRelogin) return;
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      // Strip auth cookies so middleware sees an unauthenticated request.
+      document.cookie = 'accessToken=; Path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'refreshToken=; Path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    } catch {/* noop */}
+    // Drop the param so reloads don't keep clearing repeatedly.
+    const url = new URL(window.location.href);
+    url.searchParams.delete('force_relogin');
+    window.history.replaceState({}, '', url.toString());
+  }, [forceRelogin]);
 
   const [email, setEmail] = useState(emailFromUrl || '');
   const [password, setPassword] = useState('');
@@ -117,14 +139,14 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         canUpdateHRQuestionBank: response.user.permissions.can_update_hr_question_bank,
         canDeleteHRQuestionBank: response.user.permissions.can_delete_hr_question_bank,
         // Analytics & Reports
-        canViewAnalytics: response.user.permissions.can_view_analytics,
-        // Settings & Admin
-        canManageSettings: response.user.permissions.can_manage_settings,
-        canManageUsers: response.user.permissions.can_manage_users,
-        // Billing permissions
-        canViewBilling: response.user.permissions.can_view_billing,
-        canViewInvoices: response.user.permissions.can_view_invoices,
-        canViewUsage: response.user.permissions.can_view_usage,
+        canViewAnalytics: response.user.permissions.can_view_analytics || (response.user.permissions as any).can_view_analytics_granular,
+        // Settings & Admin — accept either legacy bundle or granular grant
+        canManageSettings: response.user.permissions.can_manage_settings || (response.user.permissions as any).can_view_settings || (response.user.permissions as any).can_update_settings,
+        canManageUsers: response.user.permissions.can_manage_users || (response.user.permissions as any).can_view_users,
+        // Billing permissions — same fallback (granular *_granular OR legacy bundle)
+        canViewBilling: response.user.permissions.can_view_billing || (response.user.permissions as any).can_view_billing_granular,
+        canViewInvoices: response.user.permissions.can_view_invoices || (response.user.permissions as any).can_view_invoices_granular,
+        canViewUsage: response.user.permissions.can_view_usage || (response.user.permissions as any).can_view_usage_granular,
         // Granular billing section view permissions
         canViewCurrentPlan: response.user.permissions.can_view_current_plan,
         canViewPaymentMethods: response.user.permissions.can_view_payment_methods,
@@ -138,6 +160,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         canViewApiManagement: response.user.permissions.can_view_api_management,
         canViewBranding: response.user.permissions.can_view_branding,
         canViewSecuritySettings: response.user.permissions.can_view_security_settings,
+        canViewSupport: (response.user.permissions as any).can_view_support,
         // Granular Action Permissions — Billing
         canUpgradePlan: response.user.permissions.can_upgrade_plan,
         canExportUsage: response.user.permissions.can_export_usage,

@@ -179,14 +179,20 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canUpdateHRQuestionBank: apiUser.permissions.can_update_hr_question_bank,
       canDeleteHRQuestionBank: apiUser.permissions.can_delete_hr_question_bank,
       // Analytics & Reports
-      canViewAnalytics: apiUser.permissions.can_view_analytics,
-      // Settings & Admin
-      canManageSettings: apiUser.permissions.can_manage_settings,
-      canManageUsers: apiUser.permissions.can_manage_users,
-      // RBAC03: Billing permissions
-      canViewBilling: apiUser.permissions.can_view_billing,
-      canViewInvoices: apiUser.permissions.can_view_invoices,
-      canViewUsage: apiUser.permissions.can_view_usage,
+      // Accept either the legacy bundle column OR the granular column —
+      // granting analytics:read writes only the granular column, and the
+      // sidebar/route-guard reads canViewAnalytics; without this fallback the
+      // user can't see Analytics despite having the permission.
+      canViewAnalytics: apiUser.permissions.can_view_analytics || (apiUser.permissions as any).can_view_analytics_granular,
+      // Settings & Admin — same legacy/granular fallback pattern
+      canManageSettings: apiUser.permissions.can_manage_settings || (apiUser.permissions as any).can_view_settings || (apiUser.permissions as any).can_update_settings,
+      canManageUsers: apiUser.permissions.can_manage_users || (apiUser.permissions as any).can_view_users,
+      // RBAC03: Billing permissions — granular cascade writes *_granular only;
+      // sidebar items "Usage & Quotas" / "Unit Disputes" read canViewUsage,
+      // and "View Subscription & Billing" reads canViewBilling.
+      canViewBilling: apiUser.permissions.can_view_billing || (apiUser.permissions as any).can_view_billing_granular,
+      canViewInvoices: apiUser.permissions.can_view_invoices || (apiUser.permissions as any).can_view_invoices_granular,
+      canViewUsage: apiUser.permissions.can_view_usage || (apiUser.permissions as any).can_view_usage_granular,
       // Granular billing section view permissions
       canViewCurrentPlan: apiUser.permissions.can_view_current_plan,
       canViewPaymentMethods: apiUser.permissions.can_view_payment_methods,
@@ -200,6 +206,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canViewApiManagement: apiUser.permissions.can_view_api_management,
       canViewBranding: apiUser.permissions.can_view_branding,
       canViewSecuritySettings: apiUser.permissions.can_view_security_settings,
+      canViewSupport: (apiUser.permissions as any).can_view_support,
       // Granular Action Permissions — Billing
       canUpgradePlan: apiUser.permissions.can_upgrade_plan,
       canExportUsage: apiUser.permissions.can_export_usage,

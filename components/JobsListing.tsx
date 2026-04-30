@@ -124,7 +124,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   // NEW: Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(12);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Quota modal state
   const [showQuotaModal, setShowQuotaModal] = useState(false);
@@ -488,7 +488,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   // Update items per page based on view mode
   useEffect(() => {
-    setItemsPerPage(viewMode === 'grid' ? 9 : 10);
+    setItemsPerPage(10);
     setCurrentPage(1); // Reset to first page when view mode changes
   }, [viewMode]);
 
@@ -1594,7 +1594,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
         )}
 
         {/* Pagination Controls */}
-        {totalPages > 1 && (
+        {sortedJobs.length > 5 && (
           <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 mt-4 sm:mt-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               {/* Left: Items per page selector and showing info */}
@@ -1606,10 +1606,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
                     className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base text-black"
                   >
-                    <option value={6}>6</option>
-                    <option value={12}>12</option>
-                    <option value={24}>24</option>
-                    <option value={48}>48</option>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={40}>40</option>
                     <option value={100}>100</option>
                   </select>
                   <span className="text-sm sm:text-base text-gray-600">per page</span>

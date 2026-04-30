@@ -136,6 +136,19 @@ export const resumeService = {
   },
 
   /**
+   * Fire-and-forget: ask the backend to reconcile the admin API's RU usage
+   * with our actual active resume count. Safe to call on every page mount —
+   * the endpoint is idempotent and returns delta=0 when already in sync.
+   */
+  async reconcileUsage(): Promise<void> {
+    try {
+      await api.post('/resumes/usage/reconcile');
+    } catch {
+      // Reconciliation is best-effort; never block the page on it.
+    }
+  },
+
+  /**
    * Get single resume by ID
    */
   async get(id: string): Promise<Resume> {

@@ -7,6 +7,7 @@ import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import AITalentMatchPageJobsList from './AITalentMatchPageJobsList';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import Pagination from './Pagination';
+import ListPagination from './ListPagination';
 import { recordUsage } from '@/lib/services/usageTrackingService';
 import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
 import { scoringService } from '@/lib/services/scoringService';
@@ -185,6 +186,12 @@ export default function AITalentMatchPage({
   const [historyFilterLocation, setHistoryFilterLocation] = useState('');
   const [historyFilterExpMin, setHistoryFilterExpMin] = useState<number | ''>('');
   const [historyFilterExpMax, setHistoryFilterExpMax] = useState<number | ''>('');
+  const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
+  const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    setHistoryCurrentPage(1);
+  }, [historySearchQuery, historyDateFrom, historyDateTo, historyFilterPhone, historyFilterLocation, historyFilterExpMin, historyFilterExpMax]);
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
   
   // Matching progress
@@ -1826,7 +1833,7 @@ export default function AITalentMatchPage({
               <p className="text-xs sm:text-sm text-gray-600">Click any job to view matched candidates</p>
             </div>
             <div className="grid gap-3 sm:gap-5">
-            {filteredHistory.map((item) => {
+            {filteredHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const jobData = jobs.find(j => j.id === item.jobId);
 
               return (
@@ -1907,6 +1914,14 @@ export default function AITalentMatchPage({
               );
             })}
             </div>
+            <ListPagination
+              currentPage={historyCurrentPage}
+              itemsPerPage={historyItemsPerPage}
+              totalItems={filteredHistory.length}
+              onPageChange={setHistoryCurrentPage}
+              onItemsPerPageChange={setHistoryItemsPerPage}
+              itemLabel="jobs"
+            />
           </>
         ) : matchHistory.length === 0 ? (
           <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-8 sm:p-12 lg:p-16 text-center">

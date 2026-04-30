@@ -1,0 +1,180 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Code, Loader2, Lock } from 'lucide-react';
+import { candidateService } from '@/lib/services/candidateService';
+import {
+  LanguageConfig,
+  getLanguageConfig,
+  resolveLanguageAlias,
+} from '@/lib/constants/languageTemplates';
+
+interface CodingLanguagePickerStepProps {
+  token: string;
+  attemptId: string;
+  onPicked: () => void;
+}
+
+export default function CodingLanguagePickerStep({
+  token,
+  attemptId,
+  onPicked,
+}: CodingLanguagePickerStepProps) {
+  const [compilable, setCompilable] = useState<LanguageConfig[] | null>(null);
+  const [highlightedLang, setHighlightedLang] = useState<string | null>(null);
+  const [isPicking, setIsPicking] = useState(false);
+  const [pickError, setPickError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // Use the token-based endpoint for tenant resolution. The attempt-id
+        // endpoint does landlord-DB lookup which silently fails in schema-isolated
+        // tenants, returning an empty list.
+        const res = await candidateService.getAvailableLanguagesByToken(token);
+        if (cancelled) return;
+        const filtered = (res.available_languages || [])
+          .map((l) => getLanguageConfig(resolveLanguageAlias(l.code.toLowerCase())))
+          .filter(Boolean) as LanguageConfig[];
+        setCompilable(filtered);
+        if (filtered.length === 0) {
+          setLoadError('No compilable languages are configured for this assessment.');
+        }
+      } catch {
+        if (!cancelled) {
+          setCompilable([]);
+          setLoadError('Unable to load language options. Please refresh and try again.');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const handleConfirm = async () => {
+    if (!highlightedLang) {
+      setPickError('Please select a programming language to continue');
+      return;
+    }
+    setIsPicking(true);
+    setPickError(null);
+    try {
+      await candidateService.chooseCodingLanguage(token, highlightedLang);
+      onPicked();
+    } catch (e: any) {
+      setPickError(e?.message || 'Failed to save language. Please try again.');
+    } finally {
+      setIsPicking(false);
+    }
+  };
+
+  if (compilable === null) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-center min-h-[60vh] px-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 max-w-lg w-full p-6 sm:p-8">
+        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
+          <Code className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+        </div>
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-1">
+          Choose your coding language
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+          This assessment supports multiple languages. Pick the one you're most comfortable with —
+          your coding questions will be generated for this language and it will be locked for the
+          rest of the coding round.
+        </p>
+
+        {loadError && (
+          <p className="text-sm text-red-600 dark:text-red-400 mb-4">{loadError}</p>
+        )}
+
+        <div className="space-y-2 mb-5">
+          {compilable.map((lang) => {
+            const selected = highlightedLang === lang.id;
+            return (
+              <button
+                key={lang.id}
+                type="button"
+                onClick={() => {
+                  setHighlightedLang(lang.id);
+                  setPickError(null);
+                }}
+                disabled={isPicking}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border-2 text-left transition-colors ${
+                  selected
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                } disabled:opacity-60`}
+              >
+                <div className="flex items-center gap-3">
+                  <Code
+                    className={`w-4 h-4 ${
+                      selected
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-gray-400'
+                    }`}
+                  />
+                  <span
+                    className={`text-sm font-medium ${
+                      selected
+                        ? 'text-blue-700 dark:text-blue-300'
+                        : 'text-gray-800 dark:text-gray-200'
+                    }`}
+                  >
+                    {lang.name}
+                  </span>
+                </div>
+                <div
+                  className={`w-4 h-4 rounded-full border-2 ${
+                    selected
+                      ? 'border-blue-500 bg-blue-500'
+                      : 'border-gray-300 dark:border-gray-600'
+                  }`}
+                >
+                  {selected && (
+                    <div className="w-full h-full rounded-full bg-white scale-50" />
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {pickError && (
+          <p className="text-sm text-red-600 dark:text-red-400 mb-3">{pickError}</p>
+        )}
+
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-4">
+          <Lock className="w-3.5 h-3.5" />
+          <span>Your choice cannot be changed once confirmed.</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={isPicking || compilable.length === 0}
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors"
+        >
+          {isPicking ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            'Confirm language'
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}

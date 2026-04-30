@@ -99,7 +99,6 @@ export default function ResumeDatabasePage() {
     const params: ResumeSearchParams = {
       source: 'internal-db',
       page: 1,
-      page_size: 100, // API max limit
     };
 
     // NOTE: Search is done client-side to include phone and skills
@@ -166,10 +165,16 @@ export default function ResumeDatabasePage() {
     setLoading(true);
     try {
       const params = buildSearchParams();
-      const [resumeResponse, folderResponse] = await Promise.all([
-        resumeService.list(params),
+      // Probe with the smallest possible window to learn the true total,
+      // then issue one full-size request so the UI shows every record.
+      const [probe, folderResponse] = await Promise.all([
+        resumeService.list({ ...params, page_size: 1 }),
         folderService.list().catch(() => []),
       ]);
+      const resumeResponse =
+        probe.total > probe.items.length
+          ? await resumeService.list({ ...params, page_size: probe.total })
+          : probe;
 
       // Convert API Resume to component Resume type
       const convertedResumes: Resume[] = resumeResponse.items.map((r: ApiResume) => ({
@@ -255,6 +260,12 @@ export default function ResumeDatabasePage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Self-heal admin-API resume usage on page mount. Fire-and-forget — never
+  // blocks rendering. The backend caps deltas at ±200 to keep this safe.
+  useEffect(() => {
+    resumeService.reconcileUsage();
+  }, []);
 
   // Reset to page 1 when filters or search change
   useEffect(() => {
@@ -430,7 +441,10 @@ export default function ResumeDatabasePage() {
   // Fetch jobs for Apply to Job modal
   const fetchJobs = async () => {
     try {
-      const response = await jdService.list({ page_size: 100, source: 'my-jds' });
+      const probe = await jdService.list({ page_size: 1, source: 'my-jds' });
+      const response = probe.total > probe.items.length
+        ? await jdService.list({ page_size: probe.total, source: 'my-jds' })
+        : probe;
       const convertedJobs: Job[] = response.items.map((jd: any) => ({
         id: jd.id,
         job_id: jd.job_id,
