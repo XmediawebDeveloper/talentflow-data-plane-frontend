@@ -242,7 +242,13 @@ export default function CandidateResultDetails({
           email: details.candidate_email || '',
           phone: details.candidate_phone || '',
           completedDate: details.completed_at ? formatISTDate(details.completed_at) : 'N/A',
-          duration: details.time_spent_seconds ? `${Math.round(details.time_spent_seconds / 60)} min` : 'N/A',
+          duration: details.time_spent_seconds
+            ? (() => {
+                const m = Math.floor(details.time_spent_seconds / 60);
+                const s = details.time_spent_seconds % 60;
+                return m > 0 ? `${m}m ${s}s` : `${s}s`;
+              })()
+            : 'N/A',
           percentage: overallScore,
           status,
           sections

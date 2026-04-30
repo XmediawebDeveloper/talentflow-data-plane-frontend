@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Loader2, FileText, Briefcase, ClipboardList, X } from 'lucide-react';
+import { Search, Loader2, FileText, Briefcase, ClipboardList, Video, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { resumeService, Resume } from '@/lib/services/resumeService';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { assessmentService, AssessmentResponse } from '@/lib/services/assessmentService';
+import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
 
 interface GlobalSearchProps {
   className?: string;
@@ -19,32 +20,37 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [jds, setJds] = useState<JDResponse[]>([]);
   const [assessments, setAssessments] = useState<AssessmentResponse[]>([]);
+  const [aiInterviews, setAiInterviews] = useState<AIInterviewResponse[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  const hasResults = resumes.length > 0 || jds.length > 0 || assessments.length > 0;
+  const hasResults =
+    resumes.length > 0 || jds.length > 0 || assessments.length > 0 || aiInterviews.length > 0;
 
   const performSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResumes([]);
       setJds([]);
       setAssessments([]);
+      setAiInterviews([]);
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
     try {
-      const [resumeRes, jdRes, assessmentRes] = await Promise.allSettled([
+      const [resumeRes, jdRes, assessmentRes, aiInterviewRes] = await Promise.allSettled([
         resumeService.list({ search: searchQuery, page_size: 5 }),
         jdService.list({ search: searchQuery, page_size: 5 }),
         assessmentService.list({ search: searchQuery, page_size: 5 }),
+        aiInterviewService.list({ search: searchQuery, page_size: 5 }),
       ]);
 
       setResumes(resumeRes.status === 'fulfilled' ? resumeRes.value.items : []);
       setJds(jdRes.status === 'fulfilled' ? jdRes.value.items : []);
       setAssessments(assessmentRes.status === 'fulfilled' ? assessmentRes.value.items : []);
+      setAiInterviews(aiInterviewRes.status === 'fulfilled' ? aiInterviewRes.value.items : []);
     } catch {
       // Silently handle errors - partial results are fine
     } finally {
@@ -59,6 +65,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
       setResumes([]);
       setJds([]);
       setAssessments([]);
+      setAiInterviews([]);
       setIsLoading(false);
       return;
     }
@@ -107,6 +114,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
     setResumes([]);
     setJds([]);
     setAssessments([]);
+    setAiInterviews([]);
     inputRef.current?.focus();
   }
 
@@ -125,7 +133,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
           onFocus={() => {
             if (query.trim()) setIsOpen(true);
           }}
-          placeholder="Search candidates, jobs, assessments..."
+          placeholder="Search candidates, jobs, assessments, interviews or IDs (JD-001, AS-1, AIU-7)..."
           className="w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400 focus:border-transparent bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
         />
         {isLoading && (
@@ -227,6 +235,35 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                         {assessment.jd_title} · {assessment.status}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* AI Interviews */}
+              {aiInterviews.length > 0 && (
+                <div>
+                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
+                    <Video className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
+                    AI Interviews ({aiInterviews.length})
+                  </div>
+                  {aiInterviews.map((interview) => (
+                    <button
+                      key={interview.id}
+                      onClick={() => handleSelect(`/recruitment/ai-interviews/${interview.id}`)}
+                      className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                          {interview.candidate_name || interview.position || 'AI Interview'}
+                        </span>
+                        {interview.display_id && (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">{interview.display_id}</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {[interview.position, interview.jd_title, interview.status].filter(Boolean).join(' · ')}
                       </div>
                     </button>
                   ))}
