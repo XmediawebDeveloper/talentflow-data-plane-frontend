@@ -301,9 +301,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
             // Hide scores while AI scoring is still running
             const scoringDone = scoringStatus === 'completed';
-            const tech_score = scoringDone && item.technical_score != null ? Math.round(Number(item.technical_score)) : undefined;
-            const coding_score = scoringDone && item.coding_score != null ? Math.round(Number(item.coding_score)) : undefined;
-            const hr_score = scoringDone && item.hr_score != null ? Math.round(Number(item.hr_score)) : undefined;
+            const tech_score = scoringDone && item.technical_score != null ? Number(item.technical_score) : undefined;
+            const coding_score = scoringDone && item.coding_score != null ? Number(item.coding_score) : undefined;
+            const hr_score = scoringDone && item.hr_score != null ? Number(item.hr_score) : undefined;
 
             // Format duration properly
             let duration = '-';
@@ -329,9 +329,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               email: item.candidate_email || '',
               phone: item.candidate_phone || '',
               inviteSource: item.invite_source || 'Manual',
-              score: scoringDone ? Math.round(Number(item.overall_score) || 0) : 0,
+              score: scoringDone ? Number(item.overall_score) || 0 : 0,
               totalScore: 100,
-              percentage: scoringDone ? Math.round(Number(item.overall_score) || 0) : 0,
+              percentage: scoringDone ? Number(item.overall_score) || 0 : 0,
               tech_score,
               coding_score,
               hr_score,

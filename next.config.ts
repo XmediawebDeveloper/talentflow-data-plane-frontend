@@ -5,9 +5,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   allowedDevOrigins: ['abi.0sms.com', '*.0sms.com'],
   serverExternalPackages: [
     '@mediapipe/hands', '@mediapipe/face_detection', '@mediapipe/face_mesh',

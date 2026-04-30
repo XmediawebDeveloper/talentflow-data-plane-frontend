@@ -354,7 +354,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
   return (
     <aside className="w-64 sm:w-72 lg:w-64 bg-gray-50 border-r border-gray-200 flex flex-col shadow-lg lg:shadow-sm h-screen">
       {/* Logo + Close Button */}
-      <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
+      <div className="h-14 sm:h-16 lg:h-[72px] px-4 border-b border-gray-200 bg-white flex items-center justify-between shrink-0">
         <Link href="/dashboard" prefetch={false} className="flex items-center justify-center flex-1">
          <img
               src="/logos/talent_flow_logo.png"

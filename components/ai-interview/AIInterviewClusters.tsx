@@ -71,7 +71,7 @@ const DEFAULT_PCT = { mth: 70, nth: 20, hr: 10 } as const;
 
 function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
   if (!nthEnabled && !hrEnabled) {
-    return { mthMinutes: 30, nthMinutes: 0, hrMinutes: 0, mthMaxClusters: 5, nthMaxClusters: 0, mthQuestions: 15, nthQuestions: 0, hrQuestions: 0 };
+    return { mthMinutes: 30, nthMinutes: 0, hrMinutes: 0, mthMaxClusters: 3, nthMaxClusters: 0, mthQuestions: 15, nthQuestions: 0, hrQuestions: 0 };
   }
   if (nthEnabled && !hrEnabled) {
     return { mthMinutes: 20, nthMinutes: 10, hrMinutes: 0, mthMaxClusters: 3, nthMaxClusters: 2, mthQuestions: 10, nthQuestions: 5, hrQuestions: 0 };
@@ -750,7 +750,7 @@ export default function AIInterviewClusters() {
   const [isFixed, setIsFixed] = useState(true);
   const [fixedMthMin, setFixedMthMin] = useState<number>(30);
   const [fixedNthMin, setFixedNthMin] = useState<number>(0);
-  const [mthMaxClusters, setMthMaxClusters] = useState<number>(5);
+  const [mthMaxClusters, setMthMaxClusters] = useState<number>(3);
   const [nthMaxClusters, setNthMaxClusters] = useState<number>(0);
   const [hrEnabled, setHrEnabled] = useState(false);
   const [fixedHrMin, setFixedHrMin] = useState<number>(0);
@@ -873,14 +873,31 @@ export default function AIInterviewClusters() {
         }
 
         // Restore clusters from special_instructions — trim to current scenario max.
-        // Rules:
-        //   MHS fixed: trim to timedAllocation.mthMaxClusters; MHS flexible: trim to 3
-        //   NHS enabled+fixed: trim to timedAllocation.nthMaxClusters; NHS enabled+flexible: trim to 2
-        //   NHS disabled: always clear (regardless of what was saved)
+        // When trimming drops clusters, redistribute their skills to the surviving
+        // cluster with the fewest skills so no skill is silently lost.
+        const trimAndRedistribute = (raw: any[], max: number): any[] => {
+          if (!raw?.length || max <= 0) return [];
+          if (raw.length <= max) return raw;
+          const survivors = raw.slice(0, max).map((c: any) => ({ ...c, skills: [...(c.skills || [])] }));
+          const dropped = raw.slice(max);
+          const orphans: string[] = [];
+          for (const c of dropped) {
+            for (const s of (c.skills || [])) {
+              if (typeof s === 'string' && s.trim()) orphans.push(s);
+            }
+          }
+          for (const s of orphans) {
+            const target = survivors.reduce((min, c) =>
+              (c.skills?.length ?? 0) < (min.skills?.length ?? 0) ? c : min, survivors[0]);
+            if (!(target.skills as string[]).some(x => x.toLowerCase() === s.toLowerCase())) {
+              (target.skills as string[]).push(s);
+            }
+          }
+          return survivors;
+        };
         if (si.mth_clusters?.length) {
           const mthMax = isFlexibleMode ? 3 : timedAllocation.mthMaxClusters;
-          const mthRaw: any[] = si.mth_clusters;
-          const mthTrimmed = mthRaw.slice(0, mthMax);
+          const mthTrimmed = trimAndRedistribute(si.mth_clusters as any[], mthMax);
           setMthClusters(mthTrimmed.map((c: any) => ({
             ...c,
             priority: normalizePriority(c.priority),
@@ -888,11 +905,10 @@ export default function AIInterviewClusters() {
         }
         if (si.nth_clusters?.length) {
           const nthMax = isFlexibleMode ? 2 : timedAllocation.nthMaxClusters;
-          const nthRaw: any[] = si.nth_clusters;
           // nthEnabledForTimed=false means NHS is disabled — always clear saved clusters
           const nthTrimmed = !nthEnabledForTimed
             ? []
-            : nthRaw.slice(0, nthMax);
+            : trimAndRedistribute(si.nth_clusters as any[], nthMax);
           setNthClusters(nthTrimmed.map((c: any) => ({
             ...c,
             priority: normalizePriority(c.priority),
@@ -1522,7 +1538,31 @@ export default function AIInterviewClusters() {
             </div>
           )}
 
-          {!generating && (
+          {!generating && (() => {
+            // Display-only union of cluster skills (does NOT mutate state, so it
+            // never flows back into rounds_config). When clusters exist with
+            // expanded skills, the Skills panel shows the full distributed set;
+            // otherwise falls back to the recruiter-input list from rounds_config.
+            const unionFromClusters = (clusters: typeof mthClusters): SkillEntry[] => {
+              const seen = new Set<string>();
+              const out: SkillEntry[] = [];
+              for (const c of clusters) {
+                for (const s of (c.skills || [])) {
+                  const name = typeof s === 'string' ? s : (s as any)?.name;
+                  if (typeof name === 'string' && name.trim()) {
+                    const k = name.toLowerCase();
+                    if (!seen.has(k)) {
+                      seen.add(k);
+                      out.push({ name, comment: '', type: 'Skill' });
+                    }
+                  }
+                }
+              }
+              return out;
+            };
+            const mthDisplaySkills = mthClusters.length > 0 ? unionFromClusters(mthClusters) : mthSkills;
+            const nthDisplaySkills = nthClusters.length > 0 ? unionFromClusters(nthClusters) : nthSkills;
+            return (
             <>
               {/* Must-To-Have Section */}
               <CategorySection
@@ -1541,7 +1581,7 @@ export default function AIInterviewClusters() {
                 onAddCluster={addCluster}
                 maxClusters={mthMaxClusters}
                 isReadOnly={true}
-                skills={mthSkills}
+                skills={mthDisplaySkills}
                 onAddSkill={name => addSkillToCategory('mth', name)}
                 onRemoveSkillFromPool={name => removeSkillFromPool('mth', name)}
               />
@@ -1564,13 +1604,14 @@ export default function AIInterviewClusters() {
                   onAddCluster={addCluster}
                   maxClusters={nthMaxClusters}
                   isReadOnly={true}
-                  skills={nthSkills}
+                  skills={nthDisplaySkills}
                   onAddSkill={name => addSkillToCategory('nth', name)}
                   onRemoveSkillFromPool={name => removeSkillFromPool('nth', name)}
                 />
               )}
             </>
-          )}
+            );
+          })()}
 
           {/* Time Allocation Summary */}
           {!generating && (
@@ -1636,14 +1677,14 @@ export default function AIInterviewClusters() {
                       <tr className="border-b border-gray-50">
                         <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
                         <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthQuestions}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{mthMaxClusters}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{mthClusters.length > 0 ? mthClusters.length : mthMaxClusters}</td>
                         <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
                       </tr>
                       {nthEnabled && (
                         <tr className="border-b border-gray-50">
                           <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
                           <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthQuestions}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{nthMaxClusters}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{nthClusters.length > 0 ? nthClusters.length : nthMaxClusters}</td>
                           <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
                         </tr>
                       )}
