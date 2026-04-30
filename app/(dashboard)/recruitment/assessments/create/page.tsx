@@ -39,9 +39,15 @@ export default function CreateAssessmentPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch jobs and topic settings in parallel
+        // Fetch jobs and topic settings in parallel.
+        // Probe for total then pull all so the JD selector lists every published JD.
+        const jdParams = { status: 'published' as const, source: 'my-jds' as const };
         const [jobsResponse, topicsResponse] = await Promise.allSettled([
-          jdService.list({ status: 'published', page_size: 100, source: 'my-jds' }),
+          jdService.list({ ...jdParams, page_size: 1 }).then((probe) =>
+            probe.total > probe.items.length
+              ? jdService.list({ ...jdParams, page_size: probe.total })
+              : probe
+          ),
           api.get('/assessments/settings/topics'),
         ]);
 
@@ -57,6 +63,8 @@ export default function CreateAssessmentPage() {
             department: jd.department,
             industry_type: jd.industry_type,
             experience: jd.experience_required,
+            experience_min: jd.experience_min,
+            experience_max: jd.experience_max,
             description: jd.description,
             skills: jd.must_have_skills || [],
             postedDate: jd.created_at,

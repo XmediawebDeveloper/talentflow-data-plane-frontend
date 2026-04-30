@@ -34,6 +34,8 @@ interface BulkScoringProgressModalProps {
   filterByJobId?: string;  // Added: Optional filter to show only specific job
   showJobTitleColumn?: boolean; // Added: Explicitly control job title column visibility
   onRetryFailed?: (item: ScoringProgressItem) => Promise<void>; // Added: Retry failed individual
+  onMinimize?: () => void; // Called when user minimizes — parent should call setMainPanelOpen(false)
+  minimized?: boolean; // Allow parent to control minimized state (for restore)
 }
 
 export default function BulkScoringProgressModal({
@@ -41,7 +43,9 @@ export default function BulkScoringProgressModal({
   progressData = [],
   filterByJobId,
   showJobTitleColumn = true,
-  onRetryFailed
+  onRetryFailed,
+  onMinimize,
+  minimized = false,
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,7 +53,7 @@ export default function BulkScoringProgressModal({
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
   const [bulkRetrying, setBulkRetrying] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimizedInternal, setIsMinimizedInternal] = useState(false);
   const [startTime, setStartTime] = useState<Date | null>(null);
   const [completedTimes, setCompletedTimes] = useState<number[]>([]);
 
@@ -271,108 +275,9 @@ export default function BulkScoringProgressModal({
     );
   };
 
-  // Minimized view - show small indicator at bottom right
-  if (isMinimized) {
-    return (
-      <div className="fixed bottom-6 right-6 z-50">
-        <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl shadow-2xl border-2 border-gray-700 p-4 min-w-[320px]">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
-                <Target className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-white">
-                  {filterByJobId && filteredJobTitle ? filteredJobTitle : 'Bulk Scoring'}
-                </h3>
-                <p className="text-xs text-gray-300">
-                  {completedCount + skippedCount + failedCount}/{totalResumes} processed
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsMinimized(false)}
-                className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                aria-label="Maximize"
-              >
-                <Maximize2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                aria-label="Close"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden mb-2">
-            <div className="h-full flex">
-              <div
-                className="bg-green-500 transition-all duration-500"
-                style={{ width: `${totalResumes > 0 ? (completedCount / totalResumes) * 100 : 0}%` }}
-              />
-              <div
-                className="bg-blue-400 transition-all duration-500"
-                style={{ width: `${totalResumes > 0 ? (skippedCount / totalResumes) * 100 : 0}%` }}
-              />
-              <div
-                className="bg-red-500 transition-all duration-500"
-                style={{ width: `${totalResumes > 0 ? (failedCount / totalResumes) * 100 : 0}%` }}
-              />
-              <div
-                className="bg-gray-500 animate-pulse transition-all duration-500"
-                style={{ width: `${totalResumes > 0 ? (inProgressCount / totalResumes) * 100 : 0}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-gray-300">
-              <div className="flex items-center gap-3">
-                <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  Processing: {inProgressCount}
-                </span>
-                <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  Done: {completedCount}
-                </span>
-                {skippedCount > 0 && (
-                  <span className="flex items-center gap-1">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                    Skipped: {skippedCount}
-                  </span>
-                )}
-                {failedCount > 0 && (
-                  <span className="flex items-center gap-1">
-                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                    Failed: {failedCount}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* ETA in minimized view */}
-            {eta && !isAllComplete && (
-              <div className="flex items-center gap-1.5 text-xs text-blue-300">
-                <Clock className="w-3 h-3" />
-                <span>
-                  {eta.minMinutes === eta.maxMinutes
-                    ? `Approx. ${eta.minMinutes} min${eta.minMinutes > 1 ? 's' : ''} remaining`
-                    : `Approx. ${eta.minMinutes}–${eta.maxMinutes} min${eta.maxMinutes > 1 ? 's' : ''} remaining`
-                  }
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+  // Minimized — hand off to the persistent GlobalScoringProgressIndicator in layout.tsx
+  if (isMinimizedInternal || minimized) {
+    return null;
   }
 
   return (
@@ -405,7 +310,7 @@ export default function BulkScoringProgressModal({
                 </div>
               )}
               <button
-                onClick={() => setIsMinimized(true)}
+                onClick={() => { setIsMinimizedInternal(true); onMinimize?.(); }}
                 className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 aria-label="Minimize to background"
                 title="Run in background"
@@ -447,12 +352,7 @@ export default function BulkScoringProgressModal({
             {eta && !isAllComplete && (
               <div className="flex items-center gap-1 text-blue-300 text-xs font-medium flex-shrink-0">
                 <Clock className="w-3 h-3" />
-                <span>
-                  {eta.minMinutes === eta.maxMinutes
-                    ? `Approx. ${eta.minMinutes} min${eta.minMinutes > 1 ? 's' : ''} remaining`
-                    : `Approx. ${eta.minMinutes}–${eta.maxMinutes} min${eta.maxMinutes > 1 ? 's' : ''} remaining`
-                  }
-                </span>
+                <span>{eta.remaining} Resume{eta.remaining !== 1 ? 's' : ''} Remaining</span>
               </div>
             )}
             {isAllComplete && (

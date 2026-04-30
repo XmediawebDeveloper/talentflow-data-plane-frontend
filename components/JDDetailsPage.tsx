@@ -1,12 +1,16 @@
 'use client';
 
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { ArrowLeft, MapPin, Calendar, Clock, DollarSign, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, Target } from 'lucide-react';
-import { useState, useEffect, ReactNode } from 'react';
+import { ArrowLeft, MapPin, Calendar, Clock, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, Target } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { jdService, JDResponse, JDVersion, JDAssessmentResultsResponse, AssessmentResultItem } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -20,102 +24,6 @@ const formatEmploymentType = (type: string | undefined): string => {
 
 type TabType = 'overview' | 'scored-resumes' | 'assessment-results';
 
-// Parse and render JD description with proper formatting
-const renderJDDescription = (description: string): ReactNode => {
-  if (!description) return null;
-
-  // Split by lines
-  const lines = description.split('\n');
-  const elements: ReactNode[] = [];
-  let currentList: string[] = [];
-  let listKey = 0;
-  let skipSkillsSection = false;
-
-  const flushList = () => {
-    if (currentList.length > 0) {
-      elements.push(
-        <ul key={`list-${listKey++}`} className="space-y-2 mb-4 ml-1">
-          {currentList.map((item, i) => (
-            <li key={i} className="flex items-start gap-2 text-gray-700">
-              <span className="text-gray-400 mt-1">•</span>
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      );
-      currentList = [];
-    }
-  };
-
-  lines.forEach((line, index) => {
-    const trimmedLine = line.trim();
-
-    // Skip empty lines but flush any pending list
-    if (!trimmedLine) {
-      flushList();
-      skipSkillsSection = false;
-      return;
-    }
-
-    // Skip Must-Have Skills and Nice-to-Have Skills sections (they're shown separately)
-    if (/^(Must-Have Skills|Nice-to-Have Skills)$/i.test(trimmedLine)) {
-      flushList();
-      skipSkillsSection = true;
-      return;
-    }
-
-    // Skip content in skills sections
-    if (skipSkillsSection) {
-      return;
-    }
-
-    // H2 Headers (## or lines ending with certain keywords)
-    if (trimmedLine.startsWith('## ') ||
-        /^(About the Role|Key Responsibilities|Requirements|What We Offer|Job Summary|Qualifications|Benefits|About Us|How to Apply)$/i.test(trimmedLine)) {
-      flushList();
-      const headerText = trimmedLine.replace(/^##\s*/, '');
-      elements.push(
-        <div key={`h3-${index}`} className="mt-6 mb-3 first:mt-0">
-          <h3 className="text-base font-semibold text-gray-900">{headerText}</h3>
-          <div className="h-px bg-gray-200 mt-2"></div>
-        </div>
-      );
-      return;
-    }
-
-    // H3 Headers (### or Must Have / Nice to Have)
-    if (trimmedLine.startsWith('### ') ||
-        /^(Must Have|Nice to Have)$/i.test(trimmedLine)) {
-      flushList();
-      const headerText = trimmedLine.replace(/^###\s*/, '');
-      elements.push(
-        <h4 key={`h4-${index}`} className="text-sm font-medium text-gray-800 mt-4 mb-2">
-          {headerText}
-        </h4>
-      );
-      return;
-    }
-
-    // Bullet points
-    if (trimmedLine.startsWith('- ') || trimmedLine.startsWith('* ') || trimmedLine.startsWith('• ')) {
-      currentList.push(trimmedLine.replace(/^[-*•]\s*/, ''));
-      return;
-    }
-
-    // Regular paragraph
-    flushList();
-    elements.push(
-      <p key={`p-${index}`} className="text-gray-700 mb-3 leading-relaxed">
-        {trimmedLine}
-      </p>
-    );
-  });
-
-  // Flush any remaining list
-  flushList();
-
-  return <div className="space-y-1">{elements}</div>;
-};
 
 // Assessment Results Tab Component
 function AssessmentResultsTab({ jdId }: { jdId: string }) {
@@ -660,6 +568,8 @@ export default function JDDetailsPage() {
   const jdId = searchParams.get('id');
   const tabParam = searchParams.get('tab') as TabType | null;
   const jdPerms = useModulePermissions('jd');
+  const { isTenantAdmin, user } = useAuth();
+  const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
 
   const [jd, setJd] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -846,7 +756,7 @@ export default function JDDetailsPage() {
                   Publish
                 </button>
               )}
-              {jd.status === 'published' && (
+              {jd.status === 'published' && canRunScoring && (
                 <button
                   onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${jd.id}&mode=new`)}
                   className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
@@ -931,8 +841,10 @@ export default function JDDetailsPage() {
               {/* Description */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Description</h2>
-                <div className="jd-content text-gray-700 text-sm leading-relaxed">
-                  {renderJDDescription(jd.description || '')}
+                <div className="markdown-content text-gray-700 text-sm leading-relaxed">
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                    {(jd.description || '')}
+                  </ReactMarkdown>
                 </div>
               </div>
 
@@ -1026,22 +938,6 @@ export default function JDDetailsPage() {
                         {typeof jd.education_requirements === 'object'
                           ? jd.education_requirements.degree || 'Any'
                           : jd.education_requirements}
-                      </span>
-                    </div>
-                  )}
-                  {(jd.salary_min || jd.salary_max) && (
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-gray-600">
-                        <DollarSign className="w-4 h-4" />
-                        Compensation
-                      </span>
-                      <span className="text-gray-900">
-                        ${jd.salary_min?.toLocaleString() || 0} - ${jd.salary_max?.toLocaleString() || '∞'}
-                        {jd.compensation_type && (
-                          <span className="text-gray-500 text-xs ml-1">
-                            ({jd.compensation_type})
-                          </span>
-                        )}
                       </span>
                     </div>
                   )}

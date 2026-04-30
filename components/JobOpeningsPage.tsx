@@ -88,7 +88,6 @@ export default function JobOpeningsPage() {
     { key: 'all', label: 'All Jobs' },
     { key: 'published', label: 'Published' },
     { key: 'draft', label: 'Draft' },
-    { key: 'closed', label: 'Closed' },
     { key: 'disabled', label: 'Disabled' },
     { key: 'archived', label: 'Archived' },
   ];

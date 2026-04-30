@@ -12,9 +12,6 @@ import {
   Calendar,
   Loader2,
   AlertCircle,
-  ArrowUp,
-  ArrowDown,
-  Minus,
   Download,
 } from 'lucide-react';
 import {
@@ -41,6 +38,7 @@ import {
 } from 'recharts';
 import teamService, { AllTeamsUsageSummary, TeamUsageSummary } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 interface TeamAnalyticsDashboardProps {
   userRole: string;
@@ -61,21 +59,22 @@ const UNIT_LABELS: Record<string, string> = {
 };
 
 export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashboardProps) {
+  const { isTenantAdmin: authIsTenantAdmin, user } = useAuth();
+  const canExport = authIsTenantAdmin || !!user?.permissions?.canExport;
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [teamsUsage, setTeamsUsage] = useState<AllTeamsUsageSummary | null>(null);
-  const [selectedDays, setSelectedDays] = useState(30);
-  const [comparisonData, setComparisonData] = useState<{
-    current: AllTeamsUsageSummary | null;
-    previous: AllTeamsUsageSummary | null;
-  }>({ current: null, previous: null });
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   const isTenantAdmin = userRole === 'tenant_admin' || userRole === 'owner' || userRole === 'admin';
 
   useEffect(() => {
     fetchAnalyticsData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDays, userRole, isTenantAdmin]);
+  }, [fromDate, toDate, userRole, isTenantAdmin]);
 
   const fetchAnalyticsData = async () => {
     setIsLoading(true);
@@ -83,16 +82,10 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
     try {
       if (isTenantAdmin) {
-        // Fetch current period and previous period for comparison
-        const [currentData, previousData] = await Promise.all([
-          teamService.getAllTeamsUsage(selectedDays),
-          teamService.getAllTeamsUsage(selectedDays * 2), // Double the period to get previous
-        ]);
-
+        const currentData = await teamService.getAllTeamsUsage(fromDate, toDate);
         setTeamsUsage(currentData);
-        setComparisonData({ current: currentData, previous: previousData });
       } else {
-        const data = await teamService.getMyTeamsUsage(selectedDays);
+        const data = await teamService.getMyTeamsUsage(fromDate, toDate);
         setTeamsUsage(data as unknown as AllTeamsUsageSummary);
       }
     } catch (err: any) {
@@ -203,8 +196,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
     if (!teamsUsage?.teams) return;
 
     const formattedData = formatTeamUsageForExport(teamsUsage.teams);
-    const dateStr = new Date().toISOString().split('T')[0];
-    exportToCSV(formattedData, TEAM_USAGE_COLUMNS, `team-usage-report-${dateStr}`);
+    exportToCSV(formattedData, TEAM_USAGE_COLUMNS, `team-analytics-${fromDate}-to-${toDate}`);
   };
 
   if (isLoading) {
@@ -282,18 +274,24 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-500" />
-            <select
-              value={selectedDays}
-              onChange={(e) => setSelectedDays(Number(e.target.value))}
+            <input
+              type="date"
+              value={fromDate}
+              max={toDate}
+              onChange={(e) => setFromDate(e.target.value)}
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
-            >
-              <option value={7}>Last 7 days</option>
-              <option value={30}>Last 30 days</option>
-              <option value={60}>Last 60 days</option>
-              <option value={90}>Last 90 days</option>
-            </select>
+            />
+            <span className="text-sm text-gray-500">to</span>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={(e) => setToDate(e.target.value)}
+              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
+            />
           </div>
-          {teamsUsage?.teams && teamsUsage.teams.length > 0 && (
+          {canExport && teamsUsage?.teams && teamsUsage.teams.length > 0 && (
             <button
               onClick={handleExport}
               className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"

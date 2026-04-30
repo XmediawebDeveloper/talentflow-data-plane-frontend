@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTheme } from 'next-themes';
 import {
   ArrowRight,
   Play,
@@ -28,13 +29,14 @@ interface HomePageProps {
 }
 
 export default function HomePage({ onNavigate }: HomePageProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [demoModalOpen, setDemoModalOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSmallMobile, setIsSmallMobile] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [trialDays, setTrialDays] = useState<number>(14);
 
   useEffect(() => {
@@ -46,9 +48,6 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     };
     checkScreen();
     window.addEventListener('resize', checkScreen);
-
-    // Check dark mode
-    setIsDark(document.documentElement.classList.contains('dark'));
 
     return () => window.removeEventListener('resize', checkScreen);
   }, []);
@@ -113,8 +112,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     gap: '8px',
     padding: '12px 24px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)',
-    border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.2)'}`,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.85)',
+    border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(102,126,234,0.3)'}`,
     backdropFilter: 'blur(12px)',
     marginBottom: '32px',
   };
@@ -122,7 +121,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const badgeTextStyle: React.CSSProperties = {
     fontSize: '14px',
     fontWeight: 500,
-    color: isDark ? '#CBD5E1' : '#374151',
+    color: isDark ? '#F1F5F9' : '#374151',
   };
 
   const h1Style: React.CSSProperties = {
@@ -563,7 +562,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             <div style={trustIndicatorsStyle}>
               <div style={trustItemStyle}>
                 <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E' }} />
-                <span>{trialDays}-day free trial</span>
+                <span>{trialDays}-{trialDays === 1 ? 'day' : 'days'} free trial</span>
               </div>
               <div style={trustItemStyle}>
                 <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E' }} />
@@ -624,7 +623,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                   Watch how TalentFlow streamlines your entire recruiting process
                 </p>
                 <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 16, justifyContent: 'center' }}>
-                  <button onClick={() => { setDemoModalOpen(false); onNavigate("signup"); }} style={primaryButtonStyle}>
+                  <button onClick={() => { setDemoModalOpen(false); window.location.href = `https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`; }} style={primaryButtonStyle}>
                     Start Free Trial <ArrowRight style={{ width: 20, height: 20 }} />
                   </button>
                   <button onClick={() => { setDemoModalOpen(false); onNavigate("contact"); }}
@@ -733,7 +732,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             Join 2,500+ companies using TalentFlow to build amazing teams faster
           </p>
           <div style={ctaContainerStyle}>
-            <button onClick={() => onNavigate("signup")} style={ctaButtonPrimaryStyle}>
+            <button onClick={() => { window.location.href = `https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`; }} style={ctaButtonPrimaryStyle}>
               Start Free Trial
               <ArrowRight style={{ width: 20, height: 20 }} />
             </button>

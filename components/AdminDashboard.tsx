@@ -107,6 +107,29 @@ export default function AdminDashboard({
     return <Activity className="w-4 h-4 text-gray-600" />;
   };
 
+  const getActivityAccent = (action: string): string => {
+    if (action.includes('resume')) return 'bg-blue-50 ring-blue-100';
+    if (action.includes('jd') || action.includes('job')) return 'bg-purple-50 ring-purple-100';
+    if (action.includes('user')) return 'bg-green-50 ring-green-100';
+    if (action.includes('scoring') || action.includes('assessment')) return 'bg-orange-50 ring-orange-100';
+    return 'bg-gray-100 ring-gray-200';
+  };
+
+  const formatActivityFullTime = (iso: string): string => {
+    try {
+      return new Date(iso).toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return iso;
+    }
+  };
+
   if (loading) {
     return (
       <main className="flex-1 p-4 md:p-8 overflow-y-auto bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
@@ -230,7 +253,7 @@ export default function AdminDashboard({
             </div>
           ) : (
             /* Paid Plan Layout */
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-x-6 gap-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
               <div>
                 <p className="text-xs text-gray-500 mb-1">Current Plan</p>
                 <p className="text-sm font-semibold text-gray-900">
@@ -263,12 +286,6 @@ export default function AdminDashboard({
                 <p className="text-xs text-gray-500 mb-1">Billing Period</p>
                 <p className="text-sm font-semibold text-gray-900 capitalize">
                   {quotaData?.plan_info?.billing_period?.toLowerCase() || '-'}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Isolation</p>
-                <p className="text-sm font-semibold text-gray-900 capitalize">
-                  {(quotaData?.plan_info?.isolation_type || quotaData?.isolation_type || '-').toString().toLowerCase()}
                 </p>
               </div>
             </div>
@@ -637,151 +654,161 @@ export default function AdminDashboard({
           </div>
         </div>
 
-        {/* Recent Activity - Last 24 hours only, max 10 items - Table View */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 md:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Recent Activity</h2>
-            <Activity className="w-5 h-5 text-gray-400" />
-          </div>
-          {filteredRecentActivity.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-2 sm:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Action</th>
-                    <th className="hidden sm:table-cell text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Details</th>
-                    <th className="hidden md:table-cell text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">User</th>
-                    <th className="text-right py-3 px-2 sm:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredRecentActivity.map((activity) => {
-                    // Build details display based on activity type
-                    const getDetailsDisplay = () => {
-                      const details = activity.details || {};
-
-                      // Normalize action to lowercase for comparison
-                      const actionLower = activity.action?.toLowerCase() || '';
-
-                      // Login/Logout activities - show email and IP
-                      if (actionLower.includes('login') || actionLower.includes('logout')) {
-                        const parts: string[] = [];
-                        const email = details.email || activity.user_email;
-                        if (email) parts.push(email);
-                        if (activity.ip_address) parts.push(`IP: ${activity.ip_address}`);
-                        if (parts.length > 0) return parts.join(' • ');
-                        return 'Session activity';
-                      }
-
-                      // Team activities - show team name
-                      if (actionLower.includes('team')) {
-                        if (details.team_name) return `Team: ${details.team_name}`;
-                        if (details.name) return `Team: ${details.name}`;
-                      }
-
-                      // JD activities (jd_create, jd_publish, etc.)
-                      if (actionLower.includes('jd_') || actionLower.includes('job')) {
-                        const jdNum = details.jd_number || details.job_number;
-                        const title = details.title || details.jd_title;
-                        if (jdNum && title) return `${jdNum} - ${title}`;
-                        return jdNum || title || '-';
-                      }
-
-                      // Assessment activities
-                      if (actionLower.includes('assessment_')) {
-                        const assNum = details.assessment_number;
-                        const title = details.title || details.assessment_title;
-                        const jdNum = details.jd_number;
-                        if (assNum && title) return `${assNum} - ${title}`;
-                        if (jdNum && title) return `${jdNum} - ${title}`;
-                        return title || details.candidate_email || '-';
-                      }
-
-                      // Resume scoring
-                      if (actionLower.includes('scoring')) {
-                        const candidate = details.candidate_name;
-                        const jdNum = details.jd_number;
-                        const jdTitle = details.jd_title;
-                        const score = details.score || details.overall_score;
-                        if (jdNum && candidate && score !== undefined) {
-                          return `${jdNum} - ${candidate} (${score}%)`;
-                        }
-                        if (candidate && score !== undefined) {
-                          return `${candidate} - Score: ${score}%`;
-                        }
-                        return candidate || jdTitle || '-';
-                      }
-
-                      // Resume upload/delete/move
-                      if (actionLower.includes('resume_')) {
-                        const candidate = details.candidate_name || details.title;
-                        const fileName = details.file_name;
-                        if (candidate && candidate !== 'Unknown' && fileName) return `${candidate} (${fileName})`;
-                        if (candidate && candidate !== 'Unknown') return candidate;
-                        return fileName || '-';
-                      }
-
-                      // User activities
-                      if (actionLower.includes('user_')) {
-                        const email = details.user_email || details.email || details.title;
-                        const role = details.role;
-                        if (email && role) return `${email} (${role})`;
-                        return email || '-';
-                      }
-
-                      // Folder activities
-                      if (actionLower.includes('folder')) {
-                        if (details.folder_name) return `Folder: ${details.folder_name}`;
-                        if (details.name) return `Folder: ${details.name}`;
-                      }
-
-                      // Role activities
-                      if (actionLower.includes('role')) {
-                        if (details.role_name) return `Role: ${details.role_name}`;
-                        if (details.name) return `Role: ${details.name}`;
-                      }
-
-                      // Subscription/Plan activities
-                      if (actionLower.includes('subscription') || actionLower.includes('plan')) {
-                        if (details.plan_name) return `Plan: ${details.plan_name}`;
-                        if (details.name) return details.name;
-                      }
-
-                      // Default fallback - check common fields
-                      return details.title || details.name || details.email || details.candidate_name || '-';
-                    };
-
-                    const detailsDisplay = getDetailsDisplay();
-
-                    return (
-                      <tr key={activity.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="py-3 px-2 sm:px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 bg-gray-100 rounded-full flex items-center justify-center flex-shrink-0">
-                              {getActivityIcon(activity.action)}
-                            </div>
-                            <span className="text-sm font-medium text-gray-900 truncate max-w-[120px] sm:max-w-none">{activity.action_display}</span>
-                          </div>
-                        </td>
-                        <td className="hidden sm:table-cell py-3 px-4">
-                          <span className="text-sm text-gray-700">{detailsDisplay}</span>
-                        </td>
-                        <td className="hidden md:table-cell py-3 px-4">
-                          <span className="text-sm text-gray-600">{activity.user_name || 'System'}</span>
-                        </td>
-                        <td className="py-3 px-2 sm:px-4 text-right">
-                          <span className="text-xs text-gray-400 whitespace-nowrap">{activity.time_ago}</span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+        {/* Recent Activity - Last 24 hours only, max 10 items - Feed View */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 md:col-span-2 overflow-hidden">
+          <div className="flex items-start justify-between gap-4 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="min-w-0">
+              <h2 className="flex items-center gap-2 text-base sm:text-lg font-semibold text-gray-900">
+                <Activity className="w-5 h-5 text-gray-600" />
+                Recent Activity
+              </h2>
+              <p className="text-xs sm:text-sm text-gray-600 mt-0.5">
+                Latest actions across your workspace
+              </p>
             </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="relative flex h-2 w-2" aria-hidden="true">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700">
+                Last 24 hours
+              </span>
+            </div>
+          </div>
+
+          {filteredRecentActivity.length > 0 ? (
+            <ul className="divide-y divide-gray-100">
+              {filteredRecentActivity.map((activity) => {
+                // Build details display based on activity type
+                const getDetailsDisplay = () => {
+                  const details = activity.details || {};
+                  const actionLower = activity.action?.toLowerCase() || '';
+
+                  if (actionLower.includes('login') || actionLower.includes('logout')) {
+                    const parts: string[] = [];
+                    const email = details.email || activity.user_email;
+                    if (email) parts.push(email);
+                    if (activity.ip_address) parts.push(`IP: ${activity.ip_address}`);
+                    if (parts.length > 0) return parts.join(' • ');
+                    return 'Session activity';
+                  }
+                  if (actionLower.includes('team')) {
+                    if (details.team_name) return `Team: ${details.team_name}`;
+                    if (details.name) return `Team: ${details.name}`;
+                  }
+                  if (actionLower.includes('jd_') || actionLower.includes('job')) {
+                    const jdNum = details.jd_number || details.job_number;
+                    const title = details.title || details.jd_title;
+                    if (jdNum && title) return `${jdNum} - ${title}`;
+                    return jdNum || title || '';
+                  }
+                  if (actionLower.includes('assessment_')) {
+                    const assNum = details.assessment_number;
+                    const title = details.title || details.assessment_title;
+                    const jdNum = details.jd_number;
+                    if (assNum && title) return `${assNum} - ${title}`;
+                    if (jdNum && title) return `${jdNum} - ${title}`;
+                    return title || details.candidate_email || '';
+                  }
+                  if (actionLower.includes('scoring')) {
+                    const candidate = details.candidate_name;
+                    const jdNum = details.jd_number;
+                    const jdTitle = details.jd_title;
+                    const score = details.score || details.overall_score;
+                    if (jdNum && candidate && score !== undefined) return `${jdNum} - ${candidate} (${score}%)`;
+                    if (candidate && score !== undefined) return `${candidate} - Score: ${score}%`;
+                    return candidate || jdTitle || '';
+                  }
+                  if (actionLower.includes('resume_')) {
+                    const candidate = details.candidate_name || details.title;
+                    const fileName = details.file_name;
+                    if (candidate && candidate !== 'Unknown' && fileName) return `${candidate} (${fileName})`;
+                    if (candidate && candidate !== 'Unknown') return candidate;
+                    return fileName || '';
+                  }
+                  if (actionLower.includes('user_')) {
+                    const email = details.user_email || details.email || details.title;
+                    const role = details.role;
+                    if (email && role) return `${email} (${role})`;
+                    return email || '';
+                  }
+                  if (actionLower.includes('folder')) {
+                    if (details.folder_name) return `Folder: ${details.folder_name}`;
+                    if (details.name) return `Folder: ${details.name}`;
+                  }
+                  if (actionLower.includes('role')) {
+                    if (details.role_name) return `Role: ${details.role_name}`;
+                    if (details.name) return `Role: ${details.name}`;
+                  }
+                  if (actionLower.includes('subscription') || actionLower.includes('plan')) {
+                    if (details.plan_name) return `Plan: ${details.plan_name}`;
+                    if (details.name) return details.name;
+                  }
+                  return details.title || details.name || details.email || details.candidate_name || '';
+                };
+
+                const detailsDisplay = getDetailsDisplay();
+                const userLabel = activity.user_name || 'System';
+                const initials = userLabel
+                  .split(' ')
+                  .map((p) => p[0])
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase() || 'SY';
+                const fullTime = formatActivityFullTime(activity.created_at);
+
+                return (
+                  <li
+                    key={activity.id}
+                    className="group flex items-start gap-3 sm:gap-4 px-4 sm:px-6 py-4 hover:bg-gray-50/70 transition-colors"
+                  >
+                    <div
+                      className={`flex h-9 w-9 items-center justify-center rounded-full ring-4 ring-white ${getActivityAccent(activity.action)} flex-shrink-0`}
+                    >
+                      {getActivityIcon(activity.action)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {activity.action_display}
+                          </p>
+                          {detailsDisplay && (
+                            <p className="text-xs text-gray-500 mt-0.5 truncate">
+                              {detailsDisplay}
+                            </p>
+                          )}
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 pl-0.5 pr-2 py-0.5 text-[11px] font-medium text-gray-700">
+                              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-gray-800 text-[9px] font-semibold text-white">
+                                {initials}
+                              </span>
+                              {userLabel}
+                            </span>
+                          </div>
+                        </div>
+                        <time
+                          className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0 group-hover:text-gray-600 transition-colors"
+                          title={fullTime}
+                          dateTime={activity.created_at}
+                        >
+                          {activity.time_ago}
+                        </time>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Activity className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="text-sm">No recent activity</p>
+            <div className="text-center py-12 px-6">
+              <div className="mx-auto h-12 w-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                <Activity className="w-6 h-6 text-gray-400" />
+              </div>
+              <p className="text-sm font-medium text-gray-900">No activity in the last 24 hours</p>
+              <p className="text-xs text-gray-500 mt-1">New actions will appear here as your team works</p>
             </div>
           )}
         </div>

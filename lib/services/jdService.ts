@@ -164,6 +164,7 @@ export interface JDUsageStatus {
     resume_scores_count: number;
     assessments_count: number;
     ai_matches_count: number;
+    ai_interview_count: number;
     total_usage_count: number;
   };
   is_used: boolean;

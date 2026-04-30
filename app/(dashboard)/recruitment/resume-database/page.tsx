@@ -51,7 +51,7 @@ interface SearchFilters {
 
 export default function ResumeDatabasePage() {
   const router = useRouter();
-  const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -99,7 +99,6 @@ export default function ResumeDatabasePage() {
     const params: ResumeSearchParams = {
       source: 'internal-db',
       page: 1,
-      page_size: 100, // API max limit
     };
 
     // NOTE: Search is done client-side to include phone and skills
@@ -166,10 +165,16 @@ export default function ResumeDatabasePage() {
     setLoading(true);
     try {
       const params = buildSearchParams();
-      const [resumeResponse, folderResponse] = await Promise.all([
-        resumeService.list(params),
+      // Probe with the smallest possible window to learn the true total,
+      // then issue one full-size request so the UI shows every record.
+      const [probe, folderResponse] = await Promise.all([
+        resumeService.list({ ...params, page_size: 1 }),
         folderService.list().catch(() => []),
       ]);
+      const resumeResponse =
+        probe.total > probe.items.length
+          ? await resumeService.list({ ...params, page_size: probe.total })
+          : probe;
 
       // Convert API Resume to component Resume type
       const convertedResumes: Resume[] = resumeResponse.items.map((r: ApiResume) => ({
@@ -255,6 +260,12 @@ export default function ResumeDatabasePage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Self-heal admin-API resume usage on page mount. Fire-and-forget — never
+  // blocks rendering. The backend caps deltas at ±200 to keep this safe.
+  useEffect(() => {
+    resumeService.reconcileUsage();
+  }, []);
 
   // Reset to page 1 when filters or search change
   useEffect(() => {
@@ -430,7 +441,10 @@ export default function ResumeDatabasePage() {
   // Fetch jobs for Apply to Job modal
   const fetchJobs = async () => {
     try {
-      const response = await jdService.list({ page_size: 100, source: 'my-jds' });
+      const probe = await jdService.list({ page_size: 1, source: 'my-jds' });
+      const response = probe.total > probe.items.length
+        ? await jdService.list({ page_size: probe.total, source: 'my-jds' })
+        : probe;
       const convertedJobs: Job[] = response.items.map((jd: any) => ({
         id: jd.id,
         job_id: jd.job_id,
@@ -839,11 +853,11 @@ export default function ResumeDatabasePage() {
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
-            onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleBulkApplyToJob : undefined}
-            onDelete={isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
-            onResumeScoring={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleBulkResumeScoring : undefined}
-            onAssessment={hasPlanFeature('assessment') && (hasPermission('canCreateAssessments') || isTenantAdmin) ? handleBulkAssessment : undefined}
-            onAITalentMatch={hasPlanFeature('ai_talent_match') && (hasPermission('canRunAiMatch') || isTenantAdmin) ? handleBulkAITalentMatch : undefined}
+            onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job'))) ? handleBulkApplyToJob : undefined}
+            onDelete={isTenantAdmin || hasPermissionCode('internal_db:delete') ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onResumeScoring={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:scoring'))) ? handleBulkResumeScoring : undefined}
+            onAssessment={hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment'))) ? handleBulkAssessment : undefined}
+            onAITalentMatch={hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match'))) ? handleBulkAITalentMatch : undefined}
           />
         </div>
       )}
@@ -899,9 +913,13 @@ export default function ResumeDatabasePage() {
           onSelectResume={handleSelectResume}
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}
-          onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleApplyToJob : undefined}
+          onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job'))) ? handleApplyToJob : undefined}
           onDelete={isTenantAdmin ? (id) => handleDelete(id) : undefined}
-          onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+          onViewDetails={(resume) => {
+            sessionStorage.setItem('resumeNavList', JSON.stringify(paginatedResumes.map((r) => r.id)));
+            sessionStorage.setItem('resumeNavSource', 'resume-database');
+            router.push(`/recruitment/resume-view/${resume.id}`);
+          }}
           onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}
         />

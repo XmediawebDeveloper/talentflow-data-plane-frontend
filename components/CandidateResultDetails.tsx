@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { assessmentService, DetailedResultResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
@@ -17,6 +17,10 @@ interface CandidateResultDetailsProps {
   jdTitle?: string;
   jdId?: string;
   assessmentVersion?: number | null;
+  currentIndex?: number;
+  totalCount?: number;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
 interface CandidateBasicInfo {
@@ -32,7 +36,97 @@ interface CandidateBasicInfo {
     score: number;
     totalScore: number;
     percentage: number;
+    weightedScore: number;
   }[];
+}
+
+function getCodingEvaluationState(q: QuestionEvaluation) {
+  const judged = q.candidate_test_results;
+  const hasCode = !!q.candidate_code_submission?.trim();
+  const hasJudgedTests = !!judged?.details && judged.details.length > 0;
+  const marks = judged?.marks_breakdown;
+
+  if (!hasCode) {
+    return {
+      summary: 'No code submitted.',
+      warning: null as string | null,
+      marks,
+    };
+  }
+
+  if (!hasJudgedTests) {
+    return {
+      summary: 'Code submission exists, but judged test-case results are missing. Rescore required.',
+      warning: 'Saved run output may be visible below, but it is not authoritative judged evaluation.',
+      marks,
+    };
+  }
+
+  return {
+    summary: judged?.summary || q.feedback || 'Judged coding evaluation available.',
+    warning: null as string | null,
+    marks,
+  };
+}
+
+function roundBreakdownMark(value: number | string | null | undefined) {
+  const numeric = Number(value ?? 0);
+  if (!Number.isFinite(numeric)) return 0;
+  const whole = Math.floor(numeric);
+  const fraction = numeric - whole;
+  return fraction > 0.5 ? Math.ceil(numeric) : whole;
+}
+
+function getCandidateCodingInput(q: QuestionEvaluation) {
+  if (q.candidate_code_input && q.candidate_code_input.trim()) {
+    return q.candidate_code_input;
+  }
+  const firstDetailWithInput = q.candidate_test_results?.details?.find(detail => detail.input && detail.input.trim());
+  return firstDetailWithInput?.input || 'No input provided';
+}
+
+function getCandidateCodingOutput(q: QuestionEvaluation) {
+  if (q.candidate_code_execution_error && q.candidate_code_execution_error.trim()) {
+    return q.candidate_code_execution_error;
+  }
+  if (q.candidate_code_execution_output && q.candidate_code_execution_output.trim()) {
+    return q.candidate_code_execution_output;
+  }
+
+  const visibleJudgedDetail = q.candidate_test_results?.details?.find(detail =>
+    !detail.is_hidden && (
+      (detail.error && detail.error.trim()) ||
+      (detail.actual_output && detail.actual_output.trim())
+    )
+  );
+  if (visibleJudgedDetail?.error?.trim()) {
+    return visibleJudgedDetail.error;
+  }
+  if (visibleJudgedDetail?.actual_output?.trim()) {
+    return visibleJudgedDetail.actual_output;
+  }
+
+  if (q.candidate_code_execution_status === 'success') {
+    return 'Executed successfully without output.';
+  }
+
+  return 'No candidate terminal output captured';
+}
+
+function getNormalizedQuestionPossiblePoints(q: QuestionEvaluation) {
+  return q.points_possible === 100 ? 10 : (q.points_possible || 10);
+}
+
+function getDisplayedQuestionEarnedPoints(q: QuestionEvaluation) {
+  const normalizedEarned = q.points_possible === 100 ? (q.points_earned || 0) / 10 : (q.points_earned || 0);
+  return roundBreakdownMark(normalizedEarned);
+}
+
+function getDisplaySectionPercentage(questions: QuestionEvaluation[]) {
+  const totalPossible = questions.reduce((sum, q) => sum + getNormalizedQuestionPossiblePoints(q), 0);
+  const totalDisplayedEarned = questions.reduce((sum, q) => sum + getDisplayedQuestionEarnedPoints(q), 0);
+  if (totalPossible <= 0) return 0;
+  return Math.round((totalDisplayedEarned / totalPossible) * 100);
 }
 
 export default function CandidateResultDetails({
@@ -45,6 +139,10 @@ export default function CandidateResultDetails({
   jdTitle,
   jdId,
   assessmentVersion,
+  currentIndex,
+  totalCount,
+  onPrev,
+  onNext,
 }: CandidateResultDetailsProps) {
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
@@ -119,23 +217,20 @@ export default function CandidateResultDetails({
           status = 'Pending';
         }
 
-        // Map section scores - Use raw_score from backend (actual percentage)
+        // Map section scores directly from stored backend round scores.
         const sections = details.round_scores.map(round => {
-          // Calculate actual points from question evaluations for this round
-          const roundQuestions = details.question_evaluations.filter(
+          const questionsForRound = details.question_evaluations.filter(
             q => q.round_type === round.round_type
           );
-          const totalMarks = roundQuestions.reduce((sum, q) => sum + (q.points_possible || 10), 0);
-          const obtainedMarks = roundQuestions.reduce((sum, q) => sum + (q.points_earned || 0), 0);
-
-          // Use raw_score from backend — it's the actual percentage
-          const percentage = Math.round(round.raw_score ?? 0);
-
+          const percentage = round.round_type === 'hr'
+            ? Math.round(round.raw_score ?? 0)
+            : getDisplaySectionPercentage(questionsForRound);
           return {
             name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
-            score: Math.round(obtainedMarks * 10) / 10, // Total obtained marks
-            totalScore: totalMarks, // Total marks possible
-            percentage: Math.min(percentage, 100) // Cap at 100%
+            score: round.questions_correct ?? 0,
+            totalScore: round.questions_total ?? 0,
+            percentage: Math.min(percentage, 100),
+            weightedScore: round.weighted_score ?? 0,
           };
         });
 
@@ -177,15 +272,21 @@ export default function CandidateResultDetails({
           if (details.scoring_status === 'completed') status = 'Completed';
           else if (details.scoring_status === 'pending') status = 'Pending';
           const sections = details.round_scores.map(round => {
-            const roundQuestions = details.question_evaluations.filter(q => q.round_type === round.round_type);
-            const totalMarks = roundQuestions.reduce((sum, q) => sum + (q.points_possible || 10), 0);
-            const obtainedMarks = roundQuestions.reduce((sum, q) => sum + (q.points_earned || 0), 0);
-            const percentage = Math.min(Math.round(round.raw_score ?? 0), 100);
+            const questionsForRound = details.question_evaluations.filter(
+              q => q.round_type === round.round_type
+            );
+            const percentage = Math.min(
+              round.round_type === 'hr'
+                ? Math.round(round.raw_score ?? 0)
+                : getDisplaySectionPercentage(questionsForRound),
+              100,
+            );
             return {
               name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
-              score: Math.round(obtainedMarks * 10) / 10,
-              totalScore: totalMarks,
+              score: round.questions_correct ?? 0,
+              totalScore: round.questions_total ?? 0,
               percentage,
+              weightedScore: round.weighted_score ?? 0,
             };
           });
           setCandidateData(prev => prev ? ({
@@ -344,16 +445,47 @@ export default function CandidateResultDetails({
         </div>
       </div>
 
+      {/* Sticky navigation strip */}
+      <div className="sticky top-[72px] sm:top-[88px] z-20 border-b border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+        <div className="px-4 sm:px-6 md:px-8 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors text-sm sm:text-base"
+            >
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              Back to Results Overview
+            </button>
+            {totalCount != null && totalCount > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onPrev}
+                  disabled={!onPrev || currentIndex === 0}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                <span className="text-sm text-gray-600 font-medium px-1">
+                  {(currentIndex ?? 0) + 1} / {totalCount}
+                </span>
+                <button
+                  onClick={onNext}
+                  disabled={!onNext || currentIndex === totalCount - 1}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-[72px] sm:top-[88px] z-10">
+      <div className="bg-white border-b border-gray-200">
         <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 transition-colors text-sm sm:text-base"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            Back to Results Overview
-          </button>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
               <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0">
@@ -571,9 +703,9 @@ export default function CandidateResultDetails({
                         )}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {section.score}/{section.totalScore} points
+                        {section.score}/{section.totalScore} correct
                         {!isHR && (
-                          <span className="text-gray-800 ml-2">• Pass: ≥7/10</span>
+                          <span className="text-gray-800 ml-2">• Weighted contribution: {section.weightedScore.toFixed(1)}%</span>
                         )}
                       </div>
                     </div>
@@ -937,7 +1069,7 @@ export default function CandidateResultDetails({
             <>
               {/* Tab Navigation */}
               <div className="border-b border-gray-200 bg-gray-50">
-                <div className="flex gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 overflow-x-auto">
+                <div className="flex flex-wrap gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3">
                   {detailedResult.round_scores.map((round, idx) => {
                     const isActive = activeTab === round.round_type;
                     const questionsForRound = detailedResult.question_evaluations.filter(
@@ -948,7 +1080,7 @@ export default function CandidateResultDetails({
                       <button
                         key={idx}
                         onClick={() => setActiveTab(round.round_type)}
-                        className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                        className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                           isActive
                             ? 'bg-white text-gray-800 border-t-2 border-x border-gray-800 shadow-sm'
                             : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -967,7 +1099,7 @@ export default function CandidateResultDetails({
                   {/* Violations Tab */}
                   <button
                     onClick={() => setActiveTab('violations')}
-                    className={`px-3 sm:px-6 py-2 sm:py-3 rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${
+                    className={`px-3 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
                       activeTab === 'violations'
                         ? 'bg-white text-red-700 border-t-2 border-x border-red-500 shadow-sm'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -994,9 +1126,21 @@ export default function CandidateResultDetails({
                 {detailedResult.round_scores.map((round, roundIdx) => {
                   const isActiveTab = activeTab === round.round_type;
                   if (!isActiveTab) return null;
+                  const isHRRound = round.round_type === 'hr';
 
                   const questionsForRound = detailedResult.question_evaluations.filter(
                     q => q.round_type === round.round_type
+                  );
+                  const displayedSectionPercentage = isHRRound
+                    ? Math.round(round.raw_score ?? 0)
+                    : getDisplaySectionPercentage(questionsForRound);
+                  const displayedSectionPoints = questionsForRound.reduce(
+                    (sum, q) => sum + getDisplayedQuestionEarnedPoints(q),
+                    0,
+                  );
+                  const displayedSectionPossible = questionsForRound.reduce(
+                    (sum, q) => sum + getNormalizedQuestionPossiblePoints(q),
+                    0,
                   );
 
                   return (
@@ -1008,15 +1152,20 @@ export default function CandidateResultDetails({
                           <p className="text-sm text-gray-600 mt-1">
                             {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''} •
                             <span className="ml-1">
-                              {Math.round(questionsForRound.reduce((s, q) => s + (q.points_earned || 0), 0))}
-                              /{questionsForRound.reduce((s, q) => s + (q.points_possible || 10), 0)} points
+                              {isHRRound ? 'Informational only' : (
+                                <>
+                                  {displayedSectionPoints}/{displayedSectionPossible} points
+                                </>
+                              )}
                             </span>
                           </p>
                         </div>
                         <div className="text-left sm:text-right">
-                          <div className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Section Score</div>
-                          <div className={`text-xl sm:text-3xl ${getScoreColor(Math.round(round.raw_score ?? 0))}`}>
-                            {Math.round(round.raw_score ?? 0)}%
+                          <div className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
+                            {isHRRound ? 'Section Type' : 'Section Score'}
+                          </div>
+                          <div className={`text-xl sm:text-3xl ${isHRRound ? 'text-gray-400' : getScoreColor(displayedSectionPercentage)}`}>
+                            {isHRRound ? '—' : `${displayedSectionPercentage}%`}
                           </div>
                         </div>
                       </div>
@@ -1026,9 +1175,13 @@ export default function CandidateResultDetails({
                         <div className="space-y-6">
                           {questionsForRound.map((q, qIdx) => (
                             <div key={qIdx} className="border-2 border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
+                              {(() => {
+                                const isTextQuestion = !['coding', 'mcq', 'single_choice', 'multiple_choice'].includes(q.question_type);
+                                return (
+                                  <>
                               {/* Question Header */}
                               <div className={`px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200 ${
-                                q.is_correct ? 'bg-green-50' : 'bg-red-50'
+                                isTextQuestion ? 'bg-gray-50' : (q.is_correct ? 'bg-green-50' : 'bg-red-50')
                               }`}>
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                                   <div className="flex-1 min-w-0">
@@ -1039,49 +1192,95 @@ export default function CandidateResultDetails({
                                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                                         q.question_type === 'coding'
                                           ? 'bg-purple-100 text-purple-700'
-                                          : q.question_type === 'single_choice' || q.question_type === 'multiple_choice'
+                                          : q.question_type === 'mcq' || q.question_type === 'single_choice' || q.question_type === 'multiple_choice'
                                           ? 'bg-blue-100 text-blue-700'
                                           : 'bg-gray-100 text-gray-700'
                                       }`}>
                                         {q.question_type === 'coding' ? 'Coding'
+                                          : q.question_type === 'mcq' ? 'MCQ'
                                           : q.question_type === 'single_choice' ? 'Single Choice'
                                           : q.question_type === 'multiple_choice' ? 'Multiple Choice'
                                           : 'Text'}
                                       </span>
-                                      {q.is_correct ? (
+                                      {!isTextQuestion && (q.is_correct ? (
                                         <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Correct</span>
                                       ) : (
                                         <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">Incorrect</span>
-                                      )}
+                                      ))}
                                     </div>
                                     <div className="text-gray-900 leading-relaxed">{q.question_text}</div>
-                                  </div>
-                                  <div className="sm:ml-6 text-left sm:text-right flex-shrink-0">
-                                    <div className="text-xs text-gray-600 mb-0.5 sm:mb-1">Score</div>
-                                    <div className="flex items-center gap-2">
-                                      {(() => {
-                                        // Normalize scores to be out of 10
-                                        const normalizedEarned = q.points_possible === 100 ? q.points_earned / 10 : q.points_earned;
-                                        const normalizedPossible = q.points_possible === 100 ? 10 : q.points_possible;
-                                        const percentage = (normalizedEarned / normalizedPossible) * 100;
-
-                                        return (
-                                          <>
-                                            <div className={`text-lg sm:text-2xl font-bold ${getScoreColor(percentage)}`}>
-                                              {Math.round(normalizedEarned)}
+                                    {q.question_type === 'coding' && (
+                                      <div className="mt-3 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                        {q.problem_title && (
+                                          <div>
+                                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Problem Title</div>
+                                            <div className="text-sm text-gray-900">{q.problem_title}</div>
+                                          </div>
+                                        )}
+                                        {q.input_format && (
+                                          <div>
+                                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Input Format</div>
+                                            <div className="text-sm text-gray-800 whitespace-pre-wrap">{q.input_format}</div>
+                                          </div>
+                                        )}
+                                        {q.output_format && (
+                                          <div>
+                                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Output Format</div>
+                                            <div className="text-sm text-gray-800 whitespace-pre-wrap">{q.output_format}</div>
+                                          </div>
+                                        )}
+                                        {(q.sample_input || q.sample_output) && (
+                                          <div className="grid gap-3 md:grid-cols-2">
+                                            <div>
+                                              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Example Input</div>
+                                              <div className="rounded bg-gray-900 p-3 font-mono text-sm text-green-300">
+                                                <pre className="whitespace-pre-wrap">{q.sample_input || 'No example input provided'}</pre>
+                                              </div>
                                             </div>
-                                            <div className="text-gray-400">/</div>
-                                            <div className="text-base sm:text-xl text-gray-600">{normalizedPossible}</div>
-                                          </>
-                                        );
-                                      })()}
-                                    </div>
+                                            <div>
+                                              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Example Output</div>
+                                              <div className="rounded bg-gray-900 p-3 font-mono text-sm text-green-300">
+                                                <pre className="whitespace-pre-wrap">{q.sample_output || 'No example output provided'}</pre>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
+                                  {!isHRRound && (
+                                    <div className="sm:ml-6 text-left sm:text-right flex-shrink-0">
+                                      <div className="text-xs text-gray-600 mb-0.5 sm:mb-1">Score</div>
+                                      <div className="flex items-center gap-2">
+                                        {(() => {
+                                          const normalizedEarned = getDisplayedQuestionEarnedPoints(q);
+                                          const normalizedPossible = getNormalizedQuestionPossiblePoints(q);
+                                          const percentage = (normalizedEarned / normalizedPossible) * 100;
+
+                                          return (
+                                            <>
+                                              <div className={`text-lg sm:text-2xl font-bold ${getScoreColor(percentage)}`}>
+                                                {Math.round(normalizedEarned)}
+                                              </div>
+                                              <div className="text-gray-400">/</div>
+                                              <div className="text-base sm:text-xl text-gray-600">{normalizedPossible}</div>
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
                               {/* Question Content */}
                               <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
+                                {q.question_type === 'coding' && getCodingEvaluationState(q).warning && (
+                                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                                    {getCodingEvaluationState(q).warning}
+                                  </div>
+                                )}
+
                                 {/* Candidate's Answer */}
                                 <div>
                                   <div className="flex items-center gap-2 mb-3">
@@ -1115,6 +1314,145 @@ export default function CandidateResultDetails({
                                   </div>
                                 </div>
 
+                                {q.question_type === 'coding' && (
+                                  <>
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                          <FileText className="w-4 h-4 text-yellow-700" />
+                                        </div>
+                                        <div className="text-sm font-medium text-yellow-200">CODE INPUT</div>
+                                      </div>
+                                      <div className="bg-yellow-700 rounded-lg p-4 text-white font-mono text-sm overflow-x-auto border border-yellow-500">
+                                        <pre className="whitespace-pre-wrap">{getCandidateCodingInput(q)}</pre>
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 bg-sky-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                          <FileText className="w-4 h-4 text-sky-700" />
+                                        </div>
+                                        <div className="text-sm font-medium text-sky-900">CANDIDATE OUTPUT</div>
+                                      </div>
+                                    <div className="rounded-lg p-4 font-mono text-sm overflow-x-auto bg-sky-950 text-sky-100">
+                                      <pre className="whitespace-pre-wrap">
+                                        {getCandidateCodingOutput(q)}
+                                      </pre>
+                                    </div>
+                                  </div>
+
+                                  {q.candidate_test_results?.marks_breakdown && (
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                          <Award className="w-4 h-4 text-indigo-700" />
+                                        </div>
+                                        <div className="text-sm font-medium text-indigo-900">MARKS BREAKDOWN</div>
+                                      </div>
+                                      <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4 space-y-2 text-sm text-indigo-950">
+                                        <div>
+                                          Syntax: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.syntax?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.syntax?.total)}
+                                          {q.candidate_test_results.marks_breakdown.syntax?.reason ? ` - ${q.candidate_test_results.marks_breakdown.syntax.reason}` : ''}
+                                        </div>
+                                        <div>
+                                          Execution: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.execution?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.execution?.total)}
+                                          {q.candidate_test_results.marks_breakdown.execution?.reason ? ` - ${q.candidate_test_results.marks_breakdown.execution.reason}` : ''}
+                                        </div>
+                                        <div>
+                                          Output: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.output?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.output?.total)}
+                                          {q.candidate_test_results.marks_breakdown.output?.reason ? ` - ${q.candidate_test_results.marks_breakdown.output.reason}` : ''}
+                                        </div>
+                                        <div className="font-semibold pt-2 border-t border-indigo-200">
+                                          Final: {roundBreakdownMark(q.points_earned)}/{roundBreakdownMark(q.points_possible)} ({roundBreakdownMark(q.score)}%)
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {q.candidate_test_results?.details && q.candidate_test_results.details.length > 0 && (
+                                      <div>
+                                        <div className="flex items-center gap-2 mb-3">
+                                          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <FileText className="w-4 h-4 text-blue-700" />
+                                          </div>
+                                          <div className="text-sm font-medium text-blue-900">TEST CASES</div>
+                                        </div>
+                                        <div className="space-y-3">
+                                          {q.candidate_test_results.details.map((testCase, testCaseIdx) => (
+                                            <div key={testCaseIdx} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                                              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                <div className="text-sm font-medium text-gray-900">
+                                                  Test Case {testCase.test_number}
+                                                  {testCase.is_hidden ? ' (Hidden)' : ''}
+                                                </div>
+                                                <span className={`inline-flex w-fit items-center rounded px-2 py-0.5 text-xs font-medium uppercase ${
+                                                  testCase.passed
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-red-100 text-red-700'
+                                                }`}>
+                                                  {testCase.passed ? 'Pass' : 'Fail'}
+                                                </span>
+                                              </div>
+
+                                              <div className="grid gap-3 md:grid-cols-2">
+                                                <div>
+                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                    Test Case Input
+                                                  </div>
+                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200">
+                                                    <pre className="whitespace-pre-wrap">{testCase.input || (testCase.is_hidden ? 'Hidden test input' : 'No input')}</pre>
+                                                  </div>
+                                                </div>
+                                                <div>
+                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                    Expected Output
+                                                  </div>
+                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200">
+                                                    <pre className="whitespace-pre-wrap">{testCase.expected_output || (testCase.is_hidden ? 'Hidden expected output' : 'No expected output')}</pre>
+                                                  </div>
+                                                </div>
+                                              </div>
+
+                                              {(testCase.error || testCase.improvement_hint) && (
+                                                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                                                  {testCase.error && (
+                                                    <div>
+                                                      <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                        Why It Failed
+                                                      </div>
+                                                      <div className="rounded border border-red-200 bg-red-50 p-3 font-mono text-sm text-red-800">
+                                                        <pre className="whitespace-pre-wrap">{testCase.error}</pre>
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              )}
+
+                                              {testCase.improvement_hint && (
+                                                <div className="mt-3">
+                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                    What To Improve
+                                                  </div>
+                                                  <div className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                                                    {testCase.improvement_hint}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                  {q.candidate_code_submission && (!q.candidate_test_results?.details || q.candidate_test_results.details.length === 0) && (
+                                    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                                      No judged test-case results were recorded for this coding submission. This result should be rescored.
+                                    </div>
+                                  )}
+                                </>
+                              )}
+
                                 {/* Correct Answer (for MCQ) */}
                                 {q.correct_answer && q.correct_answer.length > 0 && (
                                   <div>
@@ -1138,43 +1476,32 @@ export default function CandidateResultDetails({
                                   </div>
                                 )}
 
-                                {/* Ideal/Model Answer (for text questions) */}
-                                {q.ideal_answer && (!q.correct_answer || q.correct_answer.length === 0) && (
-                                  <div>
-                                    <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <FileText className="w-4 h-4 text-blue-600" />
-                                      </div>
-                                      <div className="text-sm font-medium text-blue-900">MODEL ANSWER</div>
-                                    </div>
-                                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                                      <p className="text-blue-800 leading-relaxed">{q.ideal_answer}</p>
-                                    </div>
-                                  </div>
-                                )}
-
                                 {/* AI Feedback */}
-                                {q.feedback && (
+                                {!isHRRound && (q.feedback || q.question_type === 'coding') && (
                                   <div>
                                     <div className="flex items-center gap-2 mb-3">
                                       <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
                                         <FileText className="w-4 h-4 text-gray-800" />
                                       </div>
-                                      <div className="text-sm font-medium text-gray-800">AI FEEDBACK & EVALUATION</div>
+                                      <div className="text-sm font-medium text-gray-800">
+                                        {isTextQuestion ? 'WHY THIS SCORE WAS GIVEN' : 'AI FEEDBACK & EVALUATION'}
+                                      </div>
                                     </div>
                                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                                      <div className="text-gray-800 leading-relaxed">{q.feedback}</div>
+                                      <div className="text-gray-800 leading-relaxed">
+                                        {q.question_type === 'coding' ? getCodingEvaluationState(q).summary : q.feedback}
+                                      </div>
                                     </div>
                                   </div>
                                 )}
 
                                 {/* Strengths */}
-                                {q.strengths && q.strengths.length > 0 && (
+                                {!isHRRound && ((q.strengths && q.strengths.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.strengths && q.candidate_test_results.strengths.length > 0)) && (
                                   <div className="pt-4 border-t border-gray-200">
                                     <div className="bg-green-50 rounded-lg p-4">
                                       <div className="text-sm font-medium text-green-800 mb-2">Strengths</div>
                                       <ul className="text-sm text-green-700 space-y-1">
-                                        {q.strengths.map((s, i) => (
+                                        {(q.strengths && q.strengths.length > 0 ? q.strengths : (q.candidate_test_results?.strengths || [])).map((s, i) => (
                                           <li key={i} className="flex items-start gap-2">
                                             <CheckCircle className="w-3 h-3 mt-1 flex-shrink-0" />
                                             {s}
@@ -1184,7 +1511,27 @@ export default function CandidateResultDetails({
                                     </div>
                                   </div>
                                 )}
+
+                                {/* Areas for Improvement */}
+                                {!isHRRound && ((q.areas_for_improvement && q.areas_for_improvement.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.improvements && q.candidate_test_results.improvements.length > 0)) && (
+                                  <div className="pt-4 border-t border-gray-200">
+                                    <div className="bg-amber-50 rounded-lg p-4">
+                                      <div className="text-sm font-medium text-amber-900 mb-2">What to Improve</div>
+                                      <ul className="text-sm text-amber-800 space-y-1">
+                                        {(q.areas_for_improvement && q.areas_for_improvement.length > 0 ? q.areas_for_improvement : (q.candidate_test_results?.improvements || [])).map((item, i) => (
+                                          <li key={i} className="flex items-start gap-2">
+                                            <AlertCircle className="w-3 h-3 mt-1 flex-shrink-0" />
+                                            {item}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
+                            </>
+                                );
+                              })()}
                             </div>
                           ))}
                         </div>

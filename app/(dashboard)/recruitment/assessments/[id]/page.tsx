@@ -8,15 +8,35 @@ import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentEditModal from '@/components/AssessmentEditModal';
 import { assessmentService } from '@/lib/services';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 export default function AssessmentDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const assessmentId = params.id as string;
+  const { isTenantAdmin, isRecruiter } = useAuth();
+  const canInvite = isTenantAdmin || isRecruiter;
 
   const [assessment, setAssessment] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [allAssessmentIds, setAllAssessmentIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchAllIds = async () => {
+      try {
+        const probe: any = await assessmentService.list({ page_size: 1, page: 1 });
+        const probeItems: any[] = Array.isArray(probe) ? probe : (probe.items ?? []);
+        const total: number = (probe && typeof probe === 'object' && 'total' in probe ? probe.total : probeItems.length) ?? probeItems.length;
+        const res: any = total > 0
+          ? await assessmentService.list({ page_size: total, page: 1 })
+          : probe;
+        const items: any[] = Array.isArray(res) ? res : (res.items ?? []);
+        setAllAssessmentIds(items.map((a: any) => a.id));
+      } catch { /* ignore */ }
+    };
+    fetchAllIds();
+  }, []);
 
   // Modal states
   const [showShareModal, setShowShareModal] = useState(false);
@@ -143,9 +163,17 @@ export default function AssessmentDetailsPage() {
           onBack={handleBack}
           onEdit={() => setShowEditModal(true)}
           onPreview={() => setShowPreviewModal(true)}
-          onShare={() => setShowShareModal(true)}
+          onShare={canInvite ? () => setShowShareModal(true) : undefined}
           onViewResults={handleViewResults}
           onRefresh={fetchAssessment}
+          currentIndex={allAssessmentIds.indexOf(assessmentId)}
+          totalCount={allAssessmentIds.length}
+          onPrev={allAssessmentIds.indexOf(assessmentId) > 0
+            ? () => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) - 1]}`)
+            : undefined}
+          onNext={allAssessmentIds.indexOf(assessmentId) >= 0 && allAssessmentIds.indexOf(assessmentId) < allAssessmentIds.length - 1
+            ? () => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) + 1]}`)
+            : undefined}
         />
 
         {/* Modals */}

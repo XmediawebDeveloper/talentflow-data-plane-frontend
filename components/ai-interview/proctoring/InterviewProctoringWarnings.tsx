@@ -9,14 +9,14 @@
  */
 
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
-import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye } from 'lucide-react';
+import { AlertTriangle, X, Camera, Mic, Monitor, Copy, Volume2, Users, Eye, Maximize2, UserX, ScanEye, ShieldAlert, AudioLines } from 'lucide-react';
 import { InterviewEventBus, ProctoringEvent, ProctoringEventType } from './InterviewEventBus';
 
 interface WarningItem {
   id: string;
   type: ProctoringEventType;
   message: string;
-  severity: 'low' | 'medium' | 'high';
+  severity: 'minor' | 'moderate' | 'severe';
   timestamp: Date;
 }
 
@@ -39,6 +39,12 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   face_missing: <UserX className="w-6 h-6" />,
   multiple_faces: <Users className="w-6 h-6" />,
   gaze_away: <ScanEye className="w-6 h-6" />,
+  face_mismatch: <ShieldAlert className="w-6 h-6" />,
+  face_identity_changed: <ShieldAlert className="w-6 h-6" />,
+  voice_mismatch: <AudioLines className="w-6 h-6" />,
+  voice_identity_changed: <AudioLines className="w-6 h-6" />,
+  screen_share_stopped: <Monitor className="w-6 h-6" />,
+  background_noise: <AudioLines className="w-6 h-6" />,
 };
 
 const EVENT_NAMES: Record<ProctoringEventType, string> = {
@@ -57,12 +63,18 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   face_missing: 'Face Not Detected',
   multiple_faces: 'Multiple Faces Detected',
   gaze_away: 'Looking Away Detected',
+  face_mismatch: 'Face Verification Warning',
+  face_identity_changed: 'Identity Changed',
+  voice_mismatch: 'Voice Verification Warning',
+  voice_identity_changed: 'Speaker Changed',
+  screen_share_stopped: 'Screen Sharing Stopped',
+  background_noise: 'Background Noise Detected',
 };
 
-const SEVERITY_COLORS: Record<'low' | 'medium' | 'high', { bg: string; border: string; text: string; icon: string }> = {
-  low: { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-800', icon: 'text-yellow-500' },
-  medium: { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-800', icon: 'text-orange-500' },
-  high: { bg: 'bg-red-50', border: 'border-red-400', text: 'text-red-800', icon: 'text-red-500' },
+const SEVERITY_COLORS: Record<'minor' | 'moderate' | 'severe', { bg: string; border: string; text: string; icon: string }> = {
+  minor:    { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-800', icon: 'text-yellow-500' },
+  moderate: { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-800', icon: 'text-orange-500' },
+  severe:   { bg: 'bg-red-50',    border: 'border-red-400',    text: 'text-red-800',    icon: 'text-red-500'    },
 };
 
 // Individual warning card — memoized to prevent re-renders of siblings
@@ -115,11 +127,11 @@ const WarningCard = memo(function WarningCard({
       </div>
       <div className="absolute top-2 right-10">
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-          warning.severity === 'high' ? 'bg-red-200 text-red-800' :
-          warning.severity === 'medium' ? 'bg-orange-200 text-orange-800' :
+          warning.severity === 'severe'   ? 'bg-red-200 text-red-800' :
+          warning.severity === 'moderate' ? 'bg-orange-200 text-orange-800' :
           'bg-yellow-200 text-yellow-800'
         }`}>
-          {warning.severity.toUpperCase()}
+          {warning.severity.charAt(0).toUpperCase() + warning.severity.slice(1)}
         </span>
       </div>
     </div>

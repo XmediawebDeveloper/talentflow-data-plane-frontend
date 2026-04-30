@@ -18,7 +18,10 @@ export interface ProctoringSettings {
   ai_cheating_prevention: boolean;
   max_tab_switches: number;
   max_violations_before_flag: number;
+  violation_low_threshold: number;
+  violation_medium_threshold: number;
   recording_retention_days: number;
+  email_masking_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -33,7 +36,10 @@ export interface ProctoringSettingsUpdate {
   ai_cheating_prevention?: boolean;
   max_tab_switches?: number;
   max_violations_before_flag?: number;
+  violation_low_threshold?: number;
+  violation_medium_threshold?: number;
   recording_retention_days?: number;
+  email_masking_enabled?: boolean;
 }
 
 export interface ProctoringEvent {

@@ -10,9 +10,10 @@ import { useAuth } from '@/lib/hooks/useAuth';
 export default function AssessmentResultsPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, isTenantAdmin } = useAuth();
+  const { user, isTenantAdmin, hasPermissionCode } = useAuth();
   const assessmentId = params.id as string;
   const canDownloadPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
+  const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
   const [jdTitle, setJdTitle] = useState<string>('');
@@ -43,8 +44,7 @@ export default function AssessmentResultsPage() {
   }, [assessmentId]);
 
   const handleBack = () => {
-    // Go back to assessment details page
-    router.push(`/recruitment/assessments/${assessmentId}`);
+    router.push('/recruitment/assessments');
   };
 
   if (isLoading) {
@@ -77,6 +77,7 @@ export default function AssessmentResultsPage() {
         assessmentTitle={assessmentTitle}
         jdTitle={jdTitle}
         canDownloadPDF={canDownloadPDF}
+        canBatchDownload={canBatchDownload}
       />
     </FeatureGate>
   );

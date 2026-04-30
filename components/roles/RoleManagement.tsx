@@ -702,7 +702,7 @@ export default function RoleManagement() {
 
       {/* View Permissions Modal (Read-Only) */}
       {viewingRole && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
@@ -792,7 +792,6 @@ export default function RoleManagement() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="font-medium text-xs sm:text-sm text-gray-900">{perm.name}</div>
-                                <div className="text-[10px] sm:text-xs text-gray-500 font-mono truncate">{perm.code}</div>
                               </div>
                             </div>
                           ))}

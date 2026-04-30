@@ -34,6 +34,7 @@ const API_KEY_NORMALIZE: Record<string, string> = {
   ai_interviews: 'ai_interview',
   'sso_(single_sign-on)': 'sso',
   sso_integration: 'sso',
+  api_access_: 'api_access',
 };
 
 // Resolve which features are enabled using the features[] array from /quota-status.

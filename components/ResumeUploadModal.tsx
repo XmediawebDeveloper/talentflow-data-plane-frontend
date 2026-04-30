@@ -123,23 +123,31 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
     }
   };
 
+  const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
+
   const addFiles = async (files: File[]) => {
-    // Add files with pending status
-    const newFilesWithStatus: FileWithStatus[] = files.map(file => ({
-      file,
-      status: 'pending' as const
-    }));
+    // Add files with pending status, marking oversized files as errors immediately
+    const newFilesWithStatus: FileWithStatus[] = files.map(file => {
+      if (file.size > MAX_FILE_SIZE) {
+        return {
+          file,
+          status: 'error' as const,
+          error: `File size exceeds the 3MB limit. This file is ${(file.size / (1024 * 1024)).toFixed(1)}MB. Please upload a smaller file.`
+        };
+      }
+      return { file, status: 'pending' as const };
+    });
 
     setFilesWithStatus(prev => [...prev, ...newFilesWithStatus]);
 
-    // Check for duplicates
+    // Check for duplicates (only among non-errored files)
     await checkDuplicates([...filesWithStatus, ...newFilesWithStatus]);
   };
 
   const checkDuplicates = async (files: FileWithStatus[]) => {
     setIsCheckingDuplicates(true);
 
-    // Update all pending files to checking
+    // Update all pending files to checking (skip already-errored files like oversized)
     setFilesWithStatus(prev => prev.map(f =>
       f.status === 'pending' ? { ...f, status: 'checking' as const } : f
     ));
@@ -157,9 +165,13 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
         return fileName.replace(/\.(pdf|doc|docx|txt|rtf)$/i, '').toLowerCase().trim();
       };
 
+      // Separate already-errored files (e.g. oversized) from files to check
+      const erroredFiles = files.filter(f => f.status === 'error');
+      const filesToCheck = files.filter(f => f.status !== 'error');
+
       // Group files by base name
       const filesByBaseName = new Map<string, FileWithStatus[]>();
-      files.forEach(fileWithStatus => {
+      filesToCheck.forEach(fileWithStatus => {
         const baseName = getBaseName(fileWithStatus.file.name);
         if (!filesByBaseName.has(baseName)) {
           filesByBaseName.set(baseName, []);
@@ -168,7 +180,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
       });
 
       // Check for duplicates (same base name, different extensions)
-      const updatedFiles: FileWithStatus[] = [];
+      const updatedFiles: FileWithStatus[] = [...erroredFiles];
       let hasDuplicates = false;
 
       filesByBaseName.forEach((filesGroup, baseName) => {
@@ -209,7 +221,7 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
 
     } catch (error) {
       console.error('Error checking duplicates:', error);
-      // Mark all checking files as valid (fallback)
+      // Mark all checking files as valid (fallback), preserve error files
       setFilesWithStatus(prev => prev.map(f =>
         f.status === 'checking' ? { ...f, status: 'valid' as const } : f
       ));

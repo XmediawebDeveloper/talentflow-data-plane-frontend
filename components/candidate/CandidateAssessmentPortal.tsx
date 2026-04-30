@@ -14,6 +14,7 @@ import { LandingScreen } from './LandingScreen';
 import { ConsentModal } from './ConsentModal';
 import { SystemCheck } from './SystemCheck';
 import { AssessmentInterface } from './AssessmentInterface';
+import { AssessmentErrorBoundary } from './AssessmentErrorBoundary';
 import { ResultsScreen } from './ResultsScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
@@ -24,7 +25,7 @@ import { useProctoringMonitor } from '@/hooks/useProctoringMonitor';
 import { ProctoringWarningModal } from './ProctoringWarningModal';
 import { Monitor, Loader2, AlertCircle, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen } from '@/lib/utils/browserCompat';
+import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen, playVideo, shouldUseAdaptiveAssessmentMode } from '@/lib/utils/browserCompat';
 
 // ============================================
 // FULLSCREEN PROMPT SCREEN COMPONENT
@@ -116,6 +117,7 @@ type AssessmentStep =
   | 'landing'
   | 'consent'
   | 'system_check'
+  | 'hr_questions'
   | 'fullscreen_prompt'
   | 'generating_questions'
   | 'assessment'
@@ -129,10 +131,33 @@ interface CandidateAssessmentPortalProps {
   role?: string;
 }
 
+const getHRCompletedKey = (token: string) => `assessment_hr_completed_${token}`;
+
+const markHRCompleted = (token: string) => {
+  if (typeof window === 'undefined') return;
+  sessionStorage.setItem(getHRCompletedKey(token), 'true');
+  localStorage.setItem(getHRCompletedKey(token), 'true');
+};
+
+const clearHRCompleted = (token: string) => {
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(getHRCompletedKey(token));
+  localStorage.removeItem(getHRCompletedKey(token));
+};
+
+const isHRCompleted = (token: string) => {
+  if (typeof window === 'undefined') return false;
+  return (
+    sessionStorage.getItem(getHRCompletedKey(token)) === 'true' ||
+    localStorage.getItem(getHRCompletedKey(token)) === 'true'
+  );
+};
+
 export function CandidateAssessmentPortal({ token, candidateName, role }: CandidateAssessmentPortalProps) {
   // State
   const [step, setStep] = useState<AssessmentStep>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [isExpiredLink, setIsExpiredLink] = useState(false);
   const [assessmentInfo, setAssessmentInfo] = useState<AssessmentInfo | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<CurrentQuestion | null>(null);
   const [assessmentData, setAssessmentData] = useState<StartAssessmentResponse | null>(null);
@@ -140,6 +165,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const [progress, setProgress] = useState({ answered: 0, total: 0, percent: 0 });
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const [completingStuck, setCompletingStuck] = useState(false);
+  const [hrAnswers, setHrAnswers] = useState<Record<string, string>>({});
+  const [isSavingHRAnswers, setIsSavingHRAnswers] = useState(false);
 
   // Proctoring warnings are displayed via ProctoringEventBus → ProctoringWarningModal
   // (no local state needed — modal subscribes to EventBus directly)
@@ -169,7 +196,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // SYNC STEP STATE WITH REF
   // ============================================
 
-  // Custom setStep that updates both state and ref
+  // sessionStorage key for this assessment's in-progress step
+  const ASSESS_SESSION_KEY = `tf_assess_step_${token}`;
+  // Steps that aren't re-derivable from backend on refresh and must be persisted
+  const ASSESS_PERSIST_STEPS: AssessmentStep[] = ['system_check', 'hr_questions', 'fullscreen_prompt'];
+
+  // Custom setStep that updates both state, ref, and sessionStorage
   const setStepSafe = useCallback((newStep: AssessmentStep) => {
     if (!isMountedRef.current) {
       console.log('[DEBUG] Ignoring setStep - component unmounted');
@@ -184,6 +216,14 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     console.log('[DEBUG] Setting step:', stepRef.current, '->', newStep);
     stepRef.current = newStep;
+
+    // Persist resumable steps; clear when past the flow or on terminal states
+    if (ASSESS_PERSIST_STEPS.includes(newStep)) {
+      sessionStorage.setItem(ASSESS_SESSION_KEY, newStep);
+    } else if (['assessment', 'completing', 'completed', 'results', 'error'].includes(newStep)) {
+      sessionStorage.removeItem(ASSESS_SESSION_KEY);
+    }
+
     setStep(newStep);
   }, []);
 
@@ -197,6 +237,22 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
   // Fullscreen enforcement — tracks whether assessment is running in fullscreen
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
+  const [useAdaptiveAssessmentMode, setUseAdaptiveAssessmentMode] = useState(false);
+
+  // Tracks remaining time reported by AssessmentInterface — shown in fullscreen overlay
+  const [overlayTimeRemaining, setOverlayTimeRemaining] = useState<number | null>(null);
+
+  const getSavedPausedTimerSeconds = useCallback((): number | undefined => {
+    try {
+      const saved = sessionStorage.getItem(`assessment_timer_${token}`);
+      if (!saved) return undefined;
+      const parsed = JSON.parse(saved);
+      if (parsed?.isPaused === true && typeof parsed?.remainingSeconds === 'number') {
+        return parsed.remainingSeconds;
+      }
+    } catch {}
+    return undefined;
+  }, [token]);
 
   useRefreshPrevention({
     enabled: isAssessmentActive,
@@ -269,6 +325,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     loadAssessmentInfo();
   }, [token]);
 
+  useEffect(() => {
+    if (step === 'completed' || step === 'results' || step === 'error') {
+      clearHRCompleted(token);
+    }
+  }, [step, token]);
+
   // Setup proctoring when assessment starts, stop when completed
   useEffect(() => {
     if (step === 'assessment') {
@@ -286,6 +348,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // Fullscreen enforcement — listen on ALL steps so entering fullscreen
   // during 'fullscreen_prompt' is captured before assessment step starts.
   useEffect(() => {
+    const browser = detectBrowser();
+    const adaptiveMode = shouldUseAdaptiveAssessmentMode(browser);
+    setUseAdaptiveAssessmentMode(adaptiveMode);
+
+    if (adaptiveMode) {
+      setIsFullscreenActive(true);
+      return;
+    }
+
     const eventName = getFullscreenChangeEvent();
     const handleFullscreenChange = () => {
       setIsFullscreenActive(isFullscreen());
@@ -300,10 +371,6 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     return () => {
       document.removeEventListener(eventName, handleFullscreenChange);
-      // Exit fullscreen when leaving assessment step
-      if (step === 'assessment' && isFullscreen()) {
-        exitFullscreen().catch(() => {});
-      }
     };
   }, [step]);
 
@@ -352,7 +419,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
     try {
       setStepSafe('loading');
-      const info = await candidateService.getAssessmentInfo(token, candidateName, role);
+      let info = await candidateService.getAssessmentInfo(token, candidateName, role);
 
       if (!isMountedRef.current) return;
 
@@ -363,10 +430,31 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         consent_accepted: info.consent_accepted,
         attempt_id: info.attempt_id
       });
+      if (info.session_token) {
+        sessionTokenManager.setToken(info.session_token, token);
+      }
       setAssessmentInfo(info);
 
       // DISABLED: Identity verification removed - candidates can directly attend
       // const isIdentityVerified = sessionStorage.getItem(`identity_verified_${token}`) === 'true';
+
+      // ── Gate 1: EXPIRED ─────────────────────────────────────────────────────
+      // Check expiry BEFORE any other state. Two paths:
+      //   (a) backend already flipped attempt_status to 'expired', or
+      //   (b) DB hasn't been updated yet but expires_at is in the past AND
+      //       the candidate has not completed the attempt (completed runs
+      //       should still show as Completed, not Expired).
+      const _expiredByStatus = info.attempt_status === 'expired';
+      const _expiredByClock =
+        !!info.expires_at &&
+        new Date(info.expires_at) < new Date() &&
+        info.attempt_status !== 'completed';
+      if (_expiredByStatus || _expiredByClock) {
+        setIsExpiredLink(true);
+        setError('This assessment link has expired. Please contact your recruiter for a new link.');
+        setStepSafe('error');
+        return;
+      }
 
       // Determine initial step based on status
       if (info.attempt_status === 'completed') {
@@ -398,6 +486,33 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         // Can resume existing attempt
         console.log('[DEBUG] Can resume - fetching current question');
         try {
+          try {
+            const resumeHeartbeat = await candidateService.sendHeartbeat(token, {
+              clientRemainingSeconds: getSavedPausedTimerSeconds(),
+            });
+            info = {
+              ...info,
+              time_remaining_seconds: resumeHeartbeat.time_remaining_seconds,
+              is_paused: resumeHeartbeat.is_paused ?? false,
+              pause_reason: resumeHeartbeat.pause_reason ?? null,
+            };
+            if (typeof resumeHeartbeat.time_remaining_seconds === 'number') {
+              setOverlayTimeRemaining(resumeHeartbeat.time_remaining_seconds);
+            }
+            if (!(resumeHeartbeat.is_paused ?? false)) {
+              try {
+                sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+                  remainingSeconds: resumeHeartbeat.time_remaining_seconds,
+                  savedAt: Date.now(),
+                  isPaused: false,
+                }));
+              } catch {}
+            }
+          } catch (heartbeatError) {
+            console.warn('[DEBUG] Resume heartbeat sync failed, continuing with current question fetch:', heartbeatError);
+          }
+
+          setAssessmentInfo(info);
           const question = await candidateService.getCurrentQuestion(token);
           if (!isMountedRef.current) return;
 
@@ -416,10 +531,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           if (errorMsg.toLowerCase().includes('time expired')) {
             console.log('[DEBUG] Assessment time expired - completing assessment');
             try {
-              // Try to complete the assessment and get results
-              const result = await candidateService.completeAssessment(token);
+              // Try to complete the assessment (scoring runs in background)
+              await candidateService.completeAssessment(token);
               if (!isMountedRef.current) return;
-              setResults(result);
               setStepSafe('completed');
             } catch (completeError) {
               console.log('[DEBUG] Could not complete - trying to get results directly');
@@ -444,19 +558,39 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         // Need to accept consent FIRST
         setStepSafe('consent');
       } else if (info.can_start) {
-        // Consent accepted, show landing/preview
-        setStepSafe('landing');
+        // Check if candidate was mid-flow before refresh (system_check, hr_questions, fullscreen_prompt)
+        const savedStep = sessionStorage.getItem(ASSESS_SESSION_KEY) as AssessmentStep | null;
+        if (savedStep && ASSESS_PERSIST_STEPS.includes(savedStep)) {
+          if (savedStep === 'fullscreen_prompt' && shouldUseAdaptiveAssessmentMode(detectBrowser())) {
+            isFlowActiveRef.current = true;
+            await continueToAssessmentStart();
+            return;
+          }
+          // Mark flow as active so background polling doesn't interfere
+          isFlowActiveRef.current = true;
+          setStepSafe(savedStep);
+        } else {
+          clearHRCompleted(token);
+          // Consent accepted, show landing/preview
+          setStepSafe('landing');
+        }
       } else {
         // Cannot start (expired, etc)
-        setError(info.message || 'This assessment is not available');
+        const msg = info.message || 'This assessment is not available';
+        if (msg.toLowerCase().includes('expir')) {
+          setIsExpiredLink(true);
+        }
+        setError(msg);
         setStepSafe('error');
       }
     } catch (err) {
       if (isMountedRef.current) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load assessment';
-        // Handle duplicate session error with user-friendly message
         if (errorMessage === 'DUPLICATE_SESSION') {
           setError('This assessment is already open in another tab or browser. Please use the original tab to continue your assessment. Only one active session is allowed.');
+        } else if (errorMessage === 'LINK_EXPIRED') {
+          setIsExpiredLink(true);
+          setError('This assessment link has expired. Please contact your recruiter for a new link.');
         } else {
           setError(errorMessage);
         }
@@ -527,6 +661,54 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
   };
 
+  const getHRQuestions = useCallback(() => {
+    if (assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0) {
+      return assessmentInfo.hr_topics.map((topic: any, idx: number) => ({
+        key: topic.question_text || topic.text || `hr-${idx}`,
+        text: topic.question_text || topic.text || '',
+        type: topic.answer_type || topic.type || 'text',
+      }));
+    }
+
+    return [
+      { key: 'Tell me about yourself', text: 'Tell me about yourself', type: 'text' },
+      { key: 'Describe your industry experience relevant to this role', text: 'Describe your industry experience relevant to this role', type: 'text' },
+      { key: 'Why should we hire you?', text: 'Why should we hire you?', type: 'text' },
+      { key: 'What is your expected salary?', text: 'What is your expected salary?', type: 'text' },
+      { key: 'Are you willing to relocate?', text: 'Are you willing to relocate?', type: 'yes_no' },
+      { key: 'Are you available for onsite work?', text: 'Are you available for onsite work?', type: 'yes_no' },
+      { key: 'Can you work under pressure?', text: 'Can you work under pressure?', type: 'yes_no' },
+      { key: 'Are you comfortable working in a team?', text: 'Are you comfortable working in a team?', type: 'yes_no' },
+      { key: 'Are you open to learning new technologies?', text: 'Are you open to learning new technologies?', type: 'yes_no' },
+      { key: 'Can you join immediately or within notice period?', text: 'Can you join immediately or within notice period?', type: 'yes_no' },
+    ];
+  }, [assessmentInfo?.hr_topics]);
+
+  const handleContinueFromHRQuestions = async () => {
+    try {
+      setIsSavingHRAnswers(true);
+      const hrQuestions = getHRQuestions();
+
+      await candidateService.saveHRAnswers(
+        token,
+        hrQuestions.map((question) => ({
+          question_text: question.text,
+          answer_type: question.type === 'Yes/No' ? 'yes_no' : question.type,
+          answer_text: hrAnswers[question.key] || '',
+        }))
+      );
+
+      markHRCompleted(token);
+      await continueToAssessmentStart();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save HR answers';
+      setError(errorMessage);
+      setStepSafe('error');
+    } finally {
+      setIsSavingHRAnswers(false);
+    }
+  };
+
   const handleSystemCheckComplete = async (existingStream?: MediaStream) => {
     console.log('[DEBUG] handleSystemCheckComplete started');
 
@@ -555,6 +737,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
         if (videoRef.current) {
           videoRef.current.srcObject = existingStream;
+          void playVideo(videoRef.current);
         }
       } else {
         console.warn('[PORTAL] Stream appears stale (video track not live) - assessment will re-request camera if needed');
@@ -564,10 +747,33 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       }
     }
 
-    console.log('[PORTAL] System check complete, showing fullscreen prompt...');
     setIsReadyToStart(true);
-    setStepSafe('fullscreen_prompt');
+
+    // Skip HR questions if none selected (hr_topics empty or has_hr_round is false)
+    const hasHRQuestions = assessmentInfo?.hr_topics && assessmentInfo.hr_topics.length > 0;
+    if (hasHRQuestions && !isHRCompleted(token)) {
+      console.log('[PORTAL] System check complete, showing HR questions...');
+      setStepSafe('hr_questions');
+    } else {
+      console.log('[PORTAL] System check complete - continuing to assessment start gate...');
+      await continueToAssessmentStart();
+    }
   };
+
+  async function continueToAssessmentStart() {
+    const browser = detectBrowser();
+    const adaptiveMode = shouldUseAdaptiveAssessmentMode(browser);
+    setUseAdaptiveAssessmentMode(adaptiveMode);
+
+    if (adaptiveMode) {
+      console.log('[PORTAL] Using adaptive assessment mode for browser/device:', browser.name);
+      setIsFullscreenActive(true);
+      await handleFullscreenReady();
+      return;
+    }
+
+    setStepSafe('fullscreen_prompt');
+  }
 
   // NEW: Handler for when user enters fullscreen and is ready to start
   const handleFullscreenReady = async () => {
@@ -857,11 +1063,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       percent: response.progress.percent
     });
 
-    // Don't auto-navigate when saving draft - let the component handle navigation
-    // Only update currentQuestion if backend returns next_question AND it's not a draft save
-    if (response.next_question && answer.is_draft === false) {
-      setCurrentQuestion(response.next_question);
-    }
+    // Don't auto-navigate here - let the AssessmentInterface component handle navigation
+    // via onNavigate (handleNext/handlePrevious). Auto-navigating here causes the
+    // question to jump back to the start when the candidate clicks "Submit" (lock).
+    // The backend returns next_question for information only, not for auto-navigation.
 
     return response;
   };
@@ -934,6 +1139,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
       if (videoRef.current) {
         videoRef.current.srcObject = streamRef.current;
+        void playVideo(videoRef.current);
       }
     } else {
       // No existing stream - request a new one (fallback)
@@ -948,6 +1154,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          void playVideo(videoRef.current);
         }
         console.log('[PROCTORING] Camera stream initialized successfully');
       } catch (err) {
@@ -955,14 +1162,42 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       }
     }
 
-    // Start heartbeat for session keepalive
-    heartbeatRef.current = setInterval(async () => {
+    const syncHeartbeat = async () => {
       try {
-        await candidateService.sendHeartbeat(token);
+        const heartbeat = await candidateService.sendHeartbeat(token, {
+          clientRemainingSeconds: getSavedPausedTimerSeconds(),
+        });
+        if (typeof heartbeat.time_remaining_seconds === 'number') {
+          setOverlayTimeRemaining(heartbeat.time_remaining_seconds);
+          setAssessmentInfo(prev => prev ? {
+            ...prev,
+            time_remaining_seconds: heartbeat.time_remaining_seconds,
+            is_paused: heartbeat.is_paused ?? false,
+            pause_reason: heartbeat.pause_reason ?? null,
+          } : prev);
+
+          if (!(heartbeat.is_paused ?? false)) {
+            try {
+              sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+                remainingSeconds: heartbeat.time_remaining_seconds,
+                savedAt: Date.now(),
+                isPaused: false,
+              }));
+            } catch {}
+          }
+        }
       } catch (err) {
         console.error('Heartbeat failed:', err);
       }
-    }, 30000);
+    };
+
+    // Sync immediately on assessment/resume so the timer unpauses from the
+    // latest server-authoritative remaining time instead of waiting for the
+    // first interval tick after a recovery reload.
+    await syncHeartbeat();
+
+    // Start heartbeat for session keepalive
+    heartbeatRef.current = setInterval(syncHeartbeat, 3000);
 
     console.log('[PROCTORING] Advanced monitoring active via useProctoringMonitor hook');
   };
@@ -999,14 +1234,18 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         return (
           <ErrorScreen
             message={error || 'An error occurred'}
-            onRetry={() => {
-            // Reset all flags before retry
-            isFlowActiveRef.current = false;
-            isStartingRef.current = false;
-            loadAssessmentInfo();
-          }}
-        />
-      );
+            variant={isExpiredLink ? 'expired' : 'error'}
+            onRetry={isExpiredLink ? undefined : () => {
+              isFlowActiveRef.current = false;
+              isStartingRef.current = false;
+              setIsExpiredLink(false);
+              setError(null);
+              sessionTokenManager.setAssessmentToken(token);
+              sessionStorage.removeItem(ASSESS_SESSION_KEY);
+              window.location.reload();
+            }}
+          />
+        );
 
       // DISABLED: Identity verification removed - candidates can directly attend
       // case 'identity_verification':
@@ -1049,6 +1288,126 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         />
       );
 
+    case 'hr_questions':
+      const hrQuestions = getHRQuestions();
+      return (
+        <div className="min-h-screen bg-gray-50 flex flex-col">
+          {/* Header */}
+          <header className="w-full bg-white border-b border-gray-200">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+              <h1 className="text-lg font-semibold text-gray-900">HR Questions</h1>
+              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">No Timer</span>
+            </div>
+          </header>
+
+          {/* Progress Steps */}
+          <div className="w-full bg-white border-b border-gray-100">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3">
+              <div className="flex items-center justify-center gap-2 sm:gap-4">
+                {[
+                  { label: 'Terms & Consent', completed: true },
+                  { label: 'Assessment Details', completed: true },
+                  { label: 'System Check', completed: true },
+                  { label: 'HR Questions', active: true },
+                  { label: 'Assessment', completed: false },
+                ].map((s, i) => (
+                  <div key={i} className="flex items-center gap-1 sm:gap-2">
+                    {i > 0 && <div className={`w-6 sm:w-12 h-0.5 ${s.completed || (s as any).active ? 'bg-green-500' : 'bg-gray-200'}`} />}
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                      s.completed ? 'bg-green-500 text-white' : (s as any).active ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
+                    }`}>{s.completed ? '✓' : i + 1}</div>
+                    <span className={`hidden sm:block text-xs ${(s as any).active ? 'text-blue-700 font-medium' : s.completed ? 'text-green-700' : 'text-gray-400'}`}>{s.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* HR Questions Content */}
+          <div className="flex-1 max-w-3xl mx-auto px-4 sm:px-6 py-6 w-full">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">HR Questions</h2>
+                <p className="text-sm text-gray-500">
+                  Please answer the following questions. These are optional and not timed.
+                  Your responses will be shared with the recruiter.
+                </p>
+              </div>
+
+
+              <div className="space-y-4">
+                {hrQuestions.map((q: any, idx: number) => {
+                  const isYesNo = q.type === 'yes_no' || q.type === 'Yes/No';
+                  const selectedAnswer = hrAnswers[q.key] || '';
+                  return (
+                  <div key={idx} className="border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="w-6 h-6 flex items-center justify-center bg-gray-800 text-white rounded text-xs font-medium flex-shrink-0 mt-0.5">{idx + 1}</span>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium text-gray-900">{q.text}</p>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ml-2 bg-gray-100 text-gray-500">
+                            {isYesNo ? 'Yes/No' : 'Text'}
+                          </span>
+                        </div>
+                        {isYesNo ? (
+                          <div className="flex gap-3">
+                            {['Yes', 'No'].map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                onClick={() => {
+                                  setHrAnswers((prev) => ({
+                                    ...prev,
+                                    [q.key]: option
+                                  }));
+                                }}
+                                className={`flex-1 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                  selectedAnswer === option
+                                    ? 'border-gray-800 bg-gray-800 text-white'
+                                    : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                                }`}
+                              >{option}</button>
+                            ))}
+                          </div>
+                        ) : (
+                          <textarea
+                            placeholder="Type your answer here..."
+                            rows={3}
+                            value={selectedAnswer}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setHrAnswers((prev) => ({
+                                ...prev,
+                                [q.key]: value
+                              }));
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 text-black"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleContinueFromHRQuestions}
+                disabled={isSavingHRAnswers}
+                className="px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isSavingHRAnswers ? 'Saving Answers...' : 'Continue to Assessment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+
     case 'fullscreen_prompt':
       return <FullscreenPromptScreen onFullscreenReady={handleFullscreenReady} />;
 
@@ -1070,23 +1429,29 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         );
       }
       return (
-        <AssessmentInterface
-          token={token}
-          assessmentInfo={assessmentInfo!}
-          currentQuestion={currentQuestion}
-          progress={progress}
-          rounds={assessmentData?.rounds || []}
-          startedAt={assessmentData?.started_at || assessmentInfo?.attempt_started_at || new Date().toISOString()}
-          durationMinutes={assessmentInfo?.duration_minutes || 30}
-          onAnswerSubmit={handleAnswerSubmit}
-          onComplete={handleCompleteAssessment}
-          onNavigate={handleNavigateToQuestion}
-          videoRef={videoRef}
-          stream={cameraStream}
-          isCameraActive={proctoringState.isCameraActive}
-          isMicrophoneActive={proctoringState.isMicrophoneActive}
-          copyPasteBlocking={(assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true}
-        />
+        <AssessmentErrorBoundary token={token}>
+          <AssessmentInterface
+            token={token}
+            assessmentInfo={assessmentInfo!}
+            currentQuestion={currentQuestion}
+            progress={progress}
+            rounds={assessmentData?.rounds || []}
+            startedAt={assessmentData?.started_at || assessmentInfo?.attempt_started_at || new Date().toISOString()}
+            durationMinutes={assessmentInfo?.duration_minutes || 30}
+            initialTimeRemainingSeconds={assessmentInfo?.time_remaining_seconds ?? overlayTimeRemaining ?? assessmentData?.time_remaining_seconds ?? undefined}
+            onAnswerSubmit={handleAnswerSubmit}
+            onComplete={handleCompleteAssessment}
+            onNavigate={handleNavigateToQuestion}
+            onSetQuestion={setCurrentQuestion}
+            onTimeUpdate={setOverlayTimeRemaining}
+            videoRef={videoRef}
+            stream={cameraStream}
+            isCameraActive={proctoringState.isCameraActive}
+            isMicrophoneActive={proctoringState.isMicrophoneActive}
+            copyPasteBlocking={(assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings)?.copy_paste_blocking ?? true}
+            enforceFullscreen={!useAdaptiveAssessmentMode}
+          />
+        </AssessmentErrorBoundary>
       );
 
     case 'completing':
@@ -1135,14 +1500,22 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     <>
       {renderContent()}
       {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
-      {step === 'assessment' && !isFullscreenActive && (
+      {step === 'assessment' && !useAdaptiveAssessmentMode && !isFullscreenActive && (
         <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-white border-2 border-yellow-500 rounded-2xl p-8 max-w-md w-full mx-4 text-center shadow-2xl">
             <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
             <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-600 mb-4">
               Please return to fullscreen mode to continue your assessment.
             </p>
+            {overlayTimeRemaining !== null && (
+              <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg mb-6 font-mono font-bold text-lg ${
+                overlayTimeRemaining <= 300 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-800'
+              }`}>
+                <Monitor className="w-4 h-4" />
+                {String(Math.floor(overlayTimeRemaining / 60)).padStart(2, '0')}:{String(overlayTimeRemaining % 60).padStart(2, '0')} remaining
+              </div>
+            )}
             <button
               onClick={() => {
                 const el = document.documentElement as any;

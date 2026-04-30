@@ -126,20 +126,31 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     };
   } | null>(null);
 
+  const [tabSwitchWarning, setTabSwitchWarning] = useState<{ message: string; targetTab: 'single' | 'bulk' } | null>(null);
+
   // Handler to switch tabs with validation
   const handleTabSwitch = (newTab: 'single' | 'bulk') => {
-    // If switching to single tab and have multiple files selected, clear them
-    if (newTab === 'single' && selectedFiles.length > 1) {
-      setSelectedFiles([]);
-      setValidationErrors([{
-        fileName: '',
-        error: 'Files cleared. Single upload accepts only 1 file at a time.',
-        type: 'limit'
-      }]);
-    } else {
-      setValidationErrors([]);
+    if (newTab === activeTab) return;
+    // Block tab switch if files are already selected — user must clear first
+    if (selectedFiles.length > 0) {
+      setTabSwitchWarning({
+        message: `You have ${selectedFiles.length} ${selectedFiles.length > 1 ? 'files' : 'file'} selected. Clear ${selectedFiles.length > 1 ? 'them' : 'it'} before switching to ${newTab === 'single' ? 'Single' : 'Bulk'} Upload.`,
+        targetTab: newTab
+      });
+      return;
     }
+    setTabSwitchWarning(null);
+    setValidationErrors([]);
     setActiveTab(newTab);
+  };
+
+  const handleClearAndSwitch = () => {
+    if (!tabSwitchWarning) return;
+    setSelectedFiles([]);
+    setValidationErrors([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    setActiveTab(tabSwitchWarning.targetTab);
+    setTabSwitchWarning(null);
   };
 
   // Check quota status on mount
@@ -160,8 +171,8 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     fetchQuotaStatus();
   }, []);
 
-  // Get tenant-specific limits or use defaults
-  const maxFileSizeMB = tenant?.subscription.limits.maxFileSizeMB || 3;
+  // Get tenant-specific limits or use defaults — hard-capped at 3MB per backend limit
+  const maxFileSizeMB = Math.min(tenant?.subscription.limits.maxFileSizeMB || 3, 3);
   const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024;
   const storageLimitMB = (tenant?.subscription.limits.storageGB || 50) * 1024; // Convert GB to MB
   const storageUsedMB = tenant?.subscription.usage.storageUsedMB || 0;
@@ -369,17 +380,18 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
       }
 
       // ✅ STEP 2.4: Virus/malware scan (if enabled for tenant)
-      if (virusScanEnabled) {
-        const random = Math.random();
-        if (random < 0.02) { // 2% chance of virus detection for demo
-          errors.push({
-            fileName: file.name,
-            error: 'Security scan detected potential malware. File rejected for safety.',
-            type: 'virus'
-          });
-          return;
-        }
-      }
+      // TODO: Integrate real scan service (e.g. ClamAV / VirusTotal) here
+      // if (virusScanEnabled) {
+      //   const random = Math.random();
+      //   if (random < 0.02) { // 2% chance of virus detection for demo
+      //     errors.push({
+      //       fileName: file.name,
+      //       error: 'Security scan detected potential malware. File rejected for safety.',
+      //       type: 'virus'
+      //     });
+      //     return;
+      //   }
+      // }
 
       // File is valid
       validFiles.push(file);
@@ -523,7 +535,17 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
       let errorMessage = 'Upload failed. Please try again.';
       let fileName = selectedFiles[0]?.name || '';
 
-      if (error?.response?.status === 400 && error?.response?.data?.detail) {
+      if (error?.response?.status === 409) {
+        const detail = error?.response?.data?.detail;
+        const existingResume = detail?.existing_resume;
+        errorMessage = existingResume?.candidate_name
+          ? `A resume for ${existingResume.candidate_name} already exists in your Internal Resume Database.`
+          : 'This resume already exists in the system.';
+      } else if (error?.response?.status === 403) {
+        const detail = error?.response?.data?.detail;
+        const msg = typeof detail === 'string' ? detail : detail?.message;
+        errorMessage = msg || 'You do not have permission to upload resumes. Please contact your administrator.';
+      } else if (error?.response?.status === 400 && error?.response?.data?.detail) {
         const detail = error.response.data.detail;
 
         if (detail.error === 'INVALID_RESUME') {
@@ -649,7 +671,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       />
                     </div>
                     <div className="flex items-center justify-between mt-1">
-                      <span className="text-[10px] sm:text-xs text-gray-600">
+                      <span className="text-[10px] sm:text-xs text-gray-700 font-medium">
                         {quotaInfo.subscription.used.toLocaleString()} used
                       </span>
                       {(quotaInfo.status === 'APPROACHING' || quotaInfo.status === 'WARNING' || quotaInfo.status === 'CRITICAL') && (
@@ -672,15 +694,19 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           <div className="flex gap-2 sm:gap-4 mb-4 sm:mb-6">
             <button
               onClick={() => handleTabSwitch('single')}
+              disabled={activeTab !== 'single' && selectedFiles.length > 0}
+              title={activeTab !== 'single' && selectedFiles.length > 0 ? 'Clear selected files before switching to Single Upload' : undefined}
               className={`flex-1 p-2.5 sm:p-4 rounded-lg border-2 transition-all ${
                 activeTab === 'single'
-                  ? 'border-gray-800 bg-gray-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-blue-600 bg-blue-50 shadow-sm'
+                  : selectedFiles.length > 0
+                    ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                    : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="text-center">
-                <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-1.5 sm:mb-2 ${activeTab === 'single' ? 'text-gray-800' : 'text-gray-400'}`} />
-                <div className={`text-xs sm:text-sm mb-0.5 sm:mb-1 ${activeTab === 'single' ? 'text-gray-800' : 'text-gray-900'}`}>
+                <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-1.5 sm:mb-2 ${activeTab === 'single' ? 'text-blue-600' : 'text-gray-400'}`} />
+                <div className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 ${activeTab === 'single' ? 'text-blue-700' : 'text-gray-900'}`}>
                   Single Upload
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">Upload one resume at a time</div>
@@ -688,21 +714,40 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
             </button>
             <button
               onClick={() => handleTabSwitch('bulk')}
+              disabled={activeTab !== 'bulk' && selectedFiles.length > 0}
+              title={activeTab !== 'bulk' && selectedFiles.length > 0 ? 'Clear selected files before switching to Bulk Upload' : undefined}
               className={`flex-1 p-2.5 sm:p-4 rounded-lg border-2 transition-all ${
                 activeTab === 'bulk'
-                  ? 'border-gray-800 bg-gray-50'
-                  : 'border-gray-200 hover:border-gray-300'
+                  ? 'border-blue-600 bg-blue-50 shadow-sm'
+                  : selectedFiles.length > 0
+                    ? 'border-gray-200 bg-gray-50 opacity-50 cursor-not-allowed'
+                    : 'border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="text-center">
-                <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-1.5 sm:mb-2 ${activeTab === 'bulk' ? 'text-gray-800' : 'text-gray-400'}`} />
-                <div className={`text-xs sm:text-sm mb-0.5 sm:mb-1 ${activeTab === 'bulk' ? 'text-gray-800' : 'text-gray-900'}`}>
+                <Upload className={`w-6 h-6 sm:w-8 sm:h-8 mx-auto mb-1.5 sm:mb-2 ${activeTab === 'bulk' ? 'text-blue-600' : 'text-gray-400'}`} />
+                <div className={`text-xs sm:text-sm font-medium mb-0.5 sm:mb-1 ${activeTab === 'bulk' ? 'text-blue-700' : 'text-gray-900'}`}>
                   Bulk Upload
                 </div>
                 <div className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">Upload multiple resumes (up to 100)</div>
               </div>
             </button>
           </div>
+
+          {tabSwitchWarning && (
+            <div className="flex items-start sm:items-center justify-between gap-3 mb-4 px-3 py-2.5 rounded-lg bg-amber-50 border border-amber-300">
+              <div className="flex items-start gap-2 text-amber-800 text-xs sm:text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5 sm:mt-0" />
+                <span>{tabSwitchWarning.message}</span>
+              </div>
+              <button
+                onClick={handleClearAndSwitch}
+                className="flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-md bg-amber-600 hover:bg-amber-700 text-white transition-colors whitespace-nowrap"
+              >
+                Clear &amp; Switch
+              </button>
+            </div>
+          )}
 
           <div
             onDragOver={handleDragOver}
@@ -764,6 +809,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                     onClick={() => {
                       setSelectedFiles([]);
                       setValidationErrors([]);
+                      setTabSwitchWarning(null);
                     }}
                     className="text-xs sm:text-sm text-red-600 hover:text-red-700 px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-red-50 transition-colors"
                   >

@@ -18,6 +18,7 @@ interface AssessmentResultsProps {
   assessmentTitle: string;
   jdTitle?: string;
   canDownloadPDF?: boolean;
+  canBatchDownload?: boolean;
 }
 
 interface CandidateResult {
@@ -55,6 +56,7 @@ interface AssessmentDetails {
   hr_percentage?: number;
   technical_percentage?: number;
   coding_percentage?: number;
+  passing_threshold?: number;
 }
 
 interface SectionResult {
@@ -75,9 +77,14 @@ interface QuestionResult {
   type: 'multiple-choice' | 'text' | 'coding';
 }
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle, canDownloadPDF = false }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, jdTitle, canDownloadPDF = false, canBatchDownload = false }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const stickyScrollbarRef = useRef<HTMLDivElement | null>(null);
+  const stickyScrollbarInnerRef = useRef<HTMLDivElement | null>(null);
+  const isSyncingScrollRef = useRef(false);
+  const [stickyScrollbarPosition, setStickyScrollbarPosition] = useState<{ left: number; width: number }>({ left: 0, width: 0 });
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [candidateResults, setCandidateResults] = useState<CandidateResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -116,6 +123,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Date range filter (submitted/completed date)
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [showStickyScrollbar, setShowStickyScrollbar] = useState(false);
 
   // AS-24: Column customization
   const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
@@ -228,6 +236,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           hr_percentage: details.hr_percentage,
           technical_percentage: details.technical_percentage,
           coding_percentage: details.coding_percentage,
+          passing_threshold: (details as any).passing_threshold ?? 70,
         });
       } catch (error) {
         console.error('Failed to fetch assessment details:', error);
@@ -395,9 +404,37 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
   };
 
+  const getInviteSourceMeta = (src?: string) => {
+    const value = src || 'Manual';
+    const styleMap: Record<string, string> = {
+      'JD': 'bg-blue-100 text-blue-700',
+      'Assessment': 'bg-purple-100 text-purple-700',
+      'Resume Scoring': 'bg-orange-100 text-orange-700',
+      'My Resumes': 'bg-orange-100 text-orange-700',
+      'Internal DB': 'bg-teal-100 text-teal-700',
+      'Manual': 'bg-gray-100 text-gray-600',
+    };
+    const labelMap: Record<string, string> = {
+      'JD': 'Job',
+      'Assessment': 'Assessment',
+      'Resume Scoring': 'Resume Scoring',
+      'My Resumes': 'My Resumes',
+      'Internal DB': 'Internal DB',
+      'Manual': 'Manual',
+    };
+    return {
+      cls: styleMap[value] || 'bg-gray-100 text-gray-600',
+      label: labelMap[value] || value,
+    };
+  };
+
   const formatTimelineDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
     return formatIST(dateStr);
+  };
+
+  const canDownloadResultPdf = (candidate: CandidateResult): boolean => {
+    return candidate.status === 'Completed' && candidate.scoring_status === 'completed';
   };
 
   // Handle delete result
@@ -448,8 +485,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   };
 
   // AS-25: Handle PDF download for individual candidate result
-  const handleDownloadPDF = async (candidateId: string, candidateName?: string) => {
+  const handleDownloadPDF = async (candidateId: string, candidateDisplayId?: string) => {
     if (downloadingPDF) return;
+
+    const candidate = candidateResults.find(c => c.id === candidateId);
+    if (!candidate || !canDownloadResultPdf(candidate)) {
+      toast.error('PDF is available only after scoring is completed.');
+      return;
+    }
 
     setDownloadingPDF(candidateId);
     try {
@@ -459,10 +502,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const safeName = candidateName?.replace(/[^a-zA-Z0-9]/g, '_') || candidateId;
+      const safeIdentifier = candidateDisplayId?.replace(/[^a-zA-Z0-9]/g, '_') || `CID_${candidateId.replace(/[^a-zA-Z0-9]/g, '_')}`;
       const safeJdTitle = jdTitle?.replace(/[^a-zA-Z0-9]/g, '_') || 'Assessment';
       const pdfTimestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      link.download = `${safeName}_${safeJdTitle}_${pdfTimestamp}.pdf`;
+      link.download = `${safeIdentifier}_${safeJdTitle}_${pdfTimestamp}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -479,9 +522,19 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const handleDownloadBulkPDFs = async () => {
     if (downloadingBulkPDF || selectedRows.length === 0) return;
 
+    const eligibleCandidates = candidateResults.filter(c => selectedRows.includes(c.id) && canDownloadResultPdf(c));
+    if (eligibleCandidates.length === 0) {
+      toast.error('Select at least one fully scored result to download PDFs.');
+      return;
+    }
+
+    if (eligibleCandidates.length !== selectedRows.length) {
+      toast.info(`${selectedRows.length - eligibleCandidates.length} result(s) were skipped because scoring is not completed yet.`);
+    }
+
     setDownloadingBulkPDF(true);
     try {
-      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, selectedRows);
+      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, eligibleCandidates.map(c => c.id));
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -668,10 +721,68 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return 'text-red-600';
   };
 
+  const passingThreshold = assessmentDetails?.passing_threshold ?? 70;
+
+  const getMobileOverallScore = (candidate: CandidateResult) => {
+    if (candidate.status !== 'Completed' || candidate.scoring_status !== 'completed') return null;
+    return candidate.percentage;
+  };
+
+  const getMobilePassFail = (candidate: CandidateResult) => {
+    const overallScore = getMobileOverallScore(candidate);
+    if (overallScore === null) return null;
+    const passingThreshold = assessmentDetails?.passing_threshold ?? 70;
+    return overallScore >= passingThreshold ? 'Pass' : 'Fail';
+  };
+
   // Reset to page 1 when filters change (MUST be before any early returns)
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, passFailFilter, roundFilters, dateFrom, dateTo]);
+
+  useEffect(() => {
+    const updateStickyScrollbar = () => {
+      const tableEl = tableScrollRef.current;
+      const innerEl = stickyScrollbarInnerRef.current;
+      if (!tableEl || !innerEl) return;
+
+      const hasHorizontalOverflow = tableEl.scrollWidth - tableEl.clientWidth > 1;
+      setShowStickyScrollbar(hasHorizontalOverflow);
+      innerEl.style.width = `${tableEl.scrollWidth}px`;
+
+      const rect = tableEl.getBoundingClientRect();
+      setStickyScrollbarPosition({
+        left: Math.max(rect.left, 0),
+        width: Math.max(rect.width, 0),
+      });
+    };
+
+    updateStickyScrollbar();
+
+    const tableEl = tableScrollRef.current;
+    if (!tableEl || typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateStickyScrollbar);
+      return () => window.removeEventListener('resize', updateStickyScrollbar);
+    }
+
+    const resizeObserver = new ResizeObserver(updateStickyScrollbar);
+    resizeObserver.observe(tableEl);
+    const tableChild = tableEl.firstElementChild;
+    if (tableChild) {
+      resizeObserver.observe(tableChild);
+    }
+
+    window.addEventListener('resize', updateStickyScrollbar);
+    window.addEventListener('scroll', updateStickyScrollbar, true);
+    const timer = window.setTimeout(updateStickyScrollbar, 150);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateStickyScrollbar);
+      window.removeEventListener('scroll', updateStickyScrollbar, true);
+      window.clearTimeout(timer);
+    };
+  }, [candidateResults.length, assessmentDetails, isFetching, totalItems]);
 
   // Use API results only (no mock data)
   const displayResults = candidateResults;
@@ -779,6 +890,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const completedCount = candidateResults.length > 0 ? apiStats.completed_count : filteredCandidates.filter(c => c.status === 'Completed').length;
   const inProgressCount = candidateResults.length > 0 ? apiStats.in_progress_count : filteredCandidates.filter(c => c.status === 'In Progress').length;
   const pendingCount = candidateResults.length > 0 ? apiStats.pending_count : filteredCandidates.filter(c => c.status === 'Pending').length;
+  const stickyHeaderClass = 'bg-gray-50';
+
+  const syncHorizontalScroll = (source: 'table' | 'sticky') => {
+    const tableEl = tableScrollRef.current;
+    const stickyEl = stickyScrollbarRef.current;
+    if (!tableEl || !stickyEl || isSyncingScrollRef.current) return;
+
+    isSyncingScrollRef.current = true;
+    if (source === 'table') {
+      stickyEl.scrollLeft = tableEl.scrollLeft;
+    } else {
+      tableEl.scrollLeft = stickyEl.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false;
+    });
+  };
 
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -806,7 +934,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               {/* AS-26: Bulk PDF Download Button — only for users with download_pdf permission */}
-              {canDownloadPDF && selectedRows.length > 0 && (
+              {canBatchDownload && selectedRows.length > 0 && (
                 <button
                   onClick={handleDownloadBulkPDFs}
                   disabled={downloadingBulkPDF}
@@ -888,29 +1016,33 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         </div>
 
         {/* AS-23: Search and Filter Bar */}
-        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 mb-3 sm:mb-4">
-          <div className="flex flex-col gap-3 sm:gap-4">
-            {/* Search Input - full width on all screens */}
-            <div className="w-full relative">
-              <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by name, email, phone, or JD title..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-9 sm:pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm sm:text-base text-black"
-              />
-            </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 mb-3 sm:mb-4 space-y-3 sm:space-y-4">
+          {/* Search Input - full width row */}
+          <div className="relative">
+            <label htmlFor="assessment-results-search" className="sr-only">
+              Search candidate results
+            </label>
+            <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              id="assessment-results-search"
+              type="text"
+              placeholder="Search by name, email, phone, or JD title..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-9 sm:pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-sm sm:text-base text-black"
+            />
+          </div>
 
-            {/* Filters Row - grid on mobile, flex-wrap on larger */}
-            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
+          {/* Filters Row - wraps when needed, aligned baseline */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Status Filter */}
-              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Status:</label>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <label htmlFor="assessment-results-status-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Status:</label>
                 <select
+                  id="assessment-results-status-filter"
                   value={statusFilter}
                   onChange={(e) => {
                     setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
@@ -926,9 +1058,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </div>
 
               {/* Pass/Fail Filter */}
-              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Result:</label>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <label htmlFor="assessment-results-pass-fail-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Result:</label>
                 <select
+                  id="assessment-results-pass-fail-filter"
                   value={passFailFilter}
                   onChange={(e) => {
                     setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
@@ -944,9 +1077,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
               {/* Round-based Filters */}
               {assessmentDetails?.technical_enabled && (
-                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                  <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Tech:</label>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <label htmlFor="assessment-results-tech-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Tech:</label>
                   <select
+                    id="assessment-results-tech-filter"
                     value={roundFilters.technical || 'all'}
                     onChange={(e) => {
                       const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
@@ -964,9 +1098,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               )}
 
               {assessmentDetails?.coding_enabled && (
-                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                  <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Coding:</label>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <label htmlFor="assessment-results-coding-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Coding:</label>
                   <select
+                    id="assessment-results-coding-filter"
                     value={roundFilters.coding || 'all'}
                     onChange={(e) => {
                       const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
@@ -986,22 +1121,28 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               {/* Date Range Filter - full width on mobile */}
               <div className="col-span-2 flex items-center gap-1.5 sm:gap-2 min-w-0">
                 <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
+                <label htmlFor="assessment-results-date-from" className="sr-only">Filter from date</label>
                 <input
+                  id="assessment-results-date-from"
                   type="date"
                   value={dateFrom}
                   max={dateTo || undefined}
                   onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
                   className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   title="From date"
+                  aria-label="Filter from date"
                 />
-                <span className="text-xs text-gray-400 flex-shrink-0">–</span>
+                <span className="text-xs text-gray-400">–</span>
+                <label htmlFor="assessment-results-date-to" className="sr-only">Filter to date</label>
                 <input
+                  id="assessment-results-date-to"
                   type="date"
                   value={dateTo}
                   min={dateFrom || undefined}
                   onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
                   className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-800 focus:border-transparent text-xs sm:text-sm text-black"
                   title="To date"
+                  aria-label="Filter to date"
                 />
               </div>
 
@@ -1026,65 +1167,57 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </button>
                 )}
 
-                {/* AS-24: Customize Columns Button */}
-                <div className="relative">
-                  <button
-                    onClick={() => setShowColumnSelector(!showColumnSelector)}
-                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm text-gray-700"
-                  >
-                    <Columns3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    <span className="hidden sm:inline">Columns ({enabledColumnsCount})</span>
-                    <span className="sm:hidden">{enabledColumnsCount}</span>
-                  </button>
+              {/* AS-24: Customize Columns Button */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowColumnSelector(!showColumnSelector)}
+                  aria-expanded={showColumnSelector}
+                  aria-haspopup="dialog"
+                  aria-controls="assessment-results-column-selector"
+                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm text-gray-700"
+                >
+                  <Columns3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Columns ({enabledColumnsCount})</span>
+                  <span className="sm:hidden">{enabledColumnsCount}</span>
+                </button>
 
-                  {showColumnSelector && (
-                    <>
-                      {/* Backdrop */}
-                      <div
-                        className="fixed inset-0 z-40 sm:z-10 bg-black/30 sm:bg-transparent"
-                        onClick={() => setShowColumnSelector(false)}
-                      ></div>
-                      {/* Mobile: bottom sheet | Desktop: absolute dropdown */}
-                      <div className="fixed inset-x-0 bottom-0 z-50 sm:z-20 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-full sm:w-64 bg-white rounded-t-xl sm:rounded-lg shadow-lg border border-gray-200 py-2 max-h-[60vh] sm:max-h-96 overflow-y-auto">
-                        {/* Drag handle for mobile */}
-                        <div className="flex justify-center py-1.5 sm:hidden">
-                          <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
+                {showColumnSelector && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setShowColumnSelector(false)}
+                    ></div>
+                    <div
+                      id="assessment-results-column-selector"
+                      role="dialog"
+                      aria-label="Select visible result columns"
+                      className="absolute right-0 top-full mt-2 w-56 sm:w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
+                    >
+                      <div className="px-3 sm:px-4 py-2 border-b border-gray-200">
+                        <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
+                        <div className="text-xs text-gray-500 mt-0.5">
+                          {enabledColumnsCount} of {columns.length} selected
                         </div>
-                        <div className="px-4 py-2 border-b border-gray-200 flex items-center justify-between">
-                          <div>
-                            <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
-                            <div className="text-xs text-gray-500 mt-0.5">
-                              {enabledColumnsCount} of {columns.length} selected
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => setShowColumnSelector(false)}
-                            className="sm:hidden p-1 text-gray-400 hover:text-gray-600"
-                          >
-                            <X className="w-5 h-5" />
-                          </button>
-                        </div>
-                        {columns.map((column) => (
-                          <label
-                            key={column.id}
-                            className="flex items-center gap-2.5 sm:gap-3 px-4 py-2.5 sm:py-2.5 hover:bg-gray-50 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={column.enabled}
-                              onChange={() => handleToggleColumn(column.id)}
-                              className="w-4 h-4 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
-                            />
-                            <span className="text-sm text-gray-700">{column.label}</span>
-                          </label>
-                        ))}
                       </div>
-                    </>
-                  )}
-                </div>
+                      {columns.map((column) => (
+                        <label
+                          key={column.id}
+                          className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 hover:bg-gray-50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={column.enabled}
+                            onChange={() => handleToggleColumn(column.id)}
+                            className="w-4 h-4 text-gray-800 rounded border-gray-300 focus:ring-gray-500"
+                          />
+                          <span className="text-xs sm:text-sm text-gray-700">{column.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          </div>
         </div>
 
         {/* Candidates Results Table */}
@@ -1100,11 +1233,174 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               {selectedRows.length > 0 && `${selectedRows.length} selected`}
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="xl:hidden divide-y divide-gray-200">
+            {paginatedCandidates.length === 0 ? (
+              <div className="px-6 py-12 text-center">
+                <div className="flex flex-col items-center">
+                  <Users className="w-12 h-12 text-gray-300 mb-3" />
+                  {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' || passFailFilter !== 'all' ? (
+                    <>
+                      <p className="text-gray-600 mb-1">No candidates match your search criteria</p>
+                      <p className="text-sm text-gray-500">Try adjusting your filters or search query</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-gray-600 mb-1">No candidates have completed this assessment yet</p>
+                      <p className="text-sm text-gray-500">Share the assessment link to invite candidates</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              paginatedCandidates.map((candidate) => {
+                const inviteMeta = getInviteSourceMeta(candidate.inviteSource);
+                const overallScore = getMobileOverallScore(candidate);
+                const passFail = getMobilePassFail(candidate);
+                return (
+                  <div key={candidate.id} className="p-4 space-y-3" role="article" aria-label={`Candidate result for ${candidate.name || 'Unknown'}`}>
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedRows.includes(candidate.id)}
+                        onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
+                        className="mt-1 w-4 h-4 rounded border-gray-300 text-gray-800 focus:ring-gray-800"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs shrink-0">
+                                {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-gray-900 truncate">{candidate.name || 'Unknown'}</div>
+                                <div className="text-xs text-gray-500 truncate">{candidate.email || '-'}</div>
+                              </div>
+                            </div>
+                          </div>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs border shrink-0 ${getStatusColor(candidate.status)}`}>
+                            {candidate.status}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div className="rounded-lg bg-gray-50 p-2 col-span-2">
+                            <div className="text-gray-500">JD</div>
+                            <div className="text-gray-800 truncate">{jdTitle || 'N/A'}</div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Score</div>
+                            <div className={overallScore !== null ? `font-semibold ${getScoreColor(overallScore)}` : 'text-gray-400'}>
+                              {overallScore !== null ? `${overallScore}%` : '-'}
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Pass / Fail</div>
+                            {passFail ? (
+                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-1 ${passFail === 'Pass' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {passFail}
+                              </span>
+                            ) : (
+                              <div className="text-gray-400">-</div>
+                            )}
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Date</div>
+                            <div className="text-gray-700">{candidate.completedDate}</div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">CID</div>
+                            <div className="font-mono text-purple-700">{candidate.candidateDisplayId || '-'}</div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Invite Source</div>
+                            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-1 ${inviteMeta.cls}`}>
+                              {inviteMeta.label}
+                            </span>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-2">
+                            <div className="text-gray-500">Duration</div>
+                            <div className="text-gray-700">{candidate.duration}</div>
+                          </div>
+                          {assessmentDetails?.technical_enabled && (
+                            <div className="rounded-lg bg-gray-50 p-2">
+                              <div className="text-gray-500">Tech</div>
+                              <div className={candidate.tech_score !== undefined ? getScoreColor(candidate.tech_score) : 'text-gray-400'}>
+                                {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
+                              </div>
+                            </div>
+                          )}
+                          {assessmentDetails?.coding_enabled && (
+                            <div className="rounded-lg bg-gray-50 p-2">
+                              <div className="text-gray-500">Coding</div>
+                              <div className={candidate.coding_score !== undefined ? getScoreColor(candidate.coding_score) : 'text-gray-400'}>
+                                {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {candidate.phone && (
+                          <div className="mt-2 text-xs text-gray-500">Phone: {candidate.phone}</div>
+                        )}
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {candidate.status !== 'Pending' && (
+                            <button
+                              onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
+                              className="inline-flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                              title="View Details"
+                              aria-label={`View details for ${candidate.name || 'candidate'}`}
+                            >
+                              <Eye className="w-3.5 h-3.5 shrink-0" />
+                            </button>
+                          )}
+                          {canDownloadPDF && canDownloadResultPdf(candidate) ? (
+                            <button
+                              onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
+                              disabled={downloadingPDF === candidate.id}
+                              className="inline-flex items-center justify-center w-9 h-9 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Download PDF Report"
+                              aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
+                            >
+                              {downloadingPDF === candidate.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Download className="w-3 h-3" />
+                              )}
+                            </button>
+                          ) : null}
+                          <button
+                            onClick={() => handleDeleteResult(candidate.id, candidate.name)}
+                            disabled={isDeleting === candidate.id}
+                            className="inline-flex items-center justify-center w-9 h-9 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                            title="Delete"
+                            aria-label={`Delete result for ${candidate.name || 'candidate'}`}
+                          >
+                            {isDeleting === candidate.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-3 h-3" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div
+            ref={tableScrollRef}
+            className="hidden xl:block overflow-x-auto"
+            onScroll={() => syncHorizontalScroll('table')}
+          >
+            <table className="w-full min-w-[1480px] table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-4 py-3 w-10">
+                  <th className={`px-4 py-3 w-10 ${stickyHeaderClass}`}>
                     <input
                       type="checkbox"
                       checked={selectedRows.length === paginatedCandidates.length && paginatedCandidates.length > 0}
@@ -1113,11 +1409,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     />
                   </th>
                   {isColumnEnabled('cid') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">CID</th>
+                    <th className={`w-24 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>CID</th>
                   )}
                   {isColumnEnabled('candidate') && (
                     <th
-                      className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className={`w-40 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
                       onClick={() => handleSort('name')}
                     >
                       <div className="flex items-center gap-1">
@@ -1127,7 +1423,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('email') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                    <th className={`w-52 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Mail className="w-3 h-3" />
                         Email
@@ -1135,7 +1431,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('jdTitle') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                    <th className={`w-40 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Briefcase className="w-3 h-3" />
                         JD Title
@@ -1143,7 +1439,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('phone') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Phone className="w-3 h-3" />
                         Phone
@@ -1151,11 +1447,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('inviteSource') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">Invite Source</th>
+                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
                   {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                     <th
-                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
                       onClick={() => handleSort('score')}
                     >
                       <div className="flex items-center justify-center gap-1">
@@ -1166,7 +1462,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   )}
                   {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
                     <th
-                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
                       onClick={() => handleSort('score')}
                     >
                       <div className="flex items-center justify-center gap-1">
@@ -1177,7 +1473,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   )}
                   {isColumnEnabled('status') && (
                     <th
-                      className="text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center justify-center gap-1">
@@ -1187,7 +1483,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('timeline') && (
-                    <th className="text-left px-4 py-3 text-xs text-gray-600">
+                    <th className={`w-56 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         Timeline
@@ -1196,7 +1492,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   )}
                   {isColumnEnabled('completed') && (
                     <th
-                      className="text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100"
+                      className={`w-32 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-gray-100 ${stickyHeaderClass}`}
                       onClick={() => handleSort('date')}
                     >
                       <div className="flex items-center gap-1">
@@ -1206,9 +1502,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     </th>
                   )}
                   {isColumnEnabled('duration') && (
-                    <th className="text-center px-4 py-3 text-xs text-gray-600">Duration</th>
+                    <th className={`w-28 text-center px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Duration</th>
                   )}
-                  <th className="text-center px-4 py-3 text-xs text-gray-600">Actions</th>
+                  <th className={`w-32 text-center px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -1244,7 +1540,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </td>
                       {isColumnEnabled('cid') && (
                         <td className="px-4 py-4">
-                          <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                          <span className="inline-flex max-w-full break-all text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
                             {candidate.candidateDisplayId || '-'}
                           </span>
                         </td>
@@ -1255,52 +1551,34 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center text-white text-xs">
                               {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </div>
-                            <div className="text-sm text-gray-900 font-medium">{candidate.name || 'Unknown'}</div>
+                            <div className="text-sm text-gray-900 font-medium break-words">{candidate.name || 'Unknown'}</div>
                           </div>
                         </td>
                       )}
                       {isColumnEnabled('email') && (
                         <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600">{candidate.email}</div>
+                          <div className="text-sm text-gray-600 break-all">{candidate.email}</div>
                         </td>
                       )}
                       {isColumnEnabled('jdTitle') && (
                         <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600 truncate max-w-[200px]" title={jdTitle || 'N/A'}>
+                          <div className="text-sm text-gray-600 break-words" title={jdTitle || 'N/A'}>
                             {jdTitle || 'N/A'}
                           </div>
                         </td>
                       )}
                       {isColumnEnabled('phone') && (
                         <td className="px-4 py-4">
-                          <div className="text-sm text-gray-600">{candidate.phone || '-'}</div>
+                          <div className="text-sm text-gray-600 break-all">{candidate.phone || '-'}</div>
                         </td>
                       )}
                       {isColumnEnabled('inviteSource') && (
                         <td className="px-4 py-4">
                           {(() => {
-                            const src = candidate.inviteSource || 'Manual';
-                            const styleMap: Record<string, string> = {
-                              'JD':            'bg-blue-100 text-blue-700',
-                              'Assessment':    'bg-purple-100 text-purple-700',
-                              'Resume Scoring':'bg-orange-100 text-orange-700',
-                              'My Resumes':    'bg-orange-100 text-orange-700',
-                              'Internal DB':   'bg-teal-100 text-teal-700',
-                              'Manual':        'bg-gray-100 text-gray-600',
-                            };
-                            const labelMap: Record<string, string> = {
-                              'JD':            'Job',
-                              'Assessment':    'Assessment',
-                              'Resume Scoring':'Resume Scoring',
-                              'My Resumes':    'My Resumes',
-                              'Internal DB':   'Internal DB',
-                              'Manual':        'Manual',
-                            };
-                            const cls = styleMap[src] || 'bg-gray-100 text-gray-600';
-                            const label = labelMap[src] || src;
+                            const meta = getInviteSourceMeta(candidate.inviteSource);
                             return (
-                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${cls}`}>
-                                {label}
+                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${meta.cls}`}>
+                                {meta.label}
                               </span>
                             );
                           })()}
@@ -1313,8 +1591,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
                             </span>
                             {candidate.tech_score !== undefined && (
-                              <span className={`text-xs font-medium ${candidate.tech_score >= 50 ? 'text-green-600' : 'text-red-600'}`}>
-                                {candidate.tech_score >= 50 ? 'Pass' : 'Fail'}
+                              <span className={`text-xs font-medium ${candidate.tech_score >= passingThreshold ? 'text-green-600' : 'text-red-600'}`}>
+                                {candidate.tech_score >= passingThreshold ? 'Pass' : 'Fail'}
                               </span>
                             )}
                           </div>
@@ -1327,8 +1605,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                             </span>
                             {candidate.coding_score !== undefined && (
-                              <span className={`text-xs font-medium ${candidate.coding_score >= 50 ? 'text-green-600' : 'text-red-600'}`}>
-                                {candidate.coding_score >= 50 ? 'Pass' : 'Fail'}
+                              <span className={`text-xs font-medium ${candidate.coding_score >= passingThreshold ? 'text-green-600' : 'text-red-600'}`}>
+                                {candidate.coding_score >= passingThreshold ? 'Pass' : 'Fail'}
                               </span>
                             )}
                           </div>
@@ -1343,7 +1621,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('timeline') && (
                         <td className="px-4 py-4 text-xs text-gray-500">
-                          <div className="space-y-1">
+                          <div className="space-y-1 break-words">
                             {candidate.sent_at && (
                               <div className="flex items-center gap-2">
                                 <Mail className="w-3 h-3 text-blue-500" />
@@ -1392,41 +1670,41 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.status !== 'Pending' && (
                           <button
                             onClick={() => router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`)}
-                            className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors whitespace-nowrap"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
                             title="View Details"
+                            aria-label={`View details for ${candidate.name || 'candidate'}`}
                           >
-                            <Eye className="w-3.5 h-3 flex-shrink-0.5 shrink-0" />
-                            <span className="hidden sm:inline">View Details</span>
+                            <Eye className="w-3.5 h-3.5 shrink-0" />
                           </button>
                           )}
                           {/* AS-25: PDF Download Button — only for users with download_pdf permission */}
-                          {canDownloadPDF && candidate.status === 'Completed' ? (
+                          {canDownloadPDF && canDownloadResultPdf(candidate) ? (
                             <button
-                              onClick={() => handleDownloadPDF(candidate.id, candidate.name)}
+                              onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                               disabled={downloadingPDF === candidate.id}
-                              className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                              className="inline-flex items-center justify-center w-9 h-9 bg-gray-700 text-white rounded-md hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Download PDF Report"
+                              aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                             >
                               {downloadingPDF === candidate.id ? (
                                 <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
                               ) : (
                                 <Download className="w-3 h-3 flex-shrink-0" />
                               )}
-                              <span className="hidden sm:inline">PDF</span>
                             </button>
                           ) : null}
                           <button
                             onClick={() => handleDeleteResult(candidate.id, candidate.name)}
                             disabled={isDeleting === candidate.id}
-                            className="inline-flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 whitespace-nowrap"
+                            className="inline-flex items-center justify-center w-9 h-9 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
                             title="Delete"
+                            aria-label={`Delete result for ${candidate.name || 'candidate'}`}
                           >
                             {isDeleting === candidate.id ? (
                               <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
                             ) : (
                               <Trash2 className="w-3 h-3 flex-shrink-0" />
                             )}
-                            <span className="hidden sm:inline">Delete</span>
                           </button>
                         </div>
                       </td>
@@ -1506,6 +1784,21 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
           )}
         </div>
+
+        {showStickyScrollbar && (
+          <div
+            className="hidden xl:block fixed bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85"
+            style={{ left: stickyScrollbarPosition.left, width: stickyScrollbarPosition.width }}
+          >
+            <div
+              ref={stickyScrollbarRef}
+              className="overflow-x-hidden overflow-y-hidden"
+              onScroll={() => syncHorizontalScroll('sticky')}
+            >
+              <div ref={stickyScrollbarInnerRef} className="h-4" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Export Format & Scope Selection Modal */}

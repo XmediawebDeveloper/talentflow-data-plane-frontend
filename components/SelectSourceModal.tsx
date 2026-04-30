@@ -36,11 +36,17 @@ export default function SelectSourceModal({
   onScoringComplete
 }: SelectSourceModalProps) {
   const router = useRouter();
-  const { user, tenant } = useAuth();
-  const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
+  const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
+  const { startScoringJob, updateItemStatus, setMainPanelOpen, setOnRestorePanel, setMinimized } = useScoringProgress();
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
+
+  // Check if user has scoring permission
+  const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
+
+  // Check if user has upload permission (matches My Resumes page RBAC check)
+  const canUploadResumes = isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
 
   // State
   const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
@@ -57,11 +63,10 @@ export default function SelectSourceModal({
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressItems, setProgressItems] = useState<ProgressItem[]>([]);
   const [scoringStats, setScoringStats] = useState({ queued: 0, processing: 0, completed: 0, failed: 0 });
-
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
 
-  // Hide global floating widget while progress modal is open here; show it when modal closes or user navigates
+  // Hide global floating widget while this modal is open (overlay covers everything)
   useEffect(() => {
     setMainPanelOpen(showProgressModal);
     return () => { setMainPanelOpen(false); };
@@ -264,19 +269,86 @@ export default function SelectSourceModal({
         };
       });
 
-      // Store batch info for the resume-scoring page to poll
-      const scoringData = {
-        batchId: response.batch_id,
-        jobId: response.jd_id,
-        jobTitle: response.jd_title,
-        totalResumes: response.total_resumes,
-        resumeItems,
-      };
-      sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
+      // Initialize progress items and show modal
+      const initialItems: ProgressItem[] = resumeItems.map(item => ({
+        resumeId: item.resumeId,
+        candidateName: item.candidateName,
+        status: 'queued' as const,
+      }));
+      setProgressItems(initialItems);
+      setScoringStats({ queued: initialItems.length, processing: 0, completed: 0, failed: 0 });
+      setShowProgressModal(true);
 
-      // Close modal and stay on JD page (Scored Resumes tab)
-      onClose();
-      router.push(`/recruitment/job-details?id=${jobId}&tab=scored-resumes`);
+      // Register in persistent scoring context so GlobalScoringProgressIndicator works when minimized
+      const contextItems = resumeItems.map(item => ({
+        id: `${jobId}-${item.resumeId}`,
+        resumeId: item.resumeId,
+        candidateName: item.candidateName,
+        jobTitle: jobTitle,
+        jobId: jobId,
+        source: (activeTab === 'my-resumes' ? 'My Resumes' : 'Internal DB') as 'My Resumes' | 'Internal DB',
+      }));
+      startScoringJob(jobId, jobTitle, contextItems, typeof window !== 'undefined' ? window.location.pathname + window.location.search : undefined);
+
+      // Poll batch status until all items are done
+      const batchId = response.batch_id;
+      const poll = async () => {
+        try {
+          const batchStatus = await scoringService.getBatchStatus(batchId);
+
+          // Update progress items from batch status
+          setProgressItems(prev => prev.map(item => {
+            const batchItem = batchStatus.items.find((b: any) => b.resume_id === item.resumeId);
+            if (!batchItem) return item;
+            let status: ProgressItem['status'] = item.status;
+            if (batchItem.status === 'completed') status = 'completed';
+            else if (batchItem.status === 'failed') status = 'failed';
+            else if (batchItem.status === 'processing') status = 'processing';
+            else status = 'queued';
+            return { ...item, status, score: batchItem.overall_score, matchStatus: batchItem.match_status };
+          }));
+          setScoringStats({
+            queued: batchStatus.queued,
+            processing: batchStatus.processing,
+            completed: batchStatus.completed,
+            failed: batchStatus.failed,
+          });
+
+          // Sync status updates into the persistent context (drives GlobalScoringProgressIndicator)
+          for (const batchItem of (batchStatus.items || [])) {
+            const itemId = `${jobId}-${batchItem.resume_id}`;
+            if (batchItem.status === 'completed') {
+              updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score });
+            } else if (batchItem.status === 'failed') {
+              updateItemStatus(jobId, itemId, 'Failed', { errorReason: batchItem.error_message || 'Scoring failed' });
+            } else if (batchItem.status === 'processing') {
+              updateItemStatus(jobId, itemId, 'Scoring in progress');
+            }
+          }
+
+          const allDone = batchStatus.status === 'completed' || batchStatus.status === 'failed' ||
+            (batchStatus.queued === 0 && batchStatus.processing === 0);
+
+          if (allDone) {
+            setSubmitting(false);
+            // Redirect to Scored Resumes tab after a short delay so user sees final state
+            setTimeout(() => {
+              setShowProgressModal(false);
+              if (onScoringComplete) {
+                onScoringComplete();
+              } else {
+                onClose();
+              }
+            }, 1500);
+          } else {
+            setTimeout(poll, 3000);
+          }
+        } catch {
+          setTimeout(poll, 5000);
+        }
+      };
+      setTimeout(poll, 3000);
+
     } catch (error: any) {
       console.error('Failed to start scoring:', error);
       toast.error(error.message || 'Failed to start scoring');
@@ -327,7 +399,6 @@ export default function SelectSourceModal({
   // Handle resume upload
   const handleUpload = async (files: File[], folderId?: string) => {
     try {
-      // Upload the first file (UploadModal handles single file uploads)
       if (files.length === 0) {
         return {
           success: false,
@@ -335,10 +406,21 @@ export default function SelectSourceModal({
         };
       }
 
-      const file = files[0];
-      const response = await resumeService.upload(file, folderId);
+      // For bulk upload, upload all files sequentially
+      if (files.length > 1) {
+        const results = await Promise.allSettled(
+          files.map(file => resumeService.upload(file, folderId))
+        );
+        await fetchData();
+        const firstSuccess = results.find(r => r.status === 'fulfilled') as PromiseFulfilledResult<any> | undefined;
+        return {
+          success: true,
+          resumeId: firstSuccess?.value?.id,
+          candidateName: firstSuccess?.value?.candidate_name
+        };
+      }
 
-      // Refresh resumes list
+      const response = await resumeService.upload(files[0], folderId);
       await fetchData();
 
       return {
@@ -348,9 +430,104 @@ export default function SelectSourceModal({
       };
     } catch (error: any) {
       console.error('Upload error:', error);
+
+      // Handle 409 duplicate resume
+      if (error?.response?.status === 409) {
+        const detail = error?.response?.data?.detail;
+        const existingResume = detail?.existing_resume;
+        const isExactDuplicate = detail?.is_exact_duplicate ?? true;
+        const contentDifferences = detail?.content_differences || [];
+
+        if (existingResume) {
+          return {
+            success: false,
+            error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Internal Resume Database.`,
+            existingResume: {
+              id: existingResume.id,
+              candidateName: existingResume.candidate_name || existingResume.file_name || 'Unknown',
+              email: existingResume.email || '',
+              currentTitle: existingResume.current_title || '',
+              folderName: existingResume.folder_name || '',
+              uploadedAt: existingResume.upload_date || '',
+              version: existingResume.version || 1,
+            },
+            duplicateData: {
+              file: files[0],
+              existingResume: {
+                id: existingResume.id,
+                candidate_name: existingResume.candidate_name || existingResume.file_name || 'Unknown',
+                email: existingResume.email || '',
+                folder_name: existingResume.folder_name,
+                folder_path: existingResume.folder_path || 'My Resumes',
+                upload_date: existingResume.upload_date || '',
+                file_size: existingResume.file_size || 0,
+                file_name: existingResume.file_name || '',
+                version: existingResume.version || 1,
+                version_count: existingResume.version_count || existingResume.version || 1,
+              },
+              contentDifferences,
+              isDuplicate: isExactDuplicate,
+            }
+          };
+        }
+
+        return {
+          success: false,
+          error: 'This resume already exists in the system.',
+        };
+      }
+
+      // Handle 400 validation errors
+      if (error?.response?.status === 400) {
+        const detail = error?.response?.data?.detail;
+
+        if (detail?.error === 'INVALID_RESUME') {
+          return {
+            success: false,
+            error: detail?.message || 'The uploaded file does not appear to be a valid resume. It may be a scorecard, invoice, or other document type.',
+          };
+        }
+
+        if (detail?.error === 'NO_CONTENT') {
+          return {
+            success: false,
+            error: detail?.message || 'The resume file has no readable content. The file may be blank, image-only, or heavily formatted.',
+          };
+        }
+
+        return {
+          success: false,
+          error: detail?.message || `Failed to upload ${files[0]?.name || 'file'}`,
+        };
+      }
+
+      // Handle 403 — read-only mode, quota exhausted, or permission denied
+      if (error?.response?.status === 403) {
+        const detail = error?.response?.data?.detail;
+
+        if (detail?.error === 'READ_ONLY_MODE') {
+          return {
+            success: false,
+            error: 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.',
+          };
+        }
+
+        if (detail?.error === 'QUOTA_EXHAUSTED') {
+          return {
+            success: false,
+            error: detail?.message || 'Resume upload quota exhausted. Please upgrade your plan to upload more resumes.',
+          };
+        }
+
+        return {
+          success: false,
+          error: 'You do not have permission to upload resumes. Please contact your administrator.',
+        };
+      }
+
       return {
         success: false,
-        error: error.message || 'Upload failed'
+        error: `Failed to upload ${files[0]?.name || 'file'}`,
       };
     }
   };
@@ -359,6 +536,28 @@ export default function SelectSourceModal({
   const handleUploadComplete = () => {
     setShowUploadModal(false);
     fetchData(); // Refresh the list
+  };
+
+  const handleCreateFolder = async (name: string, parentId?: string) => {
+    try {
+      if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
+        toast.error('Folder name must not contain HTML or script content');
+        return;
+      }
+      const allFolders = (function flatten(list: FolderType[]): FolderType[] {
+        return list.flatMap(f => [f, ...flatten(f.children || [])]);
+      })(folders);
+      if (allFolders.find(f => f.name.toLowerCase() === name.toLowerCase() && f.id !== 'all')) {
+        toast.error(`Folder "${name}" already exists`);
+        return;
+      }
+      await folderService.create(name, parentId);
+      const folderData = await folderService.list();
+      setFolders(folderData || []);
+      toast.success('Folder created');
+    } catch (error: any) {
+      toast.error(`Failed to create folder: ${error?.response?.data?.detail || error?.message || 'Unknown error'}`);
+    }
   };
 
   // Handle auto-select after upload
@@ -400,26 +599,23 @@ export default function SelectSourceModal({
     const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && (!f.parent_id || f.parent_id === null));
     const rootId = rootFolder?.id;
 
-    // If no parentId specified, show all non-root folders
+    // If no parentId specified, show top-level folders (including root)
     let childFolders: typeof folders;
     if (parentId === undefined) {
-      // Show all folders except root itself
-      childFolders = folders.filter(f => {
-        // Skip root folder
-        if (f.name.toLowerCase() === 'root' && (!f.parent_id || f.parent_id === null)) {
-          return false;
-        }
-
-        // Include folders that are:
-        // 1. Children of root (parent_id === rootId)
-        // 2. OR have no parent/null parent (top-level folders)
-        // 3. OR have empty string parent
-        if (rootId) {
-          return f.parent_id === rootId || !f.parent_id || f.parent_id === null || f.parent_id === '';
-        } else {
-          return !f.parent_id || f.parent_id === null || f.parent_id === '';
-        }
-      });
+      if (rootId) {
+        // Show root folder first, then any other truly top-level folders (no parent, not root)
+        childFolders = folders.filter(f =>
+          (f.name.toLowerCase() === 'root' && (!f.parent_id || f.parent_id === null)) ||
+          (!f.parent_id || f.parent_id === null || f.parent_id === '')
+        );
+        // Put root first
+        childFolders = [
+          ...childFolders.filter(f => f.id === rootId),
+          ...childFolders.filter(f => f.id !== rootId),
+        ];
+      } else {
+        childFolders = folders.filter(f => !f.parent_id || f.parent_id === null || f.parent_id === '');
+      }
     } else {
       // Show children of specified parent
       childFolders = folders.filter(f => f.parent_id === parentId);
@@ -618,8 +814,8 @@ export default function SelectSourceModal({
                   />
                 </div>
                 <div className="flex items-center gap-2 sm:gap-4">
-                  {/* Upload Resume button - only for My Resumes tab */}
-                  {activeTab === 'my-resumes' && (
+                  {/* Upload Resume button - only for My Resumes tab + canUploadResumes RBAC */}
+                  {activeTab === 'my-resumes' && canUploadResumes && (
                     <button
                       onClick={() => setShowUploadModal(true)}
                       className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
@@ -929,6 +1125,7 @@ export default function SelectSourceModal({
               <button
                 onClick={handleSubmitForScoring}
                 disabled={(() => {
+                  if (!canRunScoring) return true;
                   if (selectedResumes.length === 0) return true;
                   if (submitting) return true;
                   const selectedFolderData = folders.find(f => f.id === selectedFolder);
@@ -938,6 +1135,7 @@ export default function SelectSourceModal({
                   const hasArchivedResumes = selectedResumeObjects.some(r => r.is_archived === true);
                   return hasArchivedResumes;
                 })()}
+                title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
                 className="px-4 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-medium shadow-md hover:shadow-lg flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm"
               >
                 {submitting ? (
@@ -990,6 +1188,14 @@ export default function SelectSourceModal({
           onRetryFailed={async (scoringItem) => {
             await handleRetryFailed(scoringItem.resumeId);
           }}
+          onMinimize={() => {
+            // Close the full-screen overlay so the user can navigate freely.
+            // The context keeps the job alive and GlobalScoringProgressIndicator
+            // shows the small floating button in the bottom-right corner.
+            setMinimized(true);
+            setOnRestorePanel(undefined);
+            onClose();
+          }}
         />
       )}
 
@@ -1002,6 +1208,7 @@ export default function SelectSourceModal({
           onClose={() => setShowUploadModal(false)}
           onUpload={handleUpload}
           onUploadComplete={handleUploadComplete}
+          onCreateFolder={handleCreateFolder}
           onScoreResume={handleAutoSelectAfterUpload}
         />
       )}

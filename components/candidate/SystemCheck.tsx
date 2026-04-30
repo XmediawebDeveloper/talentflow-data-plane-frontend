@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
+// Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
+import '@/lib/tfjs-rejection-guard';
 import {
   Camera,
   Mic,
@@ -10,6 +12,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  AlertTriangle,
   RefreshCw,
   ArrowLeft,
   ArrowRight,
@@ -18,7 +21,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateService, SystemCheckResult } from '@/lib/services/candidateService';
-import { getUserMedia, getErrorMessage, detectBrowser, checkBrowserCompatibility } from '@/lib/utils/browserCompat';
+import { getUserMedia, getErrorMessage, detectBrowser, checkBrowserCompatibility, playVideo, shouldUseAdaptiveAssessmentMode } from '@/lib/utils/browserCompat';
 
 interface SystemCheckProps {
   token: string;
@@ -27,14 +30,13 @@ interface SystemCheckProps {
 }
 
 interface CheckStatus {
-  status: 'pending' | 'checking' | 'success' | 'error';
+  status: 'pending' | 'checking' | 'success' | 'warning' | 'error';
   message: string;
 }
 
 export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const [cameraCheck, setCameraCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [micCheck, setMicCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
-  const [screenCheck, setScreenCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [internetCheck, setInternetCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [browserCheck, setBrowserCheck] = useState<CheckStatus>({ status: 'pending', message: 'Not checked' });
   const [isChecking, setIsChecking] = useState(false);
@@ -42,11 +44,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [browserType, setBrowserType] = useState<string>('');
   const [isIOS, setIsIOS] = useState(false);
+  const [browserWarning, setBrowserWarning] = useState<string | null>(null);
   const [cameraInUseError, setCameraInUseError] = useState<string>('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const faceCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const networkCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Scroll to top when component mounts
@@ -57,6 +61,10 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       if (faceCheckIntervalRef.current) {
         clearInterval(faceCheckIntervalRef.current);
         faceCheckIntervalRef.current = null;
+      }
+      if (networkCheckIntervalRef.current) {
+        clearInterval(networkCheckIntervalRef.current);
+        networkCheckIntervalRef.current = null;
       }
       // DON'T cleanup stream on unmount - keep it alive for assessment
       // The parent (CandidateAssessmentPortal) will handle stream cleanup
@@ -134,15 +142,15 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
   }, [streamRef.current]);
 
   useEffect(() => {
-    // Check if all checks are successful
+    // Internet 'warning' (slow but reachable) is allowed — candidate can still proceed.
+    // All other checks must be 'success'.
     const allSuccess =
       cameraCheck.status === 'success' &&
       micCheck.status === 'success' &&
-      screenCheck.status === 'success' &&
-      internetCheck.status === 'success' &&
+      (internetCheck.status === 'success' || internetCheck.status === 'warning') &&
       browserCheck.status === 'success';
     setAllChecksComplete(allSuccess);
-  }, [cameraCheck, micCheck, screenCheck, internetCheck, browserCheck]);
+  }, [cameraCheck, micCheck, internetCheck, browserCheck]);
 
   const runAllChecks = async () => {
     setIsChecking(true);
@@ -150,7 +158,6 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     // Reset all checks including camera in use error
     setCameraCheck({ status: 'checking', message: 'Checking...' });
     setMicCheck({ status: 'checking', message: 'Checking...' });
-    setScreenCheck({ status: 'checking', message: 'Checking...' });
     setInternetCheck({ status: 'checking', message: 'Checking...' });
     setBrowserCheck({ status: 'checking', message: 'Checking...' });
     setCameraInUseError(''); // Clear previous camera in use error
@@ -158,8 +165,8 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     // Run checks
     await checkBrowser();
     await checkInternet();
+    startNetworkPolling(); // keep re-checking so slow→fast transitions update immediately
     await checkCameraAndMicrophone();  // Combined to avoid permission conflicts
-    await checkScreenShare();
 
     setIsChecking(false);
   };
@@ -176,15 +183,23 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       // Check for compatibility issues
       if (!compat.isCompatible) {
         setBrowserCheck({ status: 'error', message: compat.issues.join(' ') });
+        setBrowserWarning(compat.warnings[0] || null);
+      } else if (shouldUseAdaptiveAssessmentMode(browser)) {
+        setBrowserCheck({ status: 'success', message: `${browser.name} supported (adaptive mode)` });
+        setBrowserWarning(compat.warnings[0] || 'Adaptive assessment mode will be used for this browser/device.');
       } else if (browser.name === 'Safari' || browser.name === 'iOS Safari') {
-        setBrowserCheck({ status: 'success', message: 'Safari detected (limited features)' });
+        setBrowserCheck({ status: 'success', message: 'Safari supported' });
+        setBrowserWarning(compat.warnings[0] || null);
       } else if (browser.name === 'Chrome' || browser.name === 'Edge' || browser.name === 'Firefox' || browser.name === 'Arc' || browser.name === 'Brave') {
         setBrowserCheck({ status: 'success', message: 'Browser supported' });
+        setBrowserWarning(compat.warnings[0] || null);
       } else {
         setBrowserCheck({ status: 'success', message: `${browser.name} detected` });
+        setBrowserWarning(compat.warnings[0] || null);
       }
     } catch {
       setBrowserCheck({ status: 'error', message: 'Could not detect browser' });
+      setBrowserWarning(null);
     }
   };
 
@@ -192,23 +207,29 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     try {
       const startTime = Date.now();
       await fetch('https://www.google.com/favicon.ico', { mode: 'no-cors' });
-      const endTime = Date.now();
-      const latency = endTime - startTime;
+      const latency = Date.now() - startTime;
 
       if (latency < 200) {
         setInternetCheck({ status: 'success', message: `Excellent connection (${latency}ms)` });
       } else if (latency < 500) {
         setInternetCheck({ status: 'success', message: `Good connection (${latency}ms)` });
       } else {
-        setInternetCheck({ status: 'success', message: `Slow connection (${latency}ms)` });
+        // Slow but reachable — warn without blocking; polling may improve it
+        setInternetCheck({ status: 'warning', message: `Slow connection (${latency}ms) — the interview may still work` });
       }
     } catch {
       setInternetCheck({ status: 'error', message: 'No internet connection' });
     }
   };
 
+  const startNetworkPolling = () => {
+    if (networkCheckIntervalRef.current) clearInterval(networkCheckIntervalRef.current);
+    // Re-check every 5 s so the mark updates as soon as the network improves
+    networkCheckIntervalRef.current = setInterval(checkInternet, 5000);
+  };
+
   // GitHub CDN hosts the actual weight files (npm package does not include them)
-  const FACE_API_MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights/';
+  const FACE_API_MODEL_URL = '/models/';
 
   // Apply face-count rules: exactly 1 face → pass, 0 or 2+ → fail
   const applyFaceCountResult = (count: number) => {
@@ -271,6 +292,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        void playVideo(videoRef.current);
       }
 
       // Check if we got both video and audio tracks
@@ -369,6 +391,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        void playVideo(videoRef.current);
       }
       // Run face detection on the fallback stream too
       setCameraCheck({ status: 'checking', message: 'Detecting face...' });
@@ -399,27 +422,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     }
   };
 
-  const checkScreenShare = async () => {
-    try {
-      // We can't actually test screen sharing without showing the picker
-      // So we just check if the API is available
-      if ('getDisplayMedia' in navigator.mediaDevices) {
-        setScreenCheck({ status: 'success', message: 'Screen sharing available' });
-      } else {
-        setScreenCheck({ status: 'error', message: 'Screen sharing not supported' });
-      }
-    } catch {
-      setScreenCheck({ status: 'error', message: 'Screen sharing check failed' });
-    }
-  };
-
   const handleProceed = async () => {
     setIsSubmitting(true);
     try {
       const results: SystemCheckResult = {
         camera_available: cameraCheck.status === 'success',
         microphone_available: micCheck.status === 'success',
-        screen_share_available: screenCheck.status === 'success',
+        screen_share_available: false,
         browser_compatible: browserCheck.status === 'success',
         internet_speed_mbps: null
       };
@@ -455,6 +464,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
             // Update video preview with fresh stream
             if (videoRef.current) {
               videoRef.current.srcObject = freshStream;
+              void playVideo(videoRef.current);
             }
 
             console.log('[SYSTEM CHECK] Fresh stream acquired successfully');
@@ -489,6 +499,8 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
         );
       case 'success':
         return <CheckCircle className="w-6 h-6 text-green-500" />;
+      case 'warning':
+        return <AlertTriangle className="w-6 h-6 text-yellow-500" />;
       case 'error':
         return <XCircle className="w-6 h-6 text-red-500" />;
     }
@@ -499,6 +511,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
     { label: 'Terms & Consent', active: false, completed: true },
     { label: 'Assessment Details', active: false, completed: true },
     { label: 'System Check', active: true, completed: false },
+    { label: 'HR Questions', active: false, completed: false },
     { label: 'Assessment', active: false, completed: false }
   ];
 
@@ -670,19 +683,6 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                   <StatusIcon status={micCheck.status} />
                 </div>
 
-                {/* Screen Share */}
-                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-                      <Monitor className="w-6 h-6 text-indigo-600" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">Screen Sharing</p>
-                      <p className="text-sm text-gray-500">{screenCheck.message}</p>
-                    </div>
-                  </div>
-                  <StatusIcon status={screenCheck.status} />
-                </div>
               </div>
 
               {/* Status Message */}
@@ -697,6 +697,13 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                 <div className="mt-6 p-5 bg-amber-50 rounded-xl flex items-center gap-4">
                   <AlertCircle className="w-6 h-6 text-amber-600" />
                   <p className="text-amber-700 font-medium">Some checks failed. Please resolve the issues above.</p>
+                </div>
+              )}
+
+              {browserWarning && browserCheck.status === 'success' && (
+                <div className="mt-6 p-5 bg-blue-50 rounded-xl flex items-start gap-4">
+                  <AlertTriangle className="w-6 h-6 text-blue-600 mt-0.5" />
+                  <p className="text-blue-800 font-medium">{browserWarning}</p>
                 </div>
               )}
 

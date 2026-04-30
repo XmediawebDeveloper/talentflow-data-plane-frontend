@@ -13,7 +13,8 @@ const publicRoutes = [
   '/faq',
   '/login',
   '/signup',
-  '/reset-password', // Invite-based first-login password setup
+  '/reset-password', // Forgot-password OTP reset flow
+  '/set-password',   // Invite-based first-login password setup
   '/assessment', // Candidate assessment portal (public)
   '/ai-interview', // Candidate AI interview portal (public)
 ];
@@ -91,11 +92,15 @@ export async function proxy(request: NextRequest) {
         );
 
         if (!resp.ok) {
-          // Subdomain not found or inactive → redirect to root domain
-          console.log(`[MIDDLEWARE] Unknown subdomain "${tenantSubdomain}", redirecting to root`);
-          return NextResponse.redirect(`https://${BASE_DOMAIN}`);
+          if (resp.status === 404) {
+            // Subdomain not found → redirect to root domain
+            console.log(`[MIDDLEWARE] Unknown subdomain "${tenantSubdomain}", redirecting to root`);
+            return NextResponse.redirect(`https://${BASE_DOMAIN}`);
+          }
+          // For non-404 errors (5xx, 503, etc.) — allow through rather than blocking all traffic
+          console.log(`[MIDDLEWARE] Subdomain validation returned ${resp.status} for "${tenantSubdomain}", allowing through`);
         }
-        // Valid — the cache cookie is set below on the final response
+        // Valid (or non-fatal error) — the cache cookie is set below on the final response
       } catch (err) {
         // Backend unreachable — allow through rather than blocking all traffic
         console.log('[MIDDLEWARE] Subdomain validation fetch error:', err);
@@ -148,6 +153,7 @@ export async function proxy(request: NextRequest) {
   const subdomainAllowedPaths = [
     '/login',
     '/reset-password',
+    '/set-password',
     '/complete-payment',
     '/assessment',
     '/ai-interview',
@@ -284,15 +290,15 @@ export async function proxy(request: NextRequest) {
         maxAge: 300, // 5 minutes
       });
     }
-  } else if (!isProtectedRoute && pathname !== '/reset-password') {
+  } else if (!isProtectedRoute && pathname !== '/reset-password' && pathname !== '/set-password') {
     // Only clear on non-protected public routes — never on /dashboard etc.
-    // Also preserve on /reset-password: it's part of the invite auth flow,
-    // so the org context must survive the /login → /reset-password → /dashboard journey.
+    // Also preserve on /reset-password and /set-password: they are part of the invite auth flow,
+    // so the org context must survive the /login → /set-password → /dashboard journey.
     res.cookies.delete('tf-subdomain');
     res.cookies.delete('tf-subdomain-valid');
-  } else if (pathname === '/reset-password') {
+  } else if (pathname === '/reset-password' || pathname === '/set-password') {
     // Re-set the existing tf-subdomain cookie so it isn't lost during the
-    // invite flow (login → reset-password → dashboard).
+    // invite flow (login → set-password → dashboard).
     const existingSubdomain = request.cookies.get('tf-subdomain')?.value;
     if (existingSubdomain) {
       res.cookies.set('tf-subdomain', existingSubdomain, {
@@ -316,7 +322,11 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - logos (logo files)
+     * - talkinghead (TalkingHead avatar .mjs and assets)
+     * - workers (audio worklet JS files)
+     * - models (3D avatar .glb files)
+     * - three (Three.js assets)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|logos).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|logos|talkinghead|workers|models|three).*)',
   ],
 };

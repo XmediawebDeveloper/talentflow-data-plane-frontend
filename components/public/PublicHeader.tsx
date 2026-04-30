@@ -3,6 +3,7 @@
 import { Menu, X, Moon, Sun } from "lucide-react";
 import { useState, useEffect } from "react";
 import Image from "next/image";
+import { useTheme } from 'next-themes';
 
 const navItems = [
   { label: "Home", page: "home" },
@@ -23,13 +24,11 @@ interface PublicHeaderProps {
 
 export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: PublicHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   useEffect(() => {
-    const isDarkMode = document.documentElement.classList.contains("dark");
-    setIsDark(isDarkMode);
-
     // Check if mobile
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -40,15 +39,7 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
   }, []);
 
   const toggleDarkMode = () => {
-    const newIsDark = !isDark;
-    setIsDark(newIsDark);
-    if (newIsDark) {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    }
+    setTheme(isDark ? 'light' : 'dark');
   };
 
   // Inline styles
@@ -81,6 +72,7 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
     cursor: 'pointer',
     background: 'none',
     border: 'none',
+    flexShrink: 0,
   };
 
   const logoBoxStyle: React.CSSProperties = {
@@ -121,7 +113,9 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
   const navStyle: React.CSSProperties = {
     display: isMobile ? 'none' : 'flex',
     alignItems: 'center',
-    gap: '32px',
+    gap: '20px',
+    flex: 1,
+    justifyContent: 'center',
   };
 
   const getNavItemStyle = (isActive: boolean): React.CSSProperties => ({
@@ -140,6 +134,7 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
     display: isMobile ? 'none' : 'flex',
     alignItems: 'center',
     gap: '12px',
+    flexShrink: 0,
   };
 
   const mobileButtonsStyle: React.CSSProperties = {
@@ -166,24 +161,27 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
     borderRadius: '8px',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    backgroundColor: isDark ? 'rgba(30, 41, 59, 0.3)' : '#ffffff',
-    color: isDark ? '#ffffff' : '#374151',
-    border: `1px solid ${isDark ? '#334155' : '#E5E7EB'}`,
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#ffffff',
+    color: isDark ? '#E2E8F0' : '#374151',
+    border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB'}`,
   };
 
   const startTrialButtonStyle: React.CSSProperties = {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '8px 16px',
+    padding: '8px 20px',
     fontSize: '14px',
-    fontWeight: 500,
+    fontWeight: 600,
     borderRadius: '8px',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    backgroundColor: '#2563EB',
+    background: isDark
+      ? 'linear-gradient(to right, #2563EB, #4338CA)'
+      : 'linear-gradient(to right, #3B82F6, #6366F1)',
     color: '#ffffff',
-    border: 'none',
+    border: isDark ? '1px solid rgba(99, 130, 246, 0.5)' : 'none',
+    boxShadow: isDark ? '0 0 12px rgba(59, 130, 246, 0.4)' : '0 4px 14px rgba(59, 130, 246, 0.4)',
   };
 
   const menuButtonStyle: React.CSSProperties = {

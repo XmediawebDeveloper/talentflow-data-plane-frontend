@@ -1,4 +1,4 @@
-import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader, Send } from 'lucide-react';
+import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader, Send, ShieldAlert, Info } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
@@ -6,7 +6,7 @@ import InviteToAssessmentModal from './InviteToAssessmentModal';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
@@ -91,7 +91,9 @@ export default function ScoredResumesTable({
   onSelectAll,
   isGlobalView = false
 }: ScoredResumesTableProps) {
-  const { tenant } = useAuth();  // Get tenant info from auth context
+  const { tenant, isTenantAdmin, user } = useAuth();  // Get tenant info from auth context
+  const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
+  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [showColumnModal, setShowColumnModal] = useState(false);
   const [internalSelectedResumes, setInternalSelectedResumes] = useState<string[]>([]);
 
@@ -193,11 +195,10 @@ export default function ScoredResumesTable({
     // Date range filter - compare date portions in IST (UTC+5:30)
     let matchesDate = true;
     if (filterDateFrom || filterDateTo) {
-      const d = new Date(resume.scoredDate);
+      const d = parseIST(resume.scoredDate);
       if (!isNaN(d.getTime())) {
-        // Shift UTC to IST (+5h30m) then extract YYYY-MM-DD from ISO string
-        const istDate = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
-        const scoredDateIST = istDate.toISOString().slice(0, 10);
+        // Extract YYYY-MM-DD in IST using Intl (parseIST already handles IST-naive strings)
+        const scoredDateIST = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(d);
         if (filterDateFrom) {
           matchesDate = matchesDate && scoredDateIST >= filterDateFrom;
         }
@@ -531,6 +532,7 @@ export default function ScoredResumesTable({
           </button>
           {selectedResumes.length > 0 && (
             <>
+              {canExport && (
               <button
                 onClick={handleDownloadBulkScorecards}
                 disabled={bulkDownloading}
@@ -544,6 +546,8 @@ export default function ScoredResumesTable({
                 <span className="hidden sm:inline">{bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}</span>
                 <span className="sm:hidden">{selectedResumes.length}</span>
               </button>
+              )}
+              {canExport && (
               <button
                 onClick={handleExportExcel}
                 className="px-3 sm:px-4 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
@@ -551,19 +555,22 @@ export default function ScoredResumesTable({
                 <FileDown className="w-4 h-4" />
                 <span className="hidden sm:inline">Export</span>
               </button>
-              <button
-                onClick={() => setShowBulkInviteModal(true)}
-                disabled={availableUnits === 0}
-                className="px-3 sm:px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                title={availableUnits === 0 ? 'No assessment units available' : `Bulk invite ${selectedResumes.length} candidates`}
-              >
-                <Send className="w-4 h-4" />
-                <span className="hidden sm:inline">Bulk Invite ({selectedResumes.length})</span>
-                <span className="sm:hidden">{selectedResumes.length}</span>
-              </button>
+              )}
+              {canCreateAssessments && (
+                <button
+                  onClick={() => setShowBulkInviteModal(true)}
+                  disabled={availableUnits === 0}
+                  className="px-3 sm:px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={availableUnits === 0 ? 'No assessment units available' : `Bulk invite ${selectedResumes.length} candidates`}
+                >
+                  <Send className="w-4 h-4" />
+                  <span className="hidden sm:inline">Bulk Invite ({selectedResumes.length})</span>
+                  <span className="sm:hidden">{selectedResumes.length}</span>
+                </button>
+              )}
             </>
           )}
-          {selectedResumes.length === 0 && (
+          {selectedResumes.length === 0 && canExport && (
             <button
               onClick={handleExportExcel}
               className="px-3 sm:px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
@@ -909,7 +916,7 @@ export default function ScoredResumesTable({
                 {/* Assessment Column */}
                 <td className="py-3 px-4">
                   {/* Invite Button - For Exact Match & Partial Match */}
-                  {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') ? (
+                  {canCreateAssessments && (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') ? (
                     availableUnits === 0 ? (
                       <div className="relative group">
                         <button
@@ -1085,8 +1092,8 @@ export default function ScoredResumesTable({
 
             {/* Card Actions */}
             <div className="space-y-2">
-              {/* Invite Button - For Exact Match & Partial Match */}
-              {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
+              {/* Invite Button - For Exact Match & Partial Match + assessment permission */}
+              {canCreateAssessments && (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
                 availableUnits === 0 ? (
                   <div className="relative group">
                     <button
@@ -1128,6 +1135,7 @@ export default function ScoredResumesTable({
                 )
               )}
               
+              {canExport && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1148,6 +1156,7 @@ export default function ScoredResumesTable({
                   </>
                 )}
               </button>
+              )}
             </div>
           </div>
         ))}
@@ -1298,6 +1307,11 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
   const [expiryDays, setExpiryDays] = useState(7);
   const [showNoMatchWarning, setShowNoMatchWarning] = useState(false);
 
+  // Quota stats
+  const [quotaStats, setQuotaStats] = useState<{
+    total_quota: number; consumed: number; pending: number; available: number;
+  } | null>(null);
+
   // Separate valid and invalid candidates
   const validCandidates = selectedResumes.filter(r =>
     r.matchStatus === 'Exact Match' || r.matchStatus === 'Partial Match'
@@ -1312,6 +1326,10 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
     if (noMatchCandidates.length > 0) {
       setShowNoMatchWarning(true);
     }
+    // Fetch quota stats
+    assessmentService.getInvitationStats()
+      .then(stats => setQuotaStats(stats))
+      .catch(() => setQuotaStats(null));
   }, [jobId]);
 
   const fetchAssessments = async () => {
@@ -1344,6 +1362,15 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
     // Only send to valid candidates (Exact Match or Partial Match)
     if (validCandidates.length === 0) {
       toast.error('No valid candidates to invite. Only "Exact Match" and "Partial Match" candidates can be invited.');
+      return;
+    }
+
+    // Quota check
+    if (quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < validCandidates.length) {
+      const pendingMsg = quotaStats.pending > 0
+        ? ` ${quotaStats.pending} unit(s) held by pending invitations will be released when links expire.`
+        : '';
+      toast.error(`Insufficient quota. ${quotaStats.available} unit(s) available, need ${validCandidates.length}.${pendingMsg}`);
       return;
     }
 
@@ -1430,7 +1457,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
         {/* Header */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
               <Send className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -1448,6 +1475,43 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Quota Banner */}
+          {quotaStats !== null && (() => {
+            const isUnlimited = quotaStats.total_quota >= 999999;
+            const isInsufficient = !isUnlimited && quotaStats.available === 0;
+            const isLow = !isUnlimited && !isInsufficient && quotaStats.available <= 3;
+            if (isUnlimited) return null;
+            return (
+              <div className={`px-4 py-3 rounded-lg border text-sm flex items-start gap-2 ${
+                isInsufficient ? 'bg-red-50 border-red-200 text-red-800'
+                : isLow ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-blue-50 border-blue-200 text-blue-800'
+              }`}>
+                {isInsufficient
+                  ? <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  : <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                }
+                <div className="flex-1">
+                  <div className="font-medium mb-0.5">
+                    {isInsufficient ? 'No assessment units available'
+                      : isLow ? `Only ${quotaStats.available} unit(s) available`
+                      : `${quotaStats.available} assessment unit(s) available`}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs opacity-80">
+                    <span>Total: {quotaStats.total_quota}</span>
+                    <span>Consumed: {quotaStats.consumed}</span>
+                    {quotaStats.pending > 0 && <span>Pending: {quotaStats.pending}</span>}
+                  </div>
+                  {quotaStats.pending > 0 && (
+                    <p className="text-xs mt-1 opacity-80">
+                      {quotaStats.pending} unit(s) held by active invitations — released when links expire.
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Assessment Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Select Assessment *</label>
@@ -1601,16 +1665,20 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
 
         {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm">
             {validCandidates.length > 0 ? (
-              <>
-                <strong className="text-green-600">{validCandidates.length}</strong> invitation{validCandidates.length !== 1 ? 's' : ''} will be sent
-                {noMatchCandidates.length > 0 && (
-                  <span className="ml-2 text-gray-500">
-                    ({noMatchCandidates.length} excluded)
+              (() => {
+                const insufficient = quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < validCandidates.length;
+                return (
+                  <span className={insufficient ? 'text-red-600 font-medium' : 'text-gray-600'}>
+                    <strong className={insufficient ? 'text-red-600' : 'text-green-600'}>{validCandidates.length}</strong> invitation{validCandidates.length !== 1 ? 's' : ''} will be sent
+                    {insufficient && ` — only ${quotaStats!.available} unit(s) available`}
+                    {!insufficient && noMatchCandidates.length > 0 && (
+                      <span className="ml-2 text-gray-500">({noMatchCandidates.length} excluded)</span>
+                    )}
                   </span>
-                )}
-              </>
+                );
+              })()
             ) : (
               <span className="text-gray-500">No valid candidates to invite</span>
             )}
@@ -1624,7 +1692,7 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
             </button>
             <button
               onClick={handleSendBulkInvitations}
-              disabled={!selectedAssessment || isSubmitting || validCandidates.length === 0}
+              disabled={!selectedAssessment || isSubmitting || validCandidates.length === 0 || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
               className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting ? (

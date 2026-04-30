@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2, Trash2, Award, Play } from 'lucide-react';
 import React from 'react';
 import { useRouter } from 'next/navigation';
@@ -54,14 +54,20 @@ interface AssessmentResultsTableProps {
   jobId?: string;
   onViewResultDetail?: (result: AssessmentResult, jobTitle?: string) => void;
   canDownloadPDF?: boolean;
+  canBatchDownload?: boolean;
 }
 
-export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail, canDownloadPDF = false }: AssessmentResultsTableProps) {
+export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-1', onViewResultDetail, canDownloadPDF = false, canBatchDownload = false }: AssessmentResultsTableProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const stickyScrollbarRef = useRef<HTMLDivElement | null>(null);
+  const stickyScrollbarInnerRef = useRef<HTMLDivElement | null>(null);
+  const isSyncingScrollRef = useRef(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [selectedResults, setSelectedResults] = useState<string[]>([]);
+  const [showStickyScrollbar, setShowStickyScrollbar] = useState(false);
 
   // Filters (inline dropdowns matching AssessmentResults.tsx)
   const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Pending'>('all');
@@ -150,13 +156,18 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
   // Helper: determine display status from result
   const getResultStatus = (result: AssessmentResult): string => {
-    if (result.status === 'completed' || result.completed_at) return 'Completed';
+    if ((result.status === 'completed' || result.completed_at) && result.scoring_status === 'completed') return 'Completed';
     if (result.status === 'in_progress' || result.started_at) return 'In Progress';
+    if ((result.status === 'completed' || result.completed_at) && result.scoring_status !== 'completed') return 'In Progress';
     if (result.status === 'pending') return 'Pending';
     // Fallback: check completedDate string
     if (result.completedDate && result.completedDate !== 'In Progress' && result.completedDate !== 'Not started') return 'Completed';
     if (result.completedDate === 'In Progress') return 'In Progress';
     return 'Pending';
+  };
+
+  const canDownloadResultPdf = (result: AssessmentResult): boolean => {
+    return getResultStatus(result) === 'Completed' && result.scoring_status === 'completed';
   };
 
   // Helper: status badge colors
@@ -235,6 +246,39 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
     return matchesSearch && matchesPassFail && matchesStatus && matchesTech && matchesCoding;
   });
+
+  useEffect(() => {
+    const updateStickyScrollbar = () => {
+      const tableEl = tableScrollRef.current;
+      const innerEl = stickyScrollbarInnerRef.current;
+      if (!tableEl || !innerEl) return;
+
+      const hasHorizontalOverflow = tableEl.scrollWidth > tableEl.clientWidth;
+      setShowStickyScrollbar(hasHorizontalOverflow);
+      innerEl.style.width = `${tableEl.scrollWidth}px`;
+    };
+
+    updateStickyScrollbar();
+
+    const tableEl = tableScrollRef.current;
+    if (!tableEl || typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateStickyScrollbar);
+      return () => window.removeEventListener('resize', updateStickyScrollbar);
+    }
+
+    const resizeObserver = new ResizeObserver(updateStickyScrollbar);
+    resizeObserver.observe(tableEl);
+    const tableChild = tableEl.firstElementChild;
+    if (tableChild) {
+      resizeObserver.observe(tableChild);
+    }
+    window.addEventListener('resize', updateStickyScrollbar);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateStickyScrollbar);
+    };
+  }, [enabledColumns.length, filteredResults.length, selectedResultDetail, selectedResults.length]);
 
   const handleSelectAll = () => {
     if (selectedResults.length === filteredResults.length) {
@@ -369,6 +413,10 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
     // Find the result to get assessmentId
     const result = results.find(r => r.id === resultId);
+    if (!result || !canDownloadResultPdf(result)) {
+      toast.error('PDF is available only after scoring is completed.');
+      return;
+    }
     const assessmentId = result?.assessmentId || jobId;
 
     console.log('[PDF] Starting download:', { assessmentId, resultId, hasAssessmentId: !!result?.assessmentId });
@@ -386,13 +434,13 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const safeName = result?.candidateName?.replace(/[^a-zA-Z0-9]/g, '_') || resultId;
-      link.download = `Assessment_Report_${safeName}.pdf`;
+      const safeIdentifier = result?.candidateDisplayId?.replace(/[^a-zA-Z0-9]/g, '_') || `CID_${resultId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      link.download = `Assessment_Report_${safeIdentifier}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      console.log('[PDF] Download complete:', safeName);
+      console.log('[PDF] Download complete:', safeIdentifier);
       toast.success('PDF downloaded successfully!');
     } catch (error: any) {
       console.error('[PDF] Failed to download:', error);
@@ -406,13 +454,23 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const handleDownloadBulkPDFs = async () => {
     if (downloadingBulkPDF || selectedResults.length === 0) return;
 
+    const eligibleResults = results.filter(r => selectedResults.includes(r.id) && canDownloadResultPdf(r));
+    if (eligibleResults.length === 0) {
+      toast.error('Select at least one fully scored result to download PDFs.');
+      return;
+    }
+
+    if (eligibleResults.length !== selectedResults.length) {
+      toast.info(`${selectedResults.length - eligibleResults.length} result(s) were skipped because scoring is not completed yet.`);
+    }
+
     // Get assessmentId from first selected result
-    const firstResult = results.find(r => selectedResults.includes(r.id));
+    const firstResult = eligibleResults[0];
     const assessmentId = firstResult?.assessmentId || jobId;
 
     setDownloadingBulkPDF(true);
     try {
-      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, selectedResults);
+      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, eligibleResults.map(r => r.id));
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -473,6 +531,22 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     return 'text-red-600';
   };
 
+  const syncHorizontalScroll = (source: 'table' | 'sticky') => {
+    const tableEl = tableScrollRef.current;
+    const stickyEl = stickyScrollbarRef.current;
+    if (!tableEl || !stickyEl || isSyncingScrollRef.current) return;
+
+    isSyncingScrollRef.current = true;
+    if (source === 'table') {
+      stickyEl.scrollLeft = tableEl.scrollLeft;
+    } else {
+      tableEl.scrollLeft = stickyEl.scrollLeft;
+    }
+    requestAnimationFrame(() => {
+      isSyncingScrollRef.current = false;
+    });
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
       {/* Header */}
@@ -488,6 +562,48 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           </div>
           
           <div className="flex flex-wrap items-center gap-2">
+            {/* Column Selector */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColumnSelector(!showColumnSelector)}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1.5 sm:gap-2"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                Columns ({enabledColumns.length})
+              </button>
+
+              {showColumnSelector && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowColumnSelector(false)}
+                  ></div>
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-96 overflow-y-auto">
+                    <div className="px-4 py-2 border-b border-gray-200">
+                      <div className="text-sm text-gray-900">Select Columns</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {enabledColumns.length} of {columns.length} selected
+                      </div>
+                    </div>
+                    {columns.map((column) => (
+                      <label
+                        key={column.id}
+                        className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={column.enabled}
+                          onChange={() => handleToggleColumn(column.id)}
+                          className="w-4 h-4 text-gray-800 rounded"
+                        />
+                        <span className="text-sm text-gray-700">{column.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Export Excel */}
             {selectedResults.length === 0 && (
               <button
@@ -503,7 +619,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             {/* Bulk Actions - When items are selected */}
             {selectedResults.length > 0 && (
               <>
-                {canDownloadPDF && (
+                {canBatchDownload && (
                   <button
                     onClick={handleDownloadBulkPDFs}
                     disabled={downloadingBulkPDF}
@@ -531,7 +647,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
         {/* Search and Inline Filter Bar */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <div className="flex-1 min-w-[150px] sm:min-w-[200px] relative">
+          <div className="flex-1 basis-full sm:basis-[260px] min-w-[180px] sm:max-w-sm relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -622,52 +738,15 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             </button>
           )}
 
-          {/* Column Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowColumnSelector(!showColumnSelector)}
-              className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              Columns ({enabledColumns.length})
-            </button>
-
-            {showColumnSelector && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setShowColumnSelector(false)}
-                ></div>
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-20 max-h-96 overflow-y-auto">
-                  <div className="px-4 py-2 border-b border-gray-200">
-                    <div className="text-sm text-gray-900">Select Columns</div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      {enabledColumns.length} of {columns.length} selected
-                    </div>
-                  </div>
-                  {columns.map((column) => (
-                    <label
-                      key={column.id}
-                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={column.enabled}
-                        onChange={() => handleToggleColumn(column.id)}
-                        className="w-4 h-4 text-gray-800 rounded"
-                      />
-                      <span className="text-sm text-gray-700">{column.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
         </div>
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden md:block overflow-x-auto">
+      <div
+        ref={tableScrollRef}
+        className="hidden md:block overflow-x-auto"
+        onScroll={() => syncHorizontalScroll('table')}
+      >
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200">
@@ -707,9 +786,13 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   <tr
                     className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
-                    }`}
+                    } ${getResultStatus(result) !== 'Pending' && onViewResultDetail ? 'cursor-pointer' : ''}`}
+                    onClick={() => {
+                      if (getResultStatus(result) === 'Pending' || !onViewResultDetail) return;
+                      onViewResultDetail(result, jobTitle);
+                    }}
                   >
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => handleSelectResult(result.id)}
                         className="p-1 hover:bg-gray-100 rounded"
@@ -911,7 +994,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     })}
 
                     {/* Actions */}
-                    <td className="py-3 px-4">
+                    <td className="py-3 px-4" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-2">
                         {getResultStatus(result) !== 'Pending' && (
                         <button
@@ -927,7 +1010,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           View Details
                         </button>
                         )}
-                        {canDownloadPDF && getResultStatus(result) === 'Completed' && (
+                        {canDownloadPDF && canDownloadResultPdf(result) && (
                           <button
                             onClick={() => handleDownloadPDF(result.id)}
                             disabled={downloadingPDF === result.id}
@@ -1031,6 +1114,18 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           </tbody>
         </table>
       </div>
+
+      {showStickyScrollbar && (
+        <div className="hidden md:block sticky bottom-0 z-20 border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
+          <div
+            ref={stickyScrollbarRef}
+            className="overflow-x-auto overflow-y-hidden"
+            onScroll={() => syncHorizontalScroll('sticky')}
+          >
+            <div ref={stickyScrollbarInnerRef} className="h-4" />
+          </div>
+        </div>
+      )}
 
       {/* Mobile Card View */}
       <div className="md:hidden divide-y divide-gray-200">
@@ -1141,7 +1236,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       View Details
                     </button>
                     )}
-                    {canDownloadPDF && getResultStatus(result) === 'Completed' && (
+                    {canDownloadPDF && canDownloadResultPdf(result) && (
                       <button
                         onClick={() => handleDownloadPDF(result.id)}
                         disabled={downloadingPDF === result.id}

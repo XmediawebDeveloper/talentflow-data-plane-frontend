@@ -96,6 +96,13 @@ export interface UserPermissions {
   can_export: boolean;
   can_api_access: boolean;
 
+  // Teams Permissions (Granular)
+  can_view_teams?: boolean;
+  can_create_teams?: boolean;
+  can_update_teams?: boolean;
+  can_delete_teams?: boolean;
+  can_view_team_usage?: boolean;
+
   // Dashboard & Support (Default for all)
   can_view_dashboard?: boolean;
   can_view_support?: boolean;
@@ -103,6 +110,7 @@ export interface UserPermissions {
 
 export interface ApiUser {
   id: string;
+  user_display_id?: string;  // Human-readable ID e.g. US-01
   tenant_id: string;
   email: string;
   name: string;

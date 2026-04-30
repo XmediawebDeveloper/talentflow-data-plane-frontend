@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* ── Configure dark mode to use .dark class (matches next-themes) ─────── */
+@variant dark (&:where(.dark, .dark *));
 
 /* ── Linda speaking mouth animation ─────────────────────────────────── */
 @keyframes linda-talk {
@@ -22,6 +26,120 @@
   display: none;
 }
 
+/* Auto-hiding scrollbar: thumb hidden by default, visible on hover/scroll.
+   Width stays stable (no layout shift). Only thumb color toggles. */
+.scrollbar-auto-hide {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-auto-hide:hover,
+.scrollbar-auto-hide:active {
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+/* Webkit (Chrome, Safari, Edge) */
+.scrollbar-auto-hide::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-auto-hide::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-auto-hide::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+.scrollbar-auto-hide:hover::-webkit-scrollbar-thumb,
+.scrollbar-auto-hide:active::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+}
+.scrollbar-auto-hide::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+}
+
+/* Dark mode scrollbar colors */
+.dark .scrollbar-auto-hide:hover,
+.dark .scrollbar-auto-hide:active {
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+}
+.dark .scrollbar-auto-hide:hover::-webkit-scrollbar-thumb,
+.dark .scrollbar-auto-hide:active::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+}
+.dark .scrollbar-auto-hide::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+
+/* Apply auto-hide scrollbar to ALL scrollable descendants inside main content area.
+   Pages define their own overflow-y-auto containers, so we target them via parent wrapper. */
+.scrollbar-auto-hide-area,
+.scrollbar-auto-hide-area [style*="overflow"],
+.scrollbar-auto-hide-area .overflow-y-auto,
+.scrollbar-auto-hide-area .overflow-auto {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-auto-hide-area:hover,
+.scrollbar-auto-hide-area:active,
+.scrollbar-auto-hide-area .overflow-y-auto:hover,
+.scrollbar-auto-hide-area .overflow-y-auto:active,
+.scrollbar-auto-hide-area .overflow-auto:hover,
+.scrollbar-auto-hide-area .overflow-auto:active {
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+}
+/* Webkit for area descendants */
+.scrollbar-auto-hide-area::-webkit-scrollbar,
+.scrollbar-auto-hide-area .overflow-y-auto::-webkit-scrollbar,
+.scrollbar-auto-hide-area .overflow-auto::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-auto-hide-area::-webkit-scrollbar-track,
+.scrollbar-auto-hide-area .overflow-y-auto::-webkit-scrollbar-track,
+.scrollbar-auto-hide-area .overflow-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-auto-hide-area::-webkit-scrollbar-thumb,
+.scrollbar-auto-hide-area .overflow-y-auto::-webkit-scrollbar-thumb,
+.scrollbar-auto-hide-area .overflow-auto::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+.scrollbar-auto-hide-area:hover::-webkit-scrollbar-thumb,
+.scrollbar-auto-hide-area:active::-webkit-scrollbar-thumb,
+.scrollbar-auto-hide-area .overflow-y-auto:hover::-webkit-scrollbar-thumb,
+.scrollbar-auto-hide-area .overflow-y-auto:active::-webkit-scrollbar-thumb,
+.scrollbar-auto-hide-area .overflow-auto:hover::-webkit-scrollbar-thumb,
+.scrollbar-auto-hide-area .overflow-auto:active::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+}
+.scrollbar-auto-hide-area::-webkit-scrollbar-thumb:hover,
+.scrollbar-auto-hide-area .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+.scrollbar-auto-hide-area .overflow-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+}
+/* Dark mode for area descendants */
+.dark .scrollbar-auto-hide-area:hover,
+.dark .scrollbar-auto-hide-area:active,
+.dark .scrollbar-auto-hide-area .overflow-y-auto:hover,
+.dark .scrollbar-auto-hide-area .overflow-y-auto:active,
+.dark .scrollbar-auto-hide-area .overflow-auto:hover,
+.dark .scrollbar-auto-hide-area .overflow-auto:active {
+  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+}
+.dark .scrollbar-auto-hide-area:hover::-webkit-scrollbar-thumb,
+.dark .scrollbar-auto-hide-area:active::-webkit-scrollbar-thumb,
+.dark .scrollbar-auto-hide-area .overflow-y-auto:hover::-webkit-scrollbar-thumb,
+.dark .scrollbar-auto-hide-area .overflow-y-auto:active::-webkit-scrollbar-thumb,
+.dark .scrollbar-auto-hide-area .overflow-auto:hover::-webkit-scrollbar-thumb,
+.dark .scrollbar-auto-hide-area .overflow-auto:active::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+}
+.dark .scrollbar-auto-hide-area::-webkit-scrollbar-thumb:hover,
+.dark .scrollbar-auto-hide-area .overflow-y-auto::-webkit-scrollbar-thumb:hover,
+.dark .scrollbar-auto-hide-area .overflow-auto::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -30,12 +148,15 @@
   --primary: #374151;
   --primary-hover: #1f2937;
   --primary-light: #6b7280;
+  --primary-foreground: #ffffff;
 
   --secondary: #9ca3af;
   --secondary-hover: #6b7280;
+  --secondary-foreground: #374151;
 
   --accent: #4b5563;
   --accent-light: #e5e7eb;
+  --accent-foreground: #111827;
 
   --surface: #f9fafb;
   --surface-hover: #f3f4f6;
@@ -56,6 +177,27 @@
 
   --header-bg: #ffffff;
   --header-border: #e5e7eb;
+
+  /* Component tokens */
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --destructive: #dc2626;
+  --ring: #374151;
+  --input: #e5e7eb;
+  --input-background: #ffffff;
+  /* Evaluation Dashboard — score bands (High / Medium / Low) */
+  --score-high: #10b981;
+  --score-high-bg: #d1fae5;
+  --score-medium: #f59e0b;
+  --score-medium-bg: #fef3c7;
+  --score-low: #ef4444;
+  --score-low-bg: #fee2e2;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color-scheme: light;
 }
 
 /* Markdown/Prose Styling for JD Preview */
@@ -237,46 +379,26 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-surface: var(--surface);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #111827;
-    --foreground: #f9fafb;
-
-    /* Grey Theme Colors - Dark Mode */
-    --primary: #9ca3af;
-    --primary-hover: #d1d5db;
-    --primary-light: #6b7280;
-
-    --secondary: #6b7280;
-    --secondary-hover: #9ca3af;
-
-    --accent: #9ca3af;
-    --accent-light: #374151;
-
-    --surface: #1f2937;
-    --surface-hover: #374151;
-    --surface-active: #4b5563;
-
-    --border: #374151;
-    --border-dark: #4b5563;
-
-    --text-primary: #f9fafb;
-    --text-secondary: #d1d5db;
-    --text-muted: #9ca3af;
-
-    --sidebar-bg: #111827;
-    --sidebar-hover: #1f2937;
-    --sidebar-active: #374151;
-    --sidebar-text: #f9fafb;
-    --sidebar-text-muted: #9ca3af;
-
-    --header-bg: #1f2937;
-    --header-border: #374151;
-  }
 }
 
 .dark {
@@ -287,12 +409,15 @@
   --primary: #9ca3af;
   --primary-hover: #d1d5db;
   --primary-light: #6b7280;
+  --primary-foreground: #111827;
 
   --secondary: #6b7280;
   --secondary-hover: #9ca3af;
+  --secondary-foreground: #f9fafb;
 
   --accent: #9ca3af;
   --accent-light: #374151;
+  --accent-foreground: #f9fafb;
 
   --surface: #1f2937;
   --surface-hover: #374151;
@@ -313,8 +438,30 @@
 
   --header-bg: #1f2937;
   --header-border: #374151;
+
+  /* Component tokens - Dark Mode */
+  --popover: #1f2937;
+  --popover-foreground: #f9fafb;
+  --card: #1f2937;
+  --card-foreground: #f9fafb;
+  --muted: #374151;
+  --muted-foreground: #9ca3af;
+  --destructive: #ef4444;
+  --ring: #9ca3af;
+  --input: #374151;
+  --input-background: #1f2937;
+  /* Evaluation Dashboard — score bands (dark mode) */
+  --score-high: #34d399;
+  --score-high-bg: rgba(16, 185, 129, 0.15);
+  --score-medium: #fbbf24;
+  --score-medium-bg: rgba(245, 158, 11, 0.15);
+  --score-low: #f87171;
+  --score-low-bg: rgba(239, 68, 68, 0.15);
+
+  color-scheme: dark;
 }
 
+html,
 body {
   background: var(--background);
   color: var(--foreground);
@@ -348,6 +495,40 @@ body {
 
 .animate-fadeIn {
   animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Dark mode overrides for markdown-content */
+.dark .markdown-content h1 {
+  color: var(--text-primary);
+  border-bottom-color: #3b82f6;
+}
+.dark .markdown-content h2 {
+  color: var(--text-primary);
+  border-bottom-color: var(--border);
+}
+.dark .markdown-content h3 { color: var(--text-secondary); }
+.dark .markdown-content h4 { color: var(--text-secondary); }
+.dark .markdown-content p { color: var(--text-secondary); }
+.dark .markdown-content li { color: var(--text-secondary); }
+.dark .markdown-content li::marker { color: var(--text-muted); }
+.dark .markdown-content strong,
+.dark .markdown-content b { color: var(--text-primary); }
+.dark .markdown-content a { color: #60a5fa; }
+.dark .markdown-content a:hover { color: #93c5fd; }
+.dark .markdown-content blockquote {
+  color: var(--text-muted);
+  background-color: var(--surface);
+  border-left-color: #3b82f6;
+}
+.dark .markdown-content hr { border-top-color: var(--border); }
+.dark .markdown-content th {
+  background-color: var(--surface);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.dark .markdown-content td {
+  color: var(--text-secondary);
+  border-color: var(--border);
 }
 
 /* FIX-009: Standardized Focus Indicators for Accessibility */
@@ -434,4 +615,298 @@ a:focus:not(:focus-visible) {
     overflow-wrap: break-word;
     word-wrap: break-word;
   }
+}
+
+/* ============================================================
+   DARK MODE GLOBAL OVERRIDES
+   These are unlayered CSS rules and therefore override Tailwind
+   utility classes (which live in @layer utilities). This lets
+   us apply dark-mode theming across all 200+ components that
+   use hardcoded Tailwind gray/white color classes without
+   touching every individual file.
+   ============================================================ */
+
+/* ── Background colors ──────────────────────────────────── */
+.dark .bg-white  { background-color: var(--surface); }
+.dark .bg-gray-50 { background-color: var(--surface); }
+.dark .bg-gray-100 { background-color: var(--surface-hover); }
+.dark .bg-gray-200 { background-color: var(--surface-active); }
+
+/* ── Hover background colors ────────────────────────────── */
+.dark .hover\:bg-white:hover  { background-color: var(--surface-hover); }
+.dark .hover\:bg-gray-50:hover  { background-color: var(--surface-hover); }
+.dark .hover\:bg-gray-100:hover { background-color: var(--surface-active); }
+.dark .hover\:bg-gray-200:hover { background-color: var(--border-dark); }
+
+/* ── Text colors ─────────────────────────────────────────── */
+.dark .text-black  { color: var(--text-primary); }
+.dark .text-gray-900 { color: var(--text-primary); }
+.dark .text-gray-800 { color: var(--text-primary); }
+.dark .text-gray-700 { color: var(--text-secondary); }
+.dark .text-gray-600 { color: var(--text-secondary); }
+.dark .text-gray-500 { color: var(--text-muted); }
+.dark .text-gray-400 { color: var(--text-muted); }
+
+/* ── Amber / warning text colors ──────────────────────────── */
+.dark .text-amber-900 { color: #fde68a; }
+.dark .text-amber-800 { color: #fcd34d; }
+.dark .text-amber-700 { color: #fbbf24; }
+.dark .text-amber-600 { color: #f59e0b; }
+
+/* ── Orange text colors ───────────────────────────────────── */
+.dark .text-orange-900 { color: #fdba74; }
+.dark .text-orange-800 { color: #fb923c; }
+.dark .text-orange-700 { color: #f97316; }
+
+/* ── Red / danger text colors ─────────────────────────────── */
+.dark .text-red-900 { color: #fca5a5; }
+.dark .text-red-800 { color: #f87171; }
+.dark .text-red-700 { color: #ef4444; }
+
+/* ── Hover text colors ───────────────────────────────────── */
+.dark .hover\:text-black:hover  { color: var(--text-primary); }
+.dark .hover\:text-gray-900:hover { color: var(--text-primary); }
+.dark .hover\:text-gray-800:hover { color: var(--text-primary); }
+.dark .hover\:text-gray-700:hover { color: var(--text-secondary); }
+.dark .hover\:text-gray-600:hover { color: var(--text-secondary); }
+
+/* ── Border colors ───────────────────────────────────────── */
+.dark .border-gray-50  { border-color: var(--border); }
+.dark .border-gray-100 { border-color: var(--border); }
+.dark .border-gray-200 { border-color: var(--border); }
+.dark .border-gray-300 { border-color: var(--border-dark); }
+
+/* ── Divide colors ───────────────────────────────────────── */
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border); }
+.dark .divide-gray-300 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border-dark); }
+
+/* ── Ring / focus ring colors ────────────────────────────── */
+.dark .focus\:ring-gray-600:focus { --tw-ring-color: var(--text-muted); }
+.dark .focus\:ring-gray-500:focus { --tw-ring-color: var(--text-muted); }
+
+/* ── Native form elements ────────────────────────────────── */
+/* Covers raw <input>, <textarea>, <select> that have no
+   Tailwind bg class and would otherwise stay browser-white */
+.dark input:not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="range"]):not([type="color"]):not([type="checkbox"]):not([type="radio"]) {
+  background-color: var(--input-background);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.dark input::placeholder { color: var(--text-muted); }
+.dark textarea {
+  background-color: var(--input-background);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.dark textarea::placeholder { color: var(--text-muted); }
+.dark select {
+  background-color: var(--input-background);
+  color: var(--text-primary);
+  border-color: var(--border);
+}
+.dark option {
+  background-color: var(--surface);
+  color: var(--text-primary);
+}
+
+/* ── Dark "primary action" backgrounds ──────────────────── */
+/* bg-gray-800/900 are used as primary button/action colors in light mode.
+   On dark surfaces (#1f2937 = gray-800) they become invisible, so we
+   shift them to lighter grays to preserve visual prominence. */
+.dark .bg-gray-800 { background-color: #374151; }
+.dark .bg-gray-700 { background-color: #4b5563; }
+.dark .bg-gray-900 { background-color: #1f2937; }
+
+/* ── Dark hover brightening (inverts the "darker on hover" to "lighter on hover") */
+.dark .hover\:bg-gray-900:hover { background-color: #4b5563; }
+.dark .hover\:bg-gray-800:hover { background-color: #4b5563; }
+.dark .hover\:bg-gray-700:hover { background-color: #6b7280; }
+
+/* ── Gradient color stops for dark panel headers ─────────── */
+/* e.g. "from-gray-800 to-gray-900" used on dropdown/modal headers */
+.dark .from-gray-800 { --tw-gradient-from: #374151; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .from-gray-900 { --tw-gradient-from: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-gray-800   { --tw-gradient-to: #374151; }
+.dark .to-gray-900   { --tw-gradient-to: #111827; }
+.dark .via-gray-800  { --tw-gradient-via: #374151; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+
+/* ── Light-color gradient stops (bg-gradient from-gray-50/via-white etc.) ── */
+.dark .from-white    { --tw-gradient-from: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .from-gray-50  { --tw-gradient-from: #111827; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .from-gray-100 { --tw-gradient-from: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-white      { --tw-gradient-to: #1f2937; }
+.dark .to-gray-50    { --tw-gradient-to: #111827; }
+.dark .to-gray-100   { --tw-gradient-to: #1f2937; }
+.dark .via-white     { --tw-gradient-via: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+.dark .via-gray-50   { --tw-gradient-via: #111827; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+.dark .via-gray-100  { --tw-gradient-via: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
+
+/* Opacity-modifier gradient variants (e.g. to-gray-100/30, to-gray-100/50) */
+.dark .to-gray-100\/30  { --tw-gradient-to: rgba(31, 41, 55, 0.3); }
+.dark .to-gray-100\/50  { --tw-gradient-to: rgba(31, 41, 55, 0.5); }
+.dark .from-gray-100\/30 { --tw-gradient-from: rgba(31, 41, 55, 0.3); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .from-gray-100\/50 { --tw-gradient-from: rgba(31, 41, 55, 0.5); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+
+/* Slate color family (used in some gradients) */
+.dark .from-slate-50 { --tw-gradient-from: #111827; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-slate-50   { --tw-gradient-to: #111827; }
+.dark .bg-slate-50   { background-color: #111827; }
+.dark .bg-slate-100  { background-color: #1f2937; }
+
+/* Light tint gradients for info/success banners */
+.dark .from-green-50 { --tw-gradient-from: rgba(16, 185, 129, 0.1); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .from-blue-50  { --tw-gradient-from: rgba(37, 99, 235, 0.1);  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-blue-50    { --tw-gradient-to: rgba(37, 99, 235, 0.1); }
+.dark .to-green-50   { --tw-gradient-to: rgba(16, 185, 129, 0.1); }
+
+/* ── Specific patterns used in many feature components ───── */
+/* Toggle switch track (used in Settings notifications) */
+.dark .bg-gray-300 { background-color: var(--surface-active); }
+.dark .peer-checked\:bg-gray-800 { background-color: var(--accent); }
+
+/* Colored icon badge backgrounds (light tints — make semi-transparent in dark) */
+.dark .bg-blue-50   { background-color: rgba(59, 130, 246, 0.15); }
+.dark .bg-blue-100  { background-color: rgba(59, 130, 246, 0.2); }
+.dark .bg-red-50    { background-color: rgba(239, 68, 68, 0.15); }
+.dark .bg-red-100   { background-color: rgba(239, 68, 68, 0.2); }
+.dark .bg-green-50  { background-color: rgba(34, 197, 94, 0.15); }
+.dark .bg-green-100 { background-color: rgba(34, 197, 94, 0.2); }
+.dark .bg-amber-50  { background-color: rgba(245, 158, 11, 0.15); }
+.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.2); }
+.dark .bg-purple-50  { background-color: rgba(168, 85, 247, 0.15); }
+.dark .bg-purple-100 { background-color: rgba(168, 85, 247, 0.2); }
+.dark .bg-orange-50  { background-color: rgba(249, 115, 22, 0.15); }
+.dark .bg-orange-100 { background-color: rgba(249, 115, 22, 0.2); }
+.dark .bg-yellow-50  { background-color: rgba(234, 179, 8, 0.15); }
+.dark .bg-yellow-100 { background-color: rgba(234, 179, 8, 0.2); }
+.dark .bg-indigo-50  { background-color: rgba(99, 102, 241, 0.15); }
+.dark .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.2); }
+
+/* ── Colored text (badges, status, priority labels) ────────── */
+.dark .text-blue-700   { color: #60a5fa; }
+.dark .text-blue-600   { color: #3b82f6; }
+.dark .text-blue-500   { color: #60a5fa; }
+.dark .text-blue-400   { color: #93c5fd; }
+.dark .text-green-700  { color: #4ade80; }
+.dark .text-green-600  { color: #22c55e; }
+.dark .text-green-500  { color: #4ade80; }
+.dark .text-yellow-700 { color: #fbbf24; }
+.dark .text-yellow-600 { color: #eab308; }
+.dark .text-yellow-500 { color: #facc15; }
+.dark .text-purple-700 { color: #c084fc; }
+.dark .text-purple-600 { color: #a855f7; }
+.dark .text-purple-500 { color: #c084fc; }
+.dark .text-indigo-700 { color: #818cf8; }
+.dark .text-indigo-600 { color: #6366f1; }
+.dark .text-teal-700   { color: #2dd4bf; }
+.dark .text-teal-600   { color: #14b8a6; }
+.dark .text-pink-700   { color: #f472b6; }
+.dark .text-pink-600   { color: #ec4899; }
+.dark .text-cyan-700   { color: #22d3ee; }
+.dark .text-cyan-600   { color: #06b6d4; }
+
+/* ── Colored border colors (badge outlines, card borders) ─── */
+.dark .border-red-200    { border-color: rgba(239, 68, 68, 0.35); }
+.dark .border-red-300    { border-color: rgba(239, 68, 68, 0.5); }
+.dark .border-orange-200 { border-color: rgba(249, 115, 22, 0.35); }
+.dark .border-orange-300 { border-color: rgba(249, 115, 22, 0.5); }
+.dark .border-yellow-200 { border-color: rgba(234, 179, 8, 0.35); }
+.dark .border-yellow-300 { border-color: rgba(234, 179, 8, 0.5); }
+.dark .border-blue-200   { border-color: rgba(59, 130, 246, 0.35); }
+.dark .border-blue-300   { border-color: rgba(59, 130, 246, 0.5); }
+.dark .border-green-200  { border-color: rgba(34, 197, 94, 0.35); }
+.dark .border-green-300  { border-color: rgba(34, 197, 94, 0.5); }
+.dark .border-purple-200 { border-color: rgba(168, 85, 247, 0.35); }
+.dark .border-purple-300 { border-color: rgba(168, 85, 247, 0.5); }
+.dark .border-amber-200  { border-color: rgba(245, 158, 11, 0.35); }
+.dark .border-amber-300  { border-color: rgba(245, 158, 11, 0.5); }
+.dark .border-indigo-200 { border-color: rgba(99, 102, 241, 0.35); }
+.dark .border-pink-200   { border-color: rgba(236, 72, 153, 0.35); }
+
+/* ── Hover border colors ─────────────────────────────────── */
+.dark .hover\:border-gray-200:hover { border-color: var(--border-dark); }
+.dark .hover\:border-gray-300:hover { border-color: var(--border-dark); }
+.dark .hover\:border-gray-400:hover { border-color: var(--text-muted); }
+
+/* ── Divide colors ───────────────────────────────────────── */
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--border); }
+.dark .divide-gray-50  > :not([hidden]) ~ :not([hidden]) { border-color: var(--border); }
+
+/* ── Additional colored background tints ────────────────── */
+.dark .bg-teal-50   { background-color: rgba(20, 184, 166, 0.15); }
+.dark .bg-teal-100  { background-color: rgba(20, 184, 166, 0.2); }
+.dark .bg-pink-50   { background-color: rgba(236, 72, 153, 0.15); }
+.dark .bg-pink-100  { background-color: rgba(236, 72, 153, 0.2); }
+.dark .bg-cyan-50   { background-color: rgba(6, 182, 212, 0.15); }
+.dark .bg-cyan-100  { background-color: rgba(6, 182, 212, 0.2); }
+
+/* ── Opacity-modifier bg variants used in AI interview ──── */
+/* bg-white/60, bg-white/80 — keeps transparency on dark surfaces */
+.dark .bg-white\/60 { background-color: rgba(31, 41, 55, 0.6); }
+.dark .bg-white\/80 { background-color: rgba(31, 41, 55, 0.8); }
+.dark .bg-gray-50\/50 { background-color: rgba(31, 41, 55, 0.5); }
+
+/* ── Additional gray shades (progress bars, misc) ────────── */
+.dark .bg-gray-400 { background-color: #6b7280; }
+.dark .bg-gray-500 { background-color: #9ca3af; }
+.dark .bg-gray-600 { background-color: #374151; }
+
+/* ── Toggle / switch pseudo-element (thumb) ─────────────── */
+/* Targets after:bg-white thumb on toggle tracks */
+.dark .after\:bg-white::after { background-color: #d1d5db !important; }
+
+/* ── Focus ring colors for colored inputs ────────────────── */
+.dark .focus\:ring-purple-300:focus  { --tw-ring-color: rgba(168, 85, 247, 0.4); }
+.dark .focus\:ring-purple-400:focus  { --tw-ring-color: rgba(168, 85, 247, 0.5); }
+.dark .focus\:ring-blue-300:focus    { --tw-ring-color: rgba(59, 130, 246, 0.4); }
+.dark .focus\:ring-green-300:focus   { --tw-ring-color: rgba(34, 197, 94, 0.4); }
+.dark .focus\:border-purple-300:focus { border-color: rgba(168, 85, 247, 0.6); }
+.dark .focus\:border-blue-300:focus   { border-color: rgba(59, 130, 246, 0.6); }
+.dark .focus\:ring-gray-400:focus    { --tw-ring-color: var(--text-muted); }
+
+/* ── Emerald color family (used in AI interview skill tags) ─ */
+.dark .bg-emerald-50   { background-color: rgba(16, 185, 129, 0.15); }
+.dark .bg-emerald-100  { background-color: rgba(16, 185, 129, 0.2); }
+.dark .bg-emerald-500  { background-color: #10b981; }
+.dark .text-emerald-700 { color: #34d399; }
+.dark .text-emerald-600 { color: #10b981; }
+.dark .text-emerald-500 { color: #34d399; }
+.dark .text-emerald-100 { color: #d1fae5; }
+.dark .text-emerald-900 { color: #6ee7b7; }
+.dark .border-emerald-200 { border-color: rgba(16, 185, 129, 0.35); }
+.dark .border-emerald-300 { border-color: rgba(16, 185, 129, 0.5); }
+.dark .border-emerald-500 { border-color: #10b981; }
+.dark .from-emerald-50 { --tw-gradient-from: rgba(16, 185, 129, 0.1); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+.dark .to-emerald-100  { --tw-gradient-to: rgba(16, 185, 129, 0.15); }
+
+/* ── Selected card / active border (border-gray-900 used as active indicator) */
+.dark .border-gray-900 { border-color: #6b7280; }
+
+/* ── Amber opacity-modifier variant ─────────────────────── */
+.dark .bg-amber-50\/50 { background-color: rgba(245, 158, 11, 0.1); }
+.dark .bg-amber-100\/50 { background-color: rgba(245, 158, 11, 0.15); }
+
+/* ── Orange border variants ──────────────────────────────── */
+.dark .border-orange-400 { border-color: rgba(249, 115, 22, 0.6); }
+
+/* ── Shadow adjustments for dark mode cards ──────────────── */
+.dark .shadow-sm  { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.4); }
+.dark .shadow     { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.5), 0 1px 2px -1px rgba(0, 0, 0, 0.5); }
+.dark .shadow-md  { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5); }
+.dark .shadow-lg  { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5); }
+
+/* ── Active tab / selected state (border-gray-800 used as tab indicator) */
+.dark .border-gray-800 { border-color: #9ca3af; }
+
+/* Dark mode focus indicators */
+.dark button:focus-visible,
+.dark a:focus-visible,
+.dark [role="button"]:focus-visible,
+.dark [tabindex]:focus-visible:not([tabindex="-1"]) {
+  outline-color: var(--text-muted);
+}
+.dark input:focus-visible,
+.dark textarea:focus-visible,
+.dark select:focus-visible {
+  outline-color: var(--text-muted);
 }

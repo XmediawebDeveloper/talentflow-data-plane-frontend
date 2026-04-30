@@ -14,6 +14,7 @@ interface FeatureItem {
 
 interface QuotaData {
   tenant_id?: string;
+  tenant_code?: string;
   is_trial?: boolean;
   quota_source?: string;
   plan_name?: string;

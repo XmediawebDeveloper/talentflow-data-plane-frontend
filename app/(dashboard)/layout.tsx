@@ -16,6 +16,7 @@ import { TermsProvider } from '@/components/providers/TermsProvider';
 import { PlanChangeProvider, usePlanChange } from '@/components/providers/PlanChangeProvider';
 import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail, PAYMENT_PENDING_EVENT, PaymentPendingDetail, redirectToPaymentPage } from '@/lib/services/api';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
+import ExpiredAccountBlock from '@/components/subscription/ExpiredAccountBlock';
 import TermsReminderBanner from '@/components/terms/TermsReminderBanner';
 import TermsBlockingOverlay from '@/components/terms/TermsBlockingOverlay';
 import TermsAcceptanceModal from '@/components/terms/TermsAcceptanceModal';
@@ -32,10 +33,37 @@ const adminRoutes = [
   '/analytics/activity-logs',
 ];
 
+const routePermissionRules: Array<{
+  prefix: string;
+  permissions?: string[];
+  allowAll?: boolean;
+}> = [
+  { prefix: '/recruitment/hr-question-bank', permissions: ['canViewHRQuestionBank', 'canCreateHRQuestionBank', 'canUpdateHRQuestionBank', 'canDeleteHRQuestionBank'] },
+  { prefix: '/organization/team-chat', allowAll: true },
+  { prefix: '/organization/team-management', permissions: ['canViewTeams', 'canCreateTeams'] },
+  { prefix: '/organization/user-management', permissions: ['canManageUsers'] },
+  { prefix: '/organization/company-profile', permissions: ['canManageSettings'] },
+  { prefix: '/subscription/current-plan', permissions: ['canViewCurrentPlan'] },
+  { prefix: '/subscription/usage-quotas', permissions: ['canViewUsage'] },
+  { prefix: '/subscription/payment-methods', permissions: ['canViewPaymentMethods'] },
+  { prefix: '/subscription/billing-history', permissions: ['canViewBillingHistory'] },
+  { prefix: '/subscription/refund-history', permissions: ['canViewRefundHistory'] },
+  { prefix: '/subscription/dispute-history', permissions: ['canViewDisputeHistory'] },
+  { prefix: '/subscription/unit-disputes', permissions: ['canViewUsage'] },
+  { prefix: '/settings/general-settings', allowAll: true },
+  { prefix: '/settings/permissions', permissions: ['canViewRoles'] },
+  { prefix: '/settings/api-management', permissions: ['canViewApiManagement'] },
+  { prefix: '/settings/branding', permissions: ['canViewBranding'] },
+  { prefix: '/settings/security', permissions: ['canViewSecuritySettings'] },
+  { prefix: '/settings/legal', permissions: ['canManageSettings'] },
+  { prefix: '/support-tickets', permissions: ['canViewSupport'] },
+];
+
 // Paths allowed when subscription is expired/inactive
 const SUBSCRIPTION_ALLOWED_PATHS = [
   '/subscription/current-plan',
   '/subscription/payment-methods',
+  '/subscription/usage-quotas',
   '/audits/trail',
   '/audits/activity',
   '/support-tickets',
@@ -88,6 +116,12 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
 
+  // Synchronous guard: read pending_password_reset once on mount (lazy initializer runs
+  // before first paint). If set, block all dashboard rendering — AuthProvider handles redirect.
+  const [hasPendingPasswordReset] = useState<boolean>(() =>
+    typeof window !== 'undefined' && localStorage.getItem('pending_password_reset') === 'true'
+  );
+
   // Initialize as undefined to show locked state until we know for sure
   const [subscriptionExpired, setSubscriptionExpired] = useState<boolean | undefined>(undefined);
   const [accountSuspended, setAccountSuspended] = useState<boolean>(false);
@@ -97,6 +131,12 @@ export default function DashboardLayout({
 
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const hasRoutePermission = useCallback((permission: string) => {
+    if (isTenantAdmin) return true;
+    const permissions = user?.permissions as Record<string, boolean | undefined> | undefined;
+    return !!permissions?.[permission];
+  }, [isTenantAdmin, user]);
 
   console.log('[DASHBOARD] Layout render - isLoading:', isLoading, 'isAuthenticated:', isAuthenticated, 'user:', user?.email);
 
@@ -184,10 +224,10 @@ export default function DashboardLayout({
     return () => window.removeEventListener(PAYMENT_PENDING_EVENT, handlePaymentPending as EventListener);
   }, []);
 
-  // Redirect to current-plan page when subscription is expired and user is on a non-allowed page
+  // Redirect to current-plan when subscription is expired for users who can access it.
   useEffect(() => {
-    // Only redirect if explicitly expired (not undefined/loading) and NOT suspended
-    if (subscriptionExpired === true && !accountSuspended && pathname) {
+    const canAccessCurrentPlan = hasRoutePermission('canViewCurrentPlan');
+    if (subscriptionExpired === true && !accountSuspended && canAccessCurrentPlan && pathname) {
       const isAllowed = SUBSCRIPTION_ALLOWED_PATHS.some(path =>
         pathname === path || pathname.startsWith(path + '/')
       );
@@ -196,7 +236,7 @@ export default function DashboardLayout({
         router.push('/subscription/current-plan');
       }
     }
-  }, [subscriptionExpired, accountSuspended, pathname, router]);
+  }, [subscriptionExpired, accountSuspended, hasRoutePermission, pathname, router]);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -214,14 +254,16 @@ export default function DashboardLayout({
   // Client-side authorization check for admin routes
   useEffect(() => {
     if (!isLoading && isAuthenticated && user) {
-      // Exception: Team Chat is accessible to all users, even though it's under /organization
-      if (pathname === '/organization/team-chat' || pathname.startsWith('/organization/team-chat/')) {
-        return; // Allow access to all users
-      }
+      const matchingRule = routePermissionRules.find(rule =>
+        pathname === rule.prefix || pathname.startsWith(`${rule.prefix}/`)
+      );
 
-      // Exception: Profile Settings (/settings/general-settings) is accessible to ALL users
-      if (pathname === '/settings/general-settings' || pathname.startsWith('/settings/general-settings/')) {
-        return; // Allow access to all users regardless of role
+      if (matchingRule) {
+        if (matchingRule.allowAll) return;
+
+        if ((matchingRule.permissions || []).some(hasRoutePermission)) {
+          return;
+        }
       }
 
       const isAdminRoute = adminRoutes.some(route =>
@@ -234,7 +276,7 @@ export default function DashboardLayout({
         router.push('/dashboard');
       }
     }
-  }, [isLoading, isAuthenticated, user, pathname, isTenantAdmin, router]);
+  }, [hasRoutePermission, isLoading, isAuthenticated, user, pathname, isTenantAdmin, router]);
 
   // Check for pending scoring batches on login and show notification
   useEffect(() => {
@@ -284,6 +326,13 @@ export default function DashboardLayout({
     const timer = setTimeout(checkPendingScoringBatch, 1500);
     return () => clearTimeout(timer);
   }, [isAuthenticated, isLoading, router]);
+
+  // If the pending_password_reset flag was set on mount, don't render any dashboard content.
+  // AuthProvider keeps isLoading=true and handles the /set-password redirect, so the user
+  // sees the loading skeleton instead of a flash of authenticated dashboard UI.
+  if (hasPendingPasswordReset) {
+    return null;
+  }
 
   if (isLoading) {
     console.log('[DASHBOARD] Still loading...');
@@ -407,11 +456,12 @@ export default function DashboardLayout({
                 onOpenSettings={() => router.push('/settings')}
                 onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                 isMobileMenuOpen={isMobileMenuOpen}
+                subscriptionExpired={subscriptionExpired === true}
               />
 
               <TermsReminderBanner />
               <PlanChangeReviewBanner />
-              <div className="flex-1 overflow-y-auto flex flex-col">
+              <div className="flex-1 overflow-y-auto flex flex-col scrollbar-auto-hide scrollbar-auto-hide-area">
                 {children}
               </div>
             </div>
@@ -439,6 +489,13 @@ export default function DashboardLayout({
                   suspendedAt={suspendedAt}
                   contactEmail={supportEmail}
                 />
+              </div>
+            )}
+
+            {/* Non-admin expired overlay - blocks all interaction, logout only */}
+            {subscriptionExpired === true && !accountSuspended && !isTenantAdmin && (
+              <div className="fixed inset-0 z-[100]">
+                <ExpiredAccountBlock adminEmail={user?.tenantAdminEmail} />
               </div>
             )}
           </div>

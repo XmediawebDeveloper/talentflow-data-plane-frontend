@@ -1,0 +1,59 @@
+// Shared types for the evaluation dashboard design.
+// Mapped from the backend's ai_evaluation JSON + cluster config in special_instructions.
+
+export type Level = 'High' | 'Medium' | 'Low';
+export type Recommendation = 'Strong Hire' | 'Hire' | 'Consider' | 'No Hire';
+
+export interface Skill {
+  name: string;
+  score: number;        // 0-10 scale
+  level: Level;
+  feedback: string;     // per-skill note from evaluator
+}
+
+export interface Cluster {
+  clusterNumber: number;
+  name: string;         // cluster name from config
+  priority: Level;      // cluster priority from config (High/Medium/Low)
+  weight: number;       // 0-100 weight (how much this cluster contributes to its section)
+  skills: Skill[];
+  clusterScore: number; // 0-10 average
+}
+
+export interface InterviewResponse {
+  id: number;
+  timestamp: string;     // HH:MM:SS
+  question: string;
+  candidateResponse: string;
+  skillsCovered: string[];
+  duration: string;      // MM:SS
+}
+
+export interface SectionWeights {
+  mustHave: number;   // 0-100, e.g. 70 when all 3 sections present; 77.78 when HR absent
+  niceToHave: number;
+  hr: number;
+}
+
+export interface DashboardData {
+  candidate: { name: string; role: string; email?: string };
+  interview: { mode: 'Timed' | 'Conversational'; duration: string; date: string };
+  scores: {
+    mustHave: number;    // 0-10
+    niceToHave: number;  // 0-10
+    hr: number;          // 0-10
+    final: number;       // 0-100
+  };
+  /** Per-section weights (0-100) after renormalization for missing sections.
+   *  Sections that are absent have weight 0. Present sections always sum to 100. */
+  weights: SectionWeights;
+  /** Which sections actually exist in this interview */
+  sectionsPresent: { mustHave: boolean; niceToHave: boolean; hr: boolean };
+  strengths: string[];
+  weaknesses: string[];
+  aiSummary: string;
+  recommendation: Recommendation;
+  mustHaveClusters: Cluster[];
+  niceToHaveClusters: Cluster[];
+  interviewResponses: InterviewResponse[];
+}

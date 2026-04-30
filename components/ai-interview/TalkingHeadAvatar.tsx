@@ -3,16 +3,13 @@
 /**
  * TalkingHeadAvatar — wrapper around the TalkingHead library.
  *
- * Audio playback is handled by InterviewUI via its own Web Audio API context.
- * This component handles the 3D avatar rendering and lip-sync animation only.
+ * Professional recruiter avatar with native lip-sync, friendly smile,
+ * straight pose (arms at sides), maximum eye contact, no emoji gestures.
  *
- * Lip-sync strategy (real-time amplitude driven):
- *  1. InterviewUI taps the playing audio through a Web Audio AnalyserNode.
- *  2. Each animation frame it reads RMS amplitude → maps to an Oculus viseme.
- *  3. It calls applyVisemeLive(visemeName, amplitude) on this handle.
- *  4. applyVisemeLive pushes an animQueue entry stamped at head.animClock
- *     (current time), so TalkingHead's own render loop picks it up immediately.
- *     No AudioWorklet dependency, no timing calculations needed.
+ * Key fixes:
+ * - Pose animation template replaced to ONLY use "straight" (never "side"/"hip")
+ * - Eye animation template zeroed out + per-frame bone enforcement
+ * - AudioContext from user gesture injected into TalkingHead for audio playback
  */
 
 import React, {
@@ -22,42 +19,62 @@ import React, {
   forwardRef,
   useState,
 } from "react";
-import * as THREE from "three";
 
 export interface TalkingHeadHandle {
   streamStart(sampleRate: number, onAudioEnd: () => void): void;
   streamAudio(pcmData: ArrayBuffer): void;
   streamStop(): void;
-  /**
-   * Apply a viseme to the avatar RIGHT NOW, driven by real-time amplitude.
-   * Call this every animation frame while AI audio is playing.
-   *
-   * @param visemeName  Oculus viseme blend shape name (e.g. "viseme_aa")
-   * @param amplitude   Normalised amplitude 0.0–1.0
-   */
-  applyVisemeLive(visemeName: string, amplitude: number): void;
+  /** Signal that no more audio chunks will arrive — worklet plays remaining buffer then ends */
+  notifyEnd(): void;
+  /** Feed accumulated text so word-level visemes can be generated from audio timing */
+  setText(text: string): void;
 }
 
 interface Props {
   avatarUrl: string;
   className?: string;
   style?: React.CSSProperties;
+  onReady?: () => void;
 }
 
 export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
-  function TalkingHeadAvatar({ avatarUrl, className, style }, ref) {
+  function TalkingHeadAvatar({ avatarUrl, className, style, onReady }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const headRef      = useRef<any>(null);
     const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
 
-    const streamReadyRef = useRef(false);
-    const pendingRef     = useRef<ArrayBuffer[]>([]);
-    const onAudioEndRef  = useRef<(() => void) | null>(null);
+    const streamReadyRef      = useRef(false);
+    const pendingRef          = useRef<ArrayBuffer[]>([]);
+    const onAudioEndRef       = useRef<(() => void) | null>(null);
+    // True when notifyEnd() was called before TalkingHead's streamStart resolved.
+    // Deferred streamNotifyEnd fires after pending audio is flushed.
+    const notifyEndPendingRef = useRef(false);
 
-    // ── Load TalkingHead avatar ──────────────────────────────────────────────
+    // ── Fallback Web Audio API player (used when TalkingHead isn't ready) ──
+    const fbCtxRef         = useRef<AudioContext | null>(null);
+    const fbNextTimeRef    = useRef(0);
+    const fbPendingRef     = useRef(0);     // scheduled-but-not-finished buffers
+    const fbNoMoreDataRef  = useRef(false);
+    const fbActiveRef      = useRef(false); // fallback mode is active this session
+    // Phoneme-based lip sync: visemes from text, scaled to actual audio duration
+    const fullTextRef          = useRef("");
+    const lastBuiltTextRef     = useRef("");
+    const visemeTimelineRef    = useRef<{viseme: string, startMs: number, durMs: number}[]>([]);
+    const timelineTotalMsRef   = useRef(0);          // total viseme timeline length
+    const totalAudioMsRef      = useRef(0);           // actual PCM audio duration accumulated
+    const speechStartRef       = useRef<number | null>(null);  // performance.now() when audio detected
+    const currentMorphsRef     = useRef<Record<string, number>>({});
+    const smoothAmpRef         = useRef(0);
+    const ampDataRef           = useRef<Uint8Array | null>(null);
+
     useEffect(() => {
       if (!containerRef.current) return;
       let mounted = true;
+      let rafId: number | null = null;
+      // Track head locally so cleanup can stop it even before headRef is set.
+      // Without this, React StrictMode's double-invoke creates two TalkingHead
+      // instances on the same canvas and the first one is never stopped.
+      let localHead: any = null;
 
       (async () => {
         try {
@@ -68,152 +85,682 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
           const head = new TalkingHead(containerRef.current!, {
             lipsyncModules: ["en"],
+            cameraView: "upper",
+            cameraDistance: -1.2,
+            cameraY: -0.2,               // negative = camera moves UP to eye level
+            cameraRotateEnable: false,
+            cameraPanEnable: false,
+            cameraZoomEnable: false,
+            avatarMood: "happy",
+            avatarIdleEyeContact: 1.0,
+            avatarSpeakingEyeContact: 1.0,
+            avatarIdleHeadMove: 0,
+            avatarSpeakingHeadMove: 0,
+            modelMovementFactor: 0,
+            avatarIdleHandMove: 0,
+            avatarSpeakingHandMove: 0,
+            // Professional studio lighting — soft bright front light
+            lightAmbientColor: 0xfff5eb,       // warm white ambient
+            lightAmbientIntensity: 3,           // brighter ambient fill
+            lightDirectColor: 0xffeedd,         // warm key light
+            lightDirectIntensity: 40,           // strong front light for subject pop
+            lightSpotIntensity: 0,              // no harsh spot
           });
+          localHead = head; // register immediately so cleanup can stop it
 
-          await head.showAvatar({
-            url: avatarUrl,
-            body: "F",
-            lipsyncLang: "en",
-          });
+          // ── Inject user-gesture AudioContext (24kHz) BEFORE showAvatar ──
+          // TalkingHead creates a suspended AudioContext in its constructor.
+          // By injecting the pre-created running context, showAvatar() and the
+          // subsequent start() call use a context that is already running, avoiding
+          // autoplay-policy hangs.
+          // Node graph mirrors TalkingHead's initAudioGraph() exactly so that
+          // streamStart / streamAudio / streamNotifyEnd all work correctly.
+          try {
+            const preCreated = (window as any).__interviewAudioContext as AudioContext | undefined;
+            if (preCreated && preCreated.state !== "closed") {
+              // Close TalkingHead's auto-created context (not needed anymore)
+              if (head.audioCtx && head.audioCtx !== preCreated && head.audioCtx.state !== "closed") {
+                try { head.audioCtx.close(); } catch {}
+              }
+              head.audioCtx = preCreated;
+              // NOTE: keep __interviewAudioContext set so a StrictMode second mount
+              // can also inject it (it will be resumed by showAvatar → start() anyway)
+
+              // ── Replicate initAudioGraph node setup with correct connections ──
+              head.audioSpeechSource       = preCreated.createBufferSource();
+              head.audioBackgroundSource   = preCreated.createBufferSource();
+              head.audioBackgroundGainNode = preCreated.createGain();
+              head.audioSpeechGainNode     = preCreated.createGain();
+              head.audioStreamGainNode     = preCreated.createGain();
+              head.audioAnalyzerNode       = preCreated.createAnalyser();
+              head.audioAnalyzerNode.fftSize = 256;
+              head.audioAnalyzerNode.smoothingTimeConstant = 0.1;
+              head.audioAnalyzerNode.minDecibels = -70;
+              head.audioAnalyzerNode.maxDecibels = -10;
+              // ConvolverNode (reverb) — used as dry pass-through
+              head.audioReverbNode = preCreated.createConvolver();
+              // Connections matching TalkingHead's initAudioGraph:
+              //   analyser → speechGain → reverb → destination
+              //   streamGain → reverb → destination
+              //   backgroundGain → reverb → destination
+              head.audioBackgroundGainNode.connect(head.audioReverbNode);
+              head.audioAnalyzerNode.connect(head.audioSpeechGainNode);
+              head.audioSpeechGainNode.connect(head.audioReverbNode);
+              head.audioStreamGainNode.connect(head.audioReverbNode);
+              head.audioReverbNode.connect(preCreated.destination);
+              // Also route Linda's voice to the screen recording mix (if active)
+              const recordingDest = (window as any).__interviewRecordingDest as AudioNode | null;
+              if (recordingDest) {
+                try { head.audioReverbNode.connect(recordingDest); } catch {}
+              }
+              // Dry impulse so reverb is a pass-through
+              const impulse = preCreated.createBuffer(2, preCreated.sampleRate, preCreated.sampleRate);
+              impulse.getChannelData(0)[0] = 1;
+              impulse.getChannelData(1)[0] = 1;
+              head.audioReverbNode.buffer = impulse;
+
+              head.workletLoaded    = false;
+              head.streamWorkletNode = null;
+              console.log("[TalkingHead] Pre-injected 24kHz AudioContext with correct graph, state:", preCreated.state);
+            }
+          } catch (e) {
+            console.warn("[TalkingHead] AudioContext pre-injection failed:", e);
+          }
+
+          await Promise.race([
+            head.showAvatar({ url: avatarUrl, body: "F", lipsyncLang: "en" }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("showAvatar timeout after 20 s")), 20000)
+            ),
+          ]);
 
           if (!mounted) return;
 
-          // ── Professional HR outfit recoloring ─────────────────────────
-          // Traverse the loaded armature and change clothing material colors
-          // to look like a professional businesswoman (dark navy blazer etc.)
+          // ══════════════════════════════════════════════════════════
+          // PROFESSIONAL INTERVIEWER BEHAVIOR
+          // - Straight pose (hands relaxed at sides, no hip/crossed)
+          // - Direct eye contact with camera
+          // - Subtle natural micro head movements (not robotic)
+          // - Natural blinking at realistic intervals
+          // - Slight facial expressions while speaking
+          // - No exaggerated hand gestures
+          // - No side glancing / looking away
+          // - Calm, confident, balanced appearance
+          // ══════════════════════════════════════════════════════════
+
           try {
-            const armature = head.armature;
-            if (armature) {
-              const meshNames: string[] = [];
-              armature.traverse((child: any) => {
-                if (!child.isMesh) return;
-                const name = (child.name || "").toLowerCase();
-                meshNames.push(child.name);
+            // 1) Force straight pose (hands down, relaxed — NEVER hip)
+            head.poseName = "straight";
+            head.poseCurrentTemplate = head.poseTemplates["straight"];
+            head.setPoseFromTemplate(head.poseTemplates["straight"], 0);
 
-                // Outfit top → dark charcoal blazer (near-black formal suit)
-                if (name.includes("outfit_top") || (name.includes("top") && name.includes("outfit"))) {
-                  const mat = child.material as THREE.MeshStandardMaterial;
-                  if (mat?.isMeshStandardMaterial) {
-                    child.material = mat.clone();
-                    const m = child.material as THREE.MeshStandardMaterial;
-                    m.map = null;
-                    m.normalMap = null;
-                    m.color.set(0x2a2a2e);     // Dark charcoal blazer
-                    m.roughness = 0.7;          // Matte formal fabric
-                    m.metalness = 0.0;
-                    m.needsUpdate = true;
-                  }
-                }
-
-                // Outfit bottom → black formal trousers
-                if (name.includes("outfit_bottom") || (name.includes("bottom") && name.includes("outfit"))) {
-                  const mat = child.material as THREE.MeshStandardMaterial;
-                  if (mat?.isMeshStandardMaterial) {
-                    child.material = mat.clone();
-                    const m = child.material as THREE.MeshStandardMaterial;
-                    m.map = null;
-                    m.normalMap = null;
-                    m.color.set(0x1e1e22);     // Black trousers
-                    m.roughness = 0.65;
-                    m.metalness = 0.0;
-                    m.needsUpdate = true;
-                  }
-                }
-
-                // Footwear → black formal heels
-                if (name.includes("footwear") || name.includes("shoe")) {
-                  const mat = child.material as THREE.MeshStandardMaterial;
-                  if (mat?.isMeshStandardMaterial) {
-                    child.material = mat.clone();
-                    const m = child.material as THREE.MeshStandardMaterial;
-                    m.map = null;
-                    m.normalMap = null;
-                    m.color.set(0x0a0a0c);     // Black
-                    m.roughness = 0.25;         // Polished leather heels
-                    m.metalness = 0.08;
-                    m.needsUpdate = true;
-                  }
-                }
-              });
-              console.log("[TalkingHead] Mesh names:", meshNames.join(", "));
-              console.log("[TalkingHead] Professional outfit applied");
+            // 2) Replace ALL pose animation alternatives with straight-only
+            // (Don't touch poseBase/poseTarget/poseTemplates directly — causes clone errors)
+            const straightOnly = { delay: [999999, 999999], vs: { pose: ["straight"] } };
+            if (head.animPoses) {
+              for (const key of Object.keys(head.animPoses)) {
+                const tmpl = head.animPoses[key];
+                if (tmpl?.alt) tmpl.alt = [straightOnly];
+              }
             }
-          } catch (err) {
-            console.warn("[TalkingHead] Could not recolor outfit:", err);
+
+            // 3) Reduce body rotation to very subtle micro-movements (natural, not frozen)
+            const subtleBody = {
+              idle:     { delay: [2000, 8000], dt: [[3000, 8000]], vs: { bodyRotateX: [[-0.01, 0.02]], bodyRotateY: [[-0.02, 0.02]], bodyRotateZ: [[-0.01, 0.01]] } },
+              speaking: { dt: [[1000, 3000, 0]], vs: { bodyRotateX: [[-0.01, 0.03]], bodyRotateY: [[-0.02, 0.02]], bodyRotateZ: [[-0.01, 0.01]] } },
+            };
+            if (head.poseTemplates) {
+              for (const poseName of Object.keys(head.poseTemplates)) {
+                const tmpl = head.poseTemplates[poseName];
+                if (tmpl?.anims) {
+                  for (const anim of tmpl.anims) {
+                    if (anim?.name === "head") {
+                      anim.idle = subtleBody.idle;
+                      anim.speaking = subtleBody.speaking;
+                    }
+                  }
+                }
+              }
+            }
+
+            // 4) No hand gestures — permanently override with non-writable property
+            try {
+              Object.defineProperty(head, 'speakWithHands', {
+                value: () => {},
+                writable: false,
+                configurable: false,
+              });
+            } catch {
+              head.speakWithHands = () => {};
+            }
+
+            // 5) Disable emoji gestures
+            head.animEmojis = {};
+
+            // 6) Eye contact — always looking at camera, very minimal natural eye drift
+            const lockEyeTemplate = (template: any) => {
+              if (!template) return;
+              for (const key of ["idle", "speaking"]) {
+                const sub = template[key];
+                if (!sub) continue;
+                if (sub.vs) {
+                  sub.vs.eyesRotateY = [[-0.01, 0.01]]; // tiny natural drift
+                  sub.vs.eyesRotateX = [[-0.005, 0.005]];
+                  sub.vs.headMove = [0];
+                  sub.vs.eyeContact = [1];
+                }
+                if (sub.alt) {
+                  for (const alt of sub.alt) {
+                    if (alt.vs) {
+                      alt.vs.eyesRotateY = [[-0.01, 0.01]];
+                      alt.vs.eyesRotateX = [[-0.005, 0.005]];
+                      alt.vs.headMove = [0];
+                      alt.vs.eyeContact = [1];
+                    }
+                  }
+                }
+              }
+            };
+            lockEyeTemplate(head.animTemplateEyes);
+
+            // 7) Movement factors — subtle, professional
+            head.avatarIdleHeadMove = 0.02;     // very slight head sway
+            head.avatarSpeakingHeadMove = 0.03;  // tiny nod while speaking
+            head.modelMovementFactor = 0;
+            head.avatarIdleHandMove = 0;
+            head.avatarSpeakingHandMove = 0;
+            head.avatarIdleEyeContact = 1.0;
+            head.avatarSpeakingEyeContact = 1.0;
+
+            console.log("[TalkingHead] Professional interviewer mode — natural, calm, direct eye contact");
+          } catch (e) {
+            console.warn("[TalkingHead] Behavior setup failed:", e);
           }
+
+          // ── Find bones for per-frame enforcement ──
+          let eyeBones: any[] = [];
+          let headBone: any = null;
+          let neckBone: any = null;
+          try {
+            const armature = head.armature || head.avatar;
+            if (armature) {
+              armature.traverse((bone: any) => {
+                if (!bone.isBone) return;
+                const n = (bone.name || "").toLowerCase();
+                if (/eye/.test(n) && !/eyelash|eyelid|eyebrow/.test(n)) {
+                  eyeBones.push(bone);
+                }
+                if (n === "head") headBone = bone;
+                if (n === "neck") neckBone = bone;
+              });
+              console.log("[TalkingHead] Eye bones:", eyeBones.map((b: any) => b.name).join(", ") || "none");
+              console.log("[TalkingHead] Head bone:", headBone?.name || "none", "Neck bone:", neckBone?.name || "none");
+            }
+          } catch {}
+
+          const eyeLookMorphs = [
+            "eyeLookUpLeft", "eyeLookUpRight",
+            "eyeLookDownLeft", "eyeLookDownRight",
+            "eyeLookInLeft", "eyeLookInRight",
+            "eyeLookOutLeft", "eyeLookOutRight",
+          ];
 
           headRef.current = head;
           setStatus("ready");
-          console.log("[TalkingHead] Avatar ready");
+          onReady?.();
+
+          // Debug
+          try {
+            const mt = head.mtAvatar;
+            if (mt) {
+              const visemeKeys = Object.keys(mt).filter(k => k.startsWith("viseme_"));
+              console.log("[TalkingHead] Visemes:", visemeKeys.join(", "));
+            }
+          } catch {}
+
+          // ── Per-frame: eye contact + behavior guard + amplitude lip sync ──
+          const enforce = () => {
+            if (!mounted || !headRef.current) return;
+            const h = headRef.current;
+
+            try {
+              const mt = h.mtAvatar;
+
+              // ── Direct eye contact — eyes forward, chin level ──
+              h.avatarIdleEyeContact = 1.0;
+              h.avatarSpeakingEyeContact = 1.0;
+              if (h.eyeTarget) { h.eyeTarget.x = 0; h.eyeTarget.y = 0; }
+
+              // Clamp eye bone rotations to near-zero
+              for (const bone of eyeBones) {
+                bone.rotation.x = Math.max(-0.01, Math.min(0.01, bone.rotation.x));
+                bone.rotation.y = Math.max(-0.01, Math.min(0.01, bone.rotation.y));
+              }
+
+              // Clamp eye look morphs
+              if (mt) {
+                for (const m of eyeLookMorphs) {
+                  if (mt[m] && mt[m].realtime != null) {
+                    mt[m].realtime = Math.max(-0.02, Math.min(0.02, mt[m].realtime));
+                    mt[m].needsUpdate = true;
+                  }
+                }
+              }
+
+              // ── Head level — chin up, never look down ──
+              // Three.js: positive rotation.x on Head bone = tilt forward (look down)
+              if (headBone) {
+                headBone.rotation.x = Math.max(-0.03, Math.min(0.005, headBone.rotation.x));
+                headBone.rotation.z = Math.max(-0.015, Math.min(0.015, headBone.rotation.z));
+              }
+              if (neckBone) {
+                neckBone.rotation.x = Math.max(-0.02, Math.min(0.005, neckBone.rotation.x));
+                neckBone.rotation.z = Math.max(-0.015, Math.min(0.015, neckBone.rotation.z));
+              }
+              // TalkingHead morph: positive headRotateX = look down. Clamp to ≤ 0.
+              if (mt?.headRotateX) {
+                mt.headRotateX.realtime = Math.min(0, mt.headRotateX.realtime ?? 0);
+                mt.headRotateX.needsUpdate = true;
+              }
+
+              // ── Ensure pose stays straight (never hip) ──
+              if (h.poseName !== "straight") {
+                h.poseName = "straight";
+                h.poseCurrentTemplate = h.poseTemplates["straight"];
+              }
+
+              // ══════════════════════════════════════════════════════════
+              // PHONEME-BASED LIP SYNC — AUDIO-DURATION SYNCED
+              //
+              // 1. Viseme sequence from text via lipsync-en NRL phoneme rules
+              // 2. Timeline dynamically scaled to ACTUAL audio duration (PCM ms)
+              // 3. Audio analyser detects playback start/stop
+              // 4. Lips stop IMMEDIATELY when audio ends — no trailing animation
+              // 5. Subtle, controlled intensity — no exaggerated mouth opening
+              // ══════════════════════════════════════════════════════════
+
+              const SHAPES: Record<string, Record<string, number>> = {
+                "sil": {},
+                "PP":  { viseme_PP: 0.30 },
+                "FF":  { viseme_FF: 0.22, jawOpen: 0.04 },
+                "TH":  { viseme_TH: 0.18, jawOpen: 0.06 },
+                "DD":  { viseme_DD: 0.20, jawOpen: 0.10 },
+                "kk":  { viseme_kk: 0.18, jawOpen: 0.10 },
+                "CH":  { viseme_CH: 0.20, jawOpen: 0.06 },
+                "SS":  { viseme_SS: 0.22, jawOpen: 0.03 },
+                "nn":  { viseme_nn: 0.18, jawOpen: 0.06 },
+                "RR":  { viseme_RR: 0.20, jawOpen: 0.10 },
+                "aa":  { viseme_aa: 0.28, jawOpen: 0.18 },
+                "E":   { viseme_E:  0.24, jawOpen: 0.12 },
+                "I":   { viseme_I:  0.20, jawOpen: 0.08 },
+                "O":   { viseme_O:  0.26, jawOpen: 0.15 },
+                "U":   { viseme_U:  0.22, jawOpen: 0.10 },
+              };
+
+              const ALL_MORPHS = [
+                "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
+                "viseme_CH", "viseme_SS", "viseme_nn", "viseme_RR", "viseme_aa",
+                "viseme_E",  "viseme_I",  "viseme_O",  "viseme_U",  "jawOpen",
+              ];
+
+              // Rebuild viseme timeline when text changes
+              const curText = fullTextRef.current;
+              if (curText && curText !== lastBuiltTextRef.current) {
+                const lm = h.lipsync?.["en"];
+                if (lm) {
+                  const MS_PER_UNIT = 70;
+                  const WORD_GAP = 25;
+                  const words = curText.split(/\s+/).filter((w: string) => w.length > 0);
+                  const tl: {viseme: string, startMs: number, durMs: number}[] = [];
+                  let cursor = 0;
+                  for (const word of words) {
+                    try {
+                      const v = lm.wordsToVisemes(word);
+                      if (v?.visemes?.length) {
+                        for (let vi = 0; vi < v.visemes.length; vi++) {
+                          const dur = (v.durations[vi] || 1) * MS_PER_UNIT;
+                          tl.push({ viseme: v.visemes[vi], startMs: cursor, durMs: dur });
+                          cursor += dur;
+                        }
+                      }
+                    } catch {
+                      tl.push({ viseme: "DD", startMs: cursor, durMs: 70 });
+                      cursor += 70;
+                    }
+                    tl.push({ viseme: "sil", startMs: cursor, durMs: WORD_GAP });
+                    cursor += WORD_GAP;
+                  }
+                  visemeTimelineRef.current = tl;
+                  timelineTotalMsRef.current = cursor;
+                  lastBuiltTextRef.current = curText;
+                }
+              }
+
+              // Detect audio playback via speechStartRef (anchored to first PCM chunk).
+              // We do NOT use the AnalyserNode for speaking detection because streaming
+              // audio goes through audioStreamGainNode → reverb, bypassing audioAnalyzerNode.
+              // speechStartRef.current is set in sendAudioChunk() and reset to null by
+              // streamStart() / streamStop() when the session ends.
+              if (mt) {
+                const isSpeaking = speechStartRef.current !== null;
+
+                if (isSpeaking) {
+                  const elapsed = performance.now() - speechStartRef.current!;
+                  const tl = visemeTimelineRef.current;
+                  const tlTotal = timelineTotalMsRef.current;
+                  const audioTotal = totalAudioMsRef.current;
+
+                  let targetShape: Record<string, number> = {};
+
+                  if (tl.length > 0 && tlTotal > 0 && audioTotal > 0) {
+                    // Scale timeline to match actual audio duration
+                    // scale > 1 means audio is slower than timeline estimate
+                    const scale = audioTotal / tlTotal;
+                    // Map real elapsed time back to timeline position
+                    const timelinePos = elapsed / scale;
+
+                    // Binary-style reverse search for current viseme
+                    let found = false;
+                    for (let ti = tl.length - 1; ti >= 0; ti--) {
+                      if (timelinePos >= tl[ti].startMs && timelinePos < tl[ti].startMs + tl[ti].durMs) {
+                        targetShape = SHAPES[tl[ti].viseme] || {};
+                        found = true;
+                        break;
+                      }
+                    }
+                    if (!found) targetShape = {};
+                  } else if (tl.length === 0) {
+                    // No timeline yet — subtle fallback
+                    targetShape = SHAPES["DD"];
+                  }
+
+                  // Instant articulation — no easing, direct viseme snap
+                  for (const morph of ALL_MORPHS) {
+                    const target = targetShape[morph] || 0;
+                    currentMorphsRef.current[morph] = target;
+                    if (mt[morph]) {
+                      mt[morph].realtime = currentMorphsRef.current[morph];
+                      mt[morph].needsUpdate = true;
+                    }
+                  }
+                } else {
+                  // Audio stopped — IMMEDIATELY zero all lip morphs (no decay)
+                  speechStartRef.current = null;
+                  for (const morph of ALL_MORPHS) {
+                    if (currentMorphsRef.current[morph]) {
+                      currentMorphsRef.current[morph] = 0;
+                      if (mt[morph]) {
+                        mt[morph].realtime = 0;
+                        mt[morph].needsUpdate = true;
+                      }
+                    }
+                  }
+                }
+              }
+            } catch {}
+
+            rafId = requestAnimationFrame(enforce);
+          };
+
+          rafId = requestAnimationFrame(enforce);
+          console.log("[TalkingHead] Avatar ready — straight pose, eyes locked, native lip sync");
+
         } catch (err) {
           console.error("[TalkingHead] Failed to load avatar:", err);
-          if (mounted) setStatus("error");
+          if (mounted) {
+            setStatus("error");
+            // Still signal ready so the WebSocket connects even without the avatar
+            onReady?.();
+          }
         }
       })();
 
       return () => {
         mounted = false;
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        // Stop via localHead (set immediately after construction) so we can
+        // clean up even if showAvatar() is still in-flight and headRef isn't set yet.
+        try { localHead?.stop?.(); } catch {}
         try { headRef.current?.stop?.(); } catch {}
         headRef.current = null;
+        localHead = null;
       };
     }, [avatarUrl]);
 
-    // ── Imperative handle ────────────────────────────────────────────────────
+    // ── Send audio + track cumulative PCM duration for lip sync scaling ──
+    const sendAudioChunk = (pcmData: ArrayBuffer) => {
+      const head = headRef.current;
+      if (!head) return;
+      // Int16 samples @ 24kHz → ms
+      totalAudioMsRef.current += (pcmData.byteLength / 2 / 24000) * 1000;
+      // Anchor lip sync timeline to first audio chunk arrival (not amplitude detection)
+      if (speechStartRef.current === null) {
+        speechStartRef.current = performance.now();
+      }
+
+      // The TalkingHead worklet passes Int16 samples through at the AudioContext's
+      // native rate. Most browsers run at 48kHz even when 24kHz is requested.
+      // If the context is NOT 24kHz we must resample before sending, otherwise
+      // audio plays at 2x speed (48kHz output / 24kHz input = 2x).
+      const ctxRate = (head.audioCtx as AudioContext | undefined)?.sampleRate ?? 24000;
+      const TTS_RATE = 24000;
+      if (ctxRate !== TTS_RATE && ctxRate > 0) {
+        const ratio = ctxRate / TTS_RATE; // e.g. 2.0 for 48kHz context
+        const src = new Int16Array(pcmData);
+        const outLen = Math.round(src.length * ratio);
+        const out = new Int16Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+          const pos = i / ratio;
+          const idx = Math.floor(pos);
+          const frac = pos - idx;
+          const a = src[idx] ?? 0;
+          const b = src[Math.min(idx + 1, src.length - 1)] ?? 0;
+          out[i] = Math.round(a + frac * (b - a));
+        }
+        head.streamAudio({ audio: out.buffer });
+      } else {
+        head.streamAudio({ audio: pcmData });
+      }
+    };
+
+    // ── Fallback: play Int16 PCM via Web Audio API when TalkingHead isn't ready ──
+    const fbPlayChunk = (pcmData: ArrayBuffer) => {
+      const ctx = fbCtxRef.current;
+      if (!ctx) return;
+      // Decode Int16 @ 24kHz → Float32
+      const samples = new Int16Array(pcmData);
+      const buf = ctx.createBuffer(1, samples.length, 24000);
+      const ch = buf.getChannelData(0);
+      for (let i = 0; i < samples.length; i++) ch[i] = samples[i] / 32768;
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      // Also route to screen recording mix (if active)
+      const recordingDest = (window as any).__interviewRecordingDest as AudioNode | null;
+      if (recordingDest) { try { src.connect(recordingDest); } catch {} }
+      // Gapless scheduling
+      const now = ctx.currentTime;
+      const startAt = Math.max(now, fbNextTimeRef.current);
+      src.start(startAt);
+      fbNextTimeRef.current = startAt + buf.duration;
+      fbPendingRef.current++;
+      src.onended = () => {
+        fbPendingRef.current--;
+        if (fbPendingRef.current <= 0 && fbNoMoreDataRef.current) {
+          fbPendingRef.current = 0;
+          fbNoMoreDataRef.current = false;
+          fbActiveRef.current = false;
+          console.log("[FallbackAudio] All audio played");
+          onAudioEndRef.current?.();
+        }
+      };
+    };
+
     useImperativeHandle(ref, () => ({
 
       streamStart(_sampleRate: number, onAudioEnd: () => void) {
         const head = headRef.current;
-        if (!head) return;
-
-        streamReadyRef.current = false;
-        pendingRef.current = [];
         onAudioEndRef.current = onAudioEnd;
+        pendingRef.current = [];
+        streamReadyRef.current = false;
+        notifyEndPendingRef.current = false;
+        smoothAmpRef.current = 0;
+        speechStartRef.current = null;
+        currentMorphsRef.current = {};
+        totalAudioMsRef.current = 0;
+        timelineTotalMsRef.current = 0;
+        lastBuiltTextRef.current = "";
+        fbNoMoreDataRef.current = false;
+        fbPendingRef.current = 0;
+        fbActiveRef.current = false;
 
-        head
-          .streamStart(
-            {
-              gain: 0,              // Muted — InterviewUI handles real audio
-              lipsyncLang: "en",
-              lipsyncType: "visemes",
-              waitForAudioChunks: 0,
-            },
-            null,
-            () => { streamReadyRef.current = false; },
-          )
-          .then(() => {
-            if (!headRef.current) return;
-            streamReadyRef.current = true;
-            const queued = pendingRef.current.splice(0);
-            for (const buf of queued) {
-              head.streamAudio({ audio: buf });
+        if (!head) {
+          // ── Fallback: play audio directly via Web Audio API ──
+          console.warn("[TalkingHead] head not ready — using Web Audio API fallback");
+          fbActiveRef.current = true;
+          try {
+            // Reuse or create fallback AudioContext
+            const preCreated = (window as any).__interviewAudioContext as AudioContext | undefined;
+            if (preCreated && preCreated.state !== "closed") {
+              fbCtxRef.current = preCreated;
+              (window as any).__interviewAudioContext = null;
+            } else if (!fbCtxRef.current || fbCtxRef.current.state === "closed") {
+              fbCtxRef.current = new AudioContext({ sampleRate: 24000 });
             }
-          })
-          .catch((e: Error) => {
-            console.error("[TalkingHead] streamStart failed:", e);
-            streamReadyRef.current = true;
-          });
+            const ctx = fbCtxRef.current;
+            if (ctx.state === "suspended") ctx.resume().catch(() => {});
+          } catch {}
+          fbNextTimeRef.current = 0;
+          // Mark ready immediately — no worklet setup needed
+          streamReadyRef.current = true;
+          const queued = pendingRef.current.splice(0);
+          for (const buf of queued) fbPlayChunk(buf);
+          return;
+        }
+
+        // Pre-resume AudioContext if suspended BEFORE calling head.streamStart.
+        // TalkingHead's streamStart has a 1-second resume timeout — if we don't
+        // pre-resume it returns early WITHOUT setting up the worklet, so
+        // streamNotifyEnd() is a no-op and onAudioEnd is never called (interview hangs).
+        const preResumeCtx = async () => {
+          const ctx = head.audioCtx as AudioContext | undefined;
+          if (ctx && ctx.state !== "running") {
+            try { await ctx.resume(); } catch { /* ignore */ }
+          }
+        };
+
+        const lm = head.lipsync?.["en"];
+        console.log("[TalkingHead] streamStart — phoneme-based lip sync, lipsync module:", lm ? "loaded" : "NOT loaded");
+
+        preResumeCtx().then(() => {
+          head
+            .streamStart(
+              {
+                gain: 1,
+                lipsyncLang: "en",
+                waitForAudioChunks: 0,
+              },
+              null,
+              () => {
+                console.log("[TalkingHead] stream complete — audio finished");
+                streamReadyRef.current = false;
+                onAudioEndRef.current?.();
+              },
+            )
+            .then(() => {
+              if (!headRef.current) return;
+              streamReadyRef.current = true;
+              const queued = pendingRef.current.splice(0);
+              console.log("[TalkingHead] streamStart ready, flushing", queued.length, "queued chunks");
+              for (const buf of queued) {
+                sendAudioChunk(buf);
+              }
+              // If notifyEnd() was called before we were ready (e.g. audio_end arrived
+              // before TalkingHead's streamStart resolved), fire streamNotifyEnd now —
+              // AFTER sending all pending audio so TalkingHead waits for it to play.
+              if (notifyEndPendingRef.current) {
+                notifyEndPendingRef.current = false;
+                console.log("[TalkingHead] Deferred streamNotifyEnd — firing after pending flush");
+                headRef.current?.streamNotifyEnd?.();
+              }
+            })
+            .catch((e: Error) => {
+              console.error("[TalkingHead] streamStart failed:", e);
+              streamReadyRef.current = true;
+              // Fire onAudioEnd so the mic starts even if TalkingHead failed
+              onAudioEndRef.current?.();
+            });
+        });
       },
 
       streamAudio(pcmData: ArrayBuffer) {
+        if (fbActiveRef.current) {
+          // Fallback mode: play directly
+          if (!streamReadyRef.current) {
+            pendingRef.current.push(pcmData);
+          } else {
+            fbPlayChunk(pcmData);
+          }
+          return;
+        }
         if (!streamReadyRef.current) {
           pendingRef.current.push(pcmData);
           return;
         }
-        headRef.current?.streamAudio({ audio: pcmData });
+        sendAudioChunk(pcmData);
+      },
+
+      notifyEnd() {
+        if (fbActiveRef.current) {
+          fbNoMoreDataRef.current = true;
+          // If all buffers already finished, fire immediately
+          if (fbPendingRef.current <= 0) {
+            fbNoMoreDataRef.current = false;
+            fbActiveRef.current = false;
+            onAudioEndRef.current?.();
+          }
+          return;
+        }
+        const head = headRef.current;
+        if (head) {
+          if (!streamReadyRef.current) {
+            // TalkingHead's streamStart hasn't resolved yet — pending audio hasn't been
+            // sent to TalkingHead. Deferring streamNotifyEnd until after the flush.
+            console.log("[TalkingHead] notifyEnd deferred — stream not ready yet");
+            notifyEndPendingRef.current = true;
+          } else {
+            head.streamNotifyEnd();
+          }
+        }
+      },
+
+      setText(text: string) {
+        fullTextRef.current = text;
       },
 
       streamStop() {
+        console.log("[TalkingHead] streamStop called");
         streamReadyRef.current = false;
         pendingRef.current = [];
+        speechStartRef.current = null;
+        currentMorphsRef.current = {};
+        totalAudioMsRef.current = 0;
+        // Fallback mode: close context to stop playback immediately
+        if (fbActiveRef.current) {
+          fbActiveRef.current = false;
+          fbNoMoreDataRef.current = false;
+          fbPendingRef.current = 0;
+          try { fbCtxRef.current?.close(); } catch {}
+          fbCtxRef.current = null;
+          return;
+        }
 
-        // Release realtime control of all visemes so TalkingHead's own
-        // animation system can animate the mouth back to idle/baseline.
         const h = headRef.current as any;
         if (h?.mtAvatar) {
           const VISEMES = [
             "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
             "viseme_CH", "viseme_SS", "viseme_nn", "viseme_RR", "viseme_aa",
-            "viseme_E",  "viseme_I",  "viseme_O",  "viseme_U",
+            "viseme_E",  "viseme_I",  "viseme_O",  "viseme_U",  "jawOpen",
           ];
           for (const v of VISEMES) {
             const mt = h.mtAvatar[v];
@@ -224,42 +771,28 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         headRef.current?.streamStop?.();
       },
 
-      applyVisemeLive(visemeName: string, amplitude: number) {
-        const h = headRef.current as any;
-        if (!h?.mtAvatar) return;
-
-        // Use TalkingHead's `realtime` morph target property.
-        // Unlike `system` (velocity-based, too slow) or animQueue entries,
-        // `realtime` is applied DIRECTLY each frame with no easing delay —
-        // exactly what we need for per-frame amplitude-driven lip sync.
-        //
-        // Strategy: every call sets the active viseme to `amplitude` and all
-        // other Oculus visemes to 0 (instant reset, no crossfade lag).
-        const VISEMES = [
-          "viseme_PP", "viseme_FF", "viseme_TH", "viseme_DD", "viseme_kk",
-          "viseme_CH", "viseme_SS", "viseme_nn", "viseme_RR", "viseme_aa",
-          "viseme_E",  "viseme_I",  "viseme_O",  "viseme_U",
-        ] as const;
-
-        const target = Math.min(amplitude, 0.95);
-
-        for (const v of VISEMES) {
-          const mt = h.mtAvatar[v];
-          if (!mt) continue;
-          const val = (v === visemeName) ? target : 0;
-          if (mt.realtime !== val) {
-            mt.realtime    = val;
-            mt.needsUpdate = true;
-          }
-        }
-      },
-
     }));
 
-    // ── Render ───────────────────────────────────────────────────────────────
     return (
-      <div className={`relative overflow-hidden ${className ?? ""}`} style={style}>
-        <div ref={containerRef} className="w-full h-full" />
+      <div
+        className={`relative overflow-hidden ${className ?? ""}`}
+        style={style}
+      >
+        {/* Dark cinematic studio background — soft charcoal with vignette */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "radial-gradient(ellipse at 50% 40%, #3a3a3f 0%, #2a2a2e 40%, #1a1a1e 75%, #0f0f12 100%)",
+          }}
+        />
+        {/* Subtle studio light spill from top — enhances subject separation */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: "radial-gradient(ellipse at 50% 15%, rgba(200,195,185,0.08) 0%, transparent 50%)",
+          }}
+        />
+        <div ref={containerRef} className="w-full h-full relative z-10" />
 
         {status === "loading" && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 backdrop-blur-sm">
@@ -275,13 +808,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             <div className="text-center p-6 select-none">
               <div className="text-5xl mb-3">👤</div>
               <p className="text-sm font-medium text-gray-300 mb-1">Avatar Not Loaded</p>
-              <p className="text-xs text-gray-500 mb-1">
-                Place a GLB avatar at <code className="text-violet-400">/public/avatar.glb</code>
-              </p>
-              <p className="text-xs text-gray-600">
-                Get one free from{" "}
-                <span className="text-violet-400">avaturn.me</span>
-              </p>
+              <p className="text-xs text-gray-500">Model must be from Ready Player Me or Avaturn</p>
             </div>
           </div>
         )}

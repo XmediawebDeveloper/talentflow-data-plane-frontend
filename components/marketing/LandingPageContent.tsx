@@ -74,9 +74,9 @@ export function LandingPageContent() {
 
         <div className="container relative mx-auto max-w-[1400px] px-4 sm:px-6 py-12 sm:py-16 md:py-20">
           <div className="text-center space-y-5 sm:space-y-6 md:space-y-8">
-            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-full bg-white/80 dark:bg-white/10 border border-white/20 dark:border-white/10 backdrop-blur-md">
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 rounded-full bg-gray-50 border border-gray-200 dark:border-white/20 backdrop-blur-md">
               <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#667EEA] dark:text-[#A78BFA]" />
-              <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
+              <span className="text-xs sm:text-sm font-medium text-gray-700">
                 Rated 4.9/5 by 2,500+ recruitment teams
               </span>
               <div className="flex gap-0.5">
@@ -122,7 +122,7 @@ export function LandingPageContent() {
               <Button
                 size="lg"
                 variant="outline"
-                className="w-full sm:w-auto h-12 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 text-base sm:text-lg rounded-xl sm:rounded-2xl bg-white/80 dark:bg-white/10 border-2"
+                className="w-full sm:w-auto h-12 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 text-base sm:text-lg rounded-xl sm:rounded-2xl bg-gray-50 border-2"
                 onClick={() => setDemoModalOpen(true)}
               >
                 <Play className="w-5 h-5 mr-2" />
@@ -133,7 +133,7 @@ export function LandingPageContent() {
             <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-8 text-xs sm:text-sm text-gray-600 dark:text-gray-400 pt-3 sm:pt-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
-                <span>{trialDays}-day free trial</span>
+                <span>{trialDays}-{trialDays === 1 ? 'day' : 'days'} free trial</span>
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500" />
@@ -229,7 +229,7 @@ export function LandingPageContent() {
                         onClick={() => setDemoModalOpen(false)}
                         asChild
                       >
-                        <Link href="/signup" prefetch={false}>
+                        <Link href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`} prefetch={false}>
                           Start Free Trial
                           <ArrowRight className="w-5 h-5 ml-2" />
                         </Link>
@@ -371,7 +371,7 @@ export function LandingPageContent() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 pt-4 sm:pt-6 px-4 sm:px-0">
               <Link
-                href="/signup"
+                href={`https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`}
                 prefetch={false}
                 className="w-full sm:w-auto inline-flex items-center justify-center h-12 sm:h-14 md:h-16 px-8 sm:px-10 md:px-12 text-base sm:text-lg rounded-xl sm:rounded-2xl bg-white text-gray-900 font-semibold hover:bg-gray-100 shadow-2xl transition-colors"
               >

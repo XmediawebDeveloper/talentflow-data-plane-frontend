@@ -14,6 +14,20 @@ export default function AIInterviewDetailsPage() {
   const [config, setConfig] = useState<AIInterviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [allIds, setAllIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchAllIds = async () => {
+      try {
+        const probe = await aiInterviewService.listConfigs({ status: 'published', page_size: 1, page: 1 });
+        const res = probe.total > probe.items.length
+          ? await aiInterviewService.listConfigs({ status: 'published', page_size: probe.total, page: 1 })
+          : probe;
+        setAllIds(res.items.map((a: any) => a.id));
+      } catch { /* ignore */ }
+    };
+    fetchAllIds();
+  }, []);
 
   const fetchConfig = async () => {
     try {
@@ -69,6 +83,14 @@ export default function AIInterviewDetailsPage() {
       config={config}
       onBack={handleBack}
       onRefresh={fetchConfig}
+      currentIndex={allIds.indexOf(interviewId)}
+      totalCount={allIds.length}
+      onPrev={allIds.indexOf(interviewId) > 0
+        ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) - 1]}`)
+        : undefined}
+      onNext={allIds.indexOf(interviewId) >= 0 && allIds.indexOf(interviewId) < allIds.length - 1
+        ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) + 1]}`)
+        : undefined}
     />
   );
 }

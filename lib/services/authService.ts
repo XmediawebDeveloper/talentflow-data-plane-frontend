@@ -103,6 +103,10 @@ export interface User {
     can_view_usage?: boolean;
     // Teams
     can_view_teams?: boolean;
+    can_create_teams?: boolean;
+    can_update_teams?: boolean;
+    can_delete_teams?: boolean;
+    can_view_team_usage?: boolean;
     // RBAC06: Feature flags permissions - GRANULAR (VIEW + RUN)
     can_view_scoring?: boolean;      // NEW: View resume scoring page/results
     can_run_scoring?: boolean;       // Run scoring operations
@@ -128,6 +132,18 @@ export interface User {
     can_update_assessments?: boolean;
     can_delete_assessments?: boolean;
     can_download_assessment_pdf?: boolean;
+    can_view_hr_question_bank?: boolean;
+    can_create_hr_question_bank?: boolean;
+    can_update_hr_question_bank?: boolean;
+    can_delete_hr_question_bank?: boolean;
+    can_view_ai_interviews?: boolean;
+    can_create_ai_interviews?: boolean;
+    can_update_ai_interviews?: boolean;
+    can_share_ai_interviews?: boolean;
+    can_invite_ai_interviews?: boolean;
+    can_publish_ai_interviews?: boolean;
+    can_archive_ai_interviews?: boolean;
+    can_delete_ai_interviews?: boolean;
   };
   // RBAC06: Feature flags
   feature_flags?: FeatureFlags;
@@ -143,6 +159,9 @@ export interface User {
   suspended_at?: string;
   // Tenant subdomain - used to build org-aware login URL on logout
   tenant_subdomain?: string;
+  tenant_admin_email?: string;
+  // Invite flow: if true, user must set a permanent password before accessing the dashboard
+  must_reset_password?: boolean;
 }
 
 export interface LoginResponse {
@@ -251,6 +270,22 @@ export const authService = {
     }
   },
 
+
+  /**
+   * Set first password for invited users (must_reset_password flow).
+   * Requires a valid Bearer token (user is already authenticated with temp password).
+   */
+  async setPassword(newPassword: string, confirmPassword: string): Promise<{ message: string }> {
+    try {
+      const response = await api.post('/auth/set-password', {
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
 
   /**
    * Change password

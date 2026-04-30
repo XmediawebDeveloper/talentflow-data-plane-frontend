@@ -30,6 +30,7 @@ import {
 import { Button } from '@/components/ui/button';
 import {
   candidateService,
+  sendPauseBeacon,
   AssessmentInfo,
   CurrentQuestion,
   SubmitAnswerResponse
@@ -39,6 +40,7 @@ import { TechnicalQuestionView } from './questions/TechnicalQuestionView';
 import { CodingQuestionView } from './questions/CodingQuestionView';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useRetryQueue } from '@/hooks/useRetryQueue';
+import { getFullscreenChangeEvent, isFullscreen as getIsFullscreen, exitFullscreen as compatExitFullscreen, requestFullscreen as compatRequestFullscreen, playVideo } from '@/lib/utils/browserCompat';
 
 interface Round {
   round_type: string;
@@ -60,6 +62,7 @@ interface AssessmentInterfaceProps {
   rounds: Round[];
   startedAt: string; // ISO timestamp when assessment started
   durationMinutes: number; // Total assessment duration (default 30)
+  initialTimeRemainingSeconds?: number;
   onAnswerSubmit: (
     questionId: string,
     answer: {
@@ -67,17 +70,24 @@ interface AssessmentInterfaceProps {
       video_response_url?: string;
       selected_options?: string[];
       code_submission?: string;
+      code_input?: string;
       language?: string;
+      code_execution_status?: string;
+      code_execution_output?: string;
+      code_execution_error?: string;
       is_draft?: boolean;  // True = draft (auto-save, editable), False = submitted (locked)
     }
   ) => Promise<SubmitAnswerResponse>;
   onComplete: () => void;
   onNavigate: (questionNumber: number) => void;
+  onSetQuestion?: (question: CurrentQuestion) => void;
+  onTimeUpdate?: (remainingSeconds: number) => void;
   videoRef: RefObject<HTMLVideoElement | null>;
   stream: MediaStream | null;
   isCameraActive?: boolean;
   isMicrophoneActive?: boolean;
   copyPasteBlocking?: boolean;
+  enforceFullscreen?: boolean;
 }
 
 export function AssessmentInterface({
@@ -88,46 +98,77 @@ export function AssessmentInterface({
   rounds,
   startedAt,
   durationMinutes,
+  initialTimeRemainingSeconds,
   onAnswerSubmit,
   onComplete,
   onNavigate,
+  onSetQuestion,
+  onTimeUpdate,
   videoRef,
   stream,
   isCameraActive = true,
   isMicrophoneActive = true,
   copyPasteBlocking = true,
+  enforceFullscreen = true,
 }: AssessmentInterfaceProps) {
   type AnswerState = {
+    question_id?: string;
     text_response?: string;
     video_response_url?: string;
     selected_options?: string[];
     code_submission?: string;
+    code_input?: string;
     language?: string;
+    code_execution_status?: string;
+    code_execution_output?: string;
+    code_execution_error?: string;
   };
 
   const buildAnswerFromPrevious = (q: typeof currentQuestion): AnswerState => {
     if (q.previous_answer) {
       return {
+        question_id: q.question_id,
         text_response: q.previous_answer.text_response || undefined,
         selected_options: q.previous_answer.selected_options || undefined,
         code_submission: q.previous_answer.code_submission || undefined,
+        code_input: q.previous_answer.code_input || undefined,
+        language: q.previous_answer.language || undefined,
+        code_execution_status: q.previous_answer.code_execution_status || undefined,
+        code_execution_output: q.previous_answer.code_execution_output || undefined,
+        code_execution_error: q.previous_answer.code_execution_error || undefined,
       };
     }
-    return {};
+    if (typeof window !== 'undefined') {
+      try {
+        const key = `assessment_draft_${token}_${q.question_id}`;
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return {
+            question_id: q.question_id,
+            text_response: parsed.text_response || undefined,
+            selected_options: parsed.selected_options || undefined,
+            code_submission: parsed.code_submission || undefined,
+            code_input: parsed.code_input || undefined,
+            language: parsed.language || undefined,
+            code_execution_status: parsed.code_execution_status || undefined,
+            code_execution_output: parsed.code_execution_output || undefined,
+            code_execution_error: parsed.code_execution_error || undefined,
+          };
+        }
+      } catch (error) {
+        console.warn('[LOCAL-BACKUP] Failed to restore draft from localStorage:', error);
+      }
+    }
+    return { question_id: q.question_id };
   };
 
   // Initialize answer from previous_answer immediately so child components (e.g.
   // MultiLanguageCodeEditor) see the saved code on their very first render.
   const [answer, setAnswer] = useState<AnswerState>(() => buildAnswerFromPrevious(currentQuestion));
-
-  // Synchronously update answer when the question changes (derived-state-from-props pattern).
-  // useEffect fires AFTER render, which is too late — the editor's init effect would run
-  // with a stale empty answer and show the template instead of the saved code.
-  const [prevQuestionId, setPrevQuestionId] = useState(currentQuestion.question_id);
-  if (prevQuestionId !== currentQuestion.question_id) {
-    setPrevQuestionId(currentQuestion.question_id);
+  useEffect(() => {
     setAnswer(buildAnswerFromPrevious(currentQuestion));
-  }
+  }, [currentQuestion.question_id]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
   const [questionStartTime] = useState(Date.now());
@@ -140,9 +181,10 @@ export function AssessmentInterface({
   const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [allQuestionsAnswered, setAllQuestionsAnswered] = useState(false);
+  const [showHRSummary, setShowHRSummary] = useState(false);
+  const [hrSummaryData, setHRSummaryData] = useState<{ answered: number; total: number; unanswered: number }>({ answered: 0, total: 0, unanswered: 0 });
   // const [showUnansweredPopup, setShowUnansweredPopup] = useState(false); // REMOVED: Combined into showCompleteConfirm modal
   const [unansweredQuestions, setUnansweredQuestions] = useState<number[]>([]);
-  const [skippedQuestions, setSkippedQuestions] = useState<number[]>([]);
   // Track which question numbers the candidate has actually visited
   const [visitedQuestions, setVisitedQuestions] = useState<Set<number>>(() => new Set([currentQuestion.question_number]));
 
@@ -160,6 +202,13 @@ export function AssessmentInterface({
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'offline' | 'retrying'>('idle');
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const cancelPendingAutoSave = () => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+  };
+
   // Network status and retry queue
   const { isOnline, isSlowConnection, connectionType } = useNetworkStatus();
   const { queueSize, isProcessing, addToQueue, processQueue } = useRetryQueue();
@@ -170,6 +219,13 @@ export function AssessmentInterface({
   // Store parsed start time and total duration for accurate wall-clock computation
   const assessmentStartTimeRef = useRef<number>(0);
   const totalDurationSecsRef = useRef(durationMinutes * 60);
+  const isTimerPausedRef = useRef(false);
+  const immediateNetworkPauseRef = useRef(false);
+  const globalTimeRemainingRef = useRef(0);
+  const lastAcceptedAuthoritativeRemainingRef = useRef<number | null>(null);
+  // Records the wall-clock ms when the timer was paused due to network loss.
+  // Used to shift assessmentStartTimeRef forward on resume so offline time is excluded.
+  const pauseStartWallTimeRef = useRef<number | null>(null);
 
   // Initialize: compute from wall clock (not decrement-based) to be accurate
   const [globalTimeRemaining, setGlobalTimeRemaining] = useState<number>(() => {
@@ -181,16 +237,47 @@ export function AssessmentInterface({
       if (ts.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(ts)) return new Date(ts).getTime();
       return new Date(ts + '+05:30').getTime(); // naive IST → correct UTC ms
     };
-    const startTime = parseBackendTs(startedAt);
-    assessmentStartTimeRef.current = startTime;
+
     const totalDuration = durationMinutes * 60;
     totalDurationSecsRef.current = totalDuration;
+
+    if (typeof initialTimeRemainingSeconds === 'number' && initialTimeRemainingSeconds >= 0) {
+      const restored = Math.max(0, Math.min(totalDuration, initialTimeRemainingSeconds));
+      assessmentStartTimeRef.current = Date.now() - ((totalDuration - restored) * 1000);
+      globalTimeRemainingRef.current = restored;
+      return restored;
+    }
+
+    // Restore from sessionStorage if saved during network disconnect or crash
+    try {
+      const saved = sessionStorage.getItem(`assessment_timer_${token}`);
+      if (saved) {
+        const { remainingSeconds, savedAt, isPaused } = JSON.parse(saved);
+        const elapsedSinceReload = isPaused ? 0 : Math.floor((Date.now() - savedAt) / 1000);
+        const restored = Math.max(0, remainingSeconds - elapsedSinceReload);
+        if (restored > 0) {
+          if (!isPaused) {
+            sessionStorage.removeItem(`assessment_timer_${token}`);
+          }
+          // Adjust start ref so interval stays accurate with restored remaining time
+          assessmentStartTimeRef.current = Date.now() - ((totalDuration - restored) * 1000);
+          globalTimeRemainingRef.current = restored;
+          console.log('[TIMER] Restored from saved state:', { restored });
+          return restored;
+        }
+      }
+    } catch {}
+
+    // Normal wall-clock calculation
+    const startTime = parseBackendTs(startedAt);
+    assessmentStartTimeRef.current = startTime;
     const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const remaining = Math.max(0, totalDuration - elapsed);
     console.log('[TIMER] Calculating initial time:', {
-      startedAt, startTime, now: Date.now(), elapsed, totalDuration,
-      remaining: Math.max(0, totalDuration - elapsed)
+      startedAt, startTime, now: Date.now(), elapsed, totalDuration, remaining
     });
-    return Math.max(0, totalDuration - elapsed);
+    globalTimeRemainingRef.current = remaining;
+    return remaining;
   });
   const [isGlobalTimeExpired, setIsGlobalTimeExpired] = useState(false);
   const globalTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -199,8 +286,32 @@ export function AssessmentInterface({
   // This prevents immediate completion due to timing/parsing issues
   const [isInitialized, setIsInitialized] = useState(false);
 
+  const persistPausedTimerSnapshot = () => {
+    try {
+      sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+        remainingSeconds: globalTimeRemainingRef.current,
+        savedAt: Date.now(),
+        isPaused: true,
+      }));
+    } catch {}
+  };
+
+  const pauseTimerForRecovery = (reason: string) => {
+    isTimerPausedRef.current = true;
+    immediateNetworkPauseRef.current = true;
+    if (pauseStartWallTimeRef.current === null) {
+      pauseStartWallTimeRef.current = Date.now();
+    }
+    persistPausedTimerSnapshot();
+    setShowNetworkBanner(true);
+    setAutoSaveStatus('offline');
+    void candidateService.pauseAssessment(token, reason);
+  };
+
   // Fullscreen state (only tracking, not used for pausing anymore)
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  // Initialize from actual browser state to avoid a false-negative flash on mount
+  const [isFullscreen, setIsFullscreen] = useState(() => getIsFullscreen());
+  const fullscreenExitTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Violation tracking - ESC and Alt+Tab attempts (max 3 before warning)
   const [violationCount, setViolationCount] = useState(0);
@@ -236,7 +347,7 @@ export function AssessmentInterface({
 
     // Debounce: Wait 3 seconds after user stops typing before saving
     console.log('[AUTO-SAVE] Answer changed, waiting 3 seconds before saving...');
-    const saveTimeout = setTimeout(async () => {
+    autoSaveTimerRef.current = setTimeout(async () => {
       console.log('[AUTO-SAVE] User stopped typing, saving draft now...');
       setIsAutoSaving(true);
       setAutoSaveStatus('saving');
@@ -247,7 +358,11 @@ export function AssessmentInterface({
           text_response: answer.text_response,
           selected_options: answer.selected_options,
           code_submission: answer.code_submission,
+          code_input: answer.code_input,
           language: answer.language,
+          code_execution_status: answer.code_execution_status,
+          code_execution_output: answer.code_execution_output,
+          code_execution_error: answer.code_execution_error,
           time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
         });
 
@@ -304,7 +419,11 @@ export function AssessmentInterface({
                 text_response: currentAnswer.text_response,
                 selected_options: currentAnswer.selected_options,
                 code_submission: currentAnswer.code_submission,
+                code_input: currentAnswer.code_input,
                 language: currentAnswer.language,
+                code_execution_status: currentAnswer.code_execution_status,
+                code_execution_output: currentAnswer.code_execution_output,
+                code_execution_error: currentAnswer.code_execution_error,
                 time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
               });
             },
@@ -334,13 +453,14 @@ export function AssessmentInterface({
         }
       } finally {
         setIsAutoSaving(false);
+        autoSaveTimerRef.current = null;
       }
     }, 3000); // Save 3 seconds after user stops typing
 
     // Cleanup: Cancel save if user starts typing again or navigates
     return () => {
       console.log('[AUTO-SAVE] Debounce timer cleared (user still typing or navigated)');
-      clearTimeout(saveTimeout);
+      cancelPendingAutoSave();
     };
   }, [
     answer,
@@ -384,12 +504,17 @@ export function AssessmentInterface({
         text_response: answer.text_response,
         selected_options: answer.selected_options,
         code_submission: answer.code_submission,
+        code_input: answer.code_input,
         language: answer.language,
+        code_execution_status: answer.code_execution_status,
+        code_execution_output: answer.code_execution_output,
+        code_execution_error: answer.code_execution_error,
         is_draft: true,
         time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
       });
 
       navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+      sendPauseBeacon(token, 'beforeunload');
       console.log('[UNLOAD] Flushed answer via sendBeacon');
     };
 
@@ -397,33 +522,119 @@ export function AssessmentInterface({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [answer, token, currentQuestion.question_id, isCurrentAnswerLocked, questionStartTime]);
 
-  // 🌐 NETWORK STATUS: Monitor connection and retry queued requests
+  // 🌐 NETWORK STATUS: Pause timer on disconnect, reload silently on restore
   useEffect(() => {
     if (!isOnline) {
-      console.log('[NETWORK] Connection lost - showing offline banner');
-      setShowNetworkBanner(true);
-      setAutoSaveStatus('offline');
+      console.log('[NETWORK] Connection lost - pausing timer');
+      pauseTimerForRecovery('network_offline');
     } else {
+      if (immediateNetworkPauseRef.current || isTimerPausedRef.current) {
+        // Shift the wall-clock anchor forward by the time we were offline so the
+        // timer resumes from exactly where it stopped rather than counting offline
+        // time as elapsed.
+        if (pauseStartWallTimeRef.current !== null) {
+          const offlineMs = Date.now() - pauseStartWallTimeRef.current;
+          assessmentStartTimeRef.current += offlineMs;
+          pauseStartWallTimeRef.current = null;
+          console.log(`[NETWORK] Connection restored - excluded ${Math.round(offlineMs / 1000)}s offline from timer`);
+        }
+        // Reload to re-sync with server (server is the source of truth for remaining time)
+        window.location.reload();
+        return;
+      }
       console.log('[NETWORK] Connection restored - processing retry queue');
+      isTimerPausedRef.current = false;
       setShowNetworkBanner(false);
-
-      // Auto-retry queued requests when connection is restored
       if (queueSize > 0) {
         setAutoSaveStatus('retrying');
         processQueue().then(() => {
-          if (queueSize === 0) {
-            setAutoSaveStatus('idle');
-          }
+          if (queueSize === 0) setAutoSaveStatus('idle');
         });
       }
     }
-  }, [isOnline, queueSize, processQueue]);
+  }, [isOnline, queueSize, processQueue, token]);
+
+  useEffect(() => {
+    const handleCandidateNetworkFailure = () => {
+      console.log('[NETWORK] Candidate API request failed - pausing timer immediately');
+      pauseTimerForRecovery('network_request_failed');
+    };
+
+    const handleCandidateNetworkRestored = () => {
+      if (!immediateNetworkPauseRef.current) return;
+      console.log('[NETWORK] Candidate API recovered - reloading assessment to resume timer');
+      window.location.reload();
+    };
+
+    window.addEventListener('candidate-network-failure', handleCandidateNetworkFailure);
+    window.addEventListener('candidate-network-restored', handleCandidateNetworkRestored);
+    return () => {
+      window.removeEventListener('candidate-network-failure', handleCandidateNetworkFailure);
+      window.removeEventListener('candidate-network-restored', handleCandidateNetworkRestored);
+    };
+  }, [token]);
+
+  useEffect(() => {
+    const serverPaused = Boolean(assessmentInfo.is_paused);
+    const shouldPauseTimer = !isOnline || serverPaused;
+    isTimerPausedRef.current = shouldPauseTimer;
+
+    const authoritativeRemaining = typeof assessmentInfo.time_remaining_seconds === 'number'
+      ? assessmentInfo.time_remaining_seconds
+      : initialTimeRemainingSeconds;
+
+    if (typeof authoritativeRemaining === 'number' && authoritativeRemaining >= 0) {
+      const normalizedRemaining = Math.max(0, Math.min(totalDurationSecsRef.current, authoritativeRemaining));
+      const currentRemaining = globalTimeRemainingRef.current;
+      const allowIncrease =
+        lastAcceptedAuthoritativeRemainingRef.current === null ||
+        serverPaused ||
+        !isOnline ||
+        immediateNetworkPauseRef.current;
+
+      // Ignore stale values that would incorrectly add time during question navigation
+      // or delayed parent rerenders while the assessment is actively running.
+      if (!(normalizedRemaining > currentRemaining + 1 && !allowIncrease)) {
+        assessmentStartTimeRef.current = Date.now() - ((totalDurationSecsRef.current - normalizedRemaining) * 1000);
+        globalTimeRemainingRef.current = normalizedRemaining;
+        lastAcceptedAuthoritativeRemainingRef.current = normalizedRemaining;
+        setGlobalTimeRemaining(normalizedRemaining);
+        onTimeUpdate?.(normalizedRemaining);
+      } else {
+        console.warn('[TIMER] Ignored stale authoritative timer increase', {
+          normalizedRemaining,
+          currentRemaining,
+          serverPaused,
+          isOnline,
+        });
+      }
+    }
+
+    if (!shouldPauseTimer) {
+      immediateNetworkPauseRef.current = false;
+      pauseStartWallTimeRef.current = null;
+      try {
+        sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+          remainingSeconds: globalTimeRemainingRef.current,
+          savedAt: Date.now(),
+          isPaused: false,
+        }));
+      } catch {}
+    }
+  }, [
+    assessmentInfo.is_paused,
+    assessmentInfo.time_remaining_seconds,
+    initialTimeRemainingSeconds,
+    isOnline,
+    onTimeUpdate,
+    token,
+  ]);
 
   // 🛡️ PROCTORING: Exit Fullscreen on Complete
-  const exitFullscreen = async () => {
+  const exitAssessmentFullscreen = async () => {
     try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
+      if (getIsFullscreen()) {
+        await compatExitFullscreen();
         console.log('[PROCTORING] ✅ Exited fullscreen mode');
       }
     } catch (error) {
@@ -433,47 +644,78 @@ export function AssessmentInterface({
 
   // Monitor fullscreen changes - IMMEDIATE FINISH ON EXIT (unless completing normally)
   useEffect(() => {
-    const handleFullscreenChange = async () => {
-      const isCurrentlyFullscreen = !!document.fullscreenElement;
-      console.log(`[LOCKDOWN] Fullscreen: ${isCurrentlyFullscreen ? 'ACTIVE' : 'INACTIVE'}`);
-      setIsFullscreen(isCurrentlyFullscreen);
+    if (!enforceFullscreen) {
+      setIsFullscreen(true);
+      return;
+    }
 
-      // VIOLATIONS DISABLED: Just log fullscreen changes, no penalties
-      if (!isCurrentlyFullscreen && !isDisqualified && !showCompleteConfirm) {
-        console.log('[PROCTORING] Fullscreen exited - logging only (no penalties)');
-
-        // Report to server for record-keeping only
-        candidateService.reportProctorEvent(token, {
-          event_type: 'fullscreen_exit',
-          timestamp: new Date().toISOString(),
-          details: {
-            reason: 'User exited fullscreen mode',
-            severity: 'INFO',
-          },
-        }).catch(err => console.error('[VIOLATION] Failed to report fullscreen exit:', err));
-
-        // COMMENTED OUT: No violation tracking, no warnings, no auto-complete
-        // violationCountRef.current += 1;
-        // setViolationCount(violationCountRef.current);
-        // setShowViolationWarning(true);
+    const clearPendingFullscreenExit = () => {
+      if (fullscreenExitTimerRef.current) {
+        clearTimeout(fullscreenExitTimerRef.current);
+        fullscreenExitTimerRef.current = null;
       }
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    const handleFullscreenChange = async () => {
+      const isCurrentlyFullscreen = getIsFullscreen();
+      if (isCurrentlyFullscreen) {
+        clearPendingFullscreenExit();
+        console.log('[LOCKDOWN] Fullscreen: ACTIVE');
+        setIsFullscreen(true);
+        return;
+      }
+
+      console.log('[LOCKDOWN] Fullscreen change reported as INACTIVE, verifying...');
+      clearPendingFullscreenExit();
+      fullscreenExitTimerRef.current = setTimeout(() => {
+        fullscreenExitTimerRef.current = null;
+        const stillNotFullscreen = !getIsFullscreen();
+        console.log(`[LOCKDOWN] Fullscreen verification: ${stillNotFullscreen ? 'INACTIVE' : 'ACTIVE'}`);
+        if (!stillNotFullscreen) {
+          setIsFullscreen(true);
+          return;
+        }
+
+        setIsFullscreen(false);
+
+        // VIOLATIONS DISABLED: Just log fullscreen changes, no penalties
+        if (!isDisqualified && !showCompleteConfirm) {
+          console.log('[PROCTORING] Fullscreen exited - logging only (no penalties)');
+
+          // Report to server for record-keeping only
+          candidateService.reportProctorEvent(token, {
+            event_type: 'fullscreen_exit',
+            timestamp: new Date().toISOString(),
+            details: {
+              reason: 'User exited fullscreen mode',
+              severity: 'INFO',
+            },
+          }).catch(err => console.error('[VIOLATION] Failed to report fullscreen exit:', err));
+        }
+      }, 600);
+    };
+
+    const eventName = getFullscreenChangeEvent();
+    document.addEventListener(eventName, handleFullscreenChange);
+    const initialSyncTimer = setTimeout(() => {
+      void handleFullscreenChange();
+    }, 250);
 
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      clearTimeout(initialSyncTimer);
+      clearPendingFullscreenExit();
+      document.removeEventListener(eventName, handleFullscreenChange);
     };
-  }, [token, isDisqualified, showCompleteConfirm]);
+  }, [token, isDisqualified, showCompleteConfirm, enforceFullscreen]);
 
   // Exit fullscreen only on unmount (separate effect so it doesn't run on every re-render)
   useEffect(() => {
     return () => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
+      if (enforceFullscreen && getIsFullscreen()) {
+        compatExitFullscreen().catch(() => {});
       }
     };
-  }, []);
+  }, [enforceFullscreen]);
 
   // SECURITY: Block developer tools shortcuts (F12, Ctrl+Shift+I)
   // NOTE: ESC and Alt+Tab are NO LONGER blocked here to prevent false positives
@@ -531,21 +773,29 @@ export function AssessmentInterface({
       }
     };
 
-    // Prevent right-click context menu
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []); // Empty deps - only register once on mount
+
+  // SECURITY: Block right-click context menu only when copy-paste blocking is enabled
+  useEffect(() => {
+    if (!copyPasteBlocking) return;
+
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       console.warn('[LOCKDOWN] Right-click blocked');
       return false;
     };
 
-    document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, []); // Empty deps - only register once on mount
+  }, [copyPasteBlocking]);
 
   // SECURITY: Detect DevTools opening (by checking window size changes)
   useEffect(() => {
@@ -602,7 +852,7 @@ export function AssessmentInterface({
             clearInterval(countdownInterval);
             console.error('[PROCTORING] 💀 AUTO-SUBMIT TRIGGERED');
             setIsDisqualified(true);
-            exitFullscreen();
+            exitAssessmentFullscreen();
             onComplete();
             return 0;
           }
@@ -643,6 +893,8 @@ export function AssessmentInterface({
 
   // 🛡️ PROCTORING: 5️⃣ Block Copy/Paste/Right-Click
   useEffect(() => {
+    if (!copyPasteBlocking) return;
+
     const handleCopy = (e: ClipboardEvent) => {
       e.preventDefault();
       console.warn('[PROCTORING] ⚠️ Copy blocked');
@@ -667,7 +919,7 @@ export function AssessmentInterface({
       document.removeEventListener('paste', handlePaste);
       document.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, []);
+  }, [copyPasteBlocking]);
 
   // Global timer countdown - runs independently of question timer
   useEffect(() => {
@@ -684,8 +936,8 @@ export function AssessmentInterface({
       if (!isGlobalTimeExpired) {
         console.log('[TIMER] Time expired! Triggering auto-complete');
         setIsGlobalTimeExpired(true);
-        // Auto-submit entire assessment when global timer expires
-        exitFullscreen();
+        try { sessionStorage.removeItem(`assessment_timer_${token}`); } catch {}
+        exitAssessmentFullscreen();
         onComplete();
       }
       return;
@@ -694,15 +946,30 @@ export function AssessmentInterface({
     // Use wall-clock calculation on each tick for accuracy.
     // This prevents drift when the browser throttles background tabs or the system sleeps.
     globalTimerRef.current = setInterval(() => {
+      if (isTimerPausedRef.current) return;
+
       const elapsed = Math.floor((Date.now() - assessmentStartTimeRef.current) / 1000);
       const remaining = Math.max(0, totalDurationSecsRef.current - elapsed);
 
       setGlobalTimeRemaining(remaining);
+      globalTimeRemainingRef.current = remaining;
+      lastAcceptedAuthoritativeRemainingRef.current = remaining;
+      onTimeUpdate?.(remaining);
+
+      // Keep sessionStorage in sync for crash/error recovery
+      try {
+        sessionStorage.setItem(`assessment_timer_${token}`, JSON.stringify({
+          remainingSeconds: remaining,
+          savedAt: Date.now(),
+          isPaused: false,
+        }));
+      } catch {}
 
       if (remaining <= 0) {
         console.log('[TIMER] Timer reached zero during countdown');
         setIsGlobalTimeExpired(true);
-        exitFullscreen();
+        try { sessionStorage.removeItem(`assessment_timer_${token}`); } catch {}
+        exitAssessmentFullscreen();
         onComplete();
       }
     }, 1000);
@@ -722,6 +989,9 @@ export function AssessmentInterface({
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
+      // Don't resync from wall-clock while paused (e.g. offline) — the timer display
+      // should stay frozen until connectivity is restored.
+      if (isTimerPausedRef.current) return;
 
       // Resync global timer
       if (assessmentStartTimeRef.current && !isGlobalTimeExpired) {
@@ -730,7 +1000,7 @@ export function AssessmentInterface({
         setGlobalTimeRemaining(remaining);
         if (remaining <= 0) {
           setIsGlobalTimeExpired(true);
-          exitFullscreen();
+          exitAssessmentFullscreen();
           onComplete();
         }
       }
@@ -758,6 +1028,7 @@ export function AssessmentInterface({
   useEffect(() => {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
+      void playVideo(videoRef.current);
       console.log('[PROCTORING] Video stream attached to video element');
     }
   }, [stream, videoRef]);
@@ -766,12 +1037,18 @@ export function AssessmentInterface({
   useEffect(() => {
     if (currentQuestion.previous_answer) {
       setAnswer({
+        question_id: currentQuestion.question_id,
         text_response: currentQuestion.previous_answer.text_response || undefined,
         selected_options: currentQuestion.previous_answer.selected_options || undefined,
-        code_submission: currentQuestion.previous_answer.code_submission || undefined
+        code_submission: currentQuestion.previous_answer.code_submission || undefined,
+        code_input: currentQuestion.previous_answer.code_input || undefined,
+        language: currentQuestion.previous_answer.language || undefined,
+        code_execution_status: currentQuestion.previous_answer.code_execution_status || undefined,
+        code_execution_output: currentQuestion.previous_answer.code_execution_output || undefined,
+        code_execution_error: currentQuestion.previous_answer.code_execution_error || undefined,
       });
     } else {
-      setAnswer({});
+      setAnswer({ question_id: currentQuestion.question_id });
     }
 
     // Update ALL question statuses from backend (if available)
@@ -820,6 +1097,8 @@ export function AssessmentInterface({
     if (limit === null || limit === undefined || limit <= 0) return;
 
     const timer = setInterval(() => {
+      if (isTimerPausedRef.current) return;
+
       const elapsed = Math.floor((Date.now() - questionWallStartRef.current) / 1000);
       const remaining = Math.max(0, limit - elapsed);
       setTimeRemaining(remaining);
@@ -835,6 +1114,7 @@ export function AssessmentInterface({
   // Save answer as draft (auto-save) - editable
   const handleSaveDraft = async () => {
     if (isSubmitting || isCurrentAnswerLocked) return;
+    cancelPendingAutoSave();
 
     // Only save if there's something to save
     const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
@@ -860,11 +1140,12 @@ export function AssessmentInterface({
   // Submit and lock answer - not editable anymore
   const handleSubmitAndLock = async () => {
     if (isSubmitting || isCurrentAnswerLocked) return;
+    cancelPendingAutoSave();
     setIsSubmitting(true);
     setLastSaveError(null);
 
     try {
-      await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
+      const response = await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: false });
 
       // Update answer status - use question NUMBER as key, mark as LOCKED (submitted)
       setAnswerStatuses(prev => {
@@ -872,24 +1153,35 @@ export function AssessmentInterface({
         newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: true });
         return newMap;
       });
+
+      if (!isLastQuestion) {
+        // Use next_question from submit response to avoid a second API call
+        if (response.next_question && onSetQuestion) {
+          onSetQuestion(response.next_question);
+        } else {
+          await onNavigate(currentQuestion.question_number + 1);
+        }
+      }
     } catch (error: any) {
       console.error('Failed to submit answer:', error);
 
       // Check error type and show appropriate message
-      const isTimeExpired = error?.response?.data?.detail?.error === 'TIME_EXPIRED';
-      const isNetworkError = !navigator.onLine || error?.code === 'ECONNABORTED' || error?.message?.includes('Network Error');
+      // Note: candidateService wraps errors in plain Error objects, so check error.message
+      const errorMessage = error?.message || 'Failed to submit answer. Please try again.';
+      const isTimeExpired = errorMessage.includes('TIME_EXPIRED') || errorMessage.toLowerCase().includes('time expired');
+      const isNetworkError = !navigator.onLine || error?.code === 'ECONNABORTED' || errorMessage.includes('Network Error');
 
       if (isTimeExpired) {
         setLastSaveError('Assessment time has expired. Your progress has been saved.');
-        alert('Assessment time has expired. The assessment will be auto-submitted.');
         setTimeout(() => onComplete(), 1000);
       } else if (isNetworkError) {
         setLastSaveError('No internet connection. Your answer is saved locally and will be submitted when connection is restored.');
         setAutoSaveStatus('offline');
       } else {
-        const errorMsg = error?.response?.data?.detail?.message || error?.message || 'Failed to submit answer. Please try again.';
-        setLastSaveError(errorMsg);
-        alert(`Failed to submit answer: ${errorMsg}`);
+        setLastSaveError(errorMessage);
+        // Show error via the existing UI status bar — never use alert() as it exits fullscreen
+        setAutoSaveStatus('error');
+        setTimeout(() => setAutoSaveStatus('idle'), 5000);
       }
     } finally {
       setIsSubmitting(false);
@@ -899,6 +1191,7 @@ export function AssessmentInterface({
   // Navigate to previous question (save as draft, editable)
   const handlePrevious = async () => {
     if (isNavigating || currentQuestion.question_number <= 1) return;
+    cancelPendingAutoSave();
     setIsNavigating(true);
 
     try {
@@ -926,14 +1219,16 @@ export function AssessmentInterface({
   // Navigate to next question (save as draft, editable)
   const handleNext = async () => {
     if (isNavigating || isLastQuestion) return;
+    cancelPendingAutoSave();
     setIsNavigating(true);
 
     try {
       // Save current answer as DRAFT (editable, can change later)
       const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+      let submitResponse: SubmitAnswerResponse | null = null;
       if (hasAnswer && !isCurrentAnswerLocked) {
         // Submit with is_draft: true to keep answer editable
-        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+        submitResponse = await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
         setAnswerStatuses(prev => {
           const newMap = new Map(prev);
           newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });
@@ -941,8 +1236,12 @@ export function AssessmentInterface({
         });
       }
 
-      // Navigate to next question
-      await onNavigate(currentQuestion.question_number + 1);
+      // Use next_question from submit response to avoid a second API call
+      if (submitResponse?.next_question && onSetQuestion) {
+        onSetQuestion(submitResponse.next_question);
+      } else {
+        await onNavigate(currentQuestion.question_number + 1);
+      }
     } catch (error) {
       console.error('Failed to navigate to next:', error);
     } finally {
@@ -953,6 +1252,7 @@ export function AssessmentInterface({
   // Handle final submit - save current answer first, THEN check for unanswered
   const handleFinalSubmit = async () => {
     if (isSubmitting) return;
+    cancelPendingAutoSave();
 
     // ── STEP 1: Submit & lock the current answer if it has meaningful content ─
     // This is critical for the last question — the candidate may not have
@@ -978,25 +1278,18 @@ export function AssessmentInterface({
       }
     }
 
-    // ── STEP 2: Check unanswered/skipped questions (skip current — handled above) ──
-    // Unanswered = visited but no answer selected
-    // Skipped    = never visited at all
+    // ── STEP 2: Check unanswered questions (skip current — handled above) ──
+    // Unanswered includes both visited-without-answer and never-visited questions.
     const unanswered: number[] = [];
-    const skipped: number[] = [];
     for (let i = 1; i <= currentQuestion.total_questions; i++) {
       if (i === currentQuestion.question_number) continue;
       const status = answerStatuses.get(`question_${i}`);
       if (!status || !status.hasDraft) {
-        if (visitedQuestions.has(i)) {
-          unanswered.push(i);
-        } else {
-          skipped.push(i);
-        }
+        unanswered.push(i);
       }
     }
 
     setUnansweredQuestions(unanswered);
-    setSkippedQuestions(skipped);
     setShowCompleteConfirm(true);
   };
 
@@ -1029,7 +1322,7 @@ export function AssessmentInterface({
     setIsCompleting(true);
     setShowCompleteConfirm(false);
     // Exit fullscreen when assessment completes
-    await exitFullscreen();
+    await exitAssessmentFullscreen();
     onComplete();
   };
 
@@ -1048,12 +1341,12 @@ export function AssessmentInterface({
 
       // Complete the assessment and exit fullscreen
       console.log('[DISQUALIFICATION] Completing assessment due to disqualification...');
-      await exitFullscreen();
+      await exitAssessmentFullscreen();
       onComplete();
     } catch (error) {
       console.error('[DISQUALIFICATION] Error during submission:', error);
       // Still complete even if submission fails
-      await exitFullscreen();
+      await exitAssessmentFullscreen();
       onComplete();
     }
   };
@@ -1063,14 +1356,20 @@ export function AssessmentInterface({
     const { round_type, question_type, starter_code } = currentQuestion;
 
     // For coding questions
-    if (round_type === 'coding') {
+    if (round_type === 'coding' || question_type === 'coding') {
       const code = answer.code_submission?.trim() || '';
-      const language = answer.language || 'python';
-      const template = starter_code?.[language]?.trim() || '';
 
-      // Code must be non-empty and different from the template
+      // Code must be non-empty
       if (!code) return false;
-      if (code === template) return false;
+
+      // Check if code is different from ALL possible templates (starter_code + default template)
+      const language = answer.language || 'python';
+      const questionTemplate = starter_code?.[language]?.trim() || '';
+      if (questionTemplate && code === questionTemplate) return false;
+
+      // Also check against default language template
+      // But allow submit if candidate wrote at least 10 chars of meaningful code
+      if (code.length < 10) return false;
 
       return true;
     }
@@ -1138,14 +1437,18 @@ export function AssessmentInterface({
 
   const isLastQuestion = currentQuestion.question_number === currentQuestion.total_questions;
 
-  // Determine if proctoring devices are disabled
+  // Access is blocked unless all required proctoring conditions are valid together.
   const isDeviceDisabled = !isCameraActive || !isMicrophoneActive;
+  const isFullscreenRequired = enforceFullscreen;
+  const isFullscreenInvalid = isFullscreenRequired && !isFullscreen;
+  const isAssessmentAccessBlocked = isFullscreenInvalid || isDeviceDisabled;
 
   // Progress steps
   const progressSteps = [
     { label: 'Terms & Consent', active: false, completed: true },
     { label: 'Assessment Details', active: false, completed: true },
     { label: 'System Check', active: false, completed: true },
+    { label: 'HR Questions', active: false, completed: true },
     { label: 'Assessment', active: true, completed: false }
   ];
 
@@ -1273,78 +1576,8 @@ export function AssessmentInterface({
         </div>
       )}
 
-      {/* Proctoring Device Disabled Blocker Overlay */}
-      {isDeviceDisabled && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-8 text-center">
-            {/* Alert Icon */}
-            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ShieldAlert className="w-10 h-10 text-red-600" />
-            </div>
-
-            {/* Title */}
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">
-              Proctoring Device Disabled
-            </h2>
-
-            {/* Description */}
-            <p className="text-gray-600 mb-6">
-              Your assessment has been paused because a required proctoring device has been disabled.
-              Please re-enable the following to continue:
-            </p>
-
-            {/* Disabled Devices List */}
-            <div className="space-y-3 mb-6">
-              {!isCameraActive && (
-                <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
-                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Camera className="w-5 h-5 text-red-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-semibold text-red-800">Camera Disabled</p>
-                    <p className="text-sm text-red-600">Your camera has been turned off or blocked.</p>
-                  </div>
-                </div>
-              )}
-
-              {!isMicrophoneActive && (
-                <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
-                  <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Mic className="w-5 h-5 text-red-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-semibold text-red-800">Microphone Disabled</p>
-                    <p className="text-sm text-red-600">Your microphone has been turned off or blocked.</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Instructions */}
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div className="text-left text-sm">
-                  <p className="font-medium text-amber-800 mb-1">How to re-enable:</p>
-                  <ol className="list-decimal list-inside text-amber-700 space-y-1">
-                    <li>Click the camera/microphone icon in your browser's address bar</li>
-                    <li>Select "Allow" for the disabled device(s)</li>
-                    <li>If blocked via system settings, re-enable from your device settings</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-
-            {/* Warning Footer */}
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-              <Video className="w-4 h-4" />
-              <span>This violation has been recorded for review</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Old fullscreen prompt modal removed - ESC is now blocked completely */}
+      {/* Proctoring blocker overlay removed — the parent CandidateAssessmentPortal
+          handles the fullscreen-exit overlay (shows a "Return to Fullscreen" button). */}
 
       {/* Sticky Header Container */}
       <div className="sticky top-0 z-50">
@@ -1403,15 +1636,15 @@ export function AssessmentInterface({
             <div className="flex items-center gap-1.5 sm:gap-3">
               {/* Global Assessment Timer */}
               <div className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ${
-                globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
-                globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
-              }`}>
-                <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <div className="flex flex-col items-center">
-                  <span className="font-mono font-bold text-sm sm:text-lg">{formatTime(globalTimeRemaining)}</span>
-                  <span className="hidden sm:block text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+                  globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
+                  globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                }`}>
+                  <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <div className="flex flex-col items-center">
+                    <span className="font-mono font-bold text-sm sm:text-lg">{formatTime(globalTimeRemaining)}</span>
+                    <span className="hidden sm:block text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+                  </div>
                 </div>
-              </div>
 
               {/* Question Timer */}
               {timeRemaining !== null && (
@@ -1493,8 +1726,8 @@ export function AssessmentInterface({
 
         {/* Progress Stepper */}
         <div className="w-full bg-white border-b border-gray-200">
-          <div className="w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-3 overflow-x-auto">
-            <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-max mx-auto">
+          <div className="w-full px-2 sm:px-4 lg:px-8 py-2 sm:py-3">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mx-auto">
               {progressSteps.map((step, index) => (
                 <div key={index} className="flex items-center">
                   <div className="flex items-center gap-2">
@@ -1514,7 +1747,7 @@ export function AssessmentInterface({
                     </span>
                   </div>
                   {index < progressSteps.length - 1 && (
-                    <div className={`w-6 sm:w-12 h-0.5 mx-2 ${
+                    <div className={`hidden sm:block w-6 sm:w-12 h-0.5 mx-2 ${
                       step.completed ? 'bg-green-500' : 'bg-gray-300'
                     }`} />
                   )}
@@ -1526,8 +1759,8 @@ export function AssessmentInterface({
 
         {/* Round Progress Bar */}
         <div className="w-full bg-gray-50 border-b border-gray-200">
-          <div className="w-full px-2 sm:px-4 lg:px-8 py-1.5 sm:py-2 overflow-x-auto">
-            <div className="flex items-center justify-center gap-2 sm:gap-3 min-w-max mx-auto">
+          <div className="w-full px-2 sm:px-4 lg:px-8 py-1.5 sm:py-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mx-auto">
               {rounds.map((round, idx) => {
                 const Icon = getRoundIcon(round.round_type);
                 const isActive = round.round_type === currentQuestion.round_type;
@@ -1609,19 +1842,11 @@ export function AssessmentInterface({
               </div>
             </div>
 
-            {/* Question Content */}
+            {/* Question Content - Technical + Coding only (HR handled in Step 4) */}
             <div className="p-3 sm:p-6">
-              {currentQuestion.round_type === 'hr' && (
-                <HRQuestionView
-                  question={currentQuestion}
-                  answer={answer}
-                  onAnswerChange={setAnswer}
-                  isLocked={isCurrentAnswerLocked}
-                />
-              )}
-
               {currentQuestion.round_type === 'technical' && (
                 <TechnicalQuestionView
+                  key={currentQuestion.question_id}
                   question={currentQuestion}
                   answer={answer}
                   onAnswerChange={setAnswer}
@@ -1631,6 +1856,7 @@ export function AssessmentInterface({
 
               {currentQuestion.round_type === 'coding' && (
                 <CodingQuestionView
+                  key={currentQuestion.question_id}
                   question={currentQuestion}
                   answer={answer}
                   onAnswerChange={setAnswer}
@@ -1710,15 +1936,11 @@ export function AssessmentInterface({
             </div>
           </div>
 
-          {/* Progress Indicator - Display Only (No Navigation) */}
+          {/* Progress Indicator - Click to Navigate */}
           <div className="mt-3 sm:mt-4 bg-white rounded-lg border border-gray-200 shadow-sm p-3 sm:p-4">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <p className="text-sm font-medium text-gray-700">Progress</p>
               <div className="flex items-center gap-3 text-xs flex-wrap">
-                <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-gray-100 border border-gray-300"></div>
-                  Skipped
-                </span>
                 <span className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded bg-yellow-100 border border-yellow-300"></div>
                   Unanswered
@@ -1741,11 +1963,9 @@ export function AssessmentInterface({
                 const questionStatus = answerStatuses.get(`question_${num}`);
                 const isLocked = questionStatus?.isLocked || false;
                 const hasDraft = questionStatus?.hasDraft || false;
-                const wasVisited = visitedQuestions.has(num);
-
-                let colorClass = 'bg-gray-100 text-gray-400'; // Skipped (not visited)
+                let colorClass = 'bg-yellow-100 text-yellow-700'; // Unanswered
                 let icon = null;
-                let titleText = `Question ${num} - Skipped`;
+                let titleText = `Question ${num} - Unanswered`;
 
                 if (isCurrent) {
                   colorClass = 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2';
@@ -1758,20 +1978,25 @@ export function AssessmentInterface({
                   colorClass = 'bg-orange-100 text-orange-700';
                   icon = <Save className="w-4 h-4" />;
                   titleText = `Question ${num} - Draft saved`;
-                } else if (wasVisited) {
-                  // Visited but no answer → Unanswered
-                  colorClass = 'bg-yellow-100 text-yellow-700';
-                  titleText = `Question ${num} - Unanswered`;
                 }
 
                 return (
-                  <div
+                  <button
                     key={num}
-                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center ${colorClass}`}
+                    type="button"
+                    disabled={isCurrent || isNavigating || isSubmitting}
+                    onClick={() => {
+                      if (!isCurrent && !isNavigating && !isSubmitting) {
+                        onNavigate(num);
+                      }
+                    }}
+                    className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center transition-transform ${colorClass} ${
+                      isCurrent ? '' : 'cursor-pointer hover:scale-110 hover:shadow-md'
+                    } disabled:cursor-default disabled:hover:scale-100 disabled:hover:shadow-none`}
                     title={titleText}
                   >
                     {icon || num}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -1821,7 +2046,7 @@ export function AssessmentInterface({
             {unansweredQuestions.length > 0 && (
               <div className="bg-yellow-50 rounded-xl p-4 mb-3 border border-yellow-200">
                 <p className="text-sm text-yellow-700 mb-2 font-semibold">
-                  ⚠️ Unanswered (visited, no answer): <span className="font-bold">{unansweredQuestions.length}</span> question(s)
+                  ⚠️ Unanswered: <span className="font-bold">{unansweredQuestions.length}</span> question(s)
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {unansweredQuestions.map((qNum) => (
@@ -1833,23 +2058,7 @@ export function AssessmentInterface({
               </div>
             )}
 
-            {/* Skipped Questions Warning */}
-            {skippedQuestions.length > 0 && (
-              <div className="bg-gray-50 rounded-xl p-4 mb-3 border border-gray-200">
-                <p className="text-sm text-gray-600 mb-2 font-semibold">
-                  ⏭️ Skipped (not visited): <span className="font-bold">{skippedQuestions.length}</span> question(s)
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {skippedQuestions.map((qNum) => (
-                    <span key={qNum} className="px-3 py-1 bg-gray-200 text-gray-700 rounded-full text-sm font-medium">
-                      Q{qNum}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {unansweredQuestions.length === 0 && skippedQuestions.length === 0 && (
+            {unansweredQuestions.length === 0 && (
               <div className="bg-green-50 rounded-xl p-3 mb-3 border border-green-200">
                 <p className="text-sm text-green-700 font-semibold">✅ All questions answered!</p>
               </div>
@@ -1866,8 +2075,10 @@ export function AssessmentInterface({
                   <div className="text-xs text-gray-500">Unanswered</div>
                 </div>
                 <div>
-                  <div className="text-lg font-bold text-gray-500">{skippedQuestions.length}</div>
-                  <div className="text-xs text-gray-500">Skipped</div>
+                  <div className="text-lg font-bold text-orange-600">
+                    {Array.from(answerStatuses.values()).filter(status => status.hasDraft && !status.isLocked).length}
+                  </div>
+                  <div className="text-xs text-gray-500">Draft</div>
                 </div>
               </div>
               <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -1878,10 +2089,18 @@ export function AssessmentInterface({
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl mb-6 border border-blue-200">
-              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl mb-3 border border-blue-200">
+              <Save className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-blue-700">
-                Once submitted, you cannot modify your answers. Make sure you've reviewed all your responses.
+                All your saved drafts and the current answer will be automatically locked in
+                and submitted as your final responses.
+              </p>
+            </div>
+
+            <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-xl mb-6 border border-amber-200">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-700">
+                Once submitted, you cannot modify your answers. Please review all your responses before continuing.
               </p>
             </div>
 

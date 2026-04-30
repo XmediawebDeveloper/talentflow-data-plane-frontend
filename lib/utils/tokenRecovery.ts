@@ -32,8 +32,8 @@ export const ensureTokenCookies = (): boolean => {
     const isSafari = ua.includes('safari') && !ua.includes('chrome');
     const isIOS = /iphone|ipad|ipod/.test(ua);
     const browserName = isFirefox ? 'Firefox'
-      : isSafari ? 'Safari'
       : isIOS ? 'iOS Safari'
+      : isSafari ? 'Safari'
       : ua.includes('arc') ? 'Arc'
       : ua.includes('brave') ? 'Brave'
       : 'Unknown';

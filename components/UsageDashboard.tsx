@@ -9,6 +9,7 @@ import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { PlanFeatureKey } from '@/lib/types/planFeatures';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import api from '@/lib/services/api';
 
 // Addon interface
 interface Addon {
@@ -180,6 +181,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const { user, hasPermission: authHasPermission } = useAuth();
   const canUpgradePlan = authHasPermission('canUpgradePlan');
   const canExportUsage = authHasPermission('canExportUsage');
+  const canPurchaseAddons = canUpgradePlan;
   const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
   const { hasPlanFeature } = usePlanFeatures();
 
@@ -213,8 +215,33 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   const [purchasingAddon, setPurchasingAddon] = useState(false);
   const [addonPurchaseSuccess, setAddonPurchaseSuccess] = useState<string | null>(null);
   const [addonPurchaseError, setAddonPurchaseError] = useState<string | null>(null);
+  const [paymentCaptured, setPaymentCaptured] = useState(false);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
+
+  // Expired plan credits — fetched when subscription is expired/inactive
+  const [expiredPlanCredits, setExpiredPlanCredits] = useState<Record<string, number> | null>(null);
+  const [expiredPlanName, setExpiredPlanName] = useState<string | null>(null);
+
+  // Fetch previous-plan data when plan is expired
+  useEffect(() => {
+    const tenantId = contextQuotaData?.tenant_id;
+    const status = (contextQuotaData?.subscription_status || '').toLowerCase();
+    const isExpired = ['expired', 'inactive', 'suspended'].includes(status);
+    if (!tenantId || !isExpired) return;
+
+    api.get(`/subscription/${tenantId}/previous-plan`)
+      .then(res => {
+        const data = res.data?.data || res.data;
+        const expiredPlan = data?.expired_plan;
+        if (expiredPlan) {
+          if (expiredPlan.plan_name) setExpiredPlanName(expiredPlan.plan_name.replace(/\s*\(.*?\)\s*/g, '').trim());
+          if (expiredPlan.credits) setExpiredPlanCredits(expiredPlan.credits);
+          console.log('[UsageDashboard] Loaded expired plan:', expiredPlan.plan_name, expiredPlan.credits);
+        }
+      })
+      .catch(err => console.warn('[UsageDashboard] Could not load previous-plan:', err));
+  }, [contextQuotaData?.tenant_id, contextQuotaData?.subscription_status]);
 
   // Fetch addons on mount
   useEffect(() => {
@@ -329,18 +356,31 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       ...allQuotaTypes.filter(qt => !preferredOrder.includes(qt))
     ];
 
+    const isExpiredPlan = ['expired', 'inactive', 'suspended'].includes(
+      (contextQuotaData.subscription_status || '').toLowerCase()
+    );
+
     for (const quotaType of sortedQuotaTypes) {
       const q = quotasMap[quotaType as keyof typeof quotasMap];
       if (q) {
         // NOT_PROVISIONED means the feature is not available for this tenant — skip entirely
-        if (q.status === 'NOT_PROVISIONED') continue;
+        // EXCEPTION: for expired plans, show quotas that have actual usage (historical view)
+        if (q.status === 'NOT_PROVISIONED' && !isExpiredPlan) continue;
+        if (q.status === 'NOT_PROVISIONED' && isExpiredPlan && (q.subscription?.used || 0) === 0) continue;
 
         const sub = q.subscription || {};
         const addon = q.addon || {};
-        const isUnlimited = sub.limit === 'unlimited' || sub.limit === -1;
+
+        // For expired plans: use original plan credits as the limit if the API returns 0/null
+        const creditLimit = isExpiredPlan ? (expiredPlanCredits?.[quotaType] ?? null) : null;
+        const effectiveLimit = (creditLimit !== null && (sub.limit === 0 || sub.limit == null || sub.limit === ''))
+          ? creditLimit
+          : sub.limit;
+
+        const isUnlimited = effectiveLimit === 'unlimited' || effectiveLimit === -1;
 
         // Subscription breakdown values
-        const subLimit = isUnlimited ? -1 : (typeof sub.limit === 'number' ? sub.limit : 0);
+        const subLimit = isUnlimited ? -1 : (typeof effectiveLimit === 'number' ? effectiveLimit : 0);
         const subUsed = sub.used || 0;
         // sub.remaining removed from API — derive it
         const subRemaining = isUnlimited ? -1 : Math.max(0, subLimit - subUsed);
@@ -416,10 +456,11 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       quotas: quotasList,
       billing_period: contextQuotaData.billing_period,
     };
-  }, [contextQuotaData]);
+  }, [contextQuotaData, expiredPlanCredits]);
 
   // Derive subscriptionSummary from context data
   const subscriptionSummary = useMemo((): SubscriptionSummary | null => {
+    void expiredPlanName; // reactive dependency
     if (!contextQuotaData) return null;
 
     const isTrial = contextQuotaData.is_trial || false;
@@ -451,7 +492,10 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       trial_days_remaining: isTrial ? daysRemaining : undefined,
       plan: {
         id: contextQuotaData.plan_info?.plan_id || 0,
-        name: contextQuotaData.plan_name || 'Professional',
+        name: expiredPlanName
+          || (contextQuotaData.plan_name && contextQuotaData.plan_name.toLowerCase() !== 'no plan' ? contextQuotaData.plan_name : null)
+          || contextQuotaData.plan_info?.plan_name
+          || (isTrial ? 'Free Trial' : 'Professional'),
         price: basePrice,
         billing_interval: billingInterval,
       },
@@ -467,7 +511,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       },
       isolation_type: contextQuotaData.isolation_type || null,
     };
-  }, [contextQuotaData]);
+  }, [contextQuotaData, expiredPlanName]);
 
   // Derive usageData from context
   const usageData = useMemo(() => {
@@ -575,6 +619,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
     setPurchasingAddon(true);
     setAddonPurchaseError(null);
+    setPaymentCaptured(false);
 
     try {
       const token = localStorage.getItem('accessToken');
@@ -637,6 +682,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
         return;
       }
 
+      // Payment captured — mark so we can show the right error if backend fails
+      setPaymentCaptured(true);
+
       // Step 3: Complete purchase with Razorpay payment credentials
       const response = await fetch(`${API_BASE}/addons/purchase`, {
         method: 'POST',
@@ -652,10 +700,19 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           razorpay_payment_id: paymentResponse.razorpay_payment_id,
           razorpay_order_id: paymentResponse.razorpay_order_id,
           razorpay_signature: paymentResponse.razorpay_signature,
+          // Send addon details so backend skips the second admin API call
+          addon_name: selectedAddon.name,
+          addon_credit_type: selectedAddon.credit_type,
+          addon_credit_amount: selectedAddon.credit_amount,
+          addon_price: selectedAddon.price || selectedAddon.unit_price || 0,
         }),
       });
 
       if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          throw new Error('Service temporarily unavailable. Your payment was not charged. Please try again.');
+        }
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.detail || `Purchase verification failed: ${response.status}`);
       }
@@ -663,6 +720,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       const result = await response.json();
       const totalCredits = (selectedAddon.credit_amount || 0) * addonQuantity;
       console.log('[UsageDashboard] Addon purchase result:', result);
+
+      if (result.status === 'pending') {
+        setAddonPurchaseSuccess('Payment received! Your credits are being activated in the background and will appear shortly.');
+        return;
+      }
+
       setAddonPurchaseSuccess(`Successfully added ${totalCredits} Units to your ${cleanName}!`);
 
       // Queue audit verification for addon purchase (non-blocking)
@@ -838,9 +901,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       return (
                         <>
                           <div className="text-3xl font-bold text-gray-900">
-                            ₹{subscriptionSummary.subscription.price?.toFixed(0) || subscriptionSummary.plan?.price?.toFixed(0) || '0'}
+                            ₹{(subscriptionSummary.subscription.price ?? subscriptionSummary.plan?.price ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             <span className="text-sm font-normal text-gray-500">
-                              /{subscriptionSummary.subscription.billing_interval || 'mo'}
+                              /{subscriptionSummary.subscription.billing_interval === 'monthly' ? 'month' : subscriptionSummary.subscription.billing_interval === 'yearly' ? 'year' : (subscriptionSummary.subscription.billing_interval || 'mo')}
                             </span>
                           </div>
                           {!remaining.isExpired && (
@@ -904,8 +967,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
               )}
             </div>
 
-            {/* Low Quota Warning */}
-            {quotaSummary.has_low_quotas && (
+            {/* Low Quota Warning — hide for expired/inactive plans */}
+            {quotaSummary.has_low_quotas && !['expired', 'inactive', 'suspended'].includes(subscriptionSummary?.status?.toLowerCase() || '') && (
               <div className="bg-gradient-to-r from-gray-100 to-gray-50 border-2 border-gray-300 rounded-xl sm:rounded-2xl p-3 sm:p-5 mb-4 sm:mb-6 shadow-sm">
                 <div className="flex items-start gap-3 sm:gap-4">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -944,6 +1007,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                             <button
                               key={quota.quota_type}
                               onClick={() => {
+                                if (!canPurchaseAddons) {
+                                  return;
+                                }
                                 if (isAddonPurchaseBlocked) {
                                   setAddonPurchaseError(
                                     subscriptionSummary?.is_trial
@@ -961,9 +1027,12 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                                   }
                                 }
                               }}
-                              title={isAddonPurchaseBlocked ? addonBlockedMessage : ""}
+                              disabled={!canPurchaseAddons}
+                              title={!canPurchaseAddons ? 'You do not have permission to purchase add-ons' : isAddonPurchaseBlocked ? addonBlockedMessage : ""}
                               className={`px-4 py-2 text-sm font-semibold rounded-xl transition-all flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 ${
-                                isAddonPurchaseBlocked
+                                !canPurchaseAddons
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : isAddonPurchaseBlocked
                                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                   : quota.is_exceeded_critical
                                     ? 'bg-red-600 text-white hover:bg-red-700'
@@ -975,11 +1044,11 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                               }`}
                             >
                               <Plus className="w-4 h-4" />
-                              Add {quota.name}
-                              {quota.is_exceeded && !isAddonPurchaseBlocked && (
+                              {canPurchaseAddons ? `Add ${quota.name}` : `${quota.name} Read Only`}
+                              {quota.is_exceeded && canPurchaseAddons && !isAddonPurchaseBlocked && (
                                 <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">+{formatNum(quota.exceeded_by)} over</span>
                               )}
-                              {quota.is_exhausted && !isAddonPurchaseBlocked && (
+                              {quota.is_exhausted && canPurchaseAddons && !isAddonPurchaseBlocked && (
                                 <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Exhausted</span>
                               )}
                             </button>
@@ -995,9 +1064,14 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mb-6">
               {quotaSummary.quotas?.filter((quota: QuotaInfo) => {
                 if (quota.quota_type === 'storage_gb') return false;
-                // Gate quota cards by plan feature
-                const featureKey = quotaFeatureMap[quota.quota_type];
-                if (featureKey && !hasPlanFeature(featureKey)) return false;
+                // Gate quota cards by plan feature — but always show for expired/inactive plans (historical usage view)
+                const isExpiredOrInactive = ['expired', 'inactive', 'suspended'].includes(
+                  subscriptionSummary?.status?.toLowerCase() || ''
+                );
+                if (!isExpiredOrInactive) {
+                  const featureKey = quotaFeatureMap[quota.quota_type];
+                  if (featureKey && !hasPlanFeature(featureKey)) return false;
+                }
                 return true;
               }).map((quota: QuotaInfo) => {
                 const isUnlimited = quota.limit === -1 || quota.remaining === -1;
@@ -1169,6 +1243,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
       </div>
 
       {/* Add-ons Section */}
+      {canPurchaseAddons && (
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 pb-8 sm:pb-12" data-section="addons">
         <div className="bg-white rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
           {/* Section Header */}
@@ -1190,7 +1265,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             </div>
           </div>
 
-          {/* Trial / blocked banner */}
+          {/* Trial banner */}
           {isAddonPurchaseBlocked && subscriptionSummary?.is_trial && (
             <div className="mx-4 sm:mx-6 mt-4 mb-1 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5">
               <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
@@ -1205,6 +1280,25 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 className="flex-shrink-0 flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
               >
                 Upgrade <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Expired plan banner */}
+          {isAddonPurchaseBlocked && !subscriptionSummary?.is_trial && (subscriptionSummary?.status?.toLowerCase() === 'expired' || subscriptionSummary?.status?.toLowerCase() === 'inactive') && (
+            <div className="mx-4 sm:mx-6 mt-4 mb-1 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5">
+              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-red-800">Add-on Purchase Unavailable — Plan Expired</p>
+                <p className="text-sm text-red-700 mt-0.5">
+                  Renew your subscription to purchase add-on units.
+                </p>
+              </div>
+              <button
+                onClick={handleUpgradeClick}
+                className="flex-shrink-0 flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Renew Plan <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
@@ -1340,6 +1434,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
           )}
         </div>
       </div>
+      )}
 
       {/* Record Usage Modal */}
       {showRecordModal && (
@@ -1548,8 +1643,15 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       <AlertCircle className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-red-800 text-sm">Purchase Failed</p>
+                      <p className="font-semibold text-red-800 text-sm">
+                        {paymentCaptured ? 'Activation Failed — Payment Was Captured' : 'Purchase Failed'}
+                      </p>
                       <p className="text-xs text-red-600 mt-0.5">{addonPurchaseError}</p>
+                      {paymentCaptured && (
+                        <p className="text-xs text-red-700 mt-1 font-medium">
+                          Your payment was received. Please check Billing History to retry activation — you will not be charged again.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1669,20 +1771,25 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     setShowAddonModal(false);
                     setAddonPurchaseError(null);
                     setAddonPurchaseSuccess(null);
+                    setPaymentCaptured(false);
                   }}
                   className="px-5 py-3 border border-gray-200 rounded-2xl text-gray-600 font-semibold text-sm hover:bg-gray-50 hover:border-gray-300 transition-all"
                 >
-                  Cancel
+                  {paymentCaptured && addonPurchaseError ? 'Close' : 'Cancel'}
                 </button>
                 <button
                   onClick={handlePurchaseAddon}
-                  disabled={purchasingAddon || razorpayProcessing || !!addonPurchaseSuccess}
+                  disabled={purchasingAddon || razorpayProcessing || !!addonPurchaseSuccess || paymentCaptured}
                   className="flex-1 py-3 bg-gray-900 text-white rounded-2xl font-semibold text-sm hover:bg-gray-800 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-gray-900/20"
                 >
                   {purchasingAddon || razorpayProcessing ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
                       <span>Processing...</span>
+                    </>
+                  ) : paymentCaptured && addonPurchaseError ? (
+                    <>
+                      <span>Payment Captured — Check Billing History</span>
                     </>
                   ) : (
                     <>

@@ -263,11 +263,13 @@ class TeamService {
   /**
    * Get usage summary for all teams (Owner only)
    */
-  async getAllTeamsUsage(days: number = 30): Promise<AllTeamsUsageSummary> {
+  async getAllTeamsUsage(fromDate?: string, toDate?: string): Promise<AllTeamsUsageSummary> {
     try {
-      const response = await api.get('/unit-pool/teams/usage', {
-        params: { days },
-      });
+      const params: Record<string, string> = {};
+      if (fromDate) params.start_date = fromDate;
+      if (toDate) params.end_date = toDate;
+      if (!fromDate && !toDate) params.days = '30';
+      const response = await api.get('/unit-pool/teams/usage', { params });
       return response.data.data || response.data;
     } catch (error: any) {
       console.error('Error fetching all teams usage:', error);
@@ -279,11 +281,13 @@ class TeamService {
    * Get usage summary for current user's teams
    * Available for Standard Users and Viewers
    */
-  async getMyTeamsUsage(days: number = 30): Promise<MyTeamsUsageSummary> {
+  async getMyTeamsUsage(fromDate?: string, toDate?: string): Promise<MyTeamsUsageSummary> {
     try {
-      const response = await api.get('/unit-pool/my-teams/usage', {
-        params: { days },
-      });
+      const params: Record<string, string> = {};
+      if (fromDate) params.start_date = fromDate;
+      if (toDate) params.end_date = toDate;
+      if (!fromDate && !toDate) params.days = '30';
+      const response = await api.get('/unit-pool/my-teams/usage', { params });
       return response.data.data || response.data;
     } catch (error: any) {
       console.error('Error fetching my teams usage:', error);
@@ -295,17 +299,39 @@ class TeamService {
    * Get individual member usage within a team
    * Only available for Tenant Admin
    */
-  async getTeamMembersUsage(teamId: string, days: number = 30): Promise<TeamMembersUsageSummary> {
+  async getTeamMembersUsage(teamId: string, fromDate?: string, toDate?: string): Promise<TeamMembersUsageSummary> {
     try {
-      const response = await api.get(`/unit-pool/teams/${teamId}/members/usage`, {
-        params: { days },
-      });
+      const params: Record<string, string> = {};
+      if (fromDate) params.start_date = fromDate;
+      if (toDate) params.end_date = toDate;
+      if (!fromDate && !toDate) params.days = '30';
+      const response = await api.get(`/unit-pool/teams/${teamId}/members/usage`, { params });
       return response.data.data || response.data;
     } catch (error: any) {
       console.error(`Error fetching team ${teamId} members usage:`, error);
       throw error;
     }
   }
+
+  async getTeamsHistory(limit: number = 20, offset: number = 0, eventType?: string): Promise<{ items: TeamHistoryEntry[]; total: number }> {
+    const params: Record<string, any> = { limit, offset };
+    if (eventType && eventType !== 'ALL') params.event_type = eventType;
+    const response = await api.get('/teams/history', { params });
+    return response.data;
+  }
+}
+
+export interface TeamHistoryEntry {
+  id: string;
+  team_id: string;
+  team_name: string;
+  event_type: string;
+  actor_id?: string;
+  actor_name?: string;
+  target_user_id?: string;
+  target_user_name?: string;
+  details?: Record<string, any>;
+  event_at: string;
 }
 
 const teamService = new TeamService();

@@ -6,6 +6,7 @@ import { termsService } from '@/lib/services/termsService';
 import type { DocumentType } from '@/lib/services/termsService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import type { TermsAcceptanceRecord, TermsAndConditions } from '@/lib/types/terms';
+import ListPagination from '@/components/ListPagination';
 
 const TITLE_TO_DOCUMENT_TYPE: Record<string, DocumentType> = {
   'Terms & Conditions': 'TERMS_AND_CONDITIONS',
@@ -29,6 +30,15 @@ export default function LegalCompliancePage() {
   const [viewingDocType, setViewingDocType] = useState<DocumentType | null>(null);
   const [docLoading, setDocLoading] = useState(false);
   const [docError, setDocError] = useState<string | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const paginatedHistory = history.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -125,7 +135,7 @@ export default function LegalCompliancePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {history.map((record) => (
+                {paginatedHistory.map((record) => (
                   <tr key={record.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{record.terms_version}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{record.terms_title || '—'}</td>
@@ -164,6 +174,18 @@ export default function LegalCompliancePage() {
           </div>
         )}
       </div>
+
+      {/* Pagination */}
+      {!loading && !error && history.length > 0 && (
+        <ListPagination
+          currentPage={currentPage}
+          itemsPerPage={itemsPerPage}
+          totalItems={history.length}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={setItemsPerPage}
+          itemLabel="documents"
+        />
+      )}
 
       {/* Document View Modal — same style as TermsAcceptanceModal */}
       {(docLoading || viewingDoc || docError) && (

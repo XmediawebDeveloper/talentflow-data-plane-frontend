@@ -139,9 +139,12 @@ function AccessBlockedError({
               <p className={!accessCheck.units.AS?.sufficient ? 'text-red-600 font-medium' : ''}>
                 Assessment: {accessCheck.units.AS?.available || 0} available {!accessCheck.units.AS?.sufficient && '❌'}
               </p>
+              <p className={!accessCheck.units.AIU?.sufficient ? 'text-red-600 font-medium' : ''}>
+                AI Interview: {accessCheck.units.AIU?.available || 0} available {!accessCheck.units.AIU?.sufficient && '❌'}
+              </p>
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              All three unit types (Resume Upload, Resume Scoring, Assessment) are empty. Please purchase units to continue.
+              Required unit types shown above, including AI Interview, are unavailable. Please purchase units to continue.
             </p>
           </div>
         )}

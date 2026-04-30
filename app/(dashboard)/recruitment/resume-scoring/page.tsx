@@ -9,6 +9,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { Resume, Folder } from '@/lib/types/types';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { parseIST } from '@/lib/utils/dateUtils';
 import FeatureGate from '@/components/shared/FeatureGate';
 
 interface ScoredResumeData {
@@ -346,7 +347,11 @@ export default function ResumeScoringRoute() {
     // Load scored history sidebar from the API - only page 1 (sorted by created_at DESC)
     // Recently scored items always appear on page 1. Full JD scores are loaded on-demand via loadJdScores.
     try {
-      const firstPage = await scoringService.getAllScoredResumes({ page_size: 500, page: 1 });
+      // Probe for total then pull all scored resumes in a single request
+      const probe = await scoringService.getAllScoredResumes({ page_size: 1, page: 1 });
+      const firstPage = probe.total > (probe.items || []).length
+        ? await scoringService.getAllScoredResumes({ page_size: probe.total, page: 1 })
+        : probe;
       const allItems = firstPage.items || [];
 
       // Group scores by JD
@@ -448,7 +453,7 @@ export default function ResumeScoringRoute() {
             id: jdId,
             jobId: jdId,
             jobTitle: data.jdTitle,
-            scoredAt: new Date(data.scores[0]?.scoredDate || new Date()),
+            scoredAt: parseIST(data.scores[0]?.scoredDate || new Date().toISOString()),
             source: 'database' as const,
             jdStatus: data.jdStatus,
             jdJobId: data.jdJobId,
@@ -500,13 +505,12 @@ export default function ResumeScoringRoute() {
   // Load ALL scores for a specific JD on-demand via /jd/{jd_id} (paginated, deduped latest-per-resume)
   const loadJdScores = async (jdId: string, jdTitle?: string) => {
     try {
-      const firstPage = await scoringService.getJDScoredResumes(jdId, { page_size: 500, page: 1 });
-      let allItems = [...(firstPage.items || [])];
-
-      for (let page = 2; page <= (firstPage.total_pages || 1); page++) {
-        const nextPage = await scoringService.getJDScoredResumes(jdId, { page_size: 500, page });
-        allItems = allItems.concat(nextPage.items || []);
-      }
+      // Probe for total then pull every score for this JD in one request
+      const probe = await scoringService.getJDScoredResumes(jdId, { page_size: 1, page: 1 });
+      const firstPage = probe.total > (probe.items || []).length
+        ? await scoringService.getJDScoredResumes(jdId, { page_size: probe.total, page: 1 })
+        : probe;
+      const allItems = [...(firstPage.items || [])];
 
       const scores = allItems.map((item: any) => {
         const matchScore = Math.round(item.overall_score || 0);
@@ -572,7 +576,7 @@ export default function ResumeScoringRoute() {
           id: jdId,
           jobId: jdId,
           jobTitle: title,
-          scoredAt: scores[0]?.scoredDate ? new Date(scores[0].scoredDate) : (existing?.scoredAt || new Date()),
+          scoredAt: parseIST(scores[0]?.scoredDate || existing?.scoredAt?.toISOString() || new Date().toISOString()),
           source: 'database' as const,
           totalScored: firstPage.total || scores.length,
           scoredResumes: scores,
@@ -601,10 +605,23 @@ export default function ResumeScoringRoute() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch JDs from tenant database - only published JDs for scoring dropdown
+      // Fetch JDs and resumes from tenant database. Probe each for total then
+      // pull every record so the dropdowns reflect actual counts.
+      const jdParams = { status: 'published' as const, source: 'my-jds' as const };
+      const resumeParams = { include_archived: true };
       const [jdResponse, resumeResponse, folderResponse] = await Promise.all([
-        jdService.list({ status: 'published', page_size: 100, source: 'my-jds' }),
-        resumeService.list({ page_size: 500, include_archived: true }).catch(() => ({ items: [] })),
+        jdService.list({ ...jdParams, page_size: 1 }).then((probe) =>
+          probe.total > probe.items.length
+            ? jdService.list({ ...jdParams, page_size: probe.total })
+            : probe
+        ),
+        resumeService.list({ ...resumeParams, page_size: 1 })
+          .then((probe) =>
+            probe.total > probe.items.length
+              ? resumeService.list({ ...resumeParams, page_size: probe.total })
+              : probe
+          )
+          .catch(() => ({ items: [] })),
         folderService.list().catch(() => []),
       ]);
 
@@ -679,7 +696,10 @@ export default function ResumeScoringRoute() {
   // Refresh only resumes (lightweight, no loading state)
   const refreshResumes = async () => {
     try {
-      const resumeResponse = await resumeService.list({ page_size: 500, include_archived: true });
+      const probe = await resumeService.list({ page_size: 1, include_archived: true });
+      const resumeResponse = probe.total > probe.items.length
+        ? await resumeService.list({ page_size: probe.total, include_archived: true })
+        : probe;
       const convertedResumes: Resume[] = resumeResponse.items.map((r: any) => ({
         id: r.id,
         name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',

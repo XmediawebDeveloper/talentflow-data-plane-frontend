@@ -50,6 +50,8 @@ export interface ConsentLog {
   candidate_name?: string;
   feature_name: string;
   feature_context_id?: string;
+  assessment_title?: string;
+  assessment_sequence_number?: number;
   feature_context_type?: string;
   invitation_id?: string;
   consent_status: boolean;

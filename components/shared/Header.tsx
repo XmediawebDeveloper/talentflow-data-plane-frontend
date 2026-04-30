@@ -2,6 +2,7 @@
 
 import { Bell, Search, Settings, ChevronDown, HelpCircle, LogOut, User, Shield, Zap, CreditCard, Book, MessageCircle, FileText, Video, Mail, Phone, ExternalLink, CheckCircle, Clock, AlertCircle, Info, Users, TrendingUp, Activity, Command, Sparkles } from 'lucide-react';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { User as UserType } from '@/lib/types/tenant';
 // import NotificationCenter from './NotificationCenter';
 // import QuickActions from './QuickActions';
@@ -21,6 +22,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
+  const router = useRouter();
 
   const roleLabels = {
     tenant_admin: 'Owner',
@@ -348,7 +350,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   <button className="flex-1 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors font-medium">
                     Mark All Read
                   </button>
-                  <button className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium">
+                  <button
+                    onClick={() => {
+                      setShowNotifications(false);
+                      router.push('/notifications');
+                    }}
+                    className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium"
+                  >
                     View All
                   </button>
                 </div>

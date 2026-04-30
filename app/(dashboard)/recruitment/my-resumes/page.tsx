@@ -309,7 +309,14 @@ function DraggableCardResumeRow({
 export default function MyResumesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isTenantAdmin, hasPermission, isLoading: authLoading } = useAuth();
+  const { user, isTenantAdmin, hasPermission, hasPermissionCode, isLoading: authLoading } = useAuth();
+  const canViewMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:read');
+  const canUploadMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
+  const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update');
+  const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
+  const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
+  const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
+  const canMoveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
   const { hasPlanFeature } = usePlanFeatures();
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
@@ -343,6 +350,8 @@ export default function MyResumesPage() {
   // Upload history modal state
   const [isUploadHistoryModalOpen, setIsUploadHistoryModalOpen] = useState(false);
   const [isUploadHistoryMinimized, setIsUploadHistoryMinimized] = useState(false);
+  const [uploadHistoryTab, setUploadHistoryTab] = useState<'current' | 'completed'>('current');
+  const [allResumesTotal, setAllResumesTotal] = useState(0);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
   const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | null>(null);
   const [retryingBatches, setRetryingBatches] = useState<Set<string>>(new Set());
@@ -432,6 +441,8 @@ export default function MyResumesPage() {
   useEffect(() => {
     fetchData();
     fetchUploadHistory();
+    // Self-heal admin-API resume usage on mount (fire-and-forget — capped at ±200).
+    resumeService.reconcileUsage();
     hasMountedRef.current = true; // Mark as mounted
 
     // Cleanup: Stop all polling intervals when component unmounts
@@ -514,7 +525,7 @@ export default function MyResumesPage() {
 
     if (batchIdFromUrl) {
       // Show upload history filtered by batch
-      setIsUploadHistoryModalOpen(true);
+      openUploadHistoryModal();
       // Clear the query parameter
       router.replace('/recruitment/my-resumes', { scroll: false });
     }
@@ -527,6 +538,7 @@ export default function MyResumesPage() {
         const history = response.batches.map((batch: any) => ({
           id: batch.id,
           date: batch.date,
+          completedAt: batch.completed_at,
           fileName: batch.batch_name,
           totalFiles: batch.total_files,
           completed: batch.completed,
@@ -539,7 +551,7 @@ export default function MyResumesPage() {
           statuses: batch.items?.map((item: any) => ({
             id: item.id,
             fileName: item.file_name,
-            status: item.status,
+            status: item.status === 'duplicated' ? 'duplicate' : item.status,
             errorMessage: item.error_message,
             candidateName: item.candidate_name,
             resumeId: item.resume_id,
@@ -550,6 +562,16 @@ export default function MyResumesPage() {
     } catch (error) {
       console.error('Failed to fetch upload history:', error);
     }
+  };
+
+  const openUploadHistoryModal = () => {
+    const hasActive = uploadHistory.some(
+      r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)
+    );
+    setUploadHistoryTab(hasActive ? 'current' : 'completed');
+    setUploadHistoryFilter(null);
+    setIsUploadHistoryModalOpen(true);
+    setIsUploadHistoryMinimized(false);
   };
 
   const handleCloseUploadHistory = async () => {
@@ -696,7 +718,7 @@ export default function MyResumesPage() {
                 statuses: status.items?.map((item: any) => ({
                   id: item.id,
                   fileName: item.file_name,
-                  status: item.status,
+                  status: item.status === 'duplicated' ? 'duplicate' : item.status,
                   errorMessage: item.error_message,
                   candidateName: item.candidate_name,
                   resumeId: item.resume_id,
@@ -918,11 +940,23 @@ export default function MyResumesPage() {
         }
       }
 
+      // The current API call may be filtered by folder/search/skills — its
+      // total reflects the filtered view, not the user's whole library. Only
+      // refresh the pinned global count when no such filters are applied.
+      const isUnfiltered =
+        (!folderId || folderId === 'all') &&
+        !searchTerm?.trim() &&
+        !currentFilters;
+      const nextAllTotal = isUnfiltered ? resumeResponse.total : allResumesTotal;
+      if (isUnfiltered) {
+        setAllResumesTotal(resumeResponse.total);
+      }
+
       // Add "All Resumes" virtual folder at the top
       const allResumesFolder: FolderType = {
         id: 'all',
         name: 'All Resumes',
-        count: resumeResponse.total,
+        count: nextAllTotal,
       };
       const convertedFolders: FolderType[] = [allResumesFolder, ...apiFolders];
 
@@ -1022,7 +1056,7 @@ export default function MyResumesPage() {
   const handleDeleteResumes = (ids: string[]) => {
     const names = ids.map(id => {
       const r = resumes.find(r => r.id === id);
-      return r?.candidate_name || r?.file_name || 'Unknown';
+      return r?.candidate_name || r?.file_name || 'this resume';
     });
     setDeleteResumeConfirm({ isOpen: true, ids, names });
   };
@@ -1496,6 +1530,10 @@ export default function MyResumesPage() {
 
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
+      if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
+        toast.error('Folder name must not contain HTML or script content');
+        return;
+      }
       // Helper to get all folders including nested children
       const getAllFolders = (folderList: FolderType[]): FolderType[] => {
         const result: FolderType[] = [];
@@ -1536,11 +1574,12 @@ export default function MyResumesPage() {
       });
       const apiFolders: FolderType[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
 
-      // Add "All Resumes" virtual folder at the top
+      // Add "All Resumes" virtual folder at the top — use the pinned global
+      // total, not the currently loaded list (which may be filtered/paginated).
       const allResumesFolder: FolderType = {
         id: 'all',
         name: 'All Resumes',
-        count: resumes.length,
+        count: allResumesTotal,
       };
       setFolders([allResumesFolder, ...apiFolders]);
 
@@ -1554,6 +1593,10 @@ export default function MyResumesPage() {
 
   const handleRenameFolder = async (id: string, name: string) => {
     try {
+      if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
+        toast.error('Folder name must not contain HTML or script content');
+        return;
+      }
       // Prevent renaming "Archived Resumes" folder
       const folderToRename = folders.find(f => f.id === id);
       if (folderToRename && folderToRename.name === 'Archived Resumes' && !folderToRename.parentId) {
@@ -1714,11 +1757,11 @@ export default function MyResumesPage() {
           } catch { /* ignore */ }
         }
 
-        // Ensure "All Resumes" virtual folder
+        // Ensure "All Resumes" virtual folder uses the pinned global total
         const allResumesFolder: FolderType = {
           id: 'all',
           name: 'All Resumes',
-          count: 0,
+          count: allResumesTotal,
           children: [],
         };
         setFolders([allResumesFolder, ...apiFolders]);
@@ -1820,6 +1863,8 @@ export default function MyResumesPage() {
     // Auto-open upload history panel immediately when upload starts (for multiple files)
     if (files.length > 1) {
       console.log('[UPLOAD] Auto-opening upload history panel for', files.length, 'files');
+      // New batch is about to start processing — land on Currently Processing tab
+      setUploadHistoryTab('current');
       setIsUploadHistoryModalOpen(true);
       setIsUploadHistoryMinimized(false);
 
@@ -1990,7 +2035,7 @@ export default function MyResumesPage() {
         initialStatuses = fullStatus.items?.map((item: any) => ({
           id: item.id,
           fileName: item.file_name,
-          status: item.status,
+          status: item.status === 'duplicated' ? 'duplicate' : item.status,
           errorMessage: item.error_message,
           candidateName: item.candidate_name,
           resumeId: item.resume_id,
@@ -2040,7 +2085,7 @@ export default function MyResumesPage() {
                   statuses: status.items?.map((item: any) => ({
                     id: item.id,
                     fileName: item.file_name,
-                    status: item.status,
+                    status: item.status === 'duplicated' ? 'duplicate' : item.status,
                     errorMessage: item.error_message,
                     candidateName: item.candidate_name,
                     resumeId: item.resume_id,
@@ -2254,36 +2299,34 @@ export default function MyResumesPage() {
           <p className="text-xs sm:text-sm text-gray-600">Resumes uploaded by you</p>
         </div>
         <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-          <button
-            onClick={() => setIsUploadHistoryModalOpen(true)}
-            className="relative flex items-center justify-center gap-1.5 sm:gap-2 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors text-xs sm:text-sm flex-1 sm:flex-initial"
-          >
-            <History className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="hidden sm:inline">Upload History</span>
-            <span className="sm:hidden">History</span>
-            {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-5 w-5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-5 w-5 bg-blue-500 text-white text-xs items-center justify-center">
-                  {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length}
+          {canViewMyResumes && (
+            <button
+              onClick={openUploadHistoryModal}
+              className="relative flex items-center justify-center gap-1.5 sm:gap-2 bg-white text-gray-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-md border border-gray-300 hover:bg-gray-50 transition-colors text-xs sm:text-sm flex-1 sm:flex-initial"
+            >
+              <History className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Upload History</span>
+              <span className="sm:hidden">History</span>
+              {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 w-5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-5 w-5 bg-blue-500 text-white text-xs items-center justify-center">
+                    {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length}
+                  </span>
                 </span>
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setIsUploadModalOpen(true)}
-            disabled={!authLoading && !hasPermission('canUploadResumes') && !isTenantAdmin}
-            title={!authLoading && !hasPermission('canUploadResumes') && !isTenantAdmin ? 'You do not have permission to upload resumes. Contact your administrator.' : 'Upload Resume'}
-            className={`flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-md transition-colors text-xs sm:text-sm flex-1 sm:flex-initial ${
-              authLoading || hasPermission('canUploadResumes') || isTenantAdmin
-                ? 'bg-gray-800 text-white hover:bg-gray-900 cursor-pointer'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-            }`}
-          >
-            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
-            <span className="hidden sm:inline">Upload Resume</span>
-            <span className="sm:hidden">Upload</span>
-          </button>
+              )}
+            </button>
+          )}
+          {canUploadMyResumes && (
+            <button
+              onClick={() => setIsUploadModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-md transition-colors text-xs sm:text-sm flex-1 sm:flex-initial bg-gray-800 text-white hover:bg-gray-900 cursor-pointer"
+            >
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">Upload Resume</span>
+              <span className="sm:hidden">Upload</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -2293,14 +2336,14 @@ export default function MyResumesPage() {
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
-            onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
-            onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleApplyToJob : undefined}
+            onMoveToFolder={canMoveMyResumes ? (folderId) => handleMoveToFolder(selectedResumes, folderId) : undefined}
+            onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
             onDownload={handleBulkDownload}
-            onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onDelete={canDeleteMyResumes ? () => handleDeleteResumes(selectedResumes) : undefined}
             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-            onAssessment={hasPlanFeature('assessment') && (hasPermission('canCreateAssessments') || isTenantAdmin) ? handleAssessment : undefined}
-            onArchive={() => handleArchiveResumes(selectedResumes)}
-            onAITalentMatch={hasPlanFeature('ai_talent_match') && (hasPermission('canRunAiMatch') || isTenantAdmin) ? handleAITalentMatch : undefined}
+            onAssessment={hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
+            onArchive={canArchiveMyResumes ? () => handleArchiveResumes(selectedResumes) : undefined}
+            onAITalentMatch={hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
           />
         )}
 
@@ -2375,14 +2418,15 @@ export default function MyResumesPage() {
               folders={folders}
               selectedFolder={selectedFolder}
               onSelectFolder={(folderId: string) => { setSelectedFolder(folderId); setCurrentPage(1); }}
-              onCreateFolder={hasPermission('canUploadResumes') || isTenantAdmin ? handleCreateFolder : undefined}
-              onRenameFolder={hasPermission('canUpdateResumes') || isTenantAdmin ? handleRenameFolder : undefined}
-              onDeleteFolder={hasPermission('canDeleteResumes') || isTenantAdmin ? handleDeleteFolder : undefined}
+              onCreateFolder={canUploadMyResumes ? handleCreateFolder : undefined}
+              onRenameFolder={canUpdateMyResumes ? handleRenameFolder : undefined}
+              onDeleteFolder={canDeleteMyResumes ? handleDeleteFolder : undefined}
               onUploadToFolder={(folderId) => {
+                if (!canUploadMyResumes) return;
                 setSelectedFolder(folderId);
                 setIsUploadModalOpen(true);
               }}
-              onMoveToFolder={handleMoveToFolder}
+              onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
               selectedResumes={selectedResumes}
               resumes={resumes}
               width={folderTreeWidth}
@@ -2431,13 +2475,19 @@ export default function MyResumesPage() {
                   onSelectResume={handleSelectResume}
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
-                  onApplyToJob={hasPlanFeature('resume_scoring') && (hasPermission('canRunScoring') || isTenantAdmin) ? handleSingleResumeApplyToJob : undefined}
-                  onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? (id) => handleDelete(id) : undefined}
-                  onMoveToFolder={handleMoveToFolder}
+                  onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
+                  onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
+                  onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
-                  onViewDetails={(resume) => router.push(`/recruitment/resume-view/${resume.id}`)}
+                  onViewDetails={(resume) => {
+                    sessionStorage.setItem('resumeNavList', JSON.stringify(filteredResumes.map((r) => r.id)));
+                    sessionStorage.setItem('resumeNavSource', 'my-resumes');
+                    router.push(`/recruitment/resume-view/${resume.id}`);
+                  }}
                   highlightQuery={appliedSearchQuery}
-                  onArchive={(resumeId) => handleArchiveResumes([resumeId])}
+                  onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
+                  canShare={canShareMyResumes}
+                  canTag={canUpdateMyResumes}
                   disablePagination={true}
                   isArchivedFolder={
                     folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
@@ -2745,8 +2795,12 @@ export default function MyResumesPage() {
                             isLast={index === folderResumes.length - 1}
                             onSelect={handleSelectResume}
                             onQuickView={(r) => setQuickViewResume(r)}
-                            onDelete={hasPermission('canDeleteResumes') || isTenantAdmin ? handleDelete : undefined}
-                            onViewDetails={(r) => router.push(`/recruitment/resume-view/${r.id}`)}
+                            onDelete={canDeleteMyResumes ? handleDelete : undefined}
+                            onViewDetails={(r) => {
+                              sessionStorage.setItem('resumeNavList', JSON.stringify(folderResumes.map((x) => x.id)));
+                              sessionStorage.setItem('resumeNavSource', 'my-resumes');
+                              router.push(`/recruitment/resume-view/${r.id}`);
+                            }}
                           />
                         ))}
                         </div>
@@ -2759,7 +2813,11 @@ export default function MyResumesPage() {
                               className={`bg-white border rounded-lg p-4 cursor-pointer hover:shadow-md transition-all ${
                                 selectedResumes.includes(resume.id) ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
                               }`}
-                              onClick={() => router.push(`/recruitment/resume-view/${resume.id}`)}
+                              onClick={() => {
+                                sessionStorage.setItem('resumeNavList', JSON.stringify(folderResumes.map((x) => x.id)));
+                                sessionStorage.setItem('resumeNavSource', 'my-resumes');
+                                router.push(`/recruitment/resume-view/${resume.id}`);
+                              }}
                             >
                               <div className="flex items-start gap-3 mb-3">
                                 <input
@@ -2803,7 +2861,7 @@ export default function MyResumesPage() {
                                   <Eye className="w-4 h-4" />
                                   View
                                 </button>
-                                {(hasPermission('canDeleteResumes') || isTenantAdmin) && (
+                                {canDeleteMyResumes && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handleDelete(resume.id); }}
                                     className="px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg flex items-center justify-center gap-1"
@@ -3169,17 +3227,99 @@ export default function MyResumesPage() {
               <div className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-gray-50">
                 {(() => {
                   const myResumesHistory = uploadHistory.filter(r => r.source === 'my-resumes');
-                  const processingCount = myResumesHistory.filter(r => r.status === 'processing' || r.pending > 0).length;
+                  const isActive = (r: any) => r.status === 'processing' || r.pending > 0;
+                  const activeRecords = myResumesHistory.filter(isActive);
+                  const completedRecords = myResumesHistory.filter(r => !isActive(r));
+
                   const completedCount = myResumesHistory.reduce((sum, r) => sum + (r.completed || 0), 0);
                   const duplicatedCount = myResumesHistory.reduce((sum, r) => sum + (r.duplicated || 0), 0);
                   const versionedCount = myResumesHistory.reduce((sum, r) => sum + (r.versioned || 0), 0);
                   const failedCount = myResumesHistory.reduce((sum, r) => sum + (r.errors || 0), 0);
-                  const pendingCount = myResumesHistory.reduce((sum, r) => sum + (r.pending || 0), 0);
+                  const pendingCount = activeRecords.reduce((sum, r) => sum + (r.pending || 0), 0);
                   const totalFiles = myResumesHistory.reduce((sum, r) => sum + (r.totalFiles || 0), 0);
                   const successRate = totalFiles > 0 ? Math.round((completedCount / totalFiles) * 100) : 0;
+                  const activeProcessed = activeRecords.reduce(
+                    (sum, r) => sum + (r.completed || 0) + (r.errors || 0) + (r.duplicated || 0) + (r.versioned || 0),
+                    0
+                  );
+
+                  const displayRecords = uploadHistoryTab === 'current' ? activeRecords : completedRecords;
 
                   return (
                     <>
+                      {/* Tabs */}
+                      <div className="inline-flex items-center bg-white border border-gray-200 rounded-lg p-1 mb-4 sm:mb-6 shadow-sm">
+                        <button
+                          onClick={() => setUploadHistoryTab('current')}
+                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                            uploadHistoryTab === 'current'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeRecords.length > 0 && uploadHistoryTab !== 'current' ? 'text-blue-500 animate-spin' : ''}`} />
+                          Currently Processing
+                          {activeRecords.length > 0 && (
+                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${
+                              uploadHistoryTab === 'current' ? 'bg-white text-blue-600' : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {activeRecords.length}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setUploadHistoryTab('completed')}
+                          className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium transition-colors ${
+                            uploadHistoryTab === 'completed'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          Completed
+                          {completedRecords.length > 0 && (
+                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${
+                              uploadHistoryTab === 'completed' ? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {completedRecords.length}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Currently Processing tab — compact live stats */}
+                      {uploadHistoryTab === 'current' && activeRecords.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
+                          <div className="bg-white border border-blue-200 rounded-xl p-3 sm:p-4">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 animate-spin" />
+                              <span className="text-[10px] sm:text-xs text-gray-700">In&nbsp;Progress</span>
+                            </div>
+                            <div className="text-lg sm:text-2xl font-bold text-blue-700">{activeRecords.length}</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">batch{activeRecords.length !== 1 ? 'es' : ''}</div>
+                          </div>
+                          <div className="bg-white border border-gray-200 rounded-xl p-3 sm:p-4">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />
+                              <span className="text-[10px] sm:text-xs text-gray-700">Queued</span>
+                            </div>
+                            <div className="text-lg sm:text-2xl font-bold text-gray-700">{pendingCount}</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">file{pendingCount !== 1 ? 's' : ''} left</div>
+                          </div>
+                          <div className="bg-white border border-green-200 rounded-xl p-3 sm:p-4">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" />
+                              <span className="text-[10px] sm:text-xs text-gray-700">Processed</span>
+                            </div>
+                            <div className="text-lg sm:text-2xl font-bold text-green-700">{activeProcessed}</div>
+                            <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">so far</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Completed tab — lifetime stats grid */}
+                      {uploadHistoryTab === 'completed' && (
+                      <>
                       {/* Status Summary Cards - 6 Column Grid (Clickable Filters) */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
                         {/* Completed */}
@@ -3299,9 +3439,11 @@ export default function MyResumesPage() {
                           </button>
                         </div>
                       )}
+                        </>
+                      )}
 
-                      {/* Overall ETA Banner */}
-                      {(() => {
+                      {/* Overall ETA Banner — only relevant on the Currently Processing tab */}
+                      {uploadHistoryTab === 'current' && (() => {
                         // Only show for batches that still have genuinely active items
                         const activeBatches = myResumesHistory.filter(r =>
                           r.pending > 0 && r.date &&
@@ -3342,21 +3484,39 @@ export default function MyResumesPage() {
 
                       {/* Upload History List */}
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-semibold text-gray-900">Recent Uploads</h3>
-                        <span className="text-xs text-gray-500">{myResumesHistory.length} batch{myResumesHistory.length !== 1 ? 'es' : ''}</span>
+                        <h3 className="text-sm font-semibold text-gray-900">
+                          {uploadHistoryTab === 'current' ? 'Active Uploads' : 'Recent Uploads'}
+                        </h3>
+                        <span className="text-xs text-gray-500">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
                       </div>
 
-                      {myResumesHistory.length === 0 ? (
+                      {displayRecords.length === 0 ? (
                         <div className="flex flex-col items-center justify-center text-center py-8 sm:py-12">
-                          <div className="w-14 h-14 sm:w-20 sm:h-20 bg-blue-100 rounded-full flex items-center justify-center mb-3 sm:mb-4">
-                            <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-blue-600" />
+                          <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-full flex items-center justify-center mb-3 sm:mb-4 ${
+                            uploadHistoryTab === 'current' ? 'bg-green-100' : 'bg-blue-100'
+                          }`}>
+                            {uploadHistoryTab === 'current' ? (
+                              <CheckCircle className="w-7 h-7 sm:w-10 sm:h-10 text-green-600" />
+                            ) : (
+                              <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-blue-600" />
+                            )}
                           </div>
-                          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-1.5 sm:mb-2">No Upload History</h3>
-                          <p className="text-xs sm:text-sm text-gray-500 max-w-sm px-4">Bulk upload reports will appear here. Upload multiple resumes to see detailed status reports.</p>
+                          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-1.5 sm:mb-2">
+                            {uploadHistoryTab === 'current'
+                              ? 'No uploads in progress'
+                              : myResumesHistory.length === 0 ? 'No upload history' : 'Nothing here yet'}
+                          </h3>
+                          <p className="text-xs sm:text-sm text-gray-500 max-w-sm px-4">
+                            {uploadHistoryTab === 'current'
+                              ? 'All your uploads are processed. Start a new bulk upload to see live progress here.'
+                              : myResumesHistory.length === 0
+                                ? 'Bulk upload reports will appear here. Upload multiple resumes to see detailed status reports.'
+                                : 'Active uploads will appear in the Currently Processing tab until they finish.'}
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-4">
-                          {myResumesHistory
+                          {displayRecords
                             .slice(0, 20)
                             .map(record => {
                               const processed = record.completed + record.errors + record.duplicated + (record.versioned || 0);
@@ -3383,9 +3543,33 @@ export default function MyResumesPage() {
                                         {record.date && (
                                           <span className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                                             <Calendar className="w-3 h-3 flex-shrink-0" />
-                                            <span className="truncate">{formatDateTimeIST(record.date)}</span>
+                                            <span className="truncate">Started {formatDateTimeIST(record.date)}</span>
                                           </span>
                                         )}
+                                        {record.completedAt && record.pending === 0 && (() => {
+                                          const start = new Date(record.date).getTime();
+                                          const end = new Date(record.completedAt).getTime();
+                                          const ms = Math.max(0, end - start);
+                                          const totalSec = Math.round(ms / 1000);
+                                          const h = Math.floor(totalSec / 3600);
+                                          const m = Math.floor((totalSec % 3600) / 60);
+                                          const s = totalSec % 60;
+                                          const duration = h > 0
+                                            ? `${h}h ${m}m ${s}s`
+                                            : m > 0
+                                              ? `${m}m ${s}s`
+                                              : `${s}s`;
+                                          return (
+                                            <span className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                              <CheckCircle className="w-3 h-3 flex-shrink-0 text-green-500" />
+                                              <span className="truncate">
+                                                Finished {formatDateTimeIST(record.completedAt)}
+                                                <span className="ml-1.5 text-gray-400">·</span>
+                                                <span className="ml-1.5 text-gray-700 font-medium">{duration}</span>
+                                              </span>
+                                            </span>
+                                          );
+                                        })()}
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2 sm:gap-3 ml-10 sm:ml-0">
@@ -3598,7 +3782,7 @@ export default function MyResumesPage() {
                                           </span>
                                           <span className="flex items-center gap-1 text-red-600">
                                             <AlertCircle className="w-3 h-3" />
-                                            {record.statuses.filter((f: any) => f.status === 'error' || f.status === 'duplicate').length}
+                                            {record.statuses.filter((f: any) => f.status === 'error' || f.status === 'duplicate' || f.status === 'duplicated').length}
                                           </span>
                                         </div>
                                       </div>
@@ -4045,11 +4229,7 @@ export default function MyResumesPage() {
                                     )}
                                     {assessment.created_at && (
                                       <span>
-                                        {(() => {
-                                          const dateWithZ = assessment.created_at + (assessment.created_at.includes('Z') ? '' : 'Z');
-                                          const date = new Date(dateWithZ);
-                                          return `${date.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', year: 'numeric' })} at ${date.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: true })}`;
-                                        })()}
+                                        {formatIST(assessment.created_at)}
                                       </span>
                                     )}
                                   </div>
@@ -4206,12 +4386,20 @@ export default function MyResumesPage() {
               <Trash2 className="w-5 h-5 text-red-500" />
               Delete {deleteResumeConfirm.ids.length === 1 ? 'Resume' : `${deleteResumeConfirm.ids.length} Resumes`}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              {deleteResumeConfirm.ids.length === 1 ? (
-                <>Are you sure you want to delete <span className="font-medium text-gray-900">{deleteResumeConfirm.names[0]}</span>? This action cannot be undone.</>
-              ) : (
-                <>Are you sure you want to delete <span className="font-medium text-gray-900">{deleteResumeConfirm.ids.length} resumes</span>? This action cannot be undone.</>
-              )}
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-gray-600">
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Deletion is permanent and irreversible</li>
+                  <li>Deleted resumes cannot be recovered</li>
+                  <li>This action cannot be undone.</li>
+                </ul>
+                <p>
+                  {deleteResumeConfirm.ids.length === 1
+                    ? 'Are you sure you want to delete the resume?'
+                    : <>Are you sure you want to delete <span className="font-medium text-gray-900">{deleteResumeConfirm.ids.length} resumes</span>?</>
+                  }
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

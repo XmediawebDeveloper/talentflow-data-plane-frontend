@@ -136,6 +136,19 @@ export const resumeService = {
   },
 
   /**
+   * Fire-and-forget: ask the backend to reconcile the admin API's RU usage
+   * with our actual active resume count. Safe to call on every page mount —
+   * the endpoint is idempotent and returns delta=0 when already in sync.
+   */
+  async reconcileUsage(): Promise<void> {
+    try {
+      await api.post('/resumes/usage/reconcile');
+    } catch {
+      // Reconciliation is best-effort; never block the page on it.
+    }
+  },
+
+  /**
    * Get single resume by ID
    */
   async get(id: string): Promise<Resume> {
@@ -304,7 +317,10 @@ export const resumeService = {
   },
 
   /**
-   * Retry stuck/failed items in a batch (units are NOT re-deducted)
+   * Retry stuck/failed items in a batch.
+   * Unit deduction on retry is handled by the backend:
+   *   - If a unit was already deducted for this item (e.g. stuck/processing) → unit is NOT charged again
+   *   - If no unit was deducted yet (e.g. item failed before charge) → 1 unit IS deducted on retry
    */
   async retryItem(batchId: string, itemId: string): Promise<any> {
     try {
@@ -324,6 +340,11 @@ export const resumeService = {
     }
   },
 
+  /**
+   * Retry all failed/stuck items in a batch.
+   * Same unit deduction logic as retryItem — backend charges only for items
+   * that had no unit previously deducted.
+   */
   async retryBatchItems(batchId: string): Promise<any> {
     try {
       const response = await api.post(`/resumes/upload/batch/${batchId}/retry`);

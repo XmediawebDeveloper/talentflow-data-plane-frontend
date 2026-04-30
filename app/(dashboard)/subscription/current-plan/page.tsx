@@ -250,10 +250,19 @@ const getGradientForPlan = (planName: string, tier: string): string => {
 };
 
 /**
- * Compare plan tiers to determine upgrade/downgrade
- * Returns: 1 if targetTier is higher (upgrade), -1 if lower (downgrade), 0 if same
+ * Compare plan tiers (and billing interval within the same tier) to determine upgrade/downgrade.
+ * Returns: 1 if target is higher (upgrade), -1 if lower (downgrade), 0 if identical.
+ *
+ * Same-tier billing interval rules:
+ *   ANNUAL  → MONTHLY  = downgrade (-1)
+ *   MONTHLY → ANNUAL   = upgrade   (+1)
  */
-const comparePlanTiers = (currentTier: string | undefined, targetTier: string | undefined): number => {
+const comparePlanTiers = (
+  currentTier: string | undefined,
+  targetTier: string | undefined,
+  currentInterval?: string,
+  targetInterval?: string,
+): number => {
   if (!currentTier || !targetTier) return 0;
 
   const tierOrder: Record<string, number> = {
@@ -267,7 +276,16 @@ const comparePlanTiers = (currentTier: string | undefined, targetTier: string | 
 
   if (targetLevel > currentLevel) return 1;  // Upgrade
   if (targetLevel < currentLevel) return -1; // Downgrade
-  return 0; // Same tier
+
+  // Same tier — check billing interval
+  if (currentInterval && targetInterval) {
+    const cur = currentInterval.toUpperCase();
+    const tgt = targetInterval.toUpperCase();
+    if (cur === 'ANNUAL' && tgt === 'MONTHLY') return -1; // Downgrade
+    if (cur === 'MONTHLY' && tgt === 'ANNUAL') return 1;  // Upgrade
+  }
+
+  return 0; // Same tier, same interval
 };
 
 const formatCurrency = (amount: number | undefined | null, currency: string): string => {
@@ -512,6 +530,7 @@ function CurrentPlanContent() {
 
   // Plan settings from admin API (yearly discount, database extra charge)
   const [planSettings, setPlanSettings] = useState<PlanSettings | null>(null);
+  const [planSettingsError, setPlanSettingsError] = useState(false);
 
   // Billing period toggle
   const [isYearly, setIsYearly] = useState(true);
@@ -798,24 +817,25 @@ function CurrentPlanContent() {
       console.log('[CurrentPlan] isExpired check:', isSubscriptionExpired, 'localSubscriptionStatus:', localSubscriptionStatus);
 
       // Fetch plan settings (yearly discount, database extra charge)
-      // Skip if expired to reduce wasteful API calls logged in Admin Panel
-      if (!isSubscriptionExpired) {
-        try {
-          const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
-          if (planSettingsResponse.ok) {
-            const planSettingsResult = await planSettingsResponse.json();
-            const settings = planSettingsResult.data || planSettingsResult;
+      try {
+        const planSettingsResponse = await fetch(`${API_URL}/addons/plan-settings`);
+        if (planSettingsResponse.ok) {
+          const planSettingsResult = await planSettingsResponse.json();
+          const settings = planSettingsResult.data || planSettingsResult;
+          if (settings.databasePerTenantMonthlyPrice == null) {
+            setPlanSettingsError(true);
+          } else {
             setPlanSettings({
               yearlyDiscountPercentage: settings.yearlyDiscountPercentage,
               databasePerTenantMonthlyPrice: settings.databasePerTenantMonthlyPrice,
             });
             console.log('[CurrentPlan] Plan settings:', settings);
           }
-        } catch (planSettingsError) {
-          console.log('Could not fetch plan settings');
+        } else {
+          setPlanSettingsError(true);
         }
-      } else {
-        console.log('[CurrentPlan] Skipping plan-settings API call - subscription expired');
+      } catch {
+        setPlanSettingsError(true);
       }
 
       // NOTE: All plan data now comes from /usage/quota-status API (Admin API) or previous-plan API (for expired users)
@@ -851,7 +871,7 @@ function CurrentPlanContent() {
         };
       }
 
-      const transformedPlans: DisplayPlan[] = (Array.isArray(plansArray) ? plansArray : [])
+      const transformedPlans: DisplayPlan[] = ((Array.isArray(plansArray) ? plansArray : [])
         .map((groupedPlan: GroupedPlan) => {
           const monthly = groupedPlan.billing_options?.monthly;
           const annual = groupedPlan.billing_options?.annual;
@@ -882,7 +902,7 @@ function CurrentPlanContent() {
           const isCurrentAnnual = currentPlanId !== undefined && currentPlanId !== null &&
             Number(currentPlanId) === Number(annual?.id);
           const isCurrent = isCurrentMonthly || isCurrentAnnual ||
-            (currentPlanName && currentPlanName.toLowerCase() === groupedPlan.plan_name.toLowerCase());
+            !!(currentPlanName && currentPlanName.toLowerCase() === groupedPlan.plan_name.toLowerCase());
 
           return {
             id: String(basePlan.id),
@@ -904,7 +924,7 @@ function CurrentPlanContent() {
             monthlyQuotas: monthly?.quotas,
             annualQuotas: annual?.quotas,
             // Discount percentage from API
-            discountPercentage: (groupedPlan as any).discount_percentage ?? annual?.discount_percentage,
+            discountPercentage: (groupedPlan as any).discount_percentage ?? (annual as any)?.discount_percentage,
             isCurrent,
             // Track which billing period is current
             isCurrentMonthly,
@@ -917,11 +937,11 @@ function CurrentPlanContent() {
             planSlug: groupedPlan.plan_slug,
           };
         })
-        .filter((plan): plan is DisplayPlan => plan !== null)
+        .filter((plan) => plan !== null && plan !== undefined) as DisplayPlan[])
         .sort((a, b) => {
-          // Sort by price ascending (lowest first)
-          const orderA = a.monthlyPrice || 0;
-          const orderB = b.monthlyPrice || 0;
+          const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+          const orderA = tierOrder[a.tier?.toUpperCase()] ?? 99;
+          const orderB = tierOrder[b.tier?.toUpperCase()] ?? 99;
           return orderA - orderB;
         });
 
@@ -1006,16 +1026,23 @@ function CurrentPlanContent() {
       const data = await response.json();
 
       if (response.ok && (data.status === 'success' || data.status === 'partial')) {
+        const appliedPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
+        const isApplyDowngrade = comparePlanTiers(
+          currentPlan?.tier, appliedPlan?.tier,
+          currentPlanBillingPeriod,
+          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+        ) === -1;
+        const applyLabel = isApplyDowngrade ? 'downgrade' : 'upgrade';
+
         // Check if it was a partial success (local update succeeded but admin API failed)
         if (data.status === 'partial') {
-          // Show warning message for partial success
           const adminError = data.data?.admin_error || 'Admin system sync failed';
-          toast.warning('Plan upgraded with warnings', {
+          toast.warning(`Plan ${applyLabel}d with warnings`, {
             description: `${adminError}. You will be redirected to login.`,
             duration: 3000,
           });
         } else {
-          toast.success(`Successfully upgraded to ${selectedQueuedUpgrade.new_plan_name}!`, {
+          toast.success(`Successfully ${applyLabel}d to ${selectedQueuedUpgrade.new_plan_name}!`, {
             description: 'You will be redirected to login to apply your new plan.',
             duration: 3000,
           });
@@ -1028,11 +1055,10 @@ function CurrentPlanContent() {
         // Refresh notifications before logout so bell updates during toast
         window.dispatchEvent(new CustomEvent('notificationTrigger'));
 
-        // Plan upgraded successfully - logout and redirect to login
-        // This ensures user gets fresh session with new plan data
+        // Logout and redirect to login with correct direction param
         setTimeout(() => {
           logout();
-          router.push('/login?upgraded=true');
+          router.push(isApplyDowngrade ? '/login?downgraded=true' : '/login?upgraded=true');
         }, 2000);
         return; // Exit early
       } else {
@@ -1099,7 +1125,13 @@ function CurrentPlanContent() {
       const data = await response.json();
 
       if (response.ok && data.status === 'success') {
-        setSuccessMessage(`Queued upgrade to ${selectedQueuedUpgrade.new_plan_name} has been cancelled.`);
+        const cancelledPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
+        const isCancellingDowngrade = comparePlanTiers(
+          currentPlan?.tier, cancelledPlan?.tier,
+          currentPlanBillingPeriod,
+          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+        ) === -1;
+        setSuccessMessage(`Queued ${isCancellingDowngrade ? 'downgrade' : 'upgrade'} to ${selectedQueuedUpgrade.new_plan_name} has been cancelled.`);
         setShowCancelModal(false);
         setSelectedQueuedUpgrade(null);
         setCancelReason('');
@@ -1206,10 +1238,12 @@ function CurrentPlanContent() {
       return;
     }
 
-    // Check if this is a downgrade
+    // Check if this is a downgrade (tier or billing interval)
     const tierComparison = comparePlanTiers(
-      companySettings?.current_plan_tier || currentPlan?.tier,
-      plan.tier
+      currentPlan?.tier,
+      plan.tier,
+      currentPlanBillingPeriod,          // current: ANNUAL or MONTHLY
+      isYearly ? 'ANNUAL' : 'MONTHLY',   // target: what the user toggled to
     );
 
     if (tierComparison === -1) {
@@ -1411,7 +1445,7 @@ function CurrentPlanContent() {
             amount: orderData.amount,
             currency: orderData.currency,
             planName: orderData.plan_name || selectedPlanForPayment.name,
-            userName: user?.full_name || user?.email?.split('@')[0],
+            userName: user?.name || user?.email?.split('@')[0],
             userEmail: user?.email,
           });
           razorpayFields = {
@@ -1545,17 +1579,17 @@ function CurrentPlanContent() {
         // Handle both string and object error formats
         const errorDetail = data.detail;
 
-        // Check if this is a downgrade blocked error
+        // DOWNGRADE_BLOCKED_USER_LIMIT: backend no longer blocks downgrade,
+        // but handle gracefully in case it's ever returned.
         if (errorDetail && typeof errorDetail === 'object' && errorDetail.error === 'DOWNGRADE_BLOCKED_USER_LIMIT') {
-          setDowngradeWarningData({
-            activeUsers: errorDetail.active_users || 0,
-            newPlanMaxSeats: errorDetail.new_plan_max_seats || 0,
-            usersToDeactivate: errorDetail.users_to_deactivate || 0,
-            newPlanName: errorDetail.new_plan_name || 'selected plan',
-            actionRequired: errorDetail.action_required,
+          const active = errorDetail.active_users || 0;
+          const limit = errorDetail.new_plan_max_seats || 0;
+          const toDeactivate = errorDetail.users_to_deactivate || 0;
+          toast.error('Downgrade requires user reduction', {
+            description: `You have ${active} active users but the new plan allows ${limit}. Please deactivate ${toDeactivate} user(s) in User Management, then retry the downgrade.`,
+            duration: 8000,
           });
-          setShowDowngradeWarning(true);
-          return; // Don't show generic error toast
+          return;
         }
 
         let errorMessage = typeof errorDetail === 'string'
@@ -1682,7 +1716,7 @@ function CurrentPlanContent() {
     const yearlyPrice = selectedPlanForPayment?.annualPrice || 0;
     const yearlyFullPrice = monthlyPrice * 12;
     const planPrice = isYearly ? yearlyPrice : monthlyPrice;
-    const dbExtraCharge = isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 0) : 0;
+    const dbExtraCharge = isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) : 0;
     const dbChargeTotal = isYearly ? dbExtraCharge * 12 : dbExtraCharge;
     const totalAmount = planPrice + dbChargeTotal;
     return { basePrice: monthlyPrice, monthlyPrice, yearlyPrice, yearlyFullPrice, planPrice, dbExtraCharge, dbChargeTotal, totalAmount };
@@ -1919,13 +1953,13 @@ function CurrentPlanContent() {
             </span>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 lg:gap-6">
-            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Plan</p>
               <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial ? 'Free Trial' : (companySettings?.current_plan_name?.replace(/\s*\([^)]*\)\s*$/, '') || '-')}
               </p>
             </div>
-            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">Price</p>
               <p className="text-sm sm:text-lg lg:text-xl font-semibold text-gray-900">
                 {isOnTrial ? (
@@ -1939,7 +1973,7 @@ function CurrentPlanContent() {
                 )}
               </p>
             </div>
-            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
                 {isOnTrial ? 'Trial Started' : 'Plan Start'}
               </p>
@@ -1954,7 +1988,7 @@ function CurrentPlanContent() {
                 }
               </p>
             </div>
-            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 rounded-lg">
+            <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
                 {isOnTrial ? 'Trial Ends' : 'Plan Expires'}
               </p>
@@ -2016,7 +2050,8 @@ function CurrentPlanContent() {
               const expiryDate = new Date(companySettings!.plan_expiry_date!);
               const now = new Date();
               const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-              const isExpired = daysUntilExpiry < 0 || isExpiredSubscription;
+              const daysSinceExpiry = Math.floor((now.getTime() - expiryDate.getTime()) / (1000 * 60 * 60 * 24));
+              const isExpired = daysUntilExpiry <= 0 || isExpiredSubscription;
               const isExpiringSoon = !isExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
 
               if (isExpired || isExpiringSoon) {
@@ -2041,7 +2076,9 @@ function CurrentPlanContent() {
                             isExpired ? 'text-red-700' : 'text-amber-700'
                           }`}>
                             {isExpired
-                              ? `Your ${planName} plan expired ${Math.abs(daysUntilExpiry)} days ago. Please renew to continue using all features.`
+                              ? daysSinceExpiry === 0
+                                ? `Your ${planName} plan expired today. Please renew to continue using all features.`
+                                : `Your ${planName} plan expired ${daysSinceExpiry} day${daysSinceExpiry !== 1 ? 's' : ''} ago. Please renew to continue using all features.`
                               : `Your ${planName} plan expires in ${daysUntilExpiry} day${daysUntilExpiry !== 1 ? 's' : ''}`
                             }
                           </p>
@@ -2082,37 +2119,37 @@ function CurrentPlanContent() {
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h3 className="text-xs sm:text-sm font-medium text-gray-700 mb-3 sm:mb-4">Your Plan Limits</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_seats)}
                   </p>
                   <p className="text-xs text-gray-600">Team Seats</p>
                 </div>
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_jobs)}
                   </p>
                   <p className="text-xs text-gray-600">Job Postings</p>
                 </div>
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_resume_uploads)}
                   </p>
                   <p className="text-xs text-gray-600">Resume Storage</p>
                 </div>
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_resume_searches)}
                   </p>
                   <p className="text-xs text-gray-600">Resume Scores</p>
                 </div>
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_assessments)}
                   </p>
                   <p className="text-xs text-gray-600">Assessments</p>
                 </div>
-                <div className="text-center p-2 sm:p-3 bg-gray-50 rounded-lg">
+                <div className="text-center p-2 sm:p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <p className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">
                     {formatQuotaValue(companySettings.max_ai_interviews)}
                   </p>
@@ -2160,7 +2197,7 @@ function CurrentPlanContent() {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                   {nonQuotaFeatures.map(f => (
-                    <div key={f.feature_key} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50">
+                    <div key={f.feature_key} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 border border-gray-200">
                       {f.is_enabled ? (
                         <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
                       ) : (
@@ -2198,7 +2235,10 @@ function CurrentPlanContent() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-2 flex-wrap">
                         <Package className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-                        <span className="font-semibold text-gray-900">{upgrade.new_plan_name}</span>
+                        <span className="font-semibold text-gray-900">
+                          {upgrade.new_plan_name}
+                          {upgrade.billing_interval && <span className="font-normal text-gray-500"> ({upgrade.billing_interval.charAt(0).toUpperCase() + upgrade.billing_interval.slice(1).toLowerCase()})</span>}
+                        </span>
                         <Badge className="bg-amber-100 text-amber-700 text-xs">
                           {upgrade.status === 'SCHEDULED' ? 'Scheduled' : 'Queued'}
                         </Badge>
@@ -2236,9 +2276,22 @@ function CurrentPlanContent() {
                           </span>
                         </div>
                       </div>
-                      {upgrade.reason && (
-                        <p className="text-xs text-gray-500 mt-2">Reason: {upgrade.reason}</p>
-                      )}
+                      {upgrade.reason && (() => {
+                        const upgradePlan = plans.find(p => p.name === upgrade.new_plan_name);
+                        const isQueuedDowngrade = comparePlanTiers(
+                          currentPlan?.tier, upgradePlan?.tier,
+                          currentPlanBillingPeriod,
+                          upgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+                        ) === -1;
+                        const direction = isQueuedDowngrade ? 'downgrade' : 'upgrade';
+                        const fromPlan = upgrade.current_plan_name || currentPlan?.name || '';
+                        const fromPeriod = currentPlanBillingPeriod ? currentPlanBillingPeriod.charAt(0).toUpperCase() + currentPlanBillingPeriod.slice(1).toLowerCase() : '';
+                        const toPeriod = upgrade.billing_interval ? upgrade.billing_interval.charAt(0).toUpperCase() + upgrade.billing_interval.slice(1).toLowerCase() : '';
+                        const correctedReason = fromPlan
+                          ? `User ${direction} from ${fromPlan}${fromPeriod ? ` (${fromPeriod})` : ''} to ${upgrade.new_plan_name}${toPeriod ? ` (${toPeriod})` : ''}`
+                          : upgrade.reason.replace(/\b(upgrade|downgrade)\b/gi, (m: string) => m[0] === m[0].toUpperCase() ? (isQueuedDowngrade ? 'Downgrade' : 'Upgrade') : direction);
+                        return <p className="text-xs text-gray-500 mt-2">Reason: {correctedReason}</p>;
+                      })()}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -2273,8 +2326,8 @@ function CurrentPlanContent() {
             </div>
 
             <p className="text-xs text-amber-600 mt-4">
-              Queued upgrades will automatically apply when your current plan expires.
-              Click "Apply Now" to upgrade immediately (remaining credits will be forfeited).
+              Queued plan changes will automatically apply when your current plan expires.
+              Click "Apply Now" to apply immediately (remaining credits will be forfeited).
             </p>
           </div>
         )}
@@ -2327,9 +2380,9 @@ function CurrentPlanContent() {
               onMouseLeave={() => setHoveredPlan(null)}
             >
               {[...plans].sort((a, b) => {
-                // Sort by price ascending (lowest first)
-                const priceA = a.monthlyPrice || a.annualPrice || 0;
-                const priceB = b.monthlyPrice || b.annualPrice || 0;
+                const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+                const priceA = tierOrder[a.tier?.toUpperCase()] ?? 99;
+                const priceB = tierOrder[b.tier?.toUpperCase()] ?? 99;
                 return priceA - priceB;
               }).map((plan) => {
                 const Icon = plan.icon;
@@ -2397,6 +2450,11 @@ function CurrentPlanContent() {
                       <Icon className="w-5 h-5 sm:w-6 sm:h-6 lg:w-7 lg:h-7 text-white" />
                     </div>
 
+                    {plan.tier && (
+                      <Badge className="mb-2 text-xs uppercase tracking-widest bg-gray-100 text-gray-500 border border-gray-200">
+                        {plan.tier}
+                      </Badge>
+                    )}
                     <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900 mb-1 sm:mb-2">{plan.name}</h3>
                     <p className="text-gray-600 mb-3 sm:mb-4 lg:mb-6 min-h-[36px] sm:min-h-[48px] text-xs sm:text-sm">{plan.description}</p>
 
@@ -2574,9 +2632,9 @@ function CurrentPlanContent() {
                         (!plan.monthlyPrice && !plan.annualPrice) ||
                         queuedUpgrades.length > 0 ||
                         // Disable if viewing yearly but only monthly available
-                        (isYearly && !plan.annualPrice && plan.monthlyPrice) ||
+                        (isYearly && !plan.annualPrice && !!plan.monthlyPrice) ||
                         // Disable if viewing monthly but only yearly available
-                        (!isYearly && !plan.monthlyPrice && plan.annualPrice)
+                        (!isYearly && !plan.monthlyPrice && !!plan.annualPrice)
                       }
                       className={`block w-full h-12 rounded-lg font-medium text-center transition-all flex items-center justify-center gap-2 mt-auto ${
                         !canUpgradePlan && !isCurrentForToggle
@@ -2604,7 +2662,11 @@ function CurrentPlanContent() {
                       ) : queuedUpgrades.length > 0 ? (
                         (() => {
                           const queuedPlan = plans.find(p => p.name === queuedUpgrades[0]?.new_plan_name);
-                          const queuedDirection = comparePlanTiers(currentPlan?.tier, queuedPlan?.tier);
+                          const queuedDirection = comparePlanTiers(
+                            currentPlan?.tier, queuedPlan?.tier,
+                            currentPlanBillingPeriod,
+                            queuedUpgrades[0]?.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+                          );
                           return queuedDirection === -1 ? 'Downgrade Queued' : 'Upgrade Queued';
                         })()
                       ) : (!plan.monthlyPrice && !plan.annualPrice) ? (
@@ -2616,8 +2678,13 @@ function CurrentPlanContent() {
                       ) : isOnTrial || isLocked || isExpiredSubscription ? (
                         'Choose Plan'
                       ) : (() => {
-                        // Compare tiers to show Upgrade or Downgrade
-                        const tierComparison = comparePlanTiers(currentPlan?.tier, plan.tier);
+                        // Compare tiers AND billing interval to show Upgrade or Downgrade
+                        const tierComparison = comparePlanTiers(
+                          currentPlan?.tier,
+                          plan.tier,
+                          currentPlanBillingPeriod,
+                          isYearly ? 'ANNUAL' : 'MONTHLY',
+                        );
                         return tierComparison === -1 ? 'Downgrade' : 'Upgrade';
                       })()}
                     </button>
@@ -2640,7 +2707,7 @@ function CurrentPlanContent() {
       {/* Plan Selection Modal */}
       {showPaymentModal && selectedPlanForPayment && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
@@ -2651,7 +2718,12 @@ function CurrentPlanContent() {
                       : (isDowngradePayment ? 'Downgrade Plan' : 'Upgrade Plan')}
                   </h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    {selectedPlanForPayment.name} - {formatCurrency(selectedPlanForPayment.price || 0, selectedPlanForPayment.currency)}/month
+                    {selectedPlanForPayment.name} - {formatCurrency(
+                      isYearly && selectedPlanForPayment.annualPrice != null
+                        ? selectedPlanForPayment.annualPrice
+                        : (selectedPlanForPayment.monthlyPrice ?? selectedPlanForPayment.price ?? 0),
+                      selectedPlanForPayment.currency
+                    )}{isYearly && selectedPlanForPayment.annualPrice != null ? '/year' : '/month'}
                   </p>
                 </div>
                 <button
@@ -2676,16 +2748,18 @@ function CurrentPlanContent() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">
-                        {/* Show correct billing label based on what's available */}
                         {isYearly
                           ? (selectedPlanForPayment?.annualPrice ? 'Annual Price:' : 'Monthly Price:')
                           : (selectedPlanForPayment?.monthlyPrice ? 'Monthly Price:' : 'Annual Price:')}
                       </span>
                       <span className="font-medium text-gray-900">
                         {formatCurrency(
-                          isYearly
-                            ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
-                            : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0),
+                          isYearly && selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice
+                            // Show full undiscounted price (monthly × 12) so savings row is meaningful
+                            ? selectedPlanForPayment.monthlyPrice * 12
+                            : isYearly
+                              ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
+                              : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
@@ -2707,8 +2781,8 @@ function CurrentPlanContent() {
                         <span className="font-medium">
                           +{formatCurrency(
                             isYearly
-                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12
-                              : (planSettings?.databasePerTenantMonthlyPrice || 5000),
+                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * 12
+                              : (planSettings?.databasePerTenantMonthlyPrice ?? 0),
                             selectedPlanForPayment?.currency || 'INR'
                           )}
                         </span>
@@ -2722,7 +2796,7 @@ function CurrentPlanContent() {
                           Annual Savings:
                         </span>
                         <span className="font-medium">
-                          {formatCurrency(
+                          -{formatCurrency(
                             (selectedPlanForPayment.monthlyPrice * 12) - selectedPlanForPayment.annualPrice,
                             selectedPlanForPayment?.currency || 'INR'
                           )}
@@ -2739,7 +2813,7 @@ function CurrentPlanContent() {
                               ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
                               : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
                             const dbFee = isolationType === 'database'
-                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
+                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
                               : 0;
                             return basePrice + dbFee;
                           })(),
@@ -2752,15 +2826,15 @@ function CurrentPlanContent() {
                       <span className="text-gray-600">GST (18%):</span>
                       <span className="font-medium text-gray-900">
                         {formatCurrency(
-                          Math.round((() => {
+                          (() => {
                             const basePrice = isYearly
                               ? (selectedPlanForPayment?.annualPrice ?? selectedPlanForPayment?.monthlyPrice ?? 0)
                               : (selectedPlanForPayment?.monthlyPrice ?? selectedPlanForPayment?.annualPrice ?? 0);
                             const dbFee = isolationType === 'database'
-                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
+                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (isYearly && selectedPlanForPayment?.annualPrice ? 12 : 1)
                               : 0;
                             return (basePrice + dbFee) * 0.18;
-                          })()),
+                          })(),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
                       </span>
@@ -2792,10 +2866,10 @@ function CurrentPlanContent() {
                               ? (selectedPlanForPayment?.annualPrice ?? 0)
                               : (selectedPlanForPayment?.monthlyPrice ?? 0);
                             const dbFee = isolationType === 'database'
-                              ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * (useYearlyPrice ? 12 : 1)
+                              ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * (useYearlyPrice ? 12 : 1)
                               : 0;
                             const subtotal = basePrice + dbFee;
-                            return subtotal + Math.round(subtotal * 0.18);
+                            return subtotal + subtotal * 0.18;
                           })(),
                           selectedPlanForPayment?.currency || 'INR'
                         )}
@@ -2815,8 +2889,8 @@ function CurrentPlanContent() {
 
                 {/* Dedicated Database Checkbox - Available for both Monthly and Annual */}
                 <label className={`flex items-start gap-3 p-4 border-2 rounded-xl transition-colors ${
-                  hasDedicatedDatabase
-                    ? 'border-amber-500 bg-amber-50 cursor-not-allowed opacity-80'
+                  hasDedicatedDatabase || planSettingsError
+                    ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
                     : isolationType === 'database'
                       ? 'border-amber-500 bg-amber-50 cursor-pointer'
                       : 'border-gray-200 hover:bg-gray-50 cursor-pointer'
@@ -2825,11 +2899,11 @@ function CurrentPlanContent() {
                     type="checkbox"
                     checked={isolationType === 'database'}
                     onChange={(e) => {
-                      if (!hasDedicatedDatabase) {
+                      if (!hasDedicatedDatabase && !planSettingsError) {
                         setIsolationType(e.target.checked ? 'database' : 'schema');
                       }
                     }}
-                    disabled={hasDedicatedDatabase}
+                    disabled={hasDedicatedDatabase || planSettingsError}
                     className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500 disabled:cursor-not-allowed"
                   />
                   <div className="flex-1">
@@ -2847,10 +2921,21 @@ function CurrentPlanContent() {
                         ? 'Your organization already uses a dedicated database. This cannot be changed.'
                         : 'Get your own dedicated database for enhanced isolation and performance'}
                     </p>
-                    <p className="text-sm text-amber-600 font-medium mt-1">
-                      +{formatCurrency(planSettings?.databasePerTenantMonthlyPrice || 5000, selectedPlanForPayment?.currency || 'INR')}/month
-                      {isYearly && ` (${formatCurrency((planSettings?.databasePerTenantMonthlyPrice || 5000) * 12, selectedPlanForPayment?.currency || 'INR')}/year)`}
-                    </p>
+                    {planSettingsError ? (
+                      <p className="text-sm text-red-500 font-medium mt-1 flex items-center gap-1">
+                        <AlertCircle className="w-4 h-4" />
+                        Pricing unavailable — unable to load from server
+                      </p>
+                    ) : (
+                      <p className="text-sm text-amber-600 font-medium mt-1">
+                        +{formatCurrency(
+                          isYearly
+                            ? (planSettings!.databasePerTenantMonthlyPrice) * 12
+                            : (planSettings!.databasePerTenantMonthlyPrice),
+                          selectedPlanForPayment?.currency || 'INR'
+                        )}{isYearly ? '/year' : '/month'}
+                      </p>
+                    )}
                   </div>
                 </label>
 
@@ -2883,10 +2968,10 @@ function CurrentPlanContent() {
                         (() => {
                           const subtotal = isYearly
                             ? (selectedPlanForPayment?.annualPrice || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) * 12 : 0)
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) * 12 : 0)
                             : (selectedPlanForPayment?.monthlyPrice || 0) +
-                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice || 5000) : 0);
-                          return subtotal + Math.round(subtotal * 0.18);
+                              (isolationType === 'database' ? (planSettings?.databasePerTenantMonthlyPrice ?? 0) : 0);
+                          return subtotal + subtotal * 0.18;
                         })(),
                         selectedPlanForPayment?.currency || 'INR'
                       )}
@@ -2916,11 +3001,17 @@ function CurrentPlanContent() {
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Current Plan:</span>
-                        <span className="font-medium text-gray-900">{transactionResult.current_plan_name || 'Your current plan'}</span>
+                        <span className="font-medium text-gray-900">
+                          {companySettings?.current_plan_name || 'Your current plan'}
+                          {currentPlanBillingPeriod && <span className="text-gray-500 font-normal"> ({currentPlanBillingPeriod.charAt(0).toUpperCase() + currentPlanBillingPeriod.slice(1).toLowerCase()})</span>}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">New Plan:</span>
-                        <span className="font-medium text-amber-700">{transactionResult.plan_name}</span>
+                        <span className="font-medium text-amber-700">
+                          {transactionResult.plan_name}
+                          {transactionResult.billing_interval && <span className="text-amber-600 font-normal"> ({transactionResult.billing_interval.charAt(0).toUpperCase() + transactionResult.billing_interval.slice(1).toLowerCase()})</span>}
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Auto-applies on:</span>
@@ -2943,7 +3034,12 @@ function CurrentPlanContent() {
                     </div>
 
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
-                      <p>{transactionResult.message}</p>
+                      <p>{transactionResult.message
+                        ? transactionResult.message.replace(/\b(upgrade|downgrade)\b/gi, (m: string) =>
+                            isDowngradePayment ? (m.toLowerCase() === 'upgrade' ? 'downgrade' : 'Downgrade') : m
+                          )
+                        : `Your ${isDowngradePayment ? 'downgrade' : 'upgrade'} to ${transactionResult.plan_name} has been queued. It will automatically apply when your current plan expires.`
+                      }</p>
                     </div>
 
                     <button
@@ -2968,7 +3064,7 @@ function CurrentPlanContent() {
                       <h3 className="text-xl font-semibold text-gray-900 mb-2">
                         {companySettings?.status?.toLowerCase() === 'expired' || companySettings?.status?.toLowerCase() === 'suspended'
                           ? 'Account Reactivated!'
-                          : 'Plan Upgrade Successful!'}
+                          : isDowngradePayment ? 'Plan Downgrade Successful!' : 'Plan Upgrade Successful!'}
                       </h3>
                       <p className="text-gray-600">
                         {companySettings?.status?.toLowerCase() === 'expired' || companySettings?.status?.toLowerCase() === 'suspended'
@@ -3103,16 +3199,25 @@ function CurrentPlanContent() {
       )}
 
       {/* Terms & Conditions Modal for Applying Queued Upgrade */}
-      {showTCModal && selectedQueuedUpgrade && (
+      {showTCModal && selectedQueuedUpgrade && (() => {
+        const queuedNewPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
+        const isQueuedDowngrade = comparePlanTiers(
+          currentPlan?.tier, queuedNewPlan?.tier,
+          currentPlanBillingPeriod,
+          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+        ) === -1;
+        return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">Apply Upgrade Now</h2>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    {isQueuedDowngrade ? 'Apply Downgrade Now' : 'Apply Upgrade Now'}
+                  </h2>
                   <p className="text-sm text-gray-600 mt-1">
-                    Upgrade to {selectedQueuedUpgrade.new_plan_name}
+                    {isQueuedDowngrade ? 'Downgrade' : 'Upgrade'} to {selectedQueuedUpgrade.new_plan_name}
                   </p>
                 </div>
                 <button
@@ -3136,7 +3241,7 @@ function CurrentPlanContent() {
                   <div>
                     <h4 className="font-semibold text-amber-800 mb-1">Important Notice</h4>
                     <p className="text-sm text-amber-700">
-                      By applying this upgrade immediately, any remaining credits and unused quota
+                      By applying this {isQueuedDowngrade ? 'downgrade' : 'upgrade'} immediately, any remaining credits and unused quota
                       on your current plan ({companySettings?.current_plan_name || 'your active plan'}) will be
                       <strong> forfeited</strong>. Your new plan will start today.
                     </p>
@@ -3144,9 +3249,9 @@ function CurrentPlanContent() {
                 </div>
               </div>
 
-              {/* Upgrade Details */}
+              {/* Plan Change Details */}
               <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                <h4 className="font-medium text-gray-900">Upgrade Details</h4>
+                <h4 className="font-medium text-gray-900">{isQueuedDowngrade ? 'Downgrade Details' : 'Upgrade Details'}</h4>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <span className="text-gray-500">From:</span>
@@ -3226,7 +3331,7 @@ function CurrentPlanContent() {
                   ) : (
                     <>
                       <CheckCircle className="w-5 h-5" />
-                      Apply Now
+                      {isQueuedDowngrade ? 'Apply Downgrade Now' : 'Apply Upgrade Now'}
                     </>
                   )}
                 </button>
@@ -3234,10 +3339,20 @@ function CurrentPlanContent() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Cancel Queued Upgrade Modal */}
-      {showCancelModal && selectedQueuedUpgrade && (
+      {showCancelModal && selectedQueuedUpgrade && (() => {
+        const cancelQueuedPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
+        const isCancelDowngrade = comparePlanTiers(
+          currentPlan?.tier,
+          cancelQueuedPlan?.tier,
+          currentPlanBillingPeriod,
+          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
+        ) === -1;
+        const changeLabel = isCancelDowngrade ? 'Downgrade' : 'Upgrade';
+        return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
             {/* Modal Header */}
@@ -3248,8 +3363,8 @@ function CurrentPlanContent() {
                     <XCircle className="w-6 h-6 text-red-600" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-gray-900">Cancel Upgrade</h2>
-                    <p className="text-sm text-gray-600">Cancel queued plan upgrade</p>
+                    <h2 className="text-xl font-semibold text-gray-900">Cancel {changeLabel}</h2>
+                    <p className="text-sm text-gray-600">Cancel queued plan {changeLabel.toLowerCase()}</p>
                   </div>
                 </div>
                 <button
@@ -3273,16 +3388,16 @@ function CurrentPlanContent() {
                   <div>
                     <h4 className="font-semibold text-red-800 mb-1">Are you sure?</h4>
                     <p className="text-sm text-red-700">
-                      You are about to cancel the queued upgrade to <strong>{selectedQueuedUpgrade.new_plan_name}</strong>.
-                      If you paid for this upgrade, you may need to request a refund separately.
+                      You are about to cancel the queued {changeLabel.toLowerCase()} to <strong>{selectedQueuedUpgrade.new_plan_name}</strong>.
+                      If you paid for this {changeLabel.toLowerCase()}, you may need to request a refund separately.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Upgrade Details */}
+              {/* Plan Change Details */}
               <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                <h4 className="font-medium text-gray-900 text-sm">Upgrade Details</h4>
+                <h4 className="font-medium text-gray-900 text-sm">{changeLabel} Details</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-500">New Plan:</span>
@@ -3343,7 +3458,7 @@ function CurrentPlanContent() {
                   }}
                   className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
                 >
-                  Keep Upgrade
+                  Keep {changeLabel}
                 </button>
                 <button
                   onClick={handleCancelUpgrade}
@@ -3358,7 +3473,7 @@ function CurrentPlanContent() {
                   ) : (
                     <>
                       <XCircle className="w-5 h-5" />
-                      Cancel Upgrade
+                      Cancel {changeLabel}
                     </>
                   )}
                 </button>
@@ -3366,7 +3481,8 @@ function CurrentPlanContent() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Downgrade Warning Modal */}
       {showDowngradeWarning && downgradeWarningData && (

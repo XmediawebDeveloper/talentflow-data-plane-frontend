@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 import { Job } from '@/lib/types/types';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
-import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -34,10 +35,7 @@ const formatIndustryType = (type: string | undefined): string => {
 const formatLastUpdated = (dateString: string | undefined): string => {
   if (!dateString) return '-';
 
-  // Server returns UTC, convert to IST by adding 5:30 hours
-  const utcDate = new Date(dateString);
-  const istOffsetMs = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes
-  const istDate = new Date(utcDate.getTime() + istOffsetMs);
+  const istDate = parseIST(dateString);
 
   const now = new Date();
 
@@ -55,11 +53,7 @@ const formatLastUpdated = (dateString: string | undefined): string => {
   }
 
   // More than 24 hours - show actual date
-  return istDate.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
+  return formatISTDate(dateString);
 };
 
 interface JobsListingProps {
@@ -88,6 +82,12 @@ interface JobsListingProps {
 
 export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onUpdateJobStatus, onEditJob, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, quotaInfo, initialStatusFilter }: JobsListingProps) {
   const dialog = useGlobalDialog();
+  const { isTenantAdmin, user } = useAuth();
+  const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJd ?? false);
+  const canDeleteJd = isTenantAdmin || (user?.permissions?.canDeleteJd ?? false);
+  const canArchiveJd = isTenantAdmin || (user?.permissions?.canArchiveJd ?? false);
+  const canDisableJd = isTenantAdmin || (user?.permissions?.canDisableJd ?? false);
+  const canExportJd = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'all');
   const [creationMethodFilter, setCreationMethodFilter] = useState<'manual' | 'ai' | null>(null);
@@ -124,7 +124,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   // NEW: Pagination states
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(12);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Quota modal state
   const [showQuotaModal, setShowQuotaModal] = useState(false);
@@ -306,20 +306,46 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   const handleBulkExport = () => {
     const selectedJobsData = sortedJobs.filter(job => selectedJobs.has(job.id));
+    const headers = [
+      'JD ID', 'Title', 'Status', 'Creation Method', 'Version',
+      'Industry', 'Department', 'Employment Type', 'Work Mode',
+      'Experience (Min Years)', 'Experience (Max Years)', 'Experience',
+      'Salary', 'Location', 'Job Level', 'Education',
+      'Posted Date', 'Created Date', 'Last Updated', 'Created By',
+      'Applicants'
+    ];
+    const escape = (val: any) => {
+      const str = val === null || val === undefined ? '' : String(val);
+      return str.includes(',') || str.includes('"') || str.includes('\n')
+        ? `"${str.replace(/"/g, '""')}"` : str;
+    };
     const csvContent = [
-      ['Title', 'Status', 'Department', 'Location', 'Type', 'Experience', 'Applicants', 'Posted Date'].join(','),
+      headers.join(','),
       ...selectedJobsData.map(job => [
+        (job as any).job_id || '',
         job.title,
         job.status,
+        (job as any).creation_method === 'ai_generated' ? 'AI' : (job as any).creation_method === 'manual' ? 'Manual' : '',
+        (job as any).currentVersion ? `v${(job as any).currentVersion}` : '',
+        (job as any).industry_type || '',
         job.department || '',
-        job.location,
         job.employmentType || '',
+        (job as any).workMode || '',
+        (job as any).experience_min !== undefined ? (job as any).experience_min : '',
+        (job as any).experience_max !== undefined ? (job as any).experience_max : '',
         job.experience || '',
-        job.applicants || 0,
-        job.postedDate || ''
-      ].join(','))
+        (job as any).salary || '',
+        job.location || '',
+        (job as any).experience_level || '',
+        (job as any).education || '',
+        job.postedDate || '',
+        (job as any).created_at ? new Date((job as any).created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        (job as any).updated_at ? new Date((job as any).updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '',
+        job.postedBy || '',
+        job.applicants || 0
+      ].map(escape).join(','))
     ].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -462,7 +488,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
   // Update items per page based on view mode
   useEffect(() => {
-    setItemsPerPage(viewMode === 'grid' ? 9 : 10);
+    setItemsPerPage(10);
     setCurrentPage(1); // Reset to first page when view mode changes
   }, [viewMode]);
 
@@ -658,7 +684,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             {/* Quick Status Filters */}
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               <span className="text-sm sm:text-base text-gray-600">Show:</span>
-              {['all', 'Published', 'Draft', 'Closed', 'Disabled', 'Archived'].map((status) => (
+              {['all', 'Published', 'Draft', 'Disabled', 'Archived'].map((status) => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status.toLowerCase())}
@@ -886,42 +912,52 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
                     {showBulkActions && (
                       <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                        <button
-                          onClick={handleBulkPublish}
-                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                        >
-                          <Send className="w-5 h-5 text-green-600" />
-                          Publish Selected (Drafts)
-                        </button>
-                        <button
-                          onClick={handleBulkDisable}
-                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                        >
-                          <Ban className="w-5 h-5 text-red-600" />
-                          Disable Selected (Published)
-                        </button>
-                        <button
-                          onClick={handleBulkArchive}
-                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                        >
-                          <Archive className="w-5 h-5 text-gray-600" />
-                          Archive Selected
-                        </button>
-                        <div className="border-t border-gray-200 my-2" />
-                        <button
-                          onClick={handleBulkExport}
-                          className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                        >
-                          <Download className="w-5 h-5 text-gray-700" />
-                          Export Selected to CSV
-                        </button>
-                        <button
-                          onClick={handleBulkDelete}
-                          className="w-full px-5 py-3 text-left text-base text-red-600 hover:bg-red-50 flex items-center gap-3"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                          Delete Selected
-                        </button>
+                        {canUpdateJd && (
+                          <button
+                            onClick={handleBulkPublish}
+                            className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          >
+                            <Send className="w-5 h-5 text-green-600" />
+                            Publish Selected (Drafts)
+                          </button>
+                        )}
+                        {canDisableJd && (
+                          <button
+                            onClick={handleBulkDisable}
+                            className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          >
+                            <Ban className="w-5 h-5 text-red-600" />
+                            Disable Selected (Published)
+                          </button>
+                        )}
+                        {canArchiveJd && (
+                          <button
+                            onClick={handleBulkArchive}
+                            className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          >
+                            <Archive className="w-5 h-5 text-gray-600" />
+                            Archive Selected
+                          </button>
+                        )}
+                        {(canExportJd || canDeleteJd) && <div className="border-t border-gray-200 my-2" />}
+                        {canExportJd && (
+                          <button
+                            onClick={handleBulkExport}
+                            className="w-full px-5 py-3 text-left text-base text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                          >
+                            <Download className="w-5 h-5 text-gray-700" />
+                            Export Selected to CSV
+                          </button>
+                        )}
+                        {canDeleteJd && (
+                          <button
+                            onClick={handleBulkDelete}
+                            className="w-full px-5 py-3 text-left text-base text-red-600 hover:bg-red-50 flex items-center gap-3"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                            Delete Selected
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1108,8 +1144,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
                       {/* Actions */}
                       <div className="flex flex-wrap gap-2 items-center">
-                        {/* Edit Button - icon only */}
-                        {onEditJob && (
+                        {/* Edit Button - icon only (hidden for Disabled JDs) */}
+                        {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
                             className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
@@ -1371,8 +1407,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
                       {/* Actions */}
                       <div className="flex flex-wrap gap-2 flex-shrink-0 items-center">
-                        {/* Edit Button - icon only */}
-                        {onEditJob && (
+                        {/* Edit Button - icon only (hidden for Disabled JDs) */}
+                        {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
                             className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
@@ -1558,7 +1594,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
         )}
 
         {/* Pagination Controls */}
-        {totalPages > 1 && (
+        {sortedJobs.length > 5 && (
           <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-5 mt-4 sm:mt-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               {/* Left: Items per page selector and showing info */}
@@ -1570,10 +1606,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
                     className="px-2 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base text-black"
                   >
-                    <option value={6}>6</option>
-                    <option value={12}>12</option>
-                    <option value={24}>24</option>
-                    <option value={48}>48</option>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={40}>40</option>
                     <option value={100}>100</option>
                   </select>
                   <span className="text-sm sm:text-base text-gray-600">per page</span>

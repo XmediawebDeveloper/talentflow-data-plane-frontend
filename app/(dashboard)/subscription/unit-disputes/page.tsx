@@ -5,6 +5,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { useAuth } from '@/lib/hooks/useAuth';
+import ListPagination from '@/components/ListPagination';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -75,6 +77,9 @@ const UNIT_TYPE_LABELS: Record<string, string> = {
 // --- Component ---
 
 export default function UnitDisputesPage() {
+  const { hasPermission } = useAuth();
+  const canExportDisputes = hasPermission('canExportUsage');
+  const canFileDispute = hasPermission('canUpgradePlan');
   const [loading, setLoading] = useState(true);
   const [disputes, setDisputes] = useState<UnitDispute[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -102,9 +107,18 @@ export default function UnitDisputesPage() {
   const [logTotal, setLogTotal] = useState(0);
   const LOG_PAGE_SIZE = 10;
 
+  // Pagination state for the main disputes list
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   useEffect(() => {
     fetchDisputes();
   }, []);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, startDate, endDate]);
 
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('accessToken');
@@ -281,6 +295,11 @@ export default function UnitDisputesPage() {
     });
   }, [disputes, searchQuery, statusFilter, startDate, endDate]);
 
+  const paginatedDisputes = useMemo(
+    () => filteredDisputes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage),
+    [filteredDisputes, currentPage, itemsPerPage]
+  );
+
   // --- Helpers ---
 
   const formatDate = (dateString: string | null) => formatISTDate(dateString ?? undefined);
@@ -396,14 +415,16 @@ export default function UnitDisputesPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleExportCSV}
-                disabled={loading || filteredDisputes.length === 0}
-                className="px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 text-sm sm:text-base"
-              >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Export CSV</span>
-              </button>
+              {canExportDisputes && (
+                <button
+                  onClick={handleExportCSV}
+                  disabled={loading || filteredDisputes.length === 0}
+                  className="px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 text-sm sm:text-base"
+                >
+                  <Download className="w-4 h-4" />
+                  <span className="hidden sm:inline">Export CSV</span>
+                </button>
+              )}
               <button
                 onClick={fetchDisputes}
                 disabled={loading}
@@ -412,13 +433,15 @@ export default function UnitDisputesPage() {
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">Refresh</span>
               </button>
-              <button
-                onClick={openFileModal}
-                className="px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center gap-2 text-sm sm:text-base"
-              >
-                <Plus className="w-4 h-4" />
-                File Dispute
-              </button>
+              {canFileDispute && (
+                <button
+                  onClick={openFileModal}
+                  className="px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium flex items-center gap-2 text-sm sm:text-base"
+                >
+                  <Plus className="w-4 h-4" />
+                  File Dispute
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -527,7 +550,7 @@ export default function UnitDisputesPage() {
                 Clear all filters
               </button>
             )}
-            {!hasActiveFilters && (
+            {!hasActiveFilters && canFileDispute && (
               <button
                 onClick={openFileModal}
                 className="mt-6 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium inline-flex items-center gap-2"
@@ -562,7 +585,7 @@ export default function UnitDisputesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredDisputes.map((dispute, index) => (
+                  {paginatedDisputes.map((dispute, index) => (
                     <tr key={dispute.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-1.5">
@@ -614,6 +637,18 @@ export default function UnitDisputesPage() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && !error && filteredDisputes.length > 0 && (
+          <ListPagination
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={filteredDisputes.length}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemLabel="disputes"
+          />
         )}
 
         {/* Detail Modal */}

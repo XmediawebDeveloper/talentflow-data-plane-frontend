@@ -106,6 +106,7 @@ interface AuthContextType {
   isReadOnlyRole: boolean;
   hasFeature: (feature: keyof FeatureFlags) => boolean;
   hasPermission: (permission: keyof Permission) => boolean;
+  hasPermissionCode: (code: string) => boolean;
   canAccessBilling: boolean;
   canManageUsers: boolean;
   canModifyData: boolean;
@@ -173,15 +174,25 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canUpdateAssessments: apiUser.permissions.can_update_assessments,
       canDeleteAssessments: apiUser.permissions.can_delete_assessments,
       canDownloadAssessmentPDF: apiUser.permissions.can_download_assessment_pdf,
+      canViewHRQuestionBank: apiUser.permissions.can_view_hr_question_bank,
+      canCreateHRQuestionBank: apiUser.permissions.can_create_hr_question_bank,
+      canUpdateHRQuestionBank: apiUser.permissions.can_update_hr_question_bank,
+      canDeleteHRQuestionBank: apiUser.permissions.can_delete_hr_question_bank,
       // Analytics & Reports
-      canViewAnalytics: apiUser.permissions.can_view_analytics,
-      // Settings & Admin
-      canManageSettings: apiUser.permissions.can_manage_settings,
-      canManageUsers: apiUser.permissions.can_manage_users,
-      // RBAC03: Billing permissions
-      canViewBilling: apiUser.permissions.can_view_billing,
-      canViewInvoices: apiUser.permissions.can_view_invoices,
-      canViewUsage: apiUser.permissions.can_view_usage,
+      // Accept either the legacy bundle column OR the granular column —
+      // granting analytics:read writes only the granular column, and the
+      // sidebar/route-guard reads canViewAnalytics; without this fallback the
+      // user can't see Analytics despite having the permission.
+      canViewAnalytics: apiUser.permissions.can_view_analytics || (apiUser.permissions as any).can_view_analytics_granular,
+      // Settings & Admin — same legacy/granular fallback pattern
+      canManageSettings: apiUser.permissions.can_manage_settings || (apiUser.permissions as any).can_view_settings || (apiUser.permissions as any).can_update_settings,
+      canManageUsers: apiUser.permissions.can_manage_users || (apiUser.permissions as any).can_view_users,
+      // RBAC03: Billing permissions — granular cascade writes *_granular only;
+      // sidebar items "Usage & Quotas" / "Unit Disputes" read canViewUsage,
+      // and "View Subscription & Billing" reads canViewBilling.
+      canViewBilling: apiUser.permissions.can_view_billing || (apiUser.permissions as any).can_view_billing_granular,
+      canViewInvoices: apiUser.permissions.can_view_invoices || (apiUser.permissions as any).can_view_invoices_granular,
+      canViewUsage: apiUser.permissions.can_view_usage || (apiUser.permissions as any).can_view_usage_granular,
       // Granular billing section view permissions
       canViewCurrentPlan: apiUser.permissions.can_view_current_plan,
       canViewPaymentMethods: apiUser.permissions.can_view_payment_methods,
@@ -191,9 +202,11 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       // Granular settings section view permissions
       canViewGeneralSettings: apiUser.permissions.can_view_general_settings,
       canViewPermissionsRoles: apiUser.permissions.can_view_permissions_roles,
+      canViewRoles: apiUser.permissions.can_view_roles,
       canViewApiManagement: apiUser.permissions.can_view_api_management,
       canViewBranding: apiUser.permissions.can_view_branding,
       canViewSecuritySettings: apiUser.permissions.can_view_security_settings,
+      canViewSupport: (apiUser.permissions as any).can_view_support,
       // Granular Action Permissions — Billing
       canUpgradePlan: apiUser.permissions.can_upgrade_plan,
       canExportUsage: apiUser.permissions.can_export_usage,
@@ -207,9 +220,21 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canManageSecuritySettings: apiUser.permissions.can_manage_security_settings,
       // Teams
       canViewTeams: apiUser.permissions.can_view_teams,
+      canCreateTeams: apiUser.permissions.can_create_teams,
+      canUpdateTeams: apiUser.permissions.can_update_teams,
+      canDeleteTeams: apiUser.permissions.can_delete_teams,
+      canViewTeamUsage: apiUser.permissions.can_view_team_usage,
       // RBAC06: Feature permissions
       canViewScoring: apiUser.permissions.can_view_scoring,
       canRunScoring: apiUser.permissions.can_run_scoring,
+      canViewAIInterviews: apiUser.permissions.can_view_ai_interviews,
+      canCreateAIInterviews: apiUser.permissions.can_create_ai_interviews,
+      canUpdateAIInterviews: apiUser.permissions.can_update_ai_interviews,
+      canShareAIInterviews: apiUser.permissions.can_share_ai_interviews,
+      canInviteAIInterviews: apiUser.permissions.can_invite_ai_interviews,
+      canPublishAIInterviews: apiUser.permissions.can_publish_ai_interviews,
+      canArchiveAIInterviews: apiUser.permissions.can_archive_ai_interviews,
+      canDeleteAIInterviews: apiUser.permissions.can_delete_ai_interviews,
       canRunAiInterviews: apiUser.permissions.can_run_ai_interviews,
       canViewAiMatch: apiUser.permissions.can_view_ai_match,
       canRunAiMatch: apiUser.permissions.can_run_ai_match,
@@ -217,6 +242,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
       canExport: apiUser.permissions.can_export,
       canApiAccess: apiUser.permissions.can_api_access,
     },
+    permissionCodes: apiUser.permission_codes || [],
     phone: apiUser.phone,
     avatarUrl: apiUser.avatar_url,
     isActive: apiUser.is_active,
@@ -233,6 +259,7 @@ function mapApiUserToUser(apiUser: ApiUser): User {
     suspensionNotes: apiUser.suspension_notes,
     suspendedAt: apiUser.suspended_at,
     tenantSubdomain: apiUser.tenant_subdomain,
+    tenantAdminEmail: apiUser.tenant_admin_email,
   };
 }
 
@@ -289,11 +316,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user.permissions[permission] ?? false;
   }, [user]);
 
+  // Check if user has a specific raw permission code (e.g. 'my_resumes:ai_match')
+  const hasPermissionCode = useCallback((code: string): boolean => {
+    if (!user) return false;
+    if (isTenantAdminRole(user.role)) return true;
+    return (user.permissionCodes ?? []).includes(code);
+  }, [user]);
+
   // Restore session on mount
   useEffect(() => {
     const restoreSession = async () => {
-      console.log('[AUTH] Restoring session...');
-      console.log('[AUTH] Has token:', authService.isAuthenticated());
 
       // ✅ HARD REFRESH DETECTION: Clear user cache on hard refresh
       // This ensures permissions are always fresh from API after Ctrl+Shift+R
@@ -302,7 +334,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const isHardRefresh = perfData && perfData.type === 'reload';
 
         if (isHardRefresh) {
-          console.log('[AUTH] 🔄 Hard refresh detected - clearing user cache');
           clearUserFromStorage();
           localStorage.removeItem('permission_version');
         }
@@ -310,14 +341,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Ensure cookies are synced with localStorage (cross-browser token recovery)
       // This fixes token loss in Firefox, Safari, iOS Safari, Arc, Brave, etc.
-      const recovered = ensureTokenCookies();
-      if (recovered) {
-        console.log('[AUTH] Tokens recovered from localStorage to cookies');
-      }
+      ensureTokenCookies();
 
       // First, try to restore from localStorage (fast path)
       const storedUser = getUserFromStorage();
       const storedTenant = getTenantFromStorage();
+      // Fast flag check — no API call needed.
+      // Set by Login.tsx when must_reset_password=true; cleared by SetPassword.tsx after success.
+      if (
+        typeof window !== 'undefined' &&
+        localStorage.getItem('pending_password_reset') === 'true' &&
+        !window.location.pathname.startsWith('/set-password')
+      ) {
+        console.log('[AUTH] pending_password_reset flag set — redirecting to /set-password');
+        // Keep isLoading=true so the skeleton shows during redirect instead of a blank flash.
+        window.location.href = '/set-password';
+        return;
+      }
+
       if (storedUser && authService.isAuthenticated()) {
         // Check if token is expired before restoring session
         if (isTokenExpired()) {
@@ -335,7 +376,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Permission updates now use event-driven approach via refreshUser() which dispatches 'permissions-updated' event
         // On hard refresh, user data is loaded from localStorage - permission updates happen via backend save + refreshUser()
 
-        console.log('[AUTH] Restored user from localStorage:', storedUser.email);
         setUser(storedUser);
         // Use stored tenant if available, otherwise build a minimal tenant from stored user
         setTenant(storedTenant || {
@@ -348,6 +388,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Validate with API in background and refresh tenant name
         try {
           const apiUserData = await authService.getCurrentUser();
+
+          // Catch existing sessions that have must_reset_password=true in DB but no local flag.
+          // (e.g. user was invited before this flag was introduced, or flag was cleared by browser)
+          if (apiUserData.must_reset_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
+            console.log('[AUTH] must_reset_password=true from API — redirecting to /set-password');
+            localStorage.setItem('pending_password_reset', 'true');
+            // Reset auth state so the dashboard doesn't remain visible while navigating away.
+            setUser(null);
+            setIsLoading(true);
+            window.location.href = '/set-password';
+            return;
+          }
 
           // If tenant has pending payment, redirect to payment page (same logic as Login.tsx)
           if (apiUserData.pending_payment && apiUserData.pending_payment_redirect) {
@@ -393,7 +445,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             if (isLocalhost) localStorage.setItem('talentflow_subdomain', userData.tenantSubdomain);
           }
-          console.log('[AUTH] User validated with API');
         } catch (error: unknown) {
           // Check if this is a subscription inactive error (403)
           // handleApiError throws ApiError with .status property, not AxiosError with .response
@@ -428,6 +479,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AUTH] Fetching current user from API...');
           const apiUserData = await authService.getCurrentUser();
           console.log('[AUTH] Got user data:', apiUserData);
+
+          // must_reset_password guard — catches users with no cached data (first-ever session restore)
+          if (apiUserData.must_reset_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
+            console.log('[AUTH] must_reset_password=true — redirecting to /set-password');
+            localStorage.setItem('pending_password_reset', 'true');
+            // isLoading is still true here — keep it that way so skeleton shows during redirect.
+            window.location.href = '/set-password';
+            return;
+          }
 
           // If tenant has pending payment, redirect to payment page (same logic as Login.tsx)
           if (apiUserData.pending_payment && apiUserData.pending_payment_redirect) {
@@ -478,8 +538,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Let the user stay on the page and let specific error handlers deal with it
           }
         }
-      } else {
-        console.log('[AUTH] No token found, skipping session restore');
       }
       setIsLoading(false);
     };
@@ -492,7 +550,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // and dispatches 'permissions-updated' event. This listener catches it and refreshes user data.
   useEffect(() => {
     const handlePermissionsUpdated = async () => {
-      console.log('[AUTH] Permissions updated event received - refreshing user data');
       try {
         // Fetch fresh user data with new permissions
         const apiUserData = await authService.getCurrentUser();
@@ -507,7 +564,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setUser(userData);
         saveUserToStorage(userData);
-        console.log('[AUTH] User data refreshed with new permissions:', userData.permissions);
 
         // Optionally show toast notification (if you have a toast library)
         // toast.success('Your permissions have been updated.');
@@ -518,10 +574,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('permissions-updated', handlePermissionsUpdated);
-      console.log('[AUTH] Permission update listener registered');
       return () => {
         window.removeEventListener('permissions-updated', handlePermissionsUpdated);
-        console.log('[AUTH] Permission update listener cleaned up');
       };
     }
   }, []); // Empty deps - only register once on mount
@@ -734,6 +788,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Refresh permissions when tab becomes visible again (e.g. admin changed role in another tab)
+  useEffect(() => {
+    if (!user) return;
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshUser();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user, refreshUser]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -753,6 +817,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isReadOnlyRole,
         hasFeature,
         hasPermission,
+        hasPermissionCode,
         canAccessBilling,
         canManageUsers,
         canModifyData,

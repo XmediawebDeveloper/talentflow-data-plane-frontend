@@ -78,7 +78,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
   ];
 
   const importantInstructions = [
-    { icon: Clock, text: 'Once started, the timer cannot be paused or stopped.' },
+    { icon: Clock, text: 'If a genuine network or client failure occurs, your session can recover and resume from the saved server state.' },
     { icon: RefreshCcw, text: 'You cannot return to previous sections once submitted.' },
     { icon: Wifi, text: 'Ensure you have a stable internet connection throughout the test.' },
     { icon: AlertCircle, text: 'Do not refresh the page or navigate away during the assessment.' },
@@ -121,7 +121,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
               </div>
               <a
                 href="mailto:support@talentflow.com"
-                className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
               >
                 <HelpCircle className="w-4 h-4" />
                 Need help?
@@ -133,23 +133,30 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
         {/* Progress Stepper - Full Width */}
         <div className="w-full bg-white border-b border-gray-200">
           <div className="w-full px-6 lg:px-12 py-4">
-            <div className="flex items-center justify-center gap-2">
+            <p className="sm:hidden text-sm font-medium text-blue-700 mb-3 text-center" aria-live="polite">
+              Step 1 of {steps.length}: Terms &amp; Consent
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2" aria-label="Assessment progress">
               {steps.map((step, index) => (
                 <div key={index} className="flex items-center">
                   <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
+                    <div
+                      aria-current={step.active ? 'step' : undefined}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                       step.completed
                         ? 'bg-green-500 text-white'
                         : step.active
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-300 text-gray-600'
-                    }`}>
+                    }`}
+                    >
                       {step.completed ? <Check className="w-4 h-4" /> : index + 1}
                     </div>
-                    <span className={`text-sm font-medium hidden sm:block ${
+                    <span className={`text-sm font-medium ${
                       step.active ? 'text-gray-900' : step.completed ? 'text-green-600' : 'text-gray-500'
                     }`}>
-                      {step.label}
+                      <span className="sm:hidden">{step.active ? step.label : ''}</span>
+                      <span className="hidden sm:inline">{step.label}</span>
                     </span>
                   </div>
                   {index < steps.length - 1 && (
@@ -235,7 +242,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   </div>
                   <h3 className="font-semibold text-gray-900 text-lg">AI Proctoring & Monitoring</h3>
                 </div>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-gray-700 mb-4">
                   This assessment uses AI-powered proctoring to ensure fairness:
                 </p>
                 <div className="space-y-4">
@@ -246,7 +253,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                       </div>
                       <div>
                         <p className="text-gray-900 font-medium">{feature.label}</p>
-                        <p className="text-sm text-gray-500">{feature.description}</p>
+                        <p className="text-sm text-gray-600">{feature.description}</p>
                       </div>
                     </div>
                   ))}
@@ -266,7 +273,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
               <h3 className="font-semibold text-gray-900 text-lg">Terms & Conditions</h3>
             </div>
             <div
-              className="bg-white rounded-xl p-6 max-h-52 sm:max-h-60 overflow-y-auto border border-gray-200"
+              className="bg-white rounded-xl p-6 max-h-none md:max-h-80 overflow-visible md:overflow-y-auto border border-gray-200"
               role="region"
               aria-label="Terms and Conditions"
               tabIndex={0}
@@ -275,7 +282,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                 {termsAndConditions.map((term, index) => (
                   <div key={index}>
                     <p className="font-semibold text-gray-900">{term.title}</p>
-                    <p className="text-gray-600 mt-1">{term.content}</p>
+                    <p className="text-gray-700 mt-1 leading-7">{term.content}</p>
                   </div>
                 ))}
               </div>
@@ -308,11 +315,12 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   className="sr-only"
                   aria-required="true"
                   aria-label="I have read and agree to the Terms and Conditions"
+                  aria-describedby="terms-desc"
                 />
                 <span id="terms-desc">
                   <strong className="text-gray-900">I have read and agree to the Terms & Conditions</strong>
                   <br />
-                  <span className="text-gray-500 text-sm">I understand that violation of these terms may result in disqualification.</span>
+                  <span className="text-gray-700 text-sm">I understand that violation of these terms may result in disqualification.</span>
                 </span>
               </label>
 
@@ -336,11 +344,12 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   className="sr-only"
                   aria-required="true"
                   aria-label="I consent to AI proctoring and monitoring"
+                  aria-describedby="proctoring-desc"
                 />
                 <span id="proctoring-desc">
                   <strong className="text-gray-900">I consent to AI proctoring and monitoring</strong>
                   <br />
-                  <span className="text-gray-500 text-sm">I understand that my activity will be tracked to ensure test integrity.</span>
+                  <span className="text-gray-700 text-sm">I understand that my activity will be tracked to ensure test integrity.</span>
                 </span>
               </label>
             </div>
@@ -362,7 +371,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
               <Button
                 variant="outline"
                 onClick={onDecline}
-                className="px-8 py-5 border-gray-300 text-gray-700 hover:bg-gray-100"
+                className="w-full sm:w-auto px-8 py-5 border-gray-300 text-gray-700 hover:bg-gray-100"
               >
                 Cancel
               </Button>
@@ -372,7 +381,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                 aria-disabled={!canAccept || isSubmitting}
                 aria-label={!canAccept ? 'Accept both consent checkboxes to continue' : 'I Agree - Continue to assessment'}
                 size="lg"
-                className={`px-10 py-6 text-lg font-semibold rounded-xl ${
+                className={`w-full sm:w-auto px-10 py-6 text-lg font-semibold rounded-xl ${
                   canAccept
                     ? 'bg-blue-600 hover:bg-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2'
                     : 'bg-gray-300 cursor-not-allowed'
@@ -400,7 +409,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
 
       {/* Footer */}
       <footer className="w-full py-6 text-center bg-white border-t border-gray-200">
-        <p className="text-gray-500">
+        <p className="text-gray-600">
           Having trouble? Contact us at{' '}
           <a href="mailto:support@talentflow.com" className="text-blue-600 hover:underline font-medium">
             support@talentflow.com

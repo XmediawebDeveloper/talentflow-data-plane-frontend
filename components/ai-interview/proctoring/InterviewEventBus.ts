@@ -24,13 +24,19 @@ export type ProctoringEventType =
   | 'fullscreen_exit'
   | 'face_missing'
   | 'multiple_faces'
-  | 'gaze_away';
+  | 'gaze_away'
+  | 'face_mismatch'
+  | 'face_identity_changed'
+  | 'voice_mismatch'
+  | 'voice_identity_changed'
+  | 'screen_share_stopped'
+  | 'background_noise';
 
 export interface ProctoringEvent {
   id: string;
   type: ProctoringEventType;
   message: string;
-  severity: 'low' | 'medium' | 'high';
+  severity: 'minor' | 'moderate' | 'severe';
   timestamp: Date;
   details?: Record<string, any>;
 }
@@ -52,25 +58,41 @@ const WARNING_MESSAGES: Record<ProctoringEventType, string> = {
   face_missing: 'No face detected. Please ensure your face is visible to the camera.',
   multiple_faces: 'Multiple faces detected. Please ensure you are alone.',
   gaze_away: 'Looking away detected. Please keep your attention on the screen.',
+  face_mismatch: 'Face verification warning. Please ensure you are the registered candidate.',
+  face_identity_changed: 'A different person has been detected. Identity verification failed.',
+  voice_mismatch: 'Voice verification warning. Voice pattern does not match the registered speaker.',
+  voice_identity_changed: 'A different speaker has been detected. Voice verification failed.',
+  screen_share_stopped: 'Screen sharing was stopped. Screen sharing is mandatory throughout the interview.',
+  background_noise: 'Excessive background noise detected. Please move to a quieter environment for a better experience.',
 };
 
-// Severity mapping
-const EVENT_SEVERITY: Record<ProctoringEventType, 'low' | 'medium' | 'high'> = {
-  tab_switch: 'low',
-  copy_attempt: 'medium',
-  paste_attempt: 'medium',
-  voice_detected: 'medium',
-  multiple_voices: 'high',
-  camera_disabled: 'high',
-  microphone_disabled: 'high',
-  camera_obstructed: 'high',
-  screenshot_attempt: 'high',
-  screen_recording_attempt: 'high',
-  window_blur: 'low',
-  fullscreen_exit: 'high',
-  face_missing: 'high',
-  multiple_faces: 'high',
-  gaze_away: 'medium',
+// Severity mapping — Minor / Moderate / Severe
+const EVENT_SEVERITY: Record<ProctoringEventType, 'minor' | 'moderate' | 'severe'> = {
+  // Minor (1 pt) — low-friction accidental events
+  tab_switch:               'minor',
+  window_blur:              'minor',
+  gaze_away:                'minor',
+  copy_attempt:             'minor',
+  paste_attempt:            'minor',
+  fullscreen_exit:          'minor',
+  // Moderate (2 pts) — suspicious but not conclusive
+  camera_obstructed:        'moderate',
+  voice_detected:           'moderate',
+  multiple_voices:          'moderate',
+  screenshot_attempt:       'moderate',
+  screen_recording_attempt: 'moderate',
+  face_missing:             'moderate',
+  face_mismatch:            'moderate',
+  voice_mismatch:           'moderate',
+  // Severe (3 pts) — strong integrity signals
+  camera_disabled:          'severe',
+  microphone_disabled:      'severe',
+  multiple_faces:           'severe',
+  face_identity_changed:    'severe',
+  voice_identity_changed:   'severe',
+  screen_share_stopped:     'severe',
+  // Advisory — not a proctoring violation, just a UX nudge (AIU-67)
+  background_noise:         'minor',
 };
 
 type Listener = (event: ProctoringEvent) => void;

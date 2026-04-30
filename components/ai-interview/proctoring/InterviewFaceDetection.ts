@@ -55,8 +55,8 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
   const lastGazeStateRef = useRef(true);
 
   const FRAMES_FACE_MISSING = 2;
-  const FRAMES_FACE_RESTORED = 2;
-  const FRAMES_MULTIPLE_FACES = 2;
+  const FRAMES_FACE_RESTORED = 1;  // Unblock immediately on first face detection (blocking is still 2 frames)
+  const FRAMES_MULTIPLE_FACES = 1; // trigger on first detection (was 2 = 6 s worst-case)
   const FRAMES_GAZE_AWAY = 3;
   const FRAMES_GAZE_RESTORED = 2;
 
@@ -98,7 +98,7 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
 
         faceDetection.setOptions({
           model: "short",
-          minDetectionConfidence: 0.5,
+          minDetectionConfidence: 0.4, // lower threshold catches more faces
         });
 
         faceDetection.onResults((results: any) => {
@@ -228,8 +228,8 @@ export function useInterviewFaceDetection(config?: UseInterviewFaceDetectionConf
       processingRef.current = true;
       let lastFaceDetectTime = 0;
       let lastGazeTime = 0;
-      const FACE_DETECT_INTERVAL = 3000;
-      const GAZE_CHECK_INTERVAL = 3000;
+      const FACE_DETECT_INTERVAL = 1500; // check every 1.5 s (was 3 s) for faster detection
+      const GAZE_CHECK_INTERVAL = 2000;
       let retryCount = 0;
 
       const processFrame = async (timestamp: number) => {

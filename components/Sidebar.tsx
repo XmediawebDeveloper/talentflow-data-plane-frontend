@@ -157,8 +157,10 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
         { id: 'ai-talent-match', label: 'AI Talent Match', icon: Sparkles, permission: 'canViewAiMatch', feature: 'ai_talent_match' },
         // Assessments - requires create assessment permission (or view for viewing results)
         { id: 'assessments', label: 'Assessments', icon: ClipboardList, permission: 'canViewAssessments', feature: 'assessment' },
-        // AI Interviews - requires resume view permission
-        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, permission: 'canViewResumes', feature: 'ai_interview' },
+        // AI Interviews - requires AI interview view permission
+        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, permission: 'canViewAIInterviews', feature: 'ai_interview' },
+        // HR Question Bank - separate evaluation page
+        { id: 'hr-question-bank', label: 'HR Question Bank', icon: ClipboardList, permission: 'canViewHRQuestionBank', feature: 'assessment' },
         // My Resumes - requires resume view permission (upload button hidden separately inside the page)
         { id: 'my-resumes', label: 'My Resumes', icon: Users, permission: 'canViewResumes', feature: 'resume_upload' },
         // Internal Resume Database - requires internal DB access

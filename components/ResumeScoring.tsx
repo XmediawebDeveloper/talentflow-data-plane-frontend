@@ -2,6 +2,7 @@ import { ArrowLeft, Star, TrendingUp, Award, Briefcase, CheckCircle, AlertCircle
 import { Resume, Job } from '@/lib/types/types';
 import { useState } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
+import ListPagination from '@/components/ListPagination';
 
 interface ResumeScoringProps {
   resumes: Resume[] | any[];
@@ -71,6 +72,13 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
 
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [selectedResultForDetail, setSelectedResultForDetail] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  const paginatedScoringResults = scoringResults.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   // Generate detailed score breakdown for a specific result
   const getDetailedScores = (resultKey: string): DetailedScoreCategory[] => {
@@ -297,7 +305,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {scoringResults.map((result, index) => {
+                {paginatedScoringResults.map((result, index) => {
                   const resume = resumes?.find(r => r.id === result.resumeId);
                   const job = effectiveJobs.find(j => j.id === result.jobId);
                   const resultKey = `${result.resumeId}-${result.jobId}`;
@@ -376,6 +384,15 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
             </table>
           </div>
         </div>
+
+        <ListPagination
+          currentPage={currentPage}
+          itemsPerPage={itemsPerPage}
+          totalItems={scoringResults.length}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={setItemsPerPage}
+          itemLabel="candidates"
+        />
 
         {/* Detailed Analysis Section */}
         {selectedResultForDetail && (() => {

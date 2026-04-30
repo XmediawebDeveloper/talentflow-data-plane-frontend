@@ -2,6 +2,8 @@
 
 import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowLeft, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
@@ -612,6 +614,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // If editing a draft or published JD, we can update it directly.
   const [editingId, setEditingId] = useState<string | null>(null);
+  // true when editingId was loaded from an existing JD (not created fresh in this session)
+  const [isPreExistingDraft, setIsPreExistingDraft] = useState(false);
   // sourceJdId tracks the original JD for reference
   const [sourceJdId, setSourceJdId] = useState<string | null>(null);
 
@@ -683,11 +687,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       if (effectiveEditingJD.status === 'draft') {
         // Editing a draft - update it directly
         setEditingId(effectiveEditingJD.id);
+        setIsPreExistingDraft(true);
         setSourceJdId(null);
         console.log('[DEBUG] Setting editingId for draft:', effectiveEditingJD.id);
       } else if (effectiveEditingJD.status === 'published') {
         // Editing published JD - update it directly (creates new version on republish)
         setEditingId(effectiveEditingJD.id);
+        setIsPreExistingDraft(true);
         setSourceJdId(effectiveEditingJD.id);
         console.log('[DEBUG] Setting editingId for published:', effectiveEditingJD.id);
       }
@@ -793,6 +799,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     salaryRange?: string;
   }>({});
 
+  // Sanitize a salary number from backend/extraction: if > 8 digits (>99999999), clear it
+  const sanitizeExtractedSalary = (val: number | null | undefined): string => {
+    if (val == null) return '';
+    const intVal = Math.trunc(val);
+    if (intVal > 99999999) return '';
+    return String(intVal);
+  };
+
   // Helper function to parse salary value (handles LPA, L, K, commas, ₹)
   const parseSalaryValue = (value: string): number | null => {
     if (!value || value.trim() === '') return null;
@@ -837,8 +851,23 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // If both are empty, no error
     if (minSalary === null && maxSalary === null) return undefined;
 
-    // If only one is filled, that's okay
-    if (minSalary === null || maxSalary === null) return undefined;
+    // If only min is filled, prompt for max
+    if (minSalary !== null && maxSalary === null) {
+      return 'Please enter the maximum salary to complete the range (e.g., 3 LPA to 4 LPA)';
+    }
+
+    // If only max is filled, validate limit then prompt for min
+    if (minSalary === null && maxSalary !== null) {
+      if (maxSalary > 99999999) {
+        return 'Maximum salary cannot exceed ₹9,99,99,999 (8 digits)';
+      }
+      return 'Please enter the minimum salary to complete the range (e.g., 3 LPA to 4 LPA)';
+    }
+
+    // Max salary must not exceed 8 digits (99,999,999)
+    if (maxSalary !== null && maxSalary > 99999999) {
+      return 'Maximum salary cannot exceed ₹9,99,99,999 (8 digits)';
+    }
 
     // Both are filled - validate range
     if (minSalary >= maxSalary) {
@@ -847,6 +876,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     return undefined;
   };
+
 
   // Helper: mark extracted data as modified AND reset formatted flag so AI reformatting triggers
   const markExtractedDataModified = () => {
@@ -1111,6 +1141,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    // Validate salary: if prompt mentions a single salary (e.g., "3 LPA") without a range, ask user to provide a range
+    // Detect single salary value with salary keyword (e.g., "6 LPA", "3 lakh", "salary 500000")
+    const singleSalaryPattern = /\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|per\s*annum|ctc|package)/i;
+    // Detect salary RANGE: requires salary unit keyword on at least one side (e.g., "3 LPA to 5 LPA", "3 to 5 LPA")
+    // This avoids false matches on experience ranges like "3-5 years"
+    const salaryRangePattern = /\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|k|cr|crores?)\s*(?:to|-|–|~)\s*\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|k|cr|crores?)?/i;
+    const salaryRangePattern2 = /\d[\d,.\s]*\s*(?:to|-|–|~)\s*\d[\d,.\s]*\s*(?:lpa|lakhs?|lakh|k|cr|crores?)/i;
+
+    const hasSingleSalary = singleSalaryPattern.test(aiPrompt);
+    const hasSalaryRange = salaryRangePattern.test(aiPrompt) || salaryRangePattern2.test(aiPrompt);
+
+    if (hasSingleSalary && !hasSalaryRange) {
+      toast.error({
+        title: 'Salary Range Required',
+        description: 'Please enter a salary range instead of a single value. For example: "3 LPA to 4 LPA" instead of just "3 LPA".',
+      });
+      return;
+    }
+
     // Note: Quota check moved to publish action - generation doesn't consume quota
     setIsGenerating(true);
     setIsStreaming(true);
@@ -1165,9 +1214,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
         employmentType: prev.employmentType,
         workModel: prev.workModel,
-        // Pre-fill salary from generation response, preserve existing values if extraction returns null
-        salaryFrom: params.salary_min != null ? String(params.salary_min).split('.')[0] : (prev.salaryFrom || ''),
-        salaryTo: params.salary_max != null ? String(params.salary_max).split('.')[0] : (prev.salaryTo || ''),
+        // Pre-fill salary from AI extraction
+        salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || prev.salaryFrom || '') : (prev.salaryFrom || ''),
+        salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || prev.salaryTo || '') : (prev.salaryTo || ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || prev.compensationType || 'yearly',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
@@ -1180,9 +1229,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         domainKeywords: params.domain_keywords?.length > 0 ? params.domain_keywords : (isEditMode ? prev.domainKeywords : []),
       }));
 
-      // Log what was pre-filled
+      // Log what was pre-filled and trigger validation
       if (params.salary_min || params.salary_max) {
         console.log('[TalentFlow] Salary pre-filled:', { min: params.salary_min, max: params.salary_max });
+        const fromVal = sanitizeExtractedSalary(params.salary_min);
+        const toVal = sanitizeExtractedSalary(params.salary_max);
+        const error = validateSalaryRange(fromVal, toVal);
+        setValidationErrors(prev => ({ ...prev, salaryRange: error }));
       }
     };
 
@@ -1727,9 +1780,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         allowOverqualified: isEditMode ? extractedData.allowOverqualified : false,
         employmentType: params.job_type || (isEditMode ? extractedData.employmentType : 'full_time'),
         workModel: params.work_mode || (isEditMode ? extractedData.workModel : 'onsite'),
-        // Preserve salary from generation step if extraction doesn't find it in the JD text
-        salaryFrom: params.salary_min != null ? String(params.salary_min).split('.')[0] : (extractedData.salaryFrom || ''),
-        salaryTo: params.salary_max != null ? String(params.salary_max).split('.')[0] : (extractedData.salaryTo || ''),
+        // Pre-fill salary from AI extraction
+        salaryFrom: params.salary_min != null ? (sanitizeExtractedSalary(params.salary_min) || extractedData.salaryFrom || '') : (extractedData.salaryFrom || ''),
+        salaryTo: params.salary_max != null ? (sanitizeExtractedSalary(params.salary_max) || extractedData.salaryTo || '') : (extractedData.salaryTo || ''),
         compensationType: (params.compensation_type as 'yearly' | 'monthly' | 'hourly' | 'daily') || extractedData.compensationType || 'yearly',
         locations: (params.locations || []).length > 0 ? params.locations.map((loc: any) => ({
           city: loc.city || '',
@@ -1775,6 +1828,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       setExtractedDataModified(false);  // Reset after fresh extraction - no user modifications yet
       step2DataSnapshot.current = JSON.stringify(extraction);  // Snapshot for change detection
       setLastExtractedJD(jdText);  // Track JD text to skip extraction if unchanged on next "Next" click
+
+      // Trigger salary validation so warning shows immediately if only one field is filled
+      if (extraction.salaryFrom || extraction.salaryTo) {
+        const salaryErr = validateSalaryRange(extraction.salaryFrom || '', extraction.salaryTo || '');
+        setValidationErrors(prev => ({ ...prev, salaryRange: salaryErr }));
+      }
 
       // Save original Stage 1 values to detect modifications if user returns from review
       setOriginalStage1Values({
@@ -2555,12 +2614,24 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Detect changes via data comparison (bulletproof fallback - works even if a handler misses the flag)
     const dataChanged = step2DataSnapshot.current !== '' && JSON.stringify(extractedData) !== step2DataSnapshot.current;
-    const shouldReformat = (extractedDataModified && !hasFormattedForReview) || dataChanged;
 
-    console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'shouldReformat:', shouldReformat);
+    // For manual JD mode: detect if the description lacks markdown formatting
+    // (no headers, no line breaks, no bullets, no bold) → force reformat so the
+    // published JD isn't a single run-on paragraph.
+    const currentDescription = mode === 'ai' ? generatedJD : manualJD;
+    const lacksMarkdownFormatting = mode === 'manual' && currentDescription && !(
+      /^#{1,6}\s/m.test(currentDescription) ||        // markdown headers
+      /\n\n/.test(currentDescription) ||              // paragraph breaks
+      /\*\*[^*]+\*\*/.test(currentDescription) ||     // bold text
+      /^[-*+]\s/m.test(currentDescription)            // bullet points
+    );
+
+    const shouldReformat = (extractedDataModified && !hasFormattedForReview) || dataChanged || lacksMarkdownFormatting;
+
+    console.log('[DEBUG] handlePublish - extractedDataModified:', extractedDataModified, 'hasFormattedForReview:', hasFormattedForReview, 'dataChanged:', dataChanged, 'lacksMarkdownFormatting:', lacksMarkdownFormatting, 'shouldReformat:', shouldReformat);
 
     // Track the final description to use (avoiding React state async issues)
-    let finalDescription = mode === 'ai' ? generatedJD : manualJD;
+    let finalDescription = currentDescription;
 
     // Reformat with AI if user edited something in Step 2
     // Uses both flag-based check AND data snapshot comparison for reliability
@@ -2606,6 +2677,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             certifications: extractedData.certifications,
             coding_required: extractedData.codingRequired,
             supported_languages: extractedData.suggestedLanguages,
+            salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
+            salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+            compensation_type: extractedData.compensationType,
           };
 
           const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
@@ -2807,7 +2881,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Validate salary range
     const salaryError = validateSalaryRange(extractedData.salaryFrom || '', extractedData.salaryTo || '');
     if (salaryError) {
-      missingFields.push('Valid Salary Range (min must be less than max)');
+      missingFields.push('Salary Range - ' + salaryError);
     }
 
     // Debug logging
@@ -2895,10 +2969,50 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         }
       }
 
+      // For manual JD mode: detect if the description lacks markdown formatting
+      // (e.g., user resumed an existing draft and went straight to step 3 publish).
+      // Reformat with AI so the published JD isn't a single run-on paragraph.
+      let publishDescription = generatedJD || manualJD;
+      const lacksMarkdownFormatting = mode === 'manual' && publishDescription && !(
+        /^#{1,6}\s/m.test(publishDescription) ||      // markdown headers
+        /\n\n/.test(publishDescription) ||            // paragraph breaks
+        /\*\*[^*]+\*\*/.test(publishDescription) ||   // bold text
+        /^[-*+]\s/m.test(publishDescription)          // bullet points
+      );
+
+      if (lacksMarkdownFormatting && editingId) {
+        console.log('[DEBUG] handleConfirmPublish - manual JD lacks formatting, reformatting before publish');
+        try {
+          const reformatParams = {
+            must_have_skills: extractedData.mustHaveSkills,
+            nice_to_have_skills: extractedData.niceToHaveSkills,
+            must_have_comments: extractedData.mustHaveComments || [],
+            nice_to_have_comments: extractedData.niceToHaveComments || [],
+            experience_min: experienceMin,
+            experience_max: experienceMax,
+            education_requirements: extractedData.education
+              ? (typeof extractedData.education === 'string' ? { degree: extractedData.education } : extractedData.education)
+              : null,
+            certifications: extractedData.certifications,
+            coding_required: extractedData.codingRequired,
+            supported_languages: extractedData.suggestedLanguages,
+            salary_min: extractedData.salaryFrom ? parseInt(extractedData.salaryFrom.replace(/[^0-9.]/g, '')) : undefined,
+            salary_max: extractedData.salaryTo ? parseInt(extractedData.salaryTo.replace(/[^0-9.]/g, '')) : undefined,
+            compensation_type: extractedData.compensationType,
+          };
+          const reformattedJD = await jdService.reformatWithParams(editingId, reformatParams);
+          publishDescription = reformattedJD.description;
+          setManualJD(reformattedJD.description);
+          console.log('[DEBUG] Manual JD reformatted successfully before publish');
+        } catch (reformatErr) {
+          console.error('[ERROR] Failed to reformat before publish, proceeding with raw text:', reformatErr);
+        }
+      }
+
       // Build the JD data for backend
       const jdData = {
         title: jobTitle.trim(),  // Trim spaces before saving
-        description: generatedJD || manualJD,
+        description: publishDescription,
         department: extractedData.department || '',
         location: extractedData.locations.length > 0
           ? extractedData.locations[0].city
@@ -3128,9 +3242,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const confirmCancelJD = async () => {
     setIsCancelling(true);
     try {
-      // Delete the JD if it exists (editingId means we have a draft saved)
-      if (editingId) {
-        await jdService.delete(editingId);
+      // Only delete the draft if:
+      // - There's a saved draft (editingId exists)
+      // - AND either it was created fresh this session (not pre-existing) OR the user made changes
+      const shouldDelete = editingId && (!isPreExistingDraft || hasUnsavedChanges);
+      if (shouldDelete) {
+        await jdService.delete(editingId!);
         toast.info('JD draft has been deleted');
       }
       // Navigate to job openings
@@ -3366,8 +3483,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         setManualJD(prev => prev || effectiveEditingJD.description || '');  // Preserve user edits
       }
 
-      // Set lastExtractedJD to the loaded description so we can detect changes
-      setLastExtractedJD(effectiveEditingJD.description || '');
+      // Set lastExtractedJD to the loaded description only if extraction has already happened.
+      // For drafts saved at 'create' stage, leave it empty so handleNext triggers extraction.
+      if (effectiveEditingJD.creation_stage !== 'create') {
+        setLastExtractedJD(effectiveEditingJD.description || '');
+      }
 
       setStep(effectiveEditingJD.creation_stage);
       console.log('[TalentFlow] Set step to:', effectiveEditingJD.creation_stage);
@@ -3455,8 +3575,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           industryType: industryValue,
           industryTypeRequired: false,  // Default to false - user can enable if needed
           department: effectiveEditingJD.department || '',
-          salaryFrom: effectiveEditingJD.salary_min != null ? String(effectiveEditingJD.salary_min).split('.')[0] : '',
-          salaryTo: effectiveEditingJD.salary_max != null ? String(effectiveEditingJD.salary_max).split('.')[0] : '',
+          salaryFrom: sanitizeExtractedSalary(effectiveEditingJD.salary_min),
+          salaryTo: sanitizeExtractedSalary(effectiveEditingJD.salary_max),
           compensationType: (effectiveEditingJD.compensation_type as 'hourly' | 'daily' | 'monthly' | 'yearly') || 'yearly',
           assessmentGuidance: effectiveEditingJD.assessment_guidance || '',
           internalRecruiterComments: effectiveEditingJD.internal_comments ? effectiveEditingJD.internal_comments.split('\n').filter(c => c.trim()) : [],
@@ -3889,7 +4009,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 rounded-md bg-white markdown-content">
                         {generatedJD ? (
                           <>
-                            <ReactMarkdown>{generatedJD}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{generatedJD}</ReactMarkdown>
                             <div className="flex items-center gap-2 mt-4 text-blue-600 border-t pt-4">
                               <Loader2 className="w-4 h-4 animate-spin" />
                               <span className="text-sm font-medium">Generating...</span>
@@ -3959,7 +4079,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         />
                       ) : (
                         <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 rounded-md bg-white markdown-content">
-                          <ReactMarkdown>{generatedJD
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{generatedJD
                             .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
                               match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
                             )
@@ -3983,37 +4103,71 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 ) : (
                   manualJD ? (
                     <div className="h-[300px] sm:h-[400px] lg:h-[600px] overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 border border-gray-300 rounded-md bg-white markdown-content">
-                      <ReactMarkdown>{
-                        // Auto-format common JD section headers to bold/headers
-                        manualJD
-                          // Convert ALL CAPS headers to markdown headers (like JOB DESCRIPTION, REQUIREMENTS, etc.)
-                          .replace(/^([A-Z][A-Z\s\/&-]{2,})$/gm, (match) => `## ${match.split(' ').map(w => w.charAt(0) + w.slice(1).toLowerCase()).join(' ')}`)
-                          // Dynamically detect section headers: Title Case text on its own line
-                          .replace(/^([A-Z][a-zA-Z]*(?:[\s&\/\-]+[A-Za-z()]+){0,6})\s*$/gm, (match, p1) => {
-                            const trimmed = p1.trim();
-                            const words = trimmed.split(/\s+/);
-                            const wordCount = words.length;
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{(() => {
+                        const connectors = new Set(['&', 'and', 'or', 'of', 'to', 'for', 'the', 'a', 'an', 'in', 'on', 'with', 'at', 'by', 'its', 'their']);
+                        const actionVerbRe = /^(Design|Develop|Write|Build|Create|Implement|Maintain|Manage|Lead|Work|Collaborate|Participate|Fix|Optimize|Test|Review|Ensure|Prepare|Provide|Support|Assist|Handle|Conduct|Perform|Execute|Analyze|Monitor|Collect|Recommend|Identify|Report|Coordinate|Communicate|Drive|Define|Evaluate|Assess|Deliver|Plan|Track|Update|Resolve|Document|Oversee|Establish|Improve|Facilitate|Negotiate|Allocate|Forecast|Validate|Maintain|Respond|Develop)/i;
 
-                            // Skip if too long (likely a sentence)
-                            if (wordCount > 6 || trimmed.length > 50) return match;
+                        const isHeader = (line: string): boolean => {
+                          const trimmed = line.trim();
+                          if (!trimmed) return false;
+                          // Already markdown header
+                          if (trimmed.startsWith('#')) return true;
+                          // Must start with uppercase
+                          if (!/^[A-Z]/.test(trimmed)) return false;
+                          const words = trimmed.split(/\s+/);
+                          // Too long to be a header
+                          if (words.length > 7 || trimmed.length > 55) return false;
+                          // Starts with action verb → bullet, not header
+                          if (actionVerbRe.test(trimmed)) return false;
+                          // If most non-connector words start with uppercase → header
+                          const contentWords = words.filter(w => !connectors.has(w.toLowerCase().replace(/[^a-z]/g, '')));
+                          const uppercaseCount = contentWords.filter(w => /^[A-Z]/.test(w)).length;
+                          return uppercaseCount >= Math.ceil(contentWords.length * 0.7);
+                        };
 
-                            // Skip if starts with action verbs (likely a bullet point)
-                            const actionVerbs = /^(Design|Develop|Write|Build|Create|Implement|Maintain|Manage|Lead|Work|Collaborate|Participate|Fix|Optimize|Test|Review|Ensure|Prepare|Provide|Support|Assist|Handle|Conduct|Perform|Execute|Analyze|Monitor|Strong|Good|Basic|Experience|Familiarity|Knowledge|Understanding|Ability|Hands-on|Exposure|Proficiency|Excellent|Proven|Demonstrated)/i;
-                            if (actionVerbs.test(trimmed)) return match;
+                        const isBullet = (line: string): boolean => {
+                          const trimmed = line.trim();
+                          if (!trimmed) return false;
+                          if (trimmed.startsWith('#') || trimmed.startsWith('-') || trimmed.startsWith('*')) return false;
+                          // Long lines starting with uppercase action verbs → bullet
+                          return actionVerbRe.test(trimmed) || trimmed.length > 30;
+                        };
 
-                            // Skip if contains lowercase words that aren't connectors (likely a sentence)
-                            const connectors = ['&', 'and', 'or', 'of', 'to', 'for', 'the', 'a', 'an', 'in', 'on', 'with'];
-                            const hasContentWords = words.some((w, i) => {
-                              if (i === 0) return false; // Skip first word
-                              const cleanWord = w.replace(/[()\/&-]/g, '').toLowerCase();
-                              return cleanWord.length > 2 && /^[a-z]/.test(w) && !connectors.includes(cleanWord);
-                            });
-                            if (hasContentWords) return match;
+                        const lines = manualJD.split('\n');
+                        const out: string[] = [];
+                        let prevWasHeader = false;
 
-                            // Looks like a header
-                            return `## ${trimmed}`;
-                          })
-                      }</ReactMarkdown>
+                        for (let i = 0; i < lines.length; i++) {
+                          const raw = lines[i];
+                          const trimmed = raw.trim();
+
+                          if (!trimmed) {
+                            // Keep one blank line max
+                            if (out.length > 0 && out[out.length - 1] !== '') out.push('');
+                            prevWasHeader = false;
+                            continue;
+                          }
+
+                          if (isHeader(trimmed)) {
+                            // Ensure blank line before header (except at start)
+                            if (out.length > 0 && out[out.length - 1] !== '') out.push('');
+                            out.push(`## ${trimmed.replace(/^#+\s*/, '')}`);
+                            out.push('');
+                            prevWasHeader = true;
+                          } else if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
+                            out.push(raw);
+                            prevWasHeader = false;
+                          } else if (isBullet(trimmed) || prevWasHeader) {
+                            out.push(`- ${trimmed}`);
+                            prevWasHeader = false;
+                          } else {
+                            out.push(raw);
+                            prevWasHeader = false;
+                          }
+                        }
+
+                        return out.join('\n');
+                      })()}</ReactMarkdown>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-[300px] sm:h-[400px] lg:h-[600px] bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
@@ -4513,9 +4667,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={extractedData.salaryFrom || ''}
                         onChange={(e) => {
                           const newValue = e.target.value;
+                          if (newValue.replace(/\D/g, '').length > 8) return;
                           setExtractedData(prev => ({ ...prev, salaryFrom: newValue }));
                           markExtractedDataModified();
-                          // Validate salary range
                           const error = validateSalaryRange(newValue, extractedData.salaryTo || '');
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
@@ -4535,9 +4689,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value={extractedData.salaryTo || ''}
                         onChange={(e) => {
                           const newValue = e.target.value;
+                          if (newValue.replace(/\D/g, '').length > 8) return;
                           setExtractedData(prev => ({ ...prev, salaryTo: newValue }));
                           markExtractedDataModified();
-                          // Validate salary range
                           const error = validateSalaryRange(extractedData.salaryFrom || '', newValue);
                           setValidationErrors(prev => ({ ...prev, salaryRange: error }));
                         }}
@@ -5861,7 +6015,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     setStep('create');
                     setHasProceededToExtract(false);  // Re-enable regenerate button when going back
                   }}
-                  className="px-4 sm:px-8 py-2.5 sm:py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base"
+                  className="px-4 sm:px-8 py-2.5 sm:py-3 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700"
                 >
                   Back
                 </button>
@@ -6004,7 +6158,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   {/* JD Content */}
                   <div className="markdown-content text-gray-700 leading-relaxed">
                     {console.log('[DEBUG] Review stage showing JD, mode:', mode, 'length:', (mode === 'ai' ? generatedJD : manualJD)?.length)}
-                    <ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                       {(mode === 'ai' ? generatedJD : manualJD)
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
                           match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
@@ -6408,38 +6562,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             </p> */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 justify-center">
               <button
-                onClick={() => {
-                  setStep('create');
-                  setGeneratedJD('');
-                  setManualJD('');
-                  setJobTitle('');
-                  setIsPublished(false);
-                  setPublishedJdId(null);
-                  setPublishedJobCode(null);
-                  setPublishedVersion(null);
-                  setExtractedData({
-                    mustHaveSkills: [],
-                    mustHaveComments: [],
-                    niceToHaveSkills: [],
-                    education: '',
-                    educationRequired: false,
-                    experience: '',
-                    experienceRequired: false,
-                    industryType: '',
-                    industryTypeRequired: false,
-                    department: '',
-                    allowOverqualified: false,
-                    employmentType: 'full_time',
-                    workModel: 'onsite',
-                    salaryFrom: '',
-                    salaryTo: '',
-                    compensationType: 'yearly',
-                    locations: [],
-                    locationsRequired: false,
-                    assessmentGuidance: '',
-                    internalRecruiterComments: [],
-                  });
-                }}
+                onClick={() => { window.location.href = '/recruitment/jd-creation'; }}
                 className="px-4 sm:px-6 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-black"
               >
                 Create Another JD
@@ -6504,13 +6627,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           <DialogHeader>
             <DialogTitle className="text-base sm:text-lg">Cancel JD Creation?</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
-              Are you sure you want to cancel? {editingId ? 'This will delete the current draft and all your progress will be lost.' : 'All your progress will be lost.'}
+              Are you sure you want to cancel? {editingId && (!isPreExistingDraft || hasUnsavedChanges) ? 'This will delete the current draft and all your progress will be lost.' : 'You will be taken back to the job openings list.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <button
               onClick={() => setShowCancelDialog(false)}
-              className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700 text-black"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors text-sm sm:text-base text-gray-700 text-white"
             >
               Continue Editing
             </button>

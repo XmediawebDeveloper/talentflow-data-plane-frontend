@@ -6,7 +6,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import {
   ArrowLeft, Download, Mail, Phone, MapPin, Briefcase, Calendar, Award,
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
-  ChevronRight, ExternalLink, Linkedin, Globe, FileText, Clock, History,
+  ChevronRight, ChevronLeft, ExternalLink, Linkedin, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
   AlignLeft, Hash, X, Eye
 } from 'lucide-react';
@@ -201,16 +201,32 @@ import ApplyToJobModal from '@/components/ApplyToJobModal';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 
 export default function ResumeViewPage() {
   const params = useParams();
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const { isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  const { hasPlanFeature } = usePlanFeatures();
   const resumeId = params.id as string;
 
   const [resume, setResume] = useState<Resume | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Prev/Next navigation from My Resumes list
+  const [navList, setNavList] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('resumeNavList');
+      if (stored) setNavList(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+  const navIndex = navList.indexOf(resumeId);
+  const prevId = navIndex > 0 ? navList[navIndex - 1] : null;
+  const nextId = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
 
   // Apply to Job modal state
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
@@ -237,6 +253,12 @@ export default function ResumeViewPage() {
   // Version preview state
   const [versionPreviewUrl, setVersionPreviewUrl] = useState<string | null>(null);
   const [versionPreviewLabel, setVersionPreviewLabel] = useState<string>('');
+
+  const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
+  const canDeleteResume = isTenantAdmin || hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete');
+  const canApplyResumeToJob =
+    hasPlanFeature('resume_scoring') &&
+    (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')));
 
   const handleCompareCheck = (versionId: string) => {
     setCompareChecked(prev => {
@@ -761,6 +783,29 @@ Best regards`);
               </div>
             </div>
           </div>
+          {navList.length > 0 && navIndex >= 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => prevId && router.replace(`/recruitment/resume-view/${prevId}`)}
+                disabled={!prevId}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </button>
+              <span className="text-sm text-gray-600 font-medium px-1">
+                {navIndex + 1} / {navList.length}
+              </span>
+              <button
+                onClick={() => nextId && router.replace(`/recruitment/resume-view/${nextId}`)}
+                disabled={!nextId}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -782,28 +827,34 @@ Best regards`);
               <Download className="w-4 h-4" />
               Download
             </button>
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
-            >
-              <Share2 className="w-4 h-4" />
-              Share
-            </button>
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-400 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors text-sm"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
-            </button>
+            {canShareResume && (
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+              >
+                <Share2 className="w-4 h-4" />
+                Share
+              </button>
+            )}
+            {canDeleteResume && (
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-200 border border-gray-400 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors text-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            )}
           </div>
-          <button
-            onClick={handleApplyToJob}
-            className="flex items-center gap-2 px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm shadow-sm"
-          >
-            <Send className="w-4 h-4" />
-            Apply to Job
-          </button>
+          {canApplyResumeToJob && (
+            <button
+              onClick={handleApplyToJob}
+              className="flex items-center gap-2 px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm shadow-sm"
+            >
+              <Send className="w-4 h-4" />
+              Apply to Job
+            </button>
+          )}
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTheme } from 'next-themes';
 import { Check, Sparkles, Building2, Users, Zap, ArrowRight, Loader2 } from "lucide-react";
 
 interface PricingPageProps {
@@ -84,9 +85,10 @@ const getGradientForPlan = (planName: string, index: number): string => {
 };
 
 export default function PricingPage({ onNavigate }: PricingPageProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [isYearly, setIsYearly] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [plans, setPlans] = useState<DisplayPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,15 +141,10 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
         const transformedPlans: DisplayPlan[] = data
           .filter(plan => plan.is_active && plan.is_public)
           .sort((a, b) => {
-            // Sort trial/free plans first
-            const aIsTrial = a.plan_name.toLowerCase().includes('trial') || a.plan_name.toLowerCase().includes('free');
-            const bIsTrial = b.plan_name.toLowerCase().includes('trial') || b.plan_name.toLowerCase().includes('free');
-
-            if (aIsTrial && !bIsTrial) return -1;
-            if (!aIsTrial && bIsTrial) return 1;
-
-            // Then sort by display_order and price
-            return (a.display_order || 0) - (b.display_order || 0) || a.base_price - b.base_price;
+            const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+            const orderA = tierOrder[a.plan_tier?.toUpperCase()] ?? 99;
+            const orderB = tierOrder[b.plan_tier?.toUpperCase()] ?? 99;
+            return orderA - orderB;
           })
           .map((plan, index) => {
             // Extract feature names from features array
@@ -204,7 +201,6 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     };
     checkScreen();
     window.addEventListener('resize', checkScreen);
-    setIsDark(document.documentElement.classList.contains('dark'));
     return () => window.removeEventListener('resize', checkScreen);
   }, []);
 

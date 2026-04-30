@@ -736,7 +736,7 @@ export default function ResumeSelectionModal({
                   />
                 </div>
 
-                {/* Upload Resume Button */}
+                {/* Upload Resume Button - hidden input always present but button only for My Resumes tab */}
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -745,6 +745,7 @@ export default function ResumeSelectionModal({
                   className="hidden"
                 />
                 <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                  {activeTab === 'my-resumes' && (
                   <button
                     onClick={handleUploadClick}
                     disabled={isUploading}
@@ -763,6 +764,7 @@ export default function ResumeSelectionModal({
                       </>
                     )}
                   </button>
+                  )}
 
                   <button
                     onClick={handleSelectAll}

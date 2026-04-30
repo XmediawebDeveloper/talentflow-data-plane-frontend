@@ -60,10 +60,8 @@ interface SidebarProps {
 const SUBSCRIPTION_ALLOWED_PATHS = [
   '/subscription/current-plan',
   '/subscription/payment-methods',
-  '/audits/trail',
-  '/audits/activity',
+  '/subscription/usage-quotas',
   '/support-tickets',
-  '/settings/general-settings',
 ];
 
 interface NavItem {
@@ -88,6 +86,19 @@ interface NavSection {
 export default function Sidebar({ user, tenant, subscriptionExpired, accountSuspended, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { hasPlanFeature, loading: planFeaturesLoading } = usePlanFeatures();
+
+  // Track which list page the user came from when viewing resume details
+  const [resumeViewSource, setResumeViewSource] = useState<string | null>(null);
+  useEffect(() => {
+    if (pathname.startsWith('/recruitment/resume-view/')) {
+      try {
+        const src = sessionStorage.getItem('resumeNavSource');
+        setResumeViewSource(src);
+      } catch { setResumeViewSource(null); }
+    } else {
+      setResumeViewSource(null);
+    }
+  }, [pathname]);
   const [expandedSections, setExpandedSections] = useState<string[]>([
     'administration', 'recruitment', 'resume-management', 'evaluation',
     'organization', 'user-management-section', 'masters', 'subscription', 'settings', 'reports', 'audits'
@@ -130,49 +141,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
    * This ensures users ONLY see menus for permissions explicitly granted to them.
    */
 
-  // ✅ Permission dependencies (must match backend)
-  // If a permission has dependencies, ALL dependencies must be present for the feature to work
-  const PERMISSION_DEPENDENCIES: Record<string, string[]> = {
-    // VIEW permissions don't need dependencies (just need to see the page)
-    // RUN permissions need dependencies (need access to required data)
-
-    // AI Talent Match RUN requires both Internal DB and JD access
-    'canRunAiMatch': ['canViewAiMatch', 'canViewInternalDB', 'canReadJD'],
-
-    // Resume Scoring RUN requires JD and Resume access
-    'canRunScoring': ['canViewScoring', 'canReadJD', 'canViewResumes'],
-
-    // Assessments require JD access
-    'canCreateAssessments': ['canReadJD'],
-    'canUpdateAssessments': ['canViewAssessments', 'canReadJD'],
-    'canDeleteAssessments': ['canViewAssessments'],
-
-    // AI Interviews require Resume access
-    'canRunAiInterviews': ['canViewResumes'],
-
-    // Delete permissions require read permission (CRUD hierarchy)
-    'canDeleteJD': ['canReadJD'],
-    'canDeleteResumes': ['canViewResumes'],
-    'canDeleteInternalDB': ['canViewInternalDB'],
-    'canDeleteAssessments': ['canViewAssessments'],
-    'canDeleteUsers': ['canViewUsers'],
-    'canDeleteRoles': ['canViewRoles'],
-
-    // Update permissions require read permission (CRUD hierarchy)
-    'canUpdateJD': ['canReadJD'],
-    'canUpdateResumes': ['canViewResumes'],
-    'canUpdateInternalDB': ['canViewInternalDB'],
-    'canUpdateUsers': ['canViewUsers'],
-    'canUpdateRoles': ['canViewRoles'],
-
-    // Create permissions might require read permission (depends on feature)
-    'canCreateJD': [], // No dependency
-    'canCreateResumes': ['canViewResumes'], // Need to see resumes to create
-    'canCreateInternalDB': ['canViewInternalDB'], // Need to see DB to create
-    'canCreateUsers': ['canViewUsers'], // Need to see users to create
-    'canCreateRoles': ['canViewRoles'], // Need to see roles to create
-  };
-
   // Check if user has a specific permission
   const hasPermission = (permission?: string): boolean => {
     if (!permission) return true;
@@ -189,41 +157,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
     const hasAccess = user.permissions[permission as keyof typeof user.permissions] === true;
     console.log(`[SIDEBAR] Permission check: ${permission} = ${hasAccess}`);
     return hasAccess;
-  };
-
-  // NEW: Check permission AND all its dependencies
-  const hasAllRequiredPermissions = (permissions: string[]): boolean => {
-    if (isTenantAdmin) return true;
-
-    console.log(`[SIDEBAR] Checking all required permissions:`, permissions);
-
-    for (const perm of permissions) {
-      console.log(`[SIDEBAR] Checking permission: ${perm} = ${user?.permissions?.[perm as keyof typeof user.permissions]}`);
-
-      if (!user?.permissions || !user.permissions[perm as keyof typeof user.permissions]) {
-        console.log(`[SIDEBAR] Missing permission: ${perm}`);
-        return false;
-      }
-
-      // Check dependencies
-      const deps = PERMISSION_DEPENDENCIES[perm] || [];
-      if (deps.length > 0) {
-        console.log(`[SIDEBAR] Checking dependencies for ${perm}:`, deps);
-      }
-
-      for (const dep of deps) {
-        const hasDepValue = user?.permissions?.[dep as keyof typeof user.permissions];
-        console.log(`[SIDEBAR]   Dependency ${dep} = ${hasDepValue}`);
-
-        if (!user?.permissions || !user.permissions[dep as keyof typeof user.permissions]) {
-          console.log(`[SIDEBAR] Missing dependency: ${perm} requires ${dep}`);
-          return false;
-        }
-      }
-    }
-
-    console.log(`[SIDEBAR] All required permissions passed!`);
-    return true;
   };
 
   // Check if user has ANY of the specified permissions (for grouped checks)
@@ -279,7 +212,8 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       label: 'EVALUATION',
       items: [
         { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permissions: ['canViewAssessments', 'canCreateAssessments', 'canUpdateAssessments', 'canDeleteAssessments'], planFeature: 'assessment' },
-        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canViewResumes', 'canRunAiInterviews'], planFeature: 'ai_interview' },
+        { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canViewAIInterviews', 'canRunAiInterviews'], planFeature: 'ai_interview' },
+        { id: 'hr-question-bank', label: 'HR Question Bank', icon: ClipboardList, href: '/recruitment/hr-question-bank', permissions: ['canViewHRQuestionBank', 'canCreateHRQuestionBank', 'canUpdateHRQuestionBank', 'canDeleteHRQuestionBank'], planFeature: 'assessment' },
       ]
     },
 
@@ -289,8 +223,9 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       label: 'USER MANAGEMENT',
       items: [
         { id: 'user-management', label: 'Users', icon: Users, href: '/organization/user-management', permission: 'canManageUsers' },
+        { id: 'usage-history', label: 'Usage History', icon: History, href: '/organization/usage-history', adminOnly: true },
         { id: 'role-management', label: 'Roles & Permissions', icon: Shield, href: '/organization/role-management', permission: 'canManageUsers', adminOnly: true },
-        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canManageUsers', planFeature: 'teams' },
+        { id: 'team-management', label: 'Teams', icon: UserCog, href: '/organization/team-management', permission: 'canViewTeams', planFeature: 'teams' },
         { id: 'team-chat', label: 'Chat', icon: MessageCircle, href: '/organization/team-chat' },
       ]
     },
@@ -336,7 +271,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       label: 'SETTINGS',
       items: [
         { id: 'general-settings', label: 'Profile Settings', icon: Settings, href: '/settings/general-settings' },
-        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canViewPermissionsRoles' },
+        { id: 'permissions', label: 'Permissions & Roles', icon: Shield, href: '/settings/permissions', permission: 'canViewRoles' },
         { id: 'api-management', label: 'API Management', icon: Key, href: '/settings/api-management', permission: 'canViewApiManagement', planFeature: 'api_access' },
         { id: 'branding', label: 'Branding & White Label', icon: Palette, href: '/settings/branding', permission: 'canViewBranding' },
         // { id: 'integrations', label: 'Integrations', icon: LinkIcon, href: '/settings/integrations', permission: 'canManageSettings' }, // Hidden for demo
@@ -360,7 +295,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       id: 'support',
       label: 'SUPPORT',
       items: [
-        { id: 'support-tickets', label: 'Support Tickets', icon: HelpCircle, href: '/support-tickets', adminOnly: true },
+        { id: 'support-tickets', label: 'Support Tickets', icon: HelpCircle, href: '/support-tickets', permission: 'canViewSupport' },
         { id: 'help-desk', label: 'Help Desk', icon: Headphones, href: '/help-desk', internalUserOnly: true },
       ]
     },
@@ -380,11 +315,6 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
 
         // Check permissions array (granular - show if ANY match)
         if (item.permissions && item.permissions.length > 0) {
-          // ✅ NEW: For specific features with dependencies, check ALL required permissions
-          if (item.id === 'ai-talent-match' || item.id === 'resume-scoring') {
-            return hasAllRequiredPermissions(item.permissions);
-          }
-          // For other items, use the existing ANY logic
           return hasAnyPermission(item.permissions);
         }
 
@@ -406,9 +336,19 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
 
   const visibleSections = filterSections(allSections);
 
+  const relatedPaths: Record<string, string[]> = {
+    '/recruitment/job-openings': resumeViewSource === 'job-details'
+      ? ['/recruitment/job-details', '/recruitment/resume-view', '/recruitment/jd-creation']
+      : ['/recruitment/job-details', '/recruitment/jd-creation'],
+    '/recruitment/my-resumes': resumeViewSource === 'my-resumes' ? ['/recruitment/resume-view'] : [],
+    '/recruitment/resume-database': resumeViewSource === 'resume-database' ? ['/recruitment/resume-view'] : [],
+    '/recruitment/ai-talent-match': resumeViewSource === 'ai-talent-match' ? ['/recruitment/resume-view'] : [],
+  };
+
   const isActive = (href?: string): boolean => {
     if (!href) return false;
-    return pathname === href || pathname.startsWith(href + '/');
+    if (pathname === href || pathname.startsWith(href + '/')) return true;
+    return (relatedPaths[href] || []).some(p => pathname === p || pathname.startsWith(p + '/'));
   };
 
   return (
@@ -437,7 +377,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-2 min-h-0">
+      <nav className="flex-1 overflow-y-auto py-2 min-h-0 scrollbar-auto-hide">
         {visibleSections.map((section) => (
           <div key={section.id} className="mb-2">
             {/* Section Header */}
@@ -469,20 +409,9 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                   }
                 }
 
-                // Plan feature gate: check BEFORE subscription status
+                // Plan feature gate: hide item completely if feature is not in plan
                 if (item.planFeature && !planFeaturesLoading && !hasPlanFeature(item.planFeature)) {
-                  const featureMeta = PLAN_FEATURE_METADATA[item.planFeature];
-                  return (
-                    <div
-                      key={item.id}
-                      className="w-full flex items-center gap-3 px-4 py-2 mx-2 rounded-lg text-sm text-gray-400 cursor-not-allowed opacity-50"
-                      style={{ width: 'calc(100% - 16px)' }}
-                      title={`Upgrade your plan to access ${featureMeta?.name || item.label}`}
-                    >
-                      <Lock className="w-4 h-4 flex-shrink-0 text-gray-300" />
-                      <span>{item.label}</span>
-                    </div>
-                  );
+                  return null;
                 }
 
                 // Lock menus if subscriptionExpired is true OR undefined (loading/unknown)

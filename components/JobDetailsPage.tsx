@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   MapPin,
   Calendar,
   Clock,
@@ -112,6 +114,10 @@ export default function JobDetailsPage({ user, tenant }: JobDetailsPageProps = {
   const [job, setJob] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [allJDIds, setAllJDIds] = useState<string[]>([]);
+  const currentIndex = allJDIds.indexOf(jobId ?? '');
+  const prevId = currentIndex > 0 ? allJDIds[currentIndex - 1] : null;
+  const nextId = currentIndex >= 0 && currentIndex < allJDIds.length - 1 ? allJDIds[currentIndex + 1] : null;
 
   // ✅ Permission checking function
   const hasPermission = (permission: string): boolean => {
@@ -149,6 +155,23 @@ export default function JobDetailsPage({ user, tenant }: JobDetailsPageProps = {
       fetchJobDetails();
     }
   }, [jobId]);
+
+  useEffect(() => {
+    // Fetch all published JDs across pages (backend caps at 100 per page)
+    const fetchAllPublished = async () => {
+      const ids: string[] = [];
+      let page = 1;
+      while (true) {
+        const res = await jdService.list({ status: 'published', page_size: 100, page });
+        const items = res.items ?? [];
+        ids.push(...items.map((j: JDResponse) => j.id));
+        if (ids.length >= res.total || items.length < 100) break;
+        page++;
+      }
+      setAllJDIds(ids);
+    };
+    fetchAllPublished().catch(() => {});
+  }, []);
 
   const fetchJobDetails = async () => {
     if (!jobId) return;
@@ -279,13 +302,38 @@ ${job.certifications?.join(', ') || 'N/A'}
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-8 py-4">
         <div className="max-w-7xl mx-auto">
-          <button
-            onClick={() => router.push('/recruitment/job-openings')}
-            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to Job Openings
-          </button>
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => router.push('/recruitment/job-openings')}
+              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to Job Openings
+            </button>
+            {allJDIds.length > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => prevId && router.push(`/recruitment/job-details?id=${prevId}`)}
+                  disabled={!prevId}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                <span className="text-xs text-gray-400">
+                  {currentIndex + 1} / {allJDIds.length}
+                </span>
+                <button
+                  onClick={() => nextId && router.push(`/recruitment/job-details?id=${nextId}`)}
+                  disabled={!nextId}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -512,13 +560,15 @@ ${job.certifications?.join(', ') || 'N/A'}
                     <Target className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No scored resumes yet</h3>
                     <p className="text-gray-500 mb-4">Start scoring resumes against this job description</p>
-                    <button
-                      onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
-                    >
-                      <Target className="w-4 h-4" />
-                      Score Resumes
-                    </button>
+                    {permissions.canRunScoring && (
+                      <button
+                        onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                      >
+                        <Target className="w-4 h-4" />
+                        Score Resumes
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <p className="text-gray-600">{job.scored_resumes_count} resumes have been scored</p>

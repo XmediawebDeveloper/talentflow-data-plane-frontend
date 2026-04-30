@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import AssessmentCreation from './AssessmentCreation';
+import ListPagination from './ListPagination';
 import AssessmentResults from './AssessmentResults';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import AssessmentAuditTrail from './AssessmentAuditTrail';
@@ -23,7 +24,10 @@ import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
+
+const INVITATIONS_PAGE_SIZE = 10;
 
 interface AssessmentsProps {
   jobs: Job[];
@@ -37,13 +41,14 @@ interface AssessmentsProps {
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
-  const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
 
   // Permission checks for CRUD operations (bypass for tenant admin)
   const canCreateAssessment = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
   const canDownloadAssessmentPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
+  const canBatchDownloadAssessmentPDF = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
 
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'completed' | 'audit' | 'consent' | 'archived' | 'settings'>('all');
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>('proctoring');
@@ -74,13 +79,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [newEmailValue, setNewEmailValue] = useState('');
   const [isSendingChangeEmail, setIsSendingChangeEmail] = useState(false);
+  // Resend confirmation dialog state
+  const [resendTargetInvitation, setResendTargetInvitation] = useState<any | null>(null);
+  const [isResending, setIsResending] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
+  const [assessmentCurrentPage, setAssessmentCurrentPage] = useState(1);
+  const [assessmentItemsPerPage, setAssessmentItemsPerPage] = useState(10);
+  const [assessmentTotalItems, setAssessmentTotalItems] = useState(0);
+  const [assessmentTotalPages, setAssessmentTotalPages] = useState(1);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [availableUnits, setAvailableUnits] = useState<number | null>(null);
   const [totalUnits, setTotalUnits] = useState<number>(10); // Total subscription limit
   const [isUnlimited, setIsUnlimited] = useState<boolean>(false); // Track if quota is unlimited
   const [quotaPercentage, setQuotaPercentage] = useState<number>(0); // Percentage of quota used
+  const [trackingCurrentPage, setTrackingCurrentPage] = useState(1);
+  const [trackingTotalItems, setTrackingTotalItems] = useState(0);
+  const [trackingTotalPages, setTrackingTotalPages] = useState(1);
 
   // Proctoring settings from API
   const [proctoringSettings, setProctoringSettings] = useState<ProctoringSettings | null>(null);
@@ -89,6 +104,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [proctoringError, setProctoringError] = useState<string | null>(null);
   const [proctoringEvents, setProctoringEvents] = useState<ProctoringEvent[]>([]);
   const [proctoringEventsTotal, setProctoringEventsTotal] = useState(0);
+  const [isLoadingProctoringEvents, setIsLoadingProctoringEvents] = useState(false);
   const [flaggedCount, setFlaggedCount] = useState(0);
 
   // Topic settings state
@@ -127,6 +143,152 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   });
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
+  const getAssessmentStatusFilter = (tab: typeof activeTab) => {
+    if (tab === 'active') return 'published';
+    if (tab === 'draft') return 'draft';
+    if (tab === 'completed') return 'closed';
+    if (tab === 'archived') return 'archived';
+    return undefined;
+  };
+
+  const mapAssessmentFromApi = (a: any, index: number) => {
+    const rawStatus = (a.status || 'draft').toLowerCase();
+    const shortId = a.short_id || `AS-${String(a.sequence_number || index + 1).padStart(3, '0')}`;
+    return {
+      id: a.id,
+      short_id: shortId,
+      sequence_number: a.sequence_number,
+      title: a.title,
+      description: a.description,
+      type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
+      duration: `${a.duration_minutes} min`,
+      duration_minutes: a.duration_minutes,
+      questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
+      candidates: a.invitations_count || 0,
+      invitations_count: a.invitations_count || 0,
+      completed_count: a.completed_count || 0,
+      passed_count: a.passed_count || 0,
+      average_score: a.average_score,
+      pass_rate: a.pass_rate,
+      status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
+      passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
+      created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+      created_at: a.created_at,
+      updated_at: a.updated_at,
+      created_by_name: a.created_by_name || 'System',
+      version: a.version || 1,
+      jd_id: a.jd_id,
+      jd_short_id: a.jd_short_id,
+      jd_version: a.jd_version,
+      job: { title: a.jd_title || 'General Assessment', department: 'Engineering', version: a.jd_version },
+      hr_enabled: a.hr_enabled,
+      hr_percentage: a.hr_percentage,
+      hr_topics: a.hr_topics,
+      technical_enabled: a.technical_enabled,
+      technical_percentage: a.technical_percentage,
+      technical_topics: a.technical_topics,
+      coding_enabled: a.coding_enabled,
+      coding_percentage: a.coding_percentage,
+      coding_topics: a.coding_topics,
+      coding_languages: a.coding_languages,
+      proctoring_enabled: a.proctoring_enabled,
+      average_time_seconds: a.average_time_seconds,
+      hr_score: a.hr_score,
+      technical_score: a.technical_score,
+      coding_score: a.coding_score,
+    };
+  };
+
+  const closeTrackInvitesModal = () => {
+    setShowTrackInvitesModal(false);
+    setSelectedAssessmentForTracking(null);
+    setTrackingInvitations([]);
+    setTrackingCurrentPage(1);
+    setTrackingTotalItems(0);
+    setTrackingTotalPages(1);
+    setEditingEmailId(null);
+    setNewEmailValue('');
+  };
+
+  const loadAssessmentsPage = async (page: number) => {
+    setIsLoading(true);
+    try {
+      const filters: any = {
+        page,
+        page_size: assessmentItemsPerPage,
+      };
+      if (preSelectedJdId) {
+        filters.jd_id = preSelectedJdId;
+      }
+      const status = getAssessmentStatusFilter(activeTab);
+      if (status) {
+        filters.status = status;
+      }
+
+      const response = await assessmentService.list(filters);
+      const mapped = (response.items || []).map((a: any, index: number) =>
+        mapAssessmentFromApi(a, (page - 1) * assessmentItemsPerPage + index)
+      );
+
+      setApiAssessments(mapped);
+      setAssessmentTotalItems(response.total || 0);
+      setAssessmentTotalPages(response.total_pages || 1);
+
+      if ((response.items?.length || 0) === 0 && response.total > 0 && page > 1) {
+        setAssessmentCurrentPage(Math.min(page - 1, response.total_pages || 1));
+      }
+    } catch (error) {
+      console.log('[TalentFlow] Failed to load assessments:', error);
+      setApiAssessments([]);
+      setAssessmentTotalItems(0);
+      setAssessmentTotalPages(1);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadTrackingInvitations = async (assessment: any, page: number) => {
+    setIsLoadingInvitations(true);
+    try {
+      const response = await assessmentService.listInvitations(assessment.id, {
+        page,
+        page_size: INVITATIONS_PAGE_SIZE,
+      });
+      const invitations = response.items || [];
+      setTrackingInvitations(invitations);
+      setTrackingTotalItems(response.total || 0);
+      const totalPages = Math.max(1, Math.ceil((response.total || 0) / INVITATIONS_PAGE_SIZE));
+      setTrackingTotalPages(totalPages);
+
+      const stats = {
+        total: response.total || invitations.length,
+        sent: invitations.filter((inv: any) => inv.status === 'sent' || inv.status === 'pending' || inv.status === 'opened').length,
+        started: invitations.filter((inv: any) => inv.status === 'started' || (inv.started_at && inv.status !== 'completed')).length,
+        completed: invitations.filter((inv: any) => inv.status === 'completed' || inv.completed_at).length,
+        failed: invitations.filter((inv: any) => ['expired', 'failed', 'bounced', 'abandoned'].includes(inv.status)).length,
+      };
+      setInvitationStats(stats);
+
+      if (invitations.length === 0 && (response.total || 0) > 0 && page > 1) {
+        setTrackingCurrentPage(Math.min(page - 1, totalPages));
+      }
+    } catch (error) {
+      console.error('Failed to load invitations:', error);
+      setTrackingInvitations([]);
+      setTrackingTotalItems(0);
+      setTrackingTotalPages(1);
+      setInvitationStats({
+        total: 0,
+        sent: 0,
+        started: 0,
+        completed: 0,
+        failed: 0,
+      });
+    } finally {
+      setIsLoadingInvitations(false);
+    }
+  };
+
   // FIX-004: Auto-open creation view inline if requested via props
   useEffect(() => {
     if (autoOpenCreate) {
@@ -139,74 +301,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Load all data in parallel on mount (faster than 3 separate useEffects)
   useEffect(() => {
     const loadAllData = async () => {
-      setIsLoading(true);
       setIsLoadingStats(true);
 
       // Run all API calls in parallel for faster loading
-      const [assessmentsResult, statsResult, quotaResult, topicsResult] = await Promise.allSettled([
-        assessmentService.list({ page_size: 100 }),
+      const [statsResult, quotaResult, topicsResult] = await Promise.allSettled([
         assessmentService.getStats(),
         api.get('/usage/quota-status'),
         api.get('/assessments/settings/topics'),
       ]);
-
-      // Process assessments
-      if (assessmentsResult.status === 'fulfilled' && assessmentsResult.value?.items?.length > 0) {
-        const mapped = assessmentsResult.value.items.map((a: any, index: number) => {
-          // Normalize status to lowercase for consistent comparison
-          const rawStatus = (a.status || 'draft').toLowerCase();
-          // Use short_id from backend (persistent) or generate fallback
-          const shortId = a.short_id || `AS-${String(a.sequence_number || index + 1).padStart(3, '0')}`;
-          return {
-          id: a.id,
-          short_id: shortId,
-          sequence_number: a.sequence_number,
-          title: a.title,
-          description: a.description,
-          type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
-          duration: `${a.duration_minutes} min`,
-          duration_minutes: a.duration_minutes,
-          questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
-          candidates: a.invitations_count || 0,
-          invitations_count: a.invitations_count || 0,
-          completed_count: a.completed_count || 0,
-          passed_count: a.passed_count || 0,
-          average_score: a.average_score,
-          pass_rate: a.pass_rate,
-          status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
-          passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
-          created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-          created_at: a.created_at,
-          created_by_name: a.created_by_name || 'System',
-          version: a.version || 1,
-          jd_id: a.jd_id,
-          jd_short_id: a.jd_short_id,
-          jd_version: a.jd_version,
-          job: { title: a.jd_title || 'General Assessment', department: 'Engineering', version: a.jd_version },
-          // Section configuration for detail view
-          hr_enabled: a.hr_enabled,
-          hr_percentage: a.hr_percentage,
-          hr_topics: a.hr_topics,
-          technical_enabled: a.technical_enabled,
-          technical_percentage: a.technical_percentage,
-          technical_topics: a.technical_topics,
-          coding_enabled: a.coding_enabled,
-          coding_percentage: a.coding_percentage,
-          coding_topics: a.coding_topics,
-          coding_languages: a.coding_languages,
-          proctoring_enabled: a.proctoring_enabled,
-          // Analytics data
-          average_time_seconds: a.average_time_seconds,
-          hr_score: a.hr_score,
-          technical_score: a.technical_score,
-          coding_score: a.coding_score,
-        };
-        });
-        setApiAssessments(mapped);
-        console.log('[TalentFlow] Loaded', mapped.length, 'assessments from API');
-      } else if (assessmentsResult.status === 'rejected') {
-        console.log('[TalentFlow] Failed to load assessments:', assessmentsResult.reason);
-      }
 
       // Process stats
       if (statsResult.status === 'fulfilled') {
@@ -304,12 +406,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         console.log('[TalentFlow] Failed to load topic settings:', topicsResult.reason);
       }
 
-      setIsLoading(false);
       setIsLoadingStats(false);
     };
 
     loadAllData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'audit' || activeTab === 'consent' || activeTab === 'settings') {
+      return;
+    }
+    loadAssessmentsPage(assessmentCurrentPage);
+  }, [activeTab, preSelectedJdId, assessmentCurrentPage, assessmentItemsPerPage]);
+
+  useEffect(() => {
+    setAssessmentCurrentPage(1);
+  }, [activeTab, preSelectedJdId, assessmentItemsPerPage]);
+
+  useEffect(() => {
+    if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
+    loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage);
+  }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingCurrentPage]);
 
   // Load settings data when settings tab is active
   useEffect(() => {
@@ -366,34 +483,33 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  // Load proctoring settings and events from API
+  // Load proctoring settings and events from API.
+  // Settings and events load independently so the toggles paint as soon as
+  // the (fast) settings call returns; the recent-events list is the slow
+  // part and fills in afterwards.
   const loadProctoringData = async () => {
     setIsLoadingProctoring(true);
     setProctoringError(null);
-
     try {
-      const [settingsResult, eventsResult] = await Promise.allSettled([
-        proctoringService.getSettings(),
-        proctoringService.getEvents({ page_size: 10 }),
-      ]);
-
-      if (settingsResult.status === 'fulfilled') {
-        setProctoringSettings(settingsResult.value);
-      } else {
-        console.error('Failed to load proctoring settings:', settingsResult.reason);
-        setProctoringError('Failed to load proctoring settings');
-      }
-
-      if (eventsResult.status === 'fulfilled') {
-        setProctoringEvents(eventsResult.value.items);
-        setProctoringEventsTotal(eventsResult.value.total);
-        setFlaggedCount(eventsResult.value.flagged_attempts);
-      }
+      const settings = await proctoringService.getSettings();
+      setProctoringSettings(settings);
     } catch (error) {
-      console.error('Failed to load proctoring data:', error);
-      setProctoringError('Failed to load proctoring data');
+      console.error('Failed to load proctoring settings:', error);
+      setProctoringError('Failed to load proctoring settings');
     } finally {
       setIsLoadingProctoring(false);
+    }
+
+    setIsLoadingProctoringEvents(true);
+    try {
+      const events = await proctoringService.getEvents({ page_size: 10 });
+      setProctoringEvents(events.items);
+      setProctoringEventsTotal(events.total);
+      setFlaggedCount(events.flagged_attempts);
+    } catch (error) {
+      console.error('Failed to load proctoring events:', error);
+    } finally {
+      setIsLoadingProctoringEvents(false);
     }
   };
 
@@ -514,66 +630,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Reload assessments from API
   const reloadAssessments = async () => {
-    setIsLoading(true);
     try {
-      // Filter by JD if preSelectedJdId is provided
-      const filters: any = { page_size: 100 };
-      if (preSelectedJdId) {
-        filters.jd_id = preSelectedJdId;
-      }
-      const response = await assessmentService.list(filters);
-      if (response?.items?.length >= 0) {
-        const mapped = response.items.map((a: any) => {
-          // Normalize status to lowercase for consistent comparison
-          const rawStatus = (a.status || 'draft').toLowerCase();
-          return {
-          id: a.id,
-          title: a.title,
-          description: a.description,
-          type: a.technical_enabled ? 'Technical' : a.hr_enabled ? 'Behavioral' : 'Aptitude',
-          duration: `${a.duration_minutes} min`,
-          duration_minutes: a.duration_minutes,
-          questions: (a.hr_enabled ? 10 : 0) + (a.technical_enabled ? 10 : 0) + (a.coding_enabled ? 5 : 0),
-          candidates: a.invitations_count || 0,
-          invitations_count: a.invitations_count || 0,
-          completed_count: a.completed_count || 0,
-          passed_count: a.passed_count || 0,
-          average_score: a.average_score,
-          pass_rate: a.pass_rate,
-          status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
-          passRate: a.completed_count > 0 ? `${Math.round((a.passed_count / a.completed_count) * 100)}%` : 'N/A',
-          created: a.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
-          jd_version: a.jd_version,
-          job: { title: a.jd_title || 'General Assessment', department: 'Engineering', version: a.jd_version },
-          // Section configuration for detail view
-          hr_enabled: a.hr_enabled,
-          hr_percentage: a.hr_percentage,
-          hr_topics: a.hr_topics,
-          technical_enabled: a.technical_enabled,
-          technical_percentage: a.technical_percentage,
-          technical_topics: a.technical_topics,
-          coding_enabled: a.coding_enabled,
-          coding_percentage: a.coding_percentage,
-          coding_topics: a.coding_topics,
-          coding_languages: a.coding_languages,
-          proctoring_enabled: a.proctoring_enabled,
-          // Analytics data
-          average_time_seconds: a.average_time_seconds,
-          hr_score: a.hr_score,
-          technical_score: a.technical_score,
-          coding_score: a.coding_score,
-        };
-        });
-        setApiAssessments(mapped);
-      } else {
-        setApiAssessments([]);
-      }
+      await loadAssessmentsPage(assessmentCurrentPage);
       // Also reload stats and quota
       await Promise.all([reloadStats(), reloadQuota()]);
     } catch (error) {
       console.log('[TalentFlow] Failed to reload assessments:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -614,6 +676,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Delete assessment via API
   const handleDeleteAssessment = async (assessmentId: string) => {
+    // Find the assessment to check if candidates have started
+    const assessment = assessments.find((a: any) => a.id === assessmentId);
+    if (assessment && (assessment.completed_count > 0 || assessment.invitations_count > 0)) {
+      toast.error('Cannot delete — candidates have already been invited to this assessment');
+      setOpenMenuId(null);
+      return;
+    }
+
     if (!await dialog.confirm({ title: 'Delete Assessment', message: 'Delete this assessment permanently? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) return;
 
     try {
@@ -695,44 +765,59 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const handleTrackInvites = async (assessment: any) => {
     setSelectedAssessmentForTracking(assessment);
     setShowTrackInvitesModal(true);
-    setIsLoadingInvitations(true);
-
-    try {
-      const response = await assessmentService.listInvitations(assessment.id, { page_size: 100 });
-      const invitations = response.items || [];
-      setTrackingInvitations(invitations);
-
-      // Calculate stats
-      const stats = {
-        total: invitations.length,
-        sent: invitations.filter((inv: any) => inv.status === 'sent' || inv.status === 'pending' || inv.status === 'opened').length,
-        started: invitations.filter((inv: any) => inv.status === 'started' || (inv.started_at && inv.status !== 'completed')).length,
-        completed: invitations.filter((inv: any) => inv.status === 'completed' || inv.completed_at).length,
-        failed: invitations.filter((inv: any) => ['expired', 'failed', 'bounced', 'abandoned'].includes(inv.status)).length,
-      };
-      setInvitationStats(stats);
-    } catch (error) {
-      console.error('Failed to load invitations:', error);
-      setTrackingInvitations([]);
-    } finally {
-      setIsLoadingInvitations(false);
-    }
+    setTrackingCurrentPage(1);
   };
 
   const isValidInviteEmail = (email: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-  // Resend invitation to same candidate (uses resend endpoint, not invite — preserves same invitation record)
+  // Preview the new expiry the backend will produce. Mirrors backend logic:
+  // reuses the original invitation's configured duration (expires_at - created_at).
+  const computeResendExpiryPreview = (invitation: any): { dateLabel: string; durationLabel: string } | null => {
+    if (!invitation) return null;
+    const createdMs = invitation.created_at ? new Date(invitation.created_at).getTime() : NaN;
+    const expiresMs = invitation.expires_at ? new Date(invitation.expires_at).getTime() : NaN;
+    let durationMs = 24 * 60 * 60 * 1000; // default 1 day
+    if (Number.isFinite(createdMs) && Number.isFinite(expiresMs) && expiresMs > createdMs) {
+      durationMs = expiresMs - createdMs;
+    }
+    const newExpiry = new Date(Date.now() + durationMs);
+    const totalMinutes = Math.max(1, Math.round(durationMs / 60000));
+    let durationLabel: string;
+    if (totalMinutes >= 60 * 24) {
+      const days = Math.round(totalMinutes / (60 * 24));
+      durationLabel = days === 1 ? '1 day' : `${days} days`;
+    } else if (totalMinutes >= 60) {
+      const hours = Math.round(totalMinutes / 60);
+      durationLabel = hours === 1 ? '1 hour' : `${hours} hours`;
+    } else {
+      durationLabel = `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
+    }
+    return { dateLabel: formatIST(newExpiry.toISOString()), durationLabel };
+  };
+
+  // Revoke current link and resend with a freshly generated link.
+  // The backend regenerates invitation_token and refreshes expires_at using
+  // the original configured duration. Confirmation dialog handles user intent.
   const handleResendInvitation = async (invitation: any) => {
+    setIsResending(true);
     try {
       await api.post(
         `/assessments/${selectedAssessmentForTracking.id}/invitations/${invitation.id}/resend`
       );
-      toast.success('Invitation resent successfully!');
-      handleTrackInvites(selectedAssessmentForTracking);
-    } catch (error) {
+      toast.success('New invitation link generated and emailed!');
+      await loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage);
+    } catch (error: any) {
       console.error('Failed to resend invitation:', error);
-      toast.error('Failed to resend invitation. Please try again.');
+      const detail = error?.response?.data?.detail;
+      const msg =
+        (typeof detail === 'object' && detail?.message) ||
+        (typeof detail === 'string' && detail) ||
+        'Failed to resend invitation. Please try again.';
+      toast.error(msg);
+    } finally {
+      setIsResending(false);
+      setResendTargetInvitation(null);
     }
   };
 
@@ -748,7 +833,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setEditingEmailId(null);
       setNewEmailValue('');
       toast.success('Email updated and invitation resent!');
-      handleTrackInvites(selectedAssessmentForTracking);
+      await loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage);
     } catch (error: any) {
       console.error('Failed to update email:', error);
       const msg =
@@ -791,6 +876,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         assessmentTitle={selectedAssessmentForResults.title}
         jdTitle={selectedAssessmentForResults.job?.title}
         canDownloadPDF={canDownloadAssessmentPDF}
+        canBatchDownload={canBatchDownloadAssessmentPDF}
       />
     );
   }
@@ -865,15 +951,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             onSave={async (updatedAssessment) => {
               await reloadAssessments();
               // Update the selected assessment for details view with fresh data
-              const freshAssessments = await assessmentService.list({ page_size: 100 });
-              const updated = freshAssessments.items.find((a: any) => a.id === selectedAssessmentForDetails.id);
-              if (updated) {
-                const rawStatus = (updated.status || 'draft').toLowerCase();
-                setSelectedAssessmentForDetails({
-                  ...updated,
-                  status: rawStatus === 'published' ? 'Active' : rawStatus === 'closed' ? 'Completed' : rawStatus === 'archived' ? 'Archived' : 'Draft',
-                });
-              }
+              const updated = await assessmentService.get(selectedAssessmentForDetails.id);
+              setSelectedAssessmentForDetails(mapAssessmentFromApi(updated, 0));
             }}
           />
         )}
@@ -889,6 +968,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (activeTab === 'archived') return assessment.status === 'Archived';
     return true;
   });
+  const assessmentPaginationVisible = !['audit', 'consent', 'settings'].includes(activeTab) && assessmentTotalItems > 5;
+  const assessmentStartIndex = assessmentTotalItems === 0 ? 0 : (assessmentCurrentPage - 1) * assessmentItemsPerPage + 1;
+  const assessmentEndIndex = Math.min(assessmentCurrentPage * assessmentItemsPerPage, assessmentTotalItems);
+  const trackingPaginationVisible = trackingTotalPages > 1;
+  const trackingStartIndex = trackingTotalItems === 0 ? 0 : (trackingCurrentPage - 1) * INVITATIONS_PAGE_SIZE + 1;
+  const trackingEndIndex = Math.min(trackingCurrentPage * INVITATIONS_PAGE_SIZE, trackingTotalItems);
 
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
@@ -998,21 +1083,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {/* Low Quota Warning Banner */}
         {!isUnlimited && availableUnits !== null && availableUnits > 0 && availableUnits <= 3 && (
-          <div className="mb-4 sm:mb-6 bg-gray-100 border-2 border-gray-300 rounded-lg p-3 sm:p-4">
+          <div className="mb-4 sm:mb-6 bg-amber-50 border border-amber-300 rounded-lg p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="w-5 h-5 text-gray-700" />
+              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-orange-900 mb-1">Low Assessment Quota</h3>
-                <p className="text-sm text-orange-800">
-                  You have only <span className="font-bold">{availableUnits}</span> assessment unit{availableUnits !== 1 ? 's' : ''} remaining out of {totalUnits}.
+                <h3 className="text-sm font-semibold text-amber-800 mb-0.5">Low Assessment Quota</h3>
+                <p className="text-sm text-amber-700">
+                  You have only <span className="font-semibold">{availableUnits}</span> assessment unit{availableUnits !== 1 ? 's' : ''} remaining out of {totalUnits}.
                   {' '}Consider purchasing add-on credits to avoid interruptions.
                 </p>
               </div>
               <button
                 onClick={() => window.location.href = '/subscription/usage-quotas'}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 transition-colors"
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors flex-shrink-0"
               >
                 Add Credits
               </button>
@@ -1022,20 +1107,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {/* Quota Exhausted Banner — only show when units were actually consumed */}
         {!isUnlimited && availableUnits !== null && availableUnits <= 0 && stats.units_consumed > 0 && (
-          <div className="mb-4 sm:mb-6 bg-red-50 border-2 border-red-300 rounded-lg p-3 sm:p-4">
+          <div className="mb-4 sm:mb-6 bg-red-50 border border-red-300 rounded-lg p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-red-200 flex items-center justify-center flex-shrink-0">
-                <Lock className="w-5 h-5 text-red-700" />
+              <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Lock className="w-4 h-4 text-red-600" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-red-900 mb-1">Assessment Quota Exhausted</h3>
-                <p className="text-sm text-red-800">
+                <h3 className="text-sm font-semibold text-red-800 mb-0.5">Assessment Quota Exhausted</h3>
+                <p className="text-sm text-red-700">
                   You have used all {totalUnits} assessment units in your current plan. Purchase add-on credits or upgrade your plan to create more assessments.
                 </p>
               </div>
               <button
                 onClick={() => window.location.href = '/subscription/usage-quotas'}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-2 flex-shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 Add Credits
@@ -1177,7 +1262,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 >
                   Draft
                 </button>
-                <button
+                {/* <button
                   onClick={() => setActiveTab('completed')}
                   className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'completed'
@@ -1186,7 +1271,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }`}
                 >
                   Completed
-                </button>
+                </button> */}
                 {isTenantAdmin && (
                   <>
                     <button
@@ -1215,7 +1300,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </button>
                   </>
                 )}
-                <button
+                {/* <button
                   onClick={() => setActiveTab('archived')}
                   className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
                     activeTab === 'archived'
@@ -1224,7 +1309,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }`}
                 >
                   Archived
-                </button>
+                </button> */}
                 <button
                   onClick={() => setActiveTab('settings')}
                   className={`py-3 sm:py-4 text-xs sm:text-sm border-b-2 transition-colors flex items-center gap-1.5 whitespace-nowrap ${
@@ -1272,7 +1357,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <AssessmentAuditTrail />
             ) : activeTab === 'consent' ? (
               /* Consent Logs Tab */
-              <ConsentLogs />
+              <ConsentLogs defaultFeature="ASSESSMENT" />
             ) : activeTab === 'settings' ? (
               /* Settings Tab with Sub-tabs */
               <div className="space-y-4 sm:space-y-6">
@@ -1679,12 +1764,46 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
                     </div>
 
+                    {/* Masking */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                      <h3 className="text-sm font-medium text-gray-900 mb-4">Masking</h3>
+                      <div className="flex items-start justify-between p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center flex-shrink-0 border border-gray-200">
+                            <Mail className="w-4 h-4 text-gray-600" />
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">Email Masking in PDF</div>
+                            <div className="text-xs text-gray-500">
+                              When enabled, candidate emails are masked (e.g. j******e@example.com) in downloaded Assessment PDFs.
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-center gap-1">
+                          <button
+                            onClick={() => updateProctoringSettings({ email_masking_enabled: !proctoringSettings.email_masking_enabled })}
+                            disabled={isSavingProctoring}
+                            className={`relative w-14 h-7 rounded-full transition-colors ${
+                              proctoringSettings.email_masking_enabled ? 'bg-green-500' : 'bg-gray-300'
+                            } ${isSavingProctoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
+                              proctoringSettings.email_masking_enabled ? 'translate-x-7' : 'translate-x-0.5'
+                            }`} />
+                          </button>
+                          <span className="text-xs text-gray-500 font-medium">
+                            {proctoringSettings.email_masking_enabled ? 'ON' : 'OFF'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Threshold Settings */}
-                    <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-6">
-                      <h3 className="text-xs sm:text-sm font-medium text-gray-900 mb-3 sm:mb-4">Threshold Settings</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
+                    <div className="bg-white border border-gray-200 rounded-lg p-4 sm:p-6">
+                      <h3 className="text-sm font-medium text-gray-900 mb-4">Threshold Settings</h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
                         <div>
-                          <label className="block text-[10px] sm:text-xs text-gray-600 mb-1.5 sm:mb-2">Max Tab Switches Before Warning</label>
+                          <label className="block text-xs text-gray-600 mb-2">Max Tab Switches Before Warning</label>
                           <input
                             type="number"
                             value={proctoringSettings.max_tab_switches}
@@ -1728,11 +1847,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <h3 className="text-xs sm:text-sm font-medium text-gray-900">Recent Proctoring Events</h3>
                         <span className="text-[10px] sm:text-xs text-gray-500">{proctoringEventsTotal} total</span>
                       </div>
-                      {proctoringEvents.length === 0 ? (
-                        <div className="text-center py-6 sm:py-8">
-                          <Shield className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
-                          <p className="text-xs sm:text-sm text-gray-500">No proctoring events recorded yet</p>
-                          <p className="text-[10px] sm:text-xs text-gray-400 mt-1">Events appear when candidates take proctored assessments</p>
+                      {isLoadingProctoringEvents ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-800 rounded-full animate-spin mr-2" />
+                          <span className="text-sm text-gray-500">Loading events...</span>
+                        </div>
+                      ) : proctoringEvents.length === 0 ? (
+                        <div className="text-center py-8">
+                          <Shield className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                          <p className="text-sm text-gray-500">No proctoring events recorded yet</p>
+                          <p className="text-xs text-gray-400 mt-1">Events will appear here when candidates take proctored assessments</p>
                         </div>
                       ) : (
                         <div className="space-y-2 sm:space-y-3">
@@ -1835,30 +1959,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     className="p-4 sm:p-5 border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
                   >
                     {/* Grid Card Header */}
-                    <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-start mb-3">
                       <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0">
                         <FileText className="w-5 h-5 text-gray-700" />
                       </div>
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-xs ${
-                          assessment.status === 'Active'
-                            ? 'bg-gray-700 text-white'
-                            : assessment.status === 'Draft'
-                            ? 'bg-gray-200 text-gray-600'
-                            : assessment.status === 'Archived'
-                            ? 'bg-gray-400 text-white'
-                            : assessment.status === 'Completed'
-                            ? 'bg-gray-600 text-white'
-                            : 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {assessment.status}
-                      </span>
                     </div>
 
                     {/* Grid Card Title */}
                     <div className="mb-3">
-                      {/* Line 1: AS-022 SQL Developer - Assessment V1 */}
+                      {/* Line 1: AS-022 SQL Developer - Assessment V1 [AI] [Active] */}
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                         <span className="inline-flex items-center px-2.5 py-1 bg-gray-800 text-white rounded text-xs font-semibold">
                           {assessment.short_id}
@@ -1873,6 +1982,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             AI
                           </span>
                         )}
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                            assessment.status === 'Active'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : assessment.status === 'Draft'
+                              ? 'bg-amber-100 text-amber-700'
+                              : assessment.status === 'Archived'
+                              ? 'bg-orange-100 text-orange-700'
+                              : assessment.status === 'Completed'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {assessment.status}
+                        </span>
                       </div>
 
                       {/* Line 2: JD-025 SQL Developer <jdversion> */}
@@ -1997,6 +2121,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                             Preview
                           </button>
+                          {canCreateAssessment && (
                           <button
                             onClick={async () => {
                               if (assessment.status === 'Draft') {
@@ -2043,8 +2168,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <Link2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                             Copy Link
                           </button>
+                          )}
                           <div className="border-t border-gray-100 my-1"></div>
-                          {assessment.status !== 'Completed' && (
+                          {canUpdateAssessment && assessment.status !== 'Completed' && (
                             <button
                               onClick={() => handleCompleteAssessment(assessment.id)}
                               className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 sm:gap-2.5"
@@ -2072,27 +2198,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                             Archive
                           </button>
-                          {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (
-                            <button
-                              onClick={() => {
-                                if (!canDeleteAssessment) {
-                                  toast.error('You do not have permission to delete assessments');
-                                  return;
-                                }
-                                handleDeleteAssessment(assessment.id);
-                              }}
-                              disabled={!canDeleteAssessment}
-                              title={!canDeleteAssessment ? 'You do not have permission to delete assessments' : ''}
-                              className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
-                                !canDeleteAssessment
-                                  ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                  : 'text-red-600 hover:bg-red-50'
-                              }`}
-                            >
-                              <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                              Delete
-                            </button>
-                          )}
+                          {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
+                            const hasCandidates = assessment.invitations_count > 0;
+                            const isDisabled = !canDeleteAssessment || hasCandidates;
+                            const disabledReason = !canDeleteAssessment
+                              ? 'You do not have permission to delete assessments'
+                              : hasCandidates
+                                ? 'Cannot delete — candidates have already been invited to this assessment'
+                                : '';
+                            return (
+                              <button
+                                onClick={() => {
+                                  if (isDisabled) {
+                                    toast.error(disabledReason);
+                                    return;
+                                  }
+                                  handleDeleteAssessment(assessment.id);
+                                }}
+                                disabled={isDisabled}
+                                title={disabledReason}
+                                className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
+                                  isDisabled
+                                    ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                    : 'text-red-600 hover:bg-red-50'
+                                }`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                Delete
+                              </button>
+                            );
+                          })()}
                         </div>
                       </>
                     )}
@@ -2141,6 +2276,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 AI
                               </span>
                             )}
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                                assessment.status === 'Active'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : assessment.status === 'Draft'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : assessment.status === 'Archived'
+                                  ? 'bg-orange-100 text-orange-700'
+                                  : assessment.status === 'Completed'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : assessment.status === 'Paused'
+                                  ? 'bg-gray-200 text-gray-600'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}
+                            >
+                              {assessment.status}
+                            </span>
                           </div>
 
                           {/* Line 2: JD-025 SQL Developer <jdversion> */}
@@ -2233,27 +2385,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </button>
                         </div>
 
-                        {/* Status Badge + Three Dots - always grouped together */}
+                        {/* Three Dots Menu group */}
                         <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
-                          {/* Status Badge */}
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs whitespace-nowrap ${
-                              assessment.status === 'Active'
-                                ? 'bg-gray-700 text-white'
-                                : assessment.status === 'Draft'
-                                ? 'bg-gray-200 text-gray-600'
-                                : assessment.status === 'Archived'
-                                ? 'bg-gray-400 text-white'
-                                : assessment.status === 'Completed'
-                                ? 'bg-gray-600 text-white'
-                                : assessment.status === 'Paused'
-                                ? 'bg-gray-300 text-gray-700'
-                                : 'bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {assessment.status}
-                          </span>
-
                           {/* Three Dots Menu */}
                           <div className="relative">
                             <button
@@ -2308,6 +2441,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                   Preview
                                 </button>
+                                {canCreateAssessment && (
                                 <button
                                   onClick={async () => {
                                     if (assessment.status === 'Draft') {
@@ -2354,6 +2488,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <Link2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                   Copy Link
                                 </button>
+                                )}
+                                {canCreateAssessment && (
                                 <button
                                   onClick={async () => {
                                     try {
@@ -2373,8 +2509,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-600 flex-shrink-0" />
                                   Duplicate
                                 </button>
+                                )}
                                 <div className="border-t border-gray-100 my-1"></div>
-                                {assessment.status !== 'Active' && (
+                                {canUpdateAssessment && assessment.status !== 'Active' && (
                                   <button
                                     onClick={() => handleActivateAssessment(assessment.id)}
                                     className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 sm:gap-2.5"
@@ -2383,7 +2520,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     Activate
                                   </button>
                                 )}
-                                {assessment.status === 'Active' && (
+                                {canUpdateAssessment && assessment.status === 'Active' && (
                                   <button
                                     onClick={() => handleCompleteAssessment(assessment.id)}
                                     className="w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 sm:gap-2.5"
@@ -2412,27 +2549,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Archive
                                 </button>
                                 <div className="border-t border-gray-100 my-1"></div>
-                                {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (
-                                  <button
-                                    onClick={() => {
-                                      if (!canDeleteAssessment) {
-                                        toast.error('You do not have permission to delete assessments');
-                                        return;
-                                      }
-                                      handleDeleteAssessment(assessment.id);
-                                    }}
-                                    disabled={!canDeleteAssessment}
-                                    title={!canDeleteAssessment ? 'You do not have permission to delete assessments' : ''}
-                                    className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
-                                      !canDeleteAssessment
-                                        ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                        : 'text-red-600 hover:bg-red-50'
-                                    }`}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                    Delete
-                                  </button>
-                                )}
+                                {(hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
+                                  const hasCandidates = assessment.invitations_count > 0;
+                                  const isDisabled = !canDeleteAssessment || hasCandidates;
+                                  const disabledReason = !canDeleteAssessment
+                                    ? 'You do not have permission to delete assessments'
+                                    : hasCandidates
+                                      ? 'Cannot delete — candidates have already been invited to this assessment'
+                                      : '';
+                                  return (
+                                    <button
+                                      onClick={() => {
+                                        if (isDisabled) {
+                                          toast.error(disabledReason);
+                                          return;
+                                        }
+                                        handleDeleteAssessment(assessment.id);
+                                      }}
+                                      disabled={isDisabled}
+                                      title={disabledReason}
+                                      className={`w-full px-2.5 sm:px-3 py-2 text-left text-xs sm:text-sm flex items-center gap-2 sm:gap-2.5 ${
+                                        isDisabled
+                                          ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                          : 'text-red-600 hover:bg-red-50'
+                                      }`}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                      Delete
+                                    </button>
+                                  );
+                                })()}
                               </div>
                             </>
                           )}
@@ -2443,6 +2589,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                 ))}
               </div>
+            )}
+
+            {assessmentPaginationVisible && (
+              <ListPagination
+                currentPage={assessmentCurrentPage}
+                itemsPerPage={assessmentItemsPerPage}
+                totalItems={assessmentTotalItems}
+                onPageChange={setAssessmentCurrentPage}
+                onItemsPerPageChange={setAssessmentItemsPerPage}
+                itemLabel="assessments"
+              />
             )}
           </div>
         </div>
@@ -2508,14 +2665,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <p className="text-[10px] sm:text-sm text-gray-500 mt-0.5 truncate">{selectedAssessmentForTracking.title}</p>
               </div>
               <button
-                onClick={() => {
-                  setShowTrackInvitesModal(false);
-                  setSelectedAssessmentForTracking(null);
-                  setTrackingInvitations([]);
-                  setEditingEmailId(null);
-                  setNewEmailValue('');
-                }}
-                className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 ml-2"
+                onClick={closeTrackInvitesModal}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
@@ -2583,162 +2734,70 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <p className="text-xs sm:text-sm">No invitations found for this assessment.</p>
                 </div>
               ) : (
-                <>
-                  {/* Mobile Card View */}
-                  <div className="sm:hidden space-y-2">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Progress</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
                     {trackingInvitations.map((invitation: any) => {
                       const getStatusBadge = (inv: any) => {
-                        const base = "px-1.5 py-0.5 rounded-full text-[10px] flex items-center gap-1 whitespace-nowrap flex-shrink-0";
-                        if (inv.status === 'completed') return <span className={`${base} bg-green-100 text-green-700`}><CheckCircle className="w-2.5 h-2.5" /> Done</span>;
-                        if (inv.status === 'started' || (inv.started_at && inv.status !== 'completed')) return <span className={`${base} bg-yellow-100 text-yellow-700`}><Play className="w-2.5 h-2.5" /> Started</span>;
-                        if (inv.status === 'opened') return <span className={`${base} bg-purple-100 text-purple-700`}><Eye className="w-2.5 h-2.5" /> Opened</span>;
-                        if (inv.status === 'sent' || inv.sent_at) return <span className={`${base} bg-blue-100 text-blue-700`}><Mail className="w-2.5 h-2.5" /> Sent</span>;
-                        if (inv.status === 'expired') return <span className={`${base} bg-orange-100 text-orange-700`}><Clock className="w-2.5 h-2.5" /> Expired</span>;
-                        if (inv.status === 'failed') return <span className={`${base} bg-red-100 text-red-700`}><X className="w-2.5 h-2.5" /> Failed</span>;
-                        if (inv.status === 'abandoned') return <span className={`${base} bg-gray-100 text-gray-700`}><X className="w-2.5 h-2.5" /> Left</span>;
-                        return <span className={`${base} bg-gray-100 text-gray-600`}><Clock className="w-2.5 h-2.5" /> Pending</span>;
-                      };
-
-                      const formatDate = (dateStr: string | null) => {
-                        if (!dateStr) return null;
-                        return formatDateTimeIST(dateStr, { includeTime: true });
-                      };
-
-                      const initials = invitation.candidate_name
-                        ?.split(' ')
-                        .map((n: string) => n[0])
-                        .join('')
-                        .toUpperCase()
-                        .slice(0, 2) || '??';
-
-                      return (
-                        <div key={invitation.id} className="bg-white rounded-lg border border-gray-200 p-2.5">
-                          {/* Candidate + Status */}
-                          <div className="flex items-center gap-2 min-w-0 mb-1.5">
-                            <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 font-medium text-[10px] flex-shrink-0">
-                              {initials}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium text-gray-900 text-xs truncate">{invitation.candidate_name}</p>
-                              <p className="text-[10px] text-gray-500 truncate">{invitation.candidate_email}</p>
-                            </div>
-                            {getStatusBadge(invitation)}
-                          </div>
-
-                          {/* CID */}
-                          <div className="mb-1.5">
-                            <span className="text-[9px] font-mono font-medium text-purple-700 bg-purple-50 px-1 py-0.5 rounded">
-                              {invitation.candidate_display_id || '-'}
+                        const s = inv.status;
+                        if (s === 'completed' || inv.completed_at) {
+                          const autoCompleted = inv.termination_code === 'TENANT_SESSION_TIMEOUT';
+                          return (
+                            <span
+                              className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs flex items-center gap-1"
+                              title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined}
+                            >
+                              <CheckCircle className="w-3 h-3" />
+                              Completed
+                              {autoCompleted && <span className="text-green-600/80">(Auto)</span>}
                             </span>
-                          </div>
+                          );
+                        }
+                        if (s === 'failed') {
+                          return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Failed</span>;
+                        }
+                        if (s === 'bounced' || inv.bounced_at) {
+                          return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Bounced</span>;
+                        }
+                        if (s === 'expired') {
+                          return <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Expired</span>;
+                        }
+                        if (s === 'abandoned') {
+                          return <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Abandoned</span>;
+                        }
+                        if (s === 'started' || inv.started_at) {
+                          return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs flex items-center gap-1"><Play className="w-3 h-3" /> Started</span>;
+                        }
+                        if (s === 'opened' || inv.opened_at) {
+                          return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Link Opened</span>;
+                        }
+                        if (s === 'sent' || inv.sent_at) {
+                          return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
+                        }
+                        return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
+                      };
 
-                          {/* Timeline */}
-                          <div className="text-[10px] text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5 mb-1.5">
-                            {invitation.sent_at && (
-                              <div className="flex items-center gap-1">
-                                <Mail className="w-2.5 h-2.5 text-gray-500 flex-shrink-0" />
-                                <span>Sent: {formatDate(invitation.sent_at)}</span>
-                              </div>
-                            )}
-                            {invitation.started_at && (
-                              <div className="flex items-center gap-1">
-                                <Play className="w-2.5 h-2.5 text-gray-500 flex-shrink-0" />
-                                <span>Started: {formatDate(invitation.started_at)}</span>
-                              </div>
-                            )}
-                            {invitation.completed_at && (
-                              <div className="flex items-center gap-1">
-                                <CheckCircle className="w-2.5 h-2.5 text-gray-500 flex-shrink-0" />
-                                <span>Done: {formatDate(invitation.completed_at)}</span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Progress + Actions */}
-                          <div className="pt-1.5 border-t border-gray-100">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                {invitation.status === 'completed' ? (
-                                  <div className="flex items-center gap-1 text-[10px]">
-                                    <span className="text-gray-600">Score:</span>
-                                    <span className={`font-medium ${invitation.passed ? 'text-gray-800' : 'text-red-600'}`}>
-                                      {invitation.overall_score != null ? `${invitation.overall_score.toFixed(1)}%` : '100%'}
-                                    </span>
-                                    {invitation.passed !== null && (
-                                      <span className={`text-[9px] px-1 py-0.5 rounded ${invitation.passed ? 'bg-gray-700 text-white' : 'bg-red-100 text-red-700'}`}>
-                                        {invitation.passed ? 'Pass' : 'Fail'}
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : invitation.started_at ? (
-                                  <div className="flex items-center gap-1 text-[10px]">
-                                    <span className="text-gray-600">Progress:</span>
-                                    <span className="font-medium text-gray-700">
-                                      {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-[10px] text-gray-400">—</span>
-                                )}
-                              </div>
-                              <div>
-                                {invitation.status === 'completed' ? (
-                                  <button
-                                    onClick={() => router.push(`/recruitment/assessments/${selectedAssessmentForTracking.id}/results`)}
-                                    className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                                  >
-                                    <Eye className="w-3 h-3" />
-                                    View
-                                  </button>
-                                ) : invitation.status === 'failed' ? (
-                                  <button
-                                    onClick={() => handleResendInvitation(invitation)}
-                                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-600 text-white hover:bg-red-700 rounded transition-colors"
-                                  >
-                                    <Mail className="w-3 h-3" />
-                                    Resend
-                                  </button>
-                                ) : null}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Desktop Table View */}
-                  <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full min-w-[700px]">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
-                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
-                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
-                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Progress</th>
-                          <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {trackingInvitations.map((invitation: any) => {
-                          const getStatusBadge = (inv: any) => {
-                            const base = "px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs flex items-center gap-1 whitespace-nowrap";
-                            if (inv.status === 'completed') return <span className={`${base} bg-green-100 text-green-700`}><CheckCircle className="w-3 h-3" /> Done</span>;
-                            if (inv.status === 'started' || (inv.started_at && inv.status !== 'completed')) return <span className={`${base} bg-yellow-100 text-yellow-700`}><Play className="w-3 h-3" /> Started</span>;
-                            if (inv.status === 'opened') return <span className={`${base} bg-purple-100 text-purple-700`}><Eye className="w-3 h-3" /> Opened</span>;
-                            if (inv.status === 'sent' || inv.sent_at) return <span className={`${base} bg-blue-100 text-blue-700`}><Mail className="w-3 h-3" /> Sent</span>;
-                            if (inv.status === 'expired') return <span className={`${base} bg-orange-100 text-orange-700`}><Clock className="w-3 h-3" /> Expired</span>;
-                            if (inv.status === 'failed') return <span className={`${base} bg-red-100 text-red-700`}><X className="w-3 h-3" /> Failed</span>;
-                            if (inv.status === 'abandoned') return <span className={`${base} bg-gray-100 text-gray-700`}><X className="w-3 h-3" /> Left</span>;
-                            return <span className={`${base} bg-gray-100 text-gray-600`}><Clock className="w-3 h-3" /> Pending</span>;
-                          };
-
-                          const formatDate = (dateStr: string | null) => {
-                            if (!dateStr) return null;
-                            const formatted = formatDateTimeIST(dateStr, { includeTime: true });
-                            return `${formatted} IST`;
-                          };
+                      // Show an additional "Expired" badge alongside the base status
+                      // when the invitation has passed its expiry but hasn't reached a
+                      // terminal state. Covers the case where a candidate started the
+                      // system check but never started the assessment. Once a unit has
+                      // been consumed (candidate actually started the assessment),
+                      // expiry no longer applies.
+                      const isInvExpired = (inv: any): boolean => {
+                        const s = inv.status;
+                        if (['completed', 'failed', 'bounced', 'abandoned', 'expired'].includes(s) || inv.completed_at || inv.bounced_at) return false;
+                        if (inv.unit_consumed) return false;
+                        return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
+                      };
 
                           const initials = invitation.candidate_name
                             ?.split(' ')
@@ -2747,28 +2806,35 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             .toUpperCase()
                             .slice(0, 2) || '??';
 
-                          return (
-                            <tr key={invitation.id} className="hover:bg-gray-50">
-                              <td className="py-3 px-3 lg:px-4">
-                                <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
-                                  {invitation.candidate_display_id || '-'}
-                                </span>
-                              </td>
-                              <td className="py-3 px-3 lg:px-4">
-                                <div className="flex items-center gap-2 lg:gap-3">
-                                  <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 font-medium text-xs lg:text-sm flex-shrink-0">
-                                    {initials}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <p className="font-medium text-gray-900 text-sm truncate">{invitation.candidate_name}</p>
-                                    <p className="text-xs text-gray-500 truncate">{invitation.candidate_email}</p>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="py-3 px-3 lg:px-4">
-                                <div>
-                              {getStatusBadge(invitation)}
-                                  {invitation.status === 'failed' && (
+                      return (
+                        <tr key={invitation.id} className="hover:bg-gray-50">
+                          <td className="py-3 px-4">
+                            <span className="text-xs font-mono font-medium text-purple-700 bg-purple-50 px-2 py-1 rounded">
+                              {invitation.candidate_display_id || '-'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-700 font-medium text-sm">
+                                {initials}
+                              </div>
+                              <div>
+                                <p className="font-medium text-gray-900 text-sm">{invitation.candidate_name}</p>
+                                <p className="text-xs text-gray-500">{invitation.candidate_email}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {getStatusBadge(invitation)}
+                                {isInvExpired(invitation) && (
+                                  <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs flex items-center gap-1">
+                                    <Clock className="w-3 h-3" /> Expired
+                                  </span>
+                                )}
+                              </div>
+                              {invitation.status === 'failed' && (
                                 <p className="text-xs text-red-500 mt-1">Incorrect Email</p>
                               )}
                             </div>
@@ -2901,47 +2967,114 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   Change Email
                                 </button>
                               )
-                            ) : invitation.status === 'failed' ? (
-                                  <button
-                                    onClick={() => handleResendInvitation(invitation)}
-                                    className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors whitespace-nowrap"
-                                  >
-                                    <Mail className="w-3.5 h-3.5" />
-                                    Resend
-                                  </button>
-                                ) : null}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
+                            ) : (['sent', 'opened', 'failed'].includes(invitation.status) && !invitation.started_at && !invitation.completed_at) ? (
+                              <button
+                                onClick={() => setResendTargetInvitation(invitation)}
+                                title="Revoke old link and send a new invitation"
+                                className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                                  invitation.status === 'failed'
+                                    ? 'bg-red-600 text-white hover:bg-red-700'
+                                    : 'border border-gray-400 text-gray-700 hover:bg-gray-50'
+                                }`}
+                              >
+                                <Mail className="w-3.5 h-3.5" />
+                                Resend
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               )}
             </div>
 
             {/* Modal Footer */}
-            <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50 flex-shrink-0">
-              <p className="text-[10px] sm:text-sm text-gray-500">
-                <strong>{trackingInvitations.length}</strong> of <strong>{invitationStats.total}</strong> invites
+            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
+              <p className="text-sm text-gray-500">
+                Showing <strong>{trackingStartIndex}</strong> to <strong>{trackingEndIndex}</strong> of <strong>{trackingTotalItems}</strong> invites
               </p>
-              <button
-                onClick={() => {
-                  setShowTrackInvitesModal(false);
-                  setSelectedAssessmentForTracking(null);
-                  setTrackingInvitations([]);
-                  setEditingEmailId(null);
-                  setNewEmailValue('');
-                }}
-                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                {trackingPaginationVisible && (
+                  <>
+                    <button
+                      onClick={() => setTrackingCurrentPage(1)}
+                      disabled={trackingCurrentPage === 1}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
+                    >
+                      First
+                    </button>
+                    <button
+                      onClick={() => setTrackingCurrentPage(trackingCurrentPage - 1)}
+                      disabled={trackingCurrentPage === 1}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
+                    >
+                      Prev
+                    </button>
+                    <span className="px-2 text-sm text-gray-600">
+                      Page {trackingCurrentPage} of {trackingTotalPages}
+                    </span>
+                    <button
+                      onClick={() => setTrackingCurrentPage(trackingCurrentPage + 1)}
+                      disabled={trackingCurrentPage === trackingTotalPages}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
+                    >
+                      Next
+                    </button>
+                    <button
+                      onClick={() => setTrackingCurrentPage(trackingTotalPages)}
+                      disabled={trackingCurrentPage === trackingTotalPages}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white"
+                    >
+                      Last
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={closeTrackInvitesModal}
+                  className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Resend confirmation — regenerates token, invalidates old link */}
+      <ConfirmationDialog
+        isOpen={!!resendTargetInvitation}
+        onClose={() => { if (!isResending) setResendTargetInvitation(null); }}
+        onConfirm={() => resendTargetInvitation && handleResendInvitation(resendTargetInvitation)}
+        title="Invalidate old link & send new invitation?"
+        description={
+          resendTargetInvitation
+            ? `A fresh invitation will be emailed to ${resendTargetInvitation.candidate_email}. The previous link will stop working immediately.`
+            : ''
+        }
+        confirmText={isResending ? 'Sending…' : 'Yes, send new link'}
+        cancelText="Cancel"
+        variant="warning"
+      >
+        {resendTargetInvitation && (() => {
+          const preview = computeResendExpiryPreview(resendTargetInvitation);
+          if (!preview) return null;
+          return (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+              <p className="text-amber-900 font-medium mb-1">New link expiry</p>
+              <p className="text-amber-800">
+                Valid for <strong>{preview.durationLabel}</strong> from now — expires on{' '}
+                <strong>{preview.dateLabel}</strong>.
+              </p>
+              <p className="text-amber-700 text-xs mt-2">
+                Same duration as the original invitation.
+              </p>
+            </div>
+          );
+        })()}
+      </ConfirmationDialog>
     </div>
   );
 }

@@ -1,6 +1,7 @@
-import { ArrowLeft, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { assessmentService } from '@/lib/services';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -16,6 +17,10 @@ interface AssessmentDetailsViewProps {
   onShare?: () => void;
   onViewResults: () => void;
   onRefresh?: () => void;
+  currentIndex?: number;
+  totalCount?: number;
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
 interface Section {
@@ -38,10 +43,17 @@ export default function AssessmentDetailsView({
   onPreview,
   onShare,
   onViewResults,
-  onRefresh
+  onRefresh,
+  currentIndex,
+  totalCount,
+  onPrev,
+  onNext,
 }: AssessmentDetailsViewProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const { isTenantAdmin, user } = useAuth();
+  const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
+  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'info'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -197,13 +209,38 @@ export default function AssessmentDetailsView({
       {/* Sticky Header */}
       <div className="bg-gradient-to-r from-gray-800 to-gray-800 border-b-2 border-gray-600 sticky top-0 z-20 shadow-lg">
         <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-5">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-1.5 sm:gap-2 text-white/90 hover:text-white mb-3 sm:mb-4 transition-colors text-sm sm:text-base"
-          >
-            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            Back to Assessments
-          </button>
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1.5 sm:gap-2 text-white/90 hover:text-white transition-colors text-sm sm:text-base"
+            >
+              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              Back to Assessments
+            </button>
+            {totalCount != null && totalCount > 0 && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onPrev}
+                  disabled={!onPrev || currentIndex === 0}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </button>
+                <span className="text-sm text-white/80 font-medium px-1">
+                  {(currentIndex ?? 0) + 1} / {totalCount}
+                </span>
+                <button
+                  onClick={onNext}
+                  disabled={!onNext || currentIndex === totalCount - 1}
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-white/30 bg-white/10 text-white hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
           
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
             <div className="flex items-start gap-2 sm:gap-3 lg:gap-4 min-w-0">
@@ -271,7 +308,7 @@ export default function AssessmentDetailsView({
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-              {onShare && (
+              {onShare && canCreateAssessments && (
                 <button
                   onClick={onShare}
                   className="px-3 py-1.5 sm:px-4 sm:py-2 bg-white text-gray-800 hover:bg-gray-50 rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm"
@@ -382,9 +419,9 @@ export default function AssessmentDetailsView({
                         <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
                         <div className="flex flex-wrap gap-2">
                           {(assessment.hr_topics || []).length > 0 ? (
-                            (assessment.hr_topics || []).map((topic: string, idx: number) => (
+                            (assessment.hr_topics || []).map((topic: any, idx: number) => (
                               <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
-                                {topic}
+                                {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                               </span>
                             ))
                           ) : (
@@ -411,9 +448,9 @@ export default function AssessmentDetailsView({
                         <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
                         <div className="flex flex-wrap gap-2">
                           {(assessment.technical_topics || []).length > 0 ? (
-                            (assessment.technical_topics || []).map((topic: string, idx: number) => (
+                            (assessment.technical_topics || []).map((topic: any, idx: number) => (
                               <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
-                                {topic}
+                                {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                               </span>
                             ))
                           ) : (
@@ -458,9 +495,9 @@ export default function AssessmentDetailsView({
                         <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
                         <div className="flex flex-wrap gap-2">
                           {(assessment.coding_topics || []).length > 0 ? (
-                            (assessment.coding_topics || []).map((topic: string, idx: number) => (
+                            (assessment.coding_topics || []).map((topic: any, idx: number) => (
                               <span key={idx} className="px-2 py-1 bg-white border border-gray-300 text-gray-700 rounded text-xs">
-                                {topic}
+                                {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                               </span>
                             ))
                           ) : (
@@ -512,9 +549,9 @@ export default function AssessmentDetailsView({
                               <div className="mb-3">
                                 <div className="text-xs text-gray-600 mb-2 font-medium">Topics Covered</div>
                                 <div className="flex flex-wrap gap-2">
-                                  {section.topics.map((topic, i) => (
+                                  {section.topics.map((topic: any, i: number) => (
                                     <span key={i} className="px-2 py-1 bg-white border border-gray-200 text-gray-700 rounded text-xs">
-                                      {topic}
+                                      {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
                                     </span>
                                   ))}
                                 </div>
@@ -854,175 +891,7 @@ export default function AssessmentDetailsView({
                 </div>
               </div>
             </div>
-
-            {/* Quick Actions */}
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-              <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
-                <h3 className="text-sm sm:text-base font-medium text-gray-900">Quick Actions</h3>
-              </div>
-              <div className="p-3 sm:p-4 lg:p-6">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
-                <button
-                  onClick={async () => {
-                    if (assessment.status === 'Draft') {
-                      toast.warning('Please publish the assessment before sharing');
-                      return;
-                    }
-                    try {
-                      // Create a generic invitation to get a shareable link
-                      const invitation = await assessmentService.invite(assessment.id, {
-                        candidate_name: 'Anonymous Candidate',
-                        candidate_email: `anonymous-${Date.now()}@example.com`,
-                      });
-                      const shareableLink = `${window.location.origin}/assessment/take/${invitation.invitation_token}`;
-
-                      // Copy to clipboard with fallback
-                      try {
-                        await navigator.clipboard.writeText(shareableLink);
-                      } catch (clipboardError) {
-                        // Fallback for when document is not focused
-                        const textArea = document.createElement('textarea');
-                        textArea.value = shareableLink;
-                        textArea.style.position = 'fixed';
-                        textArea.style.left = '-9999px';
-                        document.body.appendChild(textArea);
-                        textArea.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(textArea);
-                      }
-                      toast.success('Shareable link copied! This link can be used by one candidate.');
-                    } catch (error) {
-                      console.error('Failed to generate link:', error);
-                      toast.error('Failed to generate shareable link. Please try Share via Email instead.');
-                    }
-                  }}
-                  disabled={assessment.status === 'Draft'}
-                  className={`p-4 border-2 rounded-lg transition-all text-left ${
-                    assessment.status === 'Draft'
-                      ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-60'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
-                >
-                  <Link2 className="w-6 h-6 text-gray-800 mb-2" />
-                  <div className="text-sm font-medium text-gray-900">Copy Link</div>
-                  <div className="text-xs text-gray-600 mt-1">
-                    {assessment.status === 'Draft' ? 'Publish first' : 'Share assessment URL'}
-                  </div>
-                </button>
-
-                <button
-                  onClick={async () => {
-                    setActionLoading('export');
-                    try {
-                      const blob = await assessmentService.exportResults(assessment.id, 'excel');
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `${assessment.title.replace(/[^a-z0-9]/gi, '_')}_results.xlsx`;
-                      document.body.appendChild(a);
-                      a.click();
-                      window.URL.revokeObjectURL(url);
-                      document.body.removeChild(a);
-                      toast.success('Results exported successfully!');
-                    } catch (error) {
-                      console.error('Export failed:', error);
-                      toast.error('Failed to export results. Make sure there are completed assessments to export.');
-                    } finally {
-                      setActionLoading(null);
-                    }
-                  }}
-                  disabled={actionLoading === 'export'}
-                  className={`p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left ${actionLoading === 'export' ? 'opacity-50 cursor-wait' : ''}`}
-                >
-                  <Download className={`w-6 h-6 text-gray-800 mb-2 ${actionLoading === 'export' ? 'animate-pulse' : ''}`} />
-                  <div className="text-sm font-medium text-gray-900">{actionLoading === 'export' ? 'Exporting...' : 'Export Results'}</div>
-                  <div className="text-xs text-gray-600 mt-1">Download as CSV</div>
-                </button>
-
-                <button
-                  onClick={async () => {
-                    setActionLoading('duplicate');
-                    try {
-                      const result = await assessmentService.clone(assessment.id, `${assessment.title} (Copy)`);
-                      toast.success(`Assessment duplicated successfully! New assessment: "${result.cloned_title}"`);
-                      onRefresh?.();
-                    } catch (error) {
-                      console.error('Duplicate failed:', error);
-                      toast.error('Failed to duplicate assessment. Please try again.');
-                    } finally {
-                      setActionLoading(null);
-                    }
-                  }}
-                  disabled={actionLoading === 'duplicate'}
-                  className={`p-4 border-2 border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-100 transition-all text-left ${actionLoading === 'duplicate' ? 'opacity-50 cursor-wait' : ''}`}
-                >
-                  <Copy className={`w-6 h-6 text-gray-700 mb-2 ${actionLoading === 'duplicate' ? 'animate-pulse' : ''}`} />
-                  <div className="text-sm font-medium text-gray-900">{actionLoading === 'duplicate' ? 'Duplicating...' : 'Duplicate'}</div>
-                  <div className="text-xs text-gray-600 mt-1">Create a copy</div>
-                </button>
-
-                {assessment.candidates > 0 && (
-                  <button
-                    onClick={onViewResults}
-                    className="p-4 border-2 border-gray-200 bg-gray-50 rounded-lg hover:border-gray-400 hover:bg-gray-100 transition-all text-left"
-                  >
-                    <BarChart className="w-6 h-6 text-gray-800 mb-2" />
-                    <div className="text-sm font-medium text-gray-900">View Results</div>
-                    <div className="text-xs text-gray-600 mt-1">{assessment.candidates} responses</div>
-                  </button>
-                )}
-
-                <button
-                  onClick={async () => {
-                    if (!await dialog.confirm({ title: 'Archive Assessment', message: 'Archive this assessment? It will be moved to the archived section.', variant: 'warning', confirmText: 'Archive' })) return;
-                    setActionLoading('archive');
-                    try {
-                      await assessmentService.update(assessment.id, { status: 'archived' });
-                      toast.success('Assessment archived successfully!');
-                      onRefresh?.();
-                      onBack();
-                    } catch (error) {
-                      console.error('Archive failed:', error);
-                      toast.error('Failed to archive assessment. Please try again.');
-                    } finally {
-                      setActionLoading(null);
-                    }
-                  }}
-                  disabled={actionLoading === 'archive' || assessment.status === 'Archived'}
-                  className={`p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left ${actionLoading === 'archive' || assessment.status === 'Archived' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <Archive className={`w-6 h-6 text-gray-600 mb-2 ${actionLoading === 'archive' ? 'animate-pulse' : ''}`} />
-                  <div className="text-sm font-medium text-gray-900">{actionLoading === 'archive' ? 'Archiving...' : 'Archive'}</div>
-                  <div className="text-xs text-gray-600 mt-1">{assessment.status === 'Archived' ? 'Already archived' : 'Move to archive'}</div>
-                </button>
-
-                <button
-                  onClick={async () => {
-                    if (!await dialog.confirm({ title: 'Delete Assessment', message: 'Delete this assessment permanently? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) return;
-                    setActionLoading('delete');
-                    try {
-                      await assessmentService.delete(assessment.id);
-                      toast.success('Assessment deleted successfully!');
-                      onRefresh?.();
-                      onBack();
-                    } catch (error) {
-                      console.error('Delete failed:', error);
-                      toast.error('Failed to delete assessment. Only draft assessments can be deleted.');
-                    } finally {
-                      setActionLoading(null);
-                    }
-                  }}
-                  disabled={actionLoading === 'delete'}
-                  className={`p-4 border-2 border-red-200 rounded-lg hover:border-red-300 hover:bg-red-50 transition-all text-left ${actionLoading === 'delete' ? 'opacity-50 cursor-wait' : ''}`}
-                >
-                  <Trash2 className={`w-6 h-6 text-red-600 mb-2 ${actionLoading === 'delete' ? 'animate-pulse' : ''}`} />
-                  <div className="text-sm font-medium text-gray-900">{actionLoading === 'delete' ? 'Deleting...' : 'Delete'}</div>
-                  <div className="text-xs text-gray-600 mt-1">Permanent removal</div>
-                </button>
-              </div>
-            </div>
           </div>
-        </div>
         )}
 
         {/* Activity Tab */}

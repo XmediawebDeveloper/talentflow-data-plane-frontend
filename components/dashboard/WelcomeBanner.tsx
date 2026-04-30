@@ -43,16 +43,25 @@ function getInitials(name: string): string {
 }
 
 function formatDateTime(date: Date): string {
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  }) + ' \u00B7 ' + date.toLocaleTimeString('en-US', {
+  }) + ' \u00B7 ' + date.toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
   });
+}
+
+function getISTHour(date: Date): number {
+  return parseInt(
+    new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false }).format(date),
+    10
+  );
 }
 
 function formatLastLogin(lastLogin: string): string {
@@ -81,7 +90,7 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
   }, []);
 
   const firstName = user?.name?.split(' ')[0] || 'there';
-  const greeting = getGreeting(now.getHours());
+  const greeting = getGreeting(getISTHour(now));
 
   return (
     <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-gray-800 via-gray-900 to-indigo-950 p-6 text-white shadow-lg">

@@ -4,6 +4,7 @@ import { Target, Briefcase, Filter, Search, FileText, User, MapPin, Mail, Phone,
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
+import ListPagination from './ListPagination';
 import ResumeSelectionModal from './ResumeSelectionModal';
 import ResumeScoringStatusPanel from './ResumeScoringStatusPanel';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
@@ -14,7 +15,7 @@ import { toast } from 'sonner';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { formatIST } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -201,6 +202,7 @@ export default function ResumeScoringPage({
   // ✅ RBAC: Get user permissions (bypass for tenant admin)
   const { user, isTenantAdmin } = useAuth();
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
+  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
 
   // Use persistent scoring progress context
   const {
@@ -208,7 +210,9 @@ export default function ResumeScoringPage({
     updateItemStatus,
     getJobProgress,
     hasActiveScoring,
-    setOnRestorePanel
+    setOnRestorePanel,
+    setMainPanelOpen,
+    setMinimized: setContextMinimized,
   } = useScoringProgress();
 
   // Use props directly - data is fetched by the page route
@@ -263,7 +267,14 @@ export default function ResumeScoringPage({
   const [progressData, setProgressData] = useState<ScoringProgressItem[]>([]);
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
+  const [isBulkProgressMinimized, setIsBulkProgressMinimized] = useState(false);
 
+  // Hide global floating widget when BulkScoringProgressModal is open and NOT minimized
+  // When minimized, setMainPanelOpen(false) lets GlobalScoringProgressIndicator show
+  useEffect(() => {
+    setMainPanelOpen(showProgressModal && !isBulkProgressMinimized);
+    return () => { setMainPanelOpen(false); };
+  }, [showProgressModal, isBulkProgressMinimized, setMainPanelOpen]);
 
   // Helper: Convert job progress items to ScoringProgressItem[] for BulkScoringProgressModal
   const showBulkProgressFromJob = (jobId: string, jobTitle: string, items: any[]) => {
@@ -312,6 +323,12 @@ export default function ResumeScoringPage({
 
   // History view mode and selection
   const [historyViewMode, setHistoryViewMode] = useState<'grid' | 'list'>('list');
+  const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
+  const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
+
+  useEffect(() => {
+    setHistoryCurrentPage(1);
+  }, [historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo, historyLocation, historyJobType, historyIndustry]);
   const [selectedHistoryItems, setSelectedHistoryItems] = useState<Set<string>>(new Set());
 
   // Bulk download state for scored resumes
@@ -1101,15 +1118,29 @@ export default function ResumeScoringPage({
 
   // View Candidate Scoring Detail Page
   if (viewMode === 'candidateView' && selectedCandidateForView && selectedHistoryItem) {
+    const _scoredList = selectedHistoryItem.scoredResumes ?? [];
+    const _currentIdx = _scoredList.findIndex((r: any) => (r.id ?? r.resumeId) === (selectedCandidateForView.id ?? selectedCandidateForView.resumeId));
+
+    const _goToCandidate = (candidate: any) => {
+      setSelectedCandidateForView(candidate);
+      router.push(
+        `/recruitment/resume-scoring?jd_id=${selectedHistoryItem.jobId}&score_id=${candidate.id ?? candidate.resumeId}`,
+        { scroll: false }
+      );
+    };
+
     return (
       <CandidateScoringDetailPage
         resume={selectedCandidateForView}
         jobTitle={selectedHistoryItem.jobTitle}
         jobId={selectedHistoryItem.jobId}
+        currentIndex={_currentIdx >= 0 ? _currentIdx : undefined}
+        totalCount={_scoredList.length}
+        onPrev={_currentIdx > 0 ? () => _goToCandidate(_scoredList[_currentIdx - 1]) : undefined}
+        onNext={_currentIdx < _scoredList.length - 1 ? () => _goToCandidate(_scoredList[_currentIdx + 1]) : undefined}
         onBack={() => {
           setSelectedCandidateForView(null);
           setViewMode('details');
-          // Update URL to remove score_id, keep jd_id
           router.push(`/recruitment/resume-scoring?jd_id=${selectedHistoryItem.jobId}`, { scroll: false });
         }}
         onMinimize={() => {
@@ -1203,25 +1234,15 @@ export default function ResumeScoringPage({
                 </div>
               </div>
 
-              <button
-                onClick={() => {
-                  if (!canRunScoring) {
-                    toast.error('You do not have permission to run scoring operations');
-                    return;
-                  }
-                  setViewMode('new');
-                }}
-                disabled={!canRunScoring}
-                className={`w-full sm:w-auto px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 shadow-sm ${
-                  canRunScoring
-                    ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                }`}
-                title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
-              >
-                <Target className="w-4 h-4" />
-                Score New Resumes
-              </button>
+              {canRunScoring && (
+                <button
+                  onClick={() => setViewMode('new')}
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 shadow-sm bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer"
+                >
+                  <Target className="w-4 h-4" />
+                  Score New Resumes
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1250,7 +1271,7 @@ export default function ResumeScoringPage({
                 </span>
               </div>
 
-              {selectedScoredResumes.length > 0 && (
+              {selectedScoredResumes.length > 0 && canExport && (
                 <button
                   onClick={handleBulkDownloadScorecards}
                   disabled={isBulkDownloading}
@@ -1304,6 +1325,15 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => setShowProgressModal(false)}
             showJobTitleColumn={showJobTitleColumn}
+            minimized={isBulkProgressMinimized}
+            onMinimize={() => {
+              setIsBulkProgressMinimized(true);
+              setContextMinimized(true);
+              setOnRestorePanel(() => () => {
+                setIsBulkProgressMinimized(false);
+                setContextMinimized(false);
+              });
+            }}
             onRetryFailed={async (item) => {
               try {
                 // Update item status to "Scoring in progress"
@@ -1537,29 +1567,21 @@ export default function ResumeScoringPage({
               <span>{isGlobalView ? 'View by Job' : 'View All Candidates'}</span>
             </button>
 
-            {/* Score Resumes Button */}
-            <button
-              onClick={() => {
-                if (!canRunScoring) {
-                  toast.error('You do not have permission to run scoring operations');
-                  return;
-                }
-                setViewMode('new');
-                setSelectedJob('');
-                setResumeSource(null);
-                setSelectedResumes([]);
-              }}
-              disabled={!canRunScoring}
-              className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm ${
-                canRunScoring
-                  ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-              }`}
-              title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
-            >
-              <Target className="w-4 h-4" />
-              Score Resumes
-            </button>
+            {/* Score Resumes Button - only shown to users with run scoring permission */}
+            {canRunScoring && (
+              <button
+                onClick={() => {
+                  setViewMode('new');
+                  setSelectedJob('');
+                  setResumeSource(null);
+                  setSelectedResumes([]);
+                }}
+                className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all text-xs sm:text-sm font-medium flex items-center gap-2 shadow-sm bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer"
+              >
+                <Target className="w-4 h-4" />
+                Score Resumes
+              </button>
+            )}
           </div>
         </div>
 
@@ -1784,8 +1806,9 @@ export default function ResumeScoringPage({
 
         {/* History List or Empty State */}
         {displayHistory.length > 0 ? (
+          <>
           <div className={historyViewMode === 'grid' ? 'grid gap-5' : 'space-y-4'}>
-            {displayHistory.map((item) => {
+            {displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const avgScore = item.scoredResumes.length > 0
                 ? Math.round(item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length)
                 : 0;
@@ -1801,7 +1824,16 @@ export default function ResumeScoringPage({
                 return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow"
+                    className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 hover:shadow-md transition-shadow cursor-pointer"
+                    onClick={() => {
+                      setSelectedHistoryItem(item);
+                      setViewMode('details');
+                      onLoadJdScores?.(item.jobId, item.jobTitle);
+                      try {
+                        localStorage.setItem('lastViewedScoringJdId', item.jobId);
+                      } catch (e) {}
+                      router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                    }}
                   >
                     <div className="flex flex-col sm:flex-row items-start gap-4">
                       {/* Scoring icon - like AI Talent Match */}
@@ -1904,7 +1936,7 @@ export default function ResumeScoringPage({
                           )}
                           <span className="flex items-center gap-1.5 sm:gap-2">
                             <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                            {new Date(item.scoredAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })}
+                            {formatIST(item.scoredAt)}
                           </span>
                           <span className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-gray-50 rounded-lg">
                             <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
@@ -1949,7 +1981,8 @@ export default function ResumeScoringPage({
                           View Progress
                         </button>
                         <button
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedHistoryItem(item);
                             setViewMode('details');
                             onLoadJdScores?.(item.jobId, item.jobTitle);
@@ -2074,7 +2107,7 @@ export default function ResumeScoringPage({
                           {item.jdPublishedAt && (
                             <div className="flex items-center gap-2 text-sm text-gray-600">
                               <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-                              <span>Posted {new Date(item.jdPublishedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                              <span>Posted {formatISTDate(item.jdPublishedAt)}</span>
                             </div>
                           )}
                           {item.jdCreatedByName && (
@@ -2177,6 +2210,15 @@ export default function ResumeScoringPage({
               );
             })}
           </div>
+          <ListPagination
+            currentPage={historyCurrentPage}
+            itemsPerPage={historyItemsPerPage}
+            totalItems={displayHistory.length}
+            onPageChange={setHistoryCurrentPage}
+            onItemsPerPageChange={setHistoryItemsPerPage}
+            itemLabel="jobs"
+          />
+          </>
         ) : scoredHistory.length === 0 ? (
           <div className="bg-white rounded-xl border-2 border-dashed border-gray-300 p-16 text-center">
             <div className="max-w-md mx-auto">
@@ -2187,28 +2229,20 @@ export default function ResumeScoringPage({
               <p className="text-gray-600 mb-6">
                 Start scoring resumes against job descriptions to see your results here. Our AI will analyze and rank candidates based on job fit.
               </p>
-              <button
-                onClick={() => {
-                  if (!canRunScoring) {
-                    toast.error('You do not have permission to run scoring operations');
-                    return;
-                  }
-                  setViewMode('new');
-                  setSelectedJob('');
-                  setResumeSource(null);
-                  setSelectedResumes([]);
-                }}
-                disabled={!canRunScoring}
-                className={`px-6 py-3 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 ${
-                  canRunScoring
-                    ? 'bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                }`}
-                title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
-              >
-                <Target className="w-5 h-5" />
-                Score Resumes Now
-              </button>
+              {canRunScoring && (
+                <button
+                  onClick={() => {
+                    setViewMode('new');
+                    setSelectedJob('');
+                    setResumeSource(null);
+                    setSelectedResumes([]);
+                  }}
+                  className="px-6 py-3 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 bg-gray-800 text-white hover:bg-gray-900 hover:shadow-md cursor-pointer"
+                >
+                  <Target className="w-5 h-5" />
+                  Score Resumes Now
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -2246,6 +2280,15 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => setShowProgressModal(false)}
             showJobTitleColumn={showJobTitleColumn}
+            minimized={isBulkProgressMinimized}
+            onMinimize={() => {
+              setIsBulkProgressMinimized(true);
+              setContextMinimized(true);
+              setOnRestorePanel(() => () => {
+                setIsBulkProgressMinimized(false);
+                setContextMinimized(false);
+              });
+            }}
             onRetryFailed={async (item) => {
               try {
                 // Update item status to "Scoring in progress"
@@ -2314,8 +2357,8 @@ export default function ResumeScoringPage({
         (historyModalItem.scoredResumes || []).forEach((r: any) => {
           const scorer = r.scoredBy || 'System';
           const rawDate = r.scoredDate || r.created_at || historyModalItem.scoredAt;
-          const day = new Date(rawDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-          const time = new Date(rawDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+          const day = formatISTDate(rawDate);
+          const time = formatISTTime(rawDate);
           const src = r.source === 'my-resumes' ? 'My Resumes' : 'Resume Database';
           const key = `${scorer}||${day}||${src}`;
           if (seen.has(key)) {
@@ -2593,7 +2636,7 @@ export default function ResumeScoringPage({
                       <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /><span className="capitalize">{selectedJobData.remote_type}</span></span>
                     )}
                     {selectedJobData.published_at && (
-                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Posted {new Date(selectedJobData.published_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Posted {formatISTDate(selectedJobData.published_at)}</span>
                     )}
                     {selectedJobData.created_by_name && (
                       <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" />By {selectedJobData.created_by_name}</span>
@@ -2602,25 +2645,15 @@ export default function ResumeScoringPage({
                   </div>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  if (!canRunScoring) {
-                    toast.error('You do not have permission to run scoring operations');
-                    return;
-                  }
-                  setShowResumeSelectionModal(true);
-                }}
-                disabled={!canRunScoring}
-                className={`w-full sm:w-auto px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 ${
-                  canRunScoring
-                    ? 'bg-gray-800 text-white hover:bg-gray-700 cursor-pointer'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                }`}
-                title={!canRunScoring ? 'You do not have permission to run scoring operations' : ''}
-              >
-                <Target className="w-4 h-4" />
-                Select Resumes
-              </button>
+              {canRunScoring && (
+                <button
+                  onClick={() => setShowResumeSelectionModal(true)}
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 bg-gray-800 text-white hover:bg-gray-700 cursor-pointer"
+                >
+                  <Target className="w-4 h-4" />
+                  Select Resumes
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -2802,6 +2835,15 @@ export default function ResumeScoringPage({
           onClose={() => setShowProgressModal(false)}
           filterByJobId={filterByJobId}
           showJobTitleColumn={showJobTitleColumn}
+          minimized={isBulkProgressMinimized}
+          onMinimize={() => {
+            setIsBulkProgressMinimized(true);
+            setContextMinimized(true);
+            setOnRestorePanel(() => () => {
+              setIsBulkProgressMinimized(false);
+              setContextMinimized(false);
+            });
+          }}
           onRetryFailed={async (item) => {
             try {
               console.log('[Retry] Starting retry for:', item.candidateName, 'resumeId:', item.resumeId, 'jobId:', item.jobId);

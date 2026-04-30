@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTheme } from 'next-themes';
 import {
   Mail,
   Phone,
@@ -18,9 +19,10 @@ interface ContactPageProps {
 }
 
 export default function ContactPage({ onNavigate }: ContactPageProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
-  const [isDark, setIsDark] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -38,7 +40,6 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     };
     checkScreen();
     window.addEventListener('resize', checkScreen);
-    setIsDark(document.documentElement.classList.contains('dark'));
     return () => window.removeEventListener('resize', checkScreen);
   }, []);
 
@@ -167,7 +168,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     display: 'block',
     fontSize: '14px',
     fontWeight: 500,
-    color: isDark ? '#CBD5E1' : '#374151',
+    color: isDark ? '#D1D5DB' : '#374151',
     marginBottom: '8px',
   };
 
@@ -175,9 +176,9 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     width: '100%',
     padding: '12px 16px',
     borderRadius: '10px',
-    border: `1px solid ${isDark ? '#334155' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
-    color: isDark ? '#ffffff' : '#111827',
+    border: `1px solid ${isDark ? '#4B5563' : '#D1D5DB'}`,
+    backgroundColor: isDark ? '#374151' : '#ffffff',
+    color: isDark ? '#F9FAFB' : '#111827',
     fontSize: '16px',
     outline: 'none',
     boxSizing: 'border-box',

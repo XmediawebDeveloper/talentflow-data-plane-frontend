@@ -13,6 +13,12 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/a
 
 let currentSessionToken: string | null = null;
 let currentAssessmentToken: string | null = null;
+let lastNetworkFailureEventAt = 0;
+
+function dispatchCandidateNetworkEvent(name: 'candidate-network-failure' | 'candidate-network-restored', detail?: Record<string, unknown>) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(name, { detail }));
+}
 
 export const sessionTokenManager = {
   setToken(token: string, assessmentToken?: string) {
@@ -129,7 +135,14 @@ candidateApi.interceptors.request.use((config) => {
 
 // Add response interceptor for better cross-browser error handling
 candidateApi.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    dispatchCandidateNetworkEvent('candidate-network-restored', {
+      url: response.config?.url,
+      method: response.config?.method,
+      timestamp: Date.now(),
+    });
+    return response;
+  },
   (error) => {
     // Enhanced error logging for debugging browser-specific issues
     if (error.response) {
@@ -138,6 +151,16 @@ candidateApi.interceptors.response.use(
     } else if (error.request) {
       // Request was made but no response received (network issues)
       console.error('[CANDIDATE API] Network error - no response received:', error.message);
+      const now = Date.now();
+      if (now - lastNetworkFailureEventAt > 1500) {
+        lastNetworkFailureEventAt = now;
+        dispatchCandidateNetworkEvent('candidate-network-failure', {
+          url: error.config?.url,
+          method: error.config?.method,
+          message: error.message,
+          timestamp: now,
+        });
+      }
     } else {
       // Something else happened (browser security, CORS, etc.)
       console.error('[CANDIDATE API] Request setup error:', error.message);
@@ -161,6 +184,7 @@ export interface AssessmentInfo {
   has_technical_round: boolean;
   has_coding_round: boolean;
   hr_percentage: number;
+  hr_topics?: any[];  // Selected HR questions from Question Bank
   technical_percentage: number;
   coding_percentage: number;
   invitation_status: string;
@@ -174,6 +198,9 @@ export interface AssessmentInfo {
   message: string;
   session_token?: string;  // Session token for page refresh support
   proctoring_settings?: AssessmentProctoringSettings | null;
+  time_remaining_seconds?: number | null;
+  is_paused?: boolean;
+  pause_reason?: string | null;
 }
 
 export interface ConsentResponse {
@@ -245,6 +272,10 @@ export interface CurrentQuestion {
     selected_options: string[] | null;
     code_submission: string | null;
     language: string | null;  // Coding language used (python, java, etc.)
+    code_input: string | null;
+    code_execution_status: string | null;
+    code_execution_output: string | null;
+    code_execution_error: string | null;
     is_locked: boolean;  // True = submitted (not editable), False = draft (editable)
   } | null;
   // All question statuses for progress tracking
@@ -278,6 +309,8 @@ export interface StartAssessmentResponse {
   message: string;
   session_token?: string;  // Unique session token for single-session enforcement
   proctoring_settings?: AssessmentProctoringSettings | null;
+  time_remaining_seconds?: number | null;
+  is_paused?: boolean;
 }
 
 export interface AnswerSubmission {
@@ -286,7 +319,11 @@ export interface AnswerSubmission {
   video_response_url?: string;
   selected_options?: string[];
   code_submission?: string;
+  code_input?: string;
   language?: string;
+  code_execution_status?: string;
+  code_execution_output?: string;
+  code_execution_error?: string;
   time_taken_seconds?: number;  // Time spent on question
   is_draft?: boolean;  // True = draft (auto-save, editable), False = submitted (locked)
 }
@@ -383,9 +420,26 @@ export interface AssessmentResult {
 
 export interface HeartbeatResponse {
   success: boolean;
-  elapsed_seconds: number;
-  remaining_seconds: number;
+  time_remaining_seconds: number;
+  tab_switch_count?: number;
+  is_paused?: boolean;
+  pause_reason?: string | null;
 }
+
+export const sendPauseBeacon = (token: string, reason: string): boolean => {
+  if (typeof window === 'undefined' || !navigator.sendBeacon) return false;
+  const sessionToken = sessionTokenManager.getToken(token);
+  const url = `${API_BASE_URL}/candidate/assessment/${token}/pause`;
+  const payload = JSON.stringify({
+    session_token: sessionToken,
+    reason,
+  });
+  try {
+    return navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+  } catch {
+    return false;
+  }
+};
 
 export interface ProctorEvent {
   event_type:
@@ -442,6 +496,8 @@ export interface CodeSubmissionResult {
   tests_total: number;
   test_results: TestCaseResult[];
   score_percentage: number;
+  syntax_valid?: boolean;
+  execution_status?: string;
   message: string;
   error?: string;
 }
@@ -449,6 +505,18 @@ export interface CodeSubmissionResult {
 export interface PrepareAssessmentResponse {
   attempt_id: string;
   status: 'pending_system_check' | 'generating' | 'ready';
+  message: string;
+}
+
+export interface HRAnswerSubmissionItem {
+  question_text: string;
+  answer_type?: 'text' | 'yes_no';
+  answer_text?: string;
+}
+
+export interface HRAnswersSubmitResponse {
+  success: boolean;
+  saved_count: number;
   message: string;
 }
 
@@ -535,12 +603,20 @@ export const candidateService = {
           throw new Error('Unable to connect to server. Please check your internet connection and try again.');
         }
 
+        if (error.response.status === 410) {
+          throw new Error('LINK_EXPIRED');
+        }
+
         if (error.response.status === 401 || error.response.status === 403) {
           throw new Error('Invalid or expired assessment link. Please contact your recruiter for a new link.');
         }
 
         if (error.response.status === 404) {
           throw new Error('Assessment not found. Please verify the link is correct.');
+        }
+
+        if (error.response.status >= 500) {
+          throw new Error('Server temporarily unavailable. Please try again.');
         }
 
         throw new Error(typeof errorDetail === 'string' ? errorDetail : (errorDetail?.message || 'Failed to get assessment info'));
@@ -582,6 +658,17 @@ export const candidateService = {
     }
   },
 
+  async pauseAssessment(token: string, reason: string): Promise<void> {
+    try {
+      await candidateApi.post(`/candidate/assessment/${token}/pause`, {
+        session_token: sessionTokenManager.getToken(token),
+        reason,
+      });
+    } catch (error) {
+      console.warn('[RECOVERY] Failed to pause assessment:', error);
+    }
+  },
+
   /**
    * Prepare assessment - triggers background question generation
    * Call this when user clicks "Begin Assessment"
@@ -597,6 +684,18 @@ export const candidateService = {
         throw new Error(error.response?.data?.detail || 'Failed to prepare assessment');
       }
       throw error;
+    }
+  },
+
+  async saveHRAnswers(token: string, answers: HRAnswerSubmissionItem[]): Promise<HRAnswersSubmitResponse> {
+    try {
+      const response = await retryApiCall(() =>
+        candidateApi.post<HRAnswersSubmitResponse>(`/candidate/assessment/${token}/hr-answers`, { answers })
+      );
+      return response.data;
+    } catch (error: any) {
+      const errorDetail = error?.response?.data?.detail;
+      throw new Error(typeof errorDetail === 'string' ? errorDetail : 'Failed to save HR answers');
     }
   },
 
@@ -976,7 +1075,7 @@ export const candidateService = {
   /**
    * Send heartbeat to keep session alive
    */
-  async sendHeartbeat(token: string, options?: { tabVisible?: boolean; cameraActive?: boolean; screenShareActive?: boolean }): Promise<HeartbeatResponse> {
+  async sendHeartbeat(token: string, options?: { tabVisible?: boolean; cameraActive?: boolean; screenShareActive?: boolean; clientRemainingSeconds?: number }): Promise<HeartbeatResponse> {
     try {
       const response = await candidateApi.post<HeartbeatResponse>(
         `/candidate/assessment/${token}/heartbeat`,
@@ -985,6 +1084,7 @@ export const candidateService = {
           tab_visible: options?.tabVisible ?? document.visibilityState === 'visible',
           camera_active: options?.cameraActive,
           screen_share_active: options?.screenShareActive,
+          client_remaining_seconds: options?.clientRemainingSeconds,
         }
       );
       return response.data;
@@ -1021,11 +1121,19 @@ export const candidateService = {
   /**
    * Execute code and get results
    */
-  async executeCode(language: string, code: string, stdin?: string): Promise<CodeExecutionResult> {
+  async executeCode(
+    language: string,
+    code: string,
+    stdin?: string,
+    attemptId?: string,
+    questionId?: string
+  ): Promise<CodeExecutionResult> {
     try {
       const response = await candidateApi.post<CodeExecutionResult>(
         `/candidate/code/run`,
         {
+          attempt_id: attemptId,
+          question_id: questionId,
           language,
           code,
           stdin: stdin || '',
@@ -1051,7 +1159,13 @@ export const candidateService = {
   /**
    * Submit code solution for evaluation against all test cases
    */
-  async submitCodeSolution(attemptId: string, questionId: string, language: string, code: string): Promise<CodeSubmissionResult> {
+  async submitCodeSolution(
+    attemptId: string,
+    questionId: string,
+    language: string,
+    code: string,
+    codeInput?: string
+  ): Promise<CodeSubmissionResult> {
     try {
       const response = await candidateApi.post<CodeSubmissionResult>(
         `/candidate/code/submit`,
@@ -1060,6 +1174,7 @@ export const candidateService = {
           question_id: questionId,
           language,
           code,
+          code_input: codeInput || '',
         }
       );
       return response.data;

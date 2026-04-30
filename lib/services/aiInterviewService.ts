@@ -10,6 +10,8 @@ export interface AIInterviewRoundConfig {
   duration_minutes: number;
   topics: string[];
   topic_weights?: Record<string, number>;
+  topic_time_minutes?: Record<string, number>;
+  topic_comments?: Record<string, string>;
   enabled: boolean;
   order: number;
   // Skills split by source — so the agent knows which came from JD vs custom-added
@@ -18,6 +20,10 @@ export interface AIInterviewRoundConfig {
   // Deprecated: kept for backward compat with old "technical" round configs only
   must_have_percentage?: number;
   nice_to_have_percentage?: number;
+  // HR round: specific questions selected from the question bank
+  hr_questions?: { id: string; question_text: string; answer_type: string }[];
+  // Timed mode: planned question count for this round (set at config time)
+  planned_questions?: number;
 }
 
 export interface AIInterviewCreate {
@@ -39,6 +45,7 @@ export interface AIInterviewCreate {
   rounds_config?: AIInterviewRoundConfig[];
   title?: string;
   save_as_draft?: boolean;
+  introduction_video_url?: string;
 }
 
 export interface AIInterviewUpdate {
@@ -56,6 +63,9 @@ export interface AIInterviewUpdate {
   custom_questions?: string[];
   special_instructions?: string;
   status?: string;
+  rounds_config?: AIInterviewRoundConfig[];
+  save_as_draft?: boolean;
+  introduction_video_url?: string;
 }
 
 export interface TopicSuggestionResponse {
@@ -76,7 +86,10 @@ export interface PublishedJD {
   nice_to_have_skills: string[];
   experience_min?: number;
   experience_max?: number;
+  industry_type?: string;
+  domain_keywords?: string[];
   education_requirements?: Record<string, any>;
+  description?: string;
   coding_required?: boolean;
   created_at?: string;
   published_at?: string;
@@ -92,6 +105,7 @@ export interface AIInterviewInviteRequest {
   expiry_days?: number;
   custom_message?: string;
   base_url?: string;
+  resume_id?: string;
 }
 
 export interface AIInterviewResponse {
@@ -110,6 +124,7 @@ export interface AIInterviewResponse {
   jd_title?: string;
   jd_version?: number;
   jd_experience_level?: string;
+  jd_location?: string;
   jd_must_have_skills?: string[];
   jd_nice_to_have_skills?: string[];
   rounds_config?: AIInterviewRoundConfig[];
@@ -127,13 +142,38 @@ export interface AIInterviewResponse {
   send_email_reminder: boolean;
   enable_ai_analysis: boolean;
   ai_voice_language: string;
+  available_languages?: string[];
+  selected_language?: string;
   custom_questions?: string[];
   special_instructions?: string;
   score?: number;
   ai_evaluation?: Record<string, any>;
   conversation_transcript?: Record<string, any>[];
   recording_file_path?: string;
+  proctoring_violations?: { event_type: string; severity: string; timestamp?: string; details?: Record<string, any> }[];
+  tab_switch_count?: number;
+  copy_paste_count?: number;
+  // Computed at interview completion (AIU-82)
+  proctoring_score?: number;
+  risk_level?: string;  // "none" | "low" | "medium" | "high"
+  recording_url?: string;
+  introduction_video_url?: string;
+  identity_name?: string;
+  identity_verified?: boolean;
+  identity_photo_path?: string;
+  screen_recording_file_path?: string;
+  screen_recording_url?: string;
   invitation_sent: boolean;
+  invitations_count?: number;
+  jd_short_id?: string;  // JD's short display ID e.g. "JD-003", injected by list endpoint
+  jd_industry_type?: string;
+  // JD freshness — set by single-config GET endpoint; null on list responses.
+  // True when the linked JD was updated (version bumped or skills changed)
+  // AFTER this interview config was created. Recruiter UI should warn the
+  // user so they know the questions may not reflect the latest JD.
+  jd_stale?: boolean | null;
+  jd_stale_reason?: string | null;
+  jd_current_version?: number | null;
   created_by: string;
   created_by_name?: string;
   scheduled_at?: string;
@@ -141,6 +181,30 @@ export interface AIInterviewResponse {
   completed_at?: string;
   created_at: string;
   updated_at: string;
+  // Global candidate identity
+  candidate_id?: string;
+  candidate_cid?: string;  // e.g. "CID-0001"
+  // Persisted live activity feed — stored via /coverage-events endpoint
+  coverage_events?: Array<{
+    kind: 'question' | 'covered' | 'medium' | 'low';
+    skill?: string;
+    qNum?: number;
+    isFollowUp?: boolean;
+    ts: number;
+  }>;
+  // Live skill coverage (updated during interview via WebSocket, persisted to session)
+  skill_coverage?: {
+    round?: string;
+    round_name?: string;
+    covered: string[];
+    medium_covered: string[];
+    low_covered: string[];
+    uncovered: string[];
+    nice_to_have_skills: string[];
+    total_questions: number;
+    questions_asked: number;
+    hr_topics?: Record<string, string>;
+  };
 }
 
 export interface AIInterviewListResponse {
@@ -149,6 +213,12 @@ export interface AIInterviewListResponse {
   page: number;
   page_size: number;
   total_pages: number;
+}
+
+export interface AIInterviewInvitationListResponse extends AIInterviewListResponse {
+  completed: number;
+  in_progress: number;
+  average_score: number | null;
 }
 
 export interface AIInterviewStatsResponse {
@@ -523,12 +593,68 @@ export const aiInterviewService = {
   },
 
   /**
+   * Deprecated: coverage events are now emitted and persisted by the backend
+   * evaluator + question-timer pipeline. The frontend no longer writes them,
+   * which removes the dual-storage divergence between `ai_evaluation.skill_coverage_map`
+   * and `coverage_events`. Kept as a no-op so any straggling caller fails closed
+   * without hitting the network.
+   */
+  async appendCoverageEvents(_sessionId: string, _events: object[]): Promise<void> {
+    return;
+  },
+
+  /**
+   * Download a report for a completed AI interview.
+   * @param sessionId - The interview session ID
+   * @param reportType - 'coverage' or 'evaluation'
+   * @param format - 'pdf', 'excel', or 'json'
+   * @returns Blob for download
+   */
+  async downloadReport(
+    sessionId: string,
+    reportType: 'coverage' | 'evaluation',
+    format: 'pdf' | 'excel' | 'json' = 'pdf',
+  ): Promise<Blob> {
+    const response = await api.get(
+      `/ai-interview/${sessionId}/reports/${reportType}?format=${format}`,
+      { responseType: 'blob' },
+    );
+    return response.data;
+  },
+
+  /**
+   * Trigger a browser download from a Blob.
+   */
+  triggerBlobDownload(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  },
+
+  /**
    * Get invitations for a config
    */
-  async getConfigInvitations(configId: string): Promise<{ items: AIInterviewResponse[]; total: number }> {
+  async getConfigInvitations(configId: string, params?: {
+    search?: string;
+    status?: string;
+    score_min?: number;
+    score_max?: number;
+    date_from?: string;
+    date_to?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<AIInterviewInvitationListResponse> {
     try {
-      const response = await api.get<{ items: AIInterviewResponse[]; total: number }>(
-        `/ai-interview/${configId}/invitations`
+      const response = await api.get<AIInterviewInvitationListResponse>(
+        `/ai-interview/${configId}/invitations`,
+        { params }
       );
       return response.data;
     } catch (error) {
@@ -605,10 +731,212 @@ export const aiInterviewService = {
   },
 
   /**
+   * Expand a small main-skill list into JD-grounded sub-skills (timed mode only).
+   * Called silently from Configure page when parents < Q for a bucket.
+   */
+  async expandSkills(args: {
+    mainSkills: string[];
+    targetSkillCount: number;
+    bucket: 'MTH' | 'NTH';
+    jdTitle?: string;
+    jdDescription?: string;
+  }): Promise<{
+    expanded_skills: { parent: string; sub_skills: string[] }[];
+    flat_skills: string[];
+  }> {
+    try {
+      const response = await api.post('/ai-interview/expand-skills', {
+        main_skills: args.mainSkills,
+        target_skill_count: args.targetSkillCount,
+        bucket: args.bucket,
+        jd_title: args.jdTitle,
+        jd_description: args.jdDescription,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Generate AI-powered skill clusters
+   */
+  async generateClusters(mthSkills: string[], nthSkills: string[], jdTitle?: string, jdDescription?: string, mthTimeMin?: number, nthTimeMin?: number, mthMaxClusters?: number, nthMaxClusters?: number): Promise<{
+    mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+  }> {
+    try {
+      const response = await api.post('/ai-interview/generate-clusters', {
+        mth_skills: mthSkills,
+        nth_skills: nthSkills,
+        jd_title: jdTitle,
+        jd_description: jdDescription,
+        mth_time_min: mthTimeMin,
+        nth_time_min: nthTimeMin,
+        mth_max_clusters: mthMaxClusters,
+        nth_max_clusters: nthMaxClusters,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Refine existing clusters — applies skill relevance + question-limit rules.
+   * Server returns refined clusters per bucket (capacity field unused here).
+   */
+  async refineClusters(args: {
+    mthClusters: { id?: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    nthClusters: { id?: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    mthQuestions: number;
+    nthQuestions: number;
+    mthMaxClusters?: number;
+    nthMaxClusters?: number;
+    jdTitle?: string;
+    jdDescription?: string;
+    /** When true, forbid the LLM from renaming/merging skills — only drop
+     * irrelevant + rebalance allowed. Used by the silent post-expansion
+     * flow so all input skills appear verbatim in the refined clusters. */
+    preserveSkillNames?: boolean;
+  }): Promise<{
+    mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+  }> {
+    try {
+      const response = await api.post('/ai-interview/refine-clusters', {
+        mth_clusters: args.mthClusters,
+        nth_clusters: args.nthClusters,
+        mth_questions: args.mthQuestions,
+        nth_questions: args.nthQuestions,
+        mth_max_clusters: args.mthMaxClusters,
+        nth_max_clusters: args.nthMaxClusters,
+        jd_title: args.jdTitle,
+        jd_description: args.jdDescription,
+        preserve_skill_names: args.preserveSkillNames ?? false,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Upload introduction video for an AI interview config
+   */
+  async uploadIntroVideo(file: File): Promise<{ url: string; file_url: string; file_name: string; size_bytes: number }> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.post<{ url: string; file_url: string; file_name: string; size_bytes: number }>(
+        '/ai-interview/upload-intro-video',
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Get recording URL for an interview
    */
   getRecordingUrl(interviewId: string): string {
     const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
     return `${baseUrl}/ai-interview/${interviewId}/recording`;
+  },
+
+  /**
+   * Get tenant-level invitation quota stats
+   * Returns how many invitations are pending (held) vs consumed vs available
+   */
+  async getInvitationStats(): Promise<{
+    total_quota: number;
+    consumed: number;
+    pending: number;
+    available: number;
+  } | null> {
+    try {
+      const response = await api.get('/ai-interview/invitation-stats');
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Generate a tracked share link for any share method (copy, whatsapp, linkedin, etc.)
+   * Creates an anonymous session with expiry and AIU unit lock.
+   */
+  async generateShareLink(configId: string, shareMethod: string, expiryDays: number = 1): Promise<{
+    session_id: string;
+    link: string;
+    expires_at: string | null;
+    share_method: string;
+  }> {
+    const response = await api.post(`/ai-interview/${configId}/generate-link`, {
+      expiry_days: expiryDays,
+      share_method: shareMethod,
+    });
+    return response.data;
+  },
+
+  /**
+   * Create a named session for a specific candidate WITHOUT sending an email.
+   * Returns the interview link so the caller can copy/share it manually.
+   * Quota unit is locked immediately.
+   */
+  async createInviteLink(configId: string, data: {
+    candidate_name: string;
+    candidate_email: string;
+    expiry_days?: number;
+  }): Promise<{ session_id: string; link: string; expires_at: string | null }> {
+    const response = await api.post(`/ai-interview/${configId}/create-invite-link`, {
+      ...data,
+      base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+    });
+    dispatchUnitsConsumed();
+    return response.data;
+  },
+
+  /**
+   * Send the invitation email for an already-created session.
+   * Used when Copy Link was clicked first and user also wants to send via email.
+   * Does NOT create a new session or deduct additional quota.
+   */
+  async sendSessionEmail(sessionId: string, data: {
+    custom_message?: string;
+    base_url?: string;
+  }): Promise<{ message: string; session_id: string }> {
+    const response = await api.post(`/ai-interview/session/${sessionId}/send-invite-email`, data);
+    return response.data;
+  },
+
+  /**
+   * Log a proctoring violation event (AIU81)
+   */
+  async logViolationEvent(sessionId: string, data: {
+    event_type: string;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    metadata?: Record<string, any>;
+  }): Promise<void> {
+    await api.post(`/ai-interviews/${sessionId}/violation-events`, data);
+  },
+
+  /**
+   * Get the full skill coverage map for a session (AIU52)
+   */
+  async getCoverageMap(sessionId: string): Promise<any> {
+    const response = await api.get(`/ai-interviews/${sessionId}/coverage-map`);
+    return response.data;
+  },
+
+  /**
+   * Trigger AI evaluation for a completed session (AIU53)
+   */
+  async triggerEvaluation(sessionId: string): Promise<any> {
+    const response = await api.post(`/ai-interviews/${sessionId}/evaluate`, {});
+    return response.data;
   },
 };

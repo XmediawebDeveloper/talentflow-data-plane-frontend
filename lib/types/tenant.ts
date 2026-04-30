@@ -37,6 +37,10 @@ export interface Permission {
   canUpdateAssessments?: boolean;// Edit Assessments
   canDeleteAssessments?: boolean;// Delete Assessments
   canDownloadAssessmentPDF?: boolean;// Download PDF reports for assessment results
+  canViewHRQuestionBank?: boolean;
+  canCreateHRQuestionBank?: boolean;
+  canUpdateHRQuestionBank?: boolean;
+  canDeleteHRQuestionBank?: boolean;
 
   // Analytics & Reports
   canViewAnalytics: boolean;    // Reports & Analytics
@@ -60,9 +64,11 @@ export interface Permission {
   // Granular settings section view permissions
   canViewGeneralSettings?: boolean;
   canViewPermissionsRoles?: boolean;
+  canViewRoles?: boolean;
   canViewApiManagement?: boolean;
   canViewBranding?: boolean;
   canViewSecuritySettings?: boolean;
+  canViewSupport?: boolean;
 
   // Granular Action Permissions — Billing
   canUpgradePlan?: boolean;
@@ -79,10 +85,22 @@ export interface Permission {
 
   // Teams
   canViewTeams?: boolean;
+  canCreateTeams?: boolean;
+  canUpdateTeams?: boolean;
+  canDeleteTeams?: boolean;
+  canViewTeamUsage?: boolean;
 
   // RBAC06: Feature flags
   canViewScoring?: boolean;      // NEW: View resume scoring page/results
   canRunScoring?: boolean;       // Run scoring operations
+  canViewAIInterviews?: boolean;
+  canCreateAIInterviews?: boolean;
+  canUpdateAIInterviews?: boolean;
+  canShareAIInterviews?: boolean;
+  canInviteAIInterviews?: boolean;
+  canPublishAIInterviews?: boolean;
+  canArchiveAIInterviews?: boolean;
+  canDeleteAIInterviews?: boolean;
   canRunAiInterviews?: boolean;
   canViewAiMatch?: boolean;      // NEW: View AI talent match page/results
   canRunAiMatch?: boolean;       // Run AI match operations
@@ -151,6 +169,7 @@ export interface User {
   role: UserRole;
   tenantId: string;
   permissions: Permission;
+  permissionCodes?: string[];
   phone?: string;
   avatarUrl?: string;
   isActive?: boolean;
@@ -170,6 +189,7 @@ export interface User {
   suspensionNotes?: string;
   suspendedAt?: string;
   tenantSubdomain?: string;
+  tenantAdminEmail?: string;
 }
 
 export interface PlanLimits {

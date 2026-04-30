@@ -130,7 +130,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
       toast.success('Assessment deleted successfully');
       fetchAssessments();
     } catch (error) {
-      toast.error('Failed to delete assessment');
+      toast.error(error instanceof Error ? error.message : 'Failed to delete assessment');
     }
   };
 
@@ -444,16 +444,31 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                       Archive
                                     </button>
                                   )}
-                                  <button
-                                    onClick={() => {
-                                      handleDelete(assessment);
-                                      setOpenMenuId(null);
-                                    }}
-                                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-red-600 hover:bg-red-50"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                    Delete
-                                  </button>
+                                  {(() => {
+                                    const hasCandidates = assessment.invitations_count > 0;
+                                    return (
+                                      <button
+                                        onClick={() => {
+                                          if (hasCandidates) {
+                                            toast.error('Cannot delete — candidates have already been invited to this assessment');
+                                            return;
+                                          }
+                                          handleDelete(assessment);
+                                          setOpenMenuId(null);
+                                        }}
+                                        disabled={hasCandidates}
+                                        title={hasCandidates ? 'Cannot delete — candidates have already been invited to this assessment' : ''}
+                                        className={`w-full flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm ${
+                                          hasCandidates
+                                            ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                            : 'text-red-600 hover:bg-red-50'
+                                        }`}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                        Delete
+                                      </button>
+                                    );
+                                  })()}
                                 </div>
                               </>
                             )}
@@ -571,16 +586,31 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                 Archive
                               </button>
                             )}
-                            <button
-                              onClick={() => {
-                                handleDelete(assessment);
-                                setOpenMenuId(null);
-                              }}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete
-                            </button>
+                            {(() => {
+                              const hasCandidates = assessment.invitations_count > 0;
+                              return (
+                                <button
+                                  onClick={() => {
+                                    if (hasCandidates) {
+                                      toast.error('Cannot delete — candidates have already been invited to this assessment');
+                                      return;
+                                    }
+                                    handleDelete(assessment);
+                                    setOpenMenuId(null);
+                                  }}
+                                  disabled={hasCandidates}
+                                  title={hasCandidates ? 'Cannot delete — candidates have already been invited to this assessment' : ''}
+                                  className={`w-full flex items-center gap-2 px-4 py-2 text-sm ${
+                                    hasCandidates
+                                      ? 'text-gray-400 cursor-not-allowed opacity-60'
+                                      : 'text-red-600 hover:bg-red-50'
+                                  }`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete
+                                </button>
+                              );
+                            })()}
                           </div>
                         </>
                       )}

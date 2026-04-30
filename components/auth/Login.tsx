@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, Building2 } from 'lucide-react';
+import { Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles, ArrowLeft, Shield, Building2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTheme } from 'next-themes';
 import { User } from '@/lib/types/tenant';
 import { authService, isTwoFactorRequired, LoginResponse } from '@/lib/services';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -25,6 +26,28 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   // Get plan and email from URL params (from signup redirect)
   const encodedPlanFromUrl = searchParams.get('plan');
   const emailFromUrl = searchParams.get('email');
+  // ?force_relogin=1 — sent in the welcome email after an admin changes a
+  // user's login email. The recipient may still be authenticated as their
+  // OLD email in this browser; without clearing cookies/storage AuthProvider
+  // would skip /login and redirect straight to /set-password, letting them
+  // bypass the temp-password challenge.
+  const forceRelogin = searchParams.get('force_relogin');
+
+  useEffect(() => {
+    if (!forceRelogin) return;
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      // Strip auth cookies so middleware sees an unauthenticated request.
+      document.cookie = 'accessToken=; Path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'refreshToken=; Path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    } catch {/* noop */}
+    // Drop the param so reloads don't keep clearing repeatedly.
+    const url = new URL(window.location.href);
+    url.searchParams.delete('force_relogin');
+    window.history.replaceState({}, '', url.toString());
+  }, [forceRelogin]);
 
   const [email, setEmail] = useState(emailFromUrl || '');
   const [password, setPassword] = useState('');
@@ -111,15 +134,19 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         canUpdateAssessments: response.user.permissions.can_update_assessments,
         canDeleteAssessments: response.user.permissions.can_delete_assessments,
         canDownloadAssessmentPDF: response.user.permissions.can_download_assessment_pdf,
+        canViewHRQuestionBank: response.user.permissions.can_view_hr_question_bank,
+        canCreateHRQuestionBank: response.user.permissions.can_create_hr_question_bank,
+        canUpdateHRQuestionBank: response.user.permissions.can_update_hr_question_bank,
+        canDeleteHRQuestionBank: response.user.permissions.can_delete_hr_question_bank,
         // Analytics & Reports
-        canViewAnalytics: response.user.permissions.can_view_analytics,
-        // Settings & Admin
-        canManageSettings: response.user.permissions.can_manage_settings,
-        canManageUsers: response.user.permissions.can_manage_users,
-        // Billing permissions
-        canViewBilling: response.user.permissions.can_view_billing,
-        canViewInvoices: response.user.permissions.can_view_invoices,
-        canViewUsage: response.user.permissions.can_view_usage,
+        canViewAnalytics: response.user.permissions.can_view_analytics || (response.user.permissions as any).can_view_analytics_granular,
+        // Settings & Admin — accept either legacy bundle or granular grant
+        canManageSettings: response.user.permissions.can_manage_settings || (response.user.permissions as any).can_view_settings || (response.user.permissions as any).can_update_settings,
+        canManageUsers: response.user.permissions.can_manage_users || (response.user.permissions as any).can_view_users,
+        // Billing permissions — same fallback (granular *_granular OR legacy bundle)
+        canViewBilling: response.user.permissions.can_view_billing || (response.user.permissions as any).can_view_billing_granular,
+        canViewInvoices: response.user.permissions.can_view_invoices || (response.user.permissions as any).can_view_invoices_granular,
+        canViewUsage: response.user.permissions.can_view_usage || (response.user.permissions as any).can_view_usage_granular,
         // Granular billing section view permissions
         canViewCurrentPlan: response.user.permissions.can_view_current_plan,
         canViewPaymentMethods: response.user.permissions.can_view_payment_methods,
@@ -129,9 +156,11 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         // Granular settings section view permissions
         canViewGeneralSettings: response.user.permissions.can_view_general_settings,
         canViewPermissionsRoles: response.user.permissions.can_view_permissions_roles,
+        canViewRoles: response.user.permissions.can_view_roles,
         canViewApiManagement: response.user.permissions.can_view_api_management,
         canViewBranding: response.user.permissions.can_view_branding,
         canViewSecuritySettings: response.user.permissions.can_view_security_settings,
+        canViewSupport: (response.user.permissions as any).can_view_support,
         // Granular Action Permissions — Billing
         canUpgradePlan: response.user.permissions.can_upgrade_plan,
         canExportUsage: response.user.permissions.can_export_usage,
@@ -146,6 +175,14 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         // Feature permissions
         canViewScoring: response.user.permissions.can_view_scoring,
         canRunScoring: response.user.permissions.can_run_scoring,
+        canViewAIInterviews: response.user.permissions.can_view_ai_interviews,
+        canCreateAIInterviews: response.user.permissions.can_create_ai_interviews,
+        canUpdateAIInterviews: response.user.permissions.can_update_ai_interviews,
+        canShareAIInterviews: response.user.permissions.can_share_ai_interviews,
+        canInviteAIInterviews: response.user.permissions.can_invite_ai_interviews,
+        canPublishAIInterviews: response.user.permissions.can_publish_ai_interviews,
+        canArchiveAIInterviews: response.user.permissions.can_archive_ai_interviews,
+        canDeleteAIInterviews: response.user.permissions.can_delete_ai_interviews,
         canRunAiInterviews: response.user.permissions.can_run_ai_interviews,
         canViewAiMatch: response.user.permissions.can_view_ai_match,
         canRunAiMatch: response.user.permissions.can_run_ai_match,
@@ -162,9 +199,6 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       tenantSubdomain: response.user.tenant_subdomain,
     };
 
-    // Pass tenant name from login response
-    login(user, response.tenant_name);
-
     // Save or clear email based on "Remember me" checkbox
     try {
       if (rememberMe) {
@@ -178,12 +212,8 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
       console.error('Error saving remember me preference:', error);
     }
 
-    // First-time login (invite flow) — show a toast so user knows where to change their password
-    if (!response.user.last_login) {
-      toast.info('You are logged in with a temporary password. Please change it via Settings → Change Password.', {
-        duration: 8000,
-      });
-    }
+    // Normal login — populate auth store (triggers WebSocket, dashboard, etc.)
+    login(user, response.tenant_name);
 
     // Check if tenant has pending payment - redirect to payment page with encoded params
     if (response.pending_payment && response.pending_payment_redirect) {
@@ -221,7 +251,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     setIsLoading(true);
 
     try {
-      const response = await authService.login({ email, password, subdomain: subdomain || undefined });
+      const response = await authService.login({ email: email.toLowerCase().trim(), password, subdomain: subdomain || undefined });
 
       // Check if 2FA is required
       if (isTwoFactorRequired(response)) {
@@ -235,7 +265,14 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
         return;
       }
 
-      // Normal login success
+      // Normal login success — tokens are now stored.
+      // must_reset_password is already in the login response; no need for a second /auth/me roundtrip.
+      if (response.must_reset_password) {
+        localStorage.setItem('pending_password_reset', 'true');
+        window.location.href = '/set-password';
+        return;
+      }
+
       handleLoginSuccess(response);
     } catch (err: any) {
       console.error('Login error:', err);
@@ -290,6 +327,14 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
     try {
       const response = await authService.verify2FALogin(tempToken, code);
+
+      // Tokens are now stored. must_reset_password comes directly from the 2FA response.
+      if (response.must_reset_password) {
+        localStorage.setItem('pending_password_reset', 'true');
+        window.location.href = '/set-password';
+        return;
+      }
+
       handleLoginSuccess(response);
     } catch (err: any) {
       console.error('2FA verification error:', err);
@@ -309,11 +354,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     setError('');
   };
 
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   // Styles
   const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
+    background: isDark
+      ? 'linear-gradient(135deg, #111827 0%, #1F2937 50%, #1E1B4B 100%)'
+      : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -360,7 +409,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const brandNameStyle: React.CSSProperties = {
     fontSize: '32px',
     fontWeight: 700,
-    color: '#111827',
+    color: isDark ? '#F9FAFB' : '#111827',
   };
 
   const brandSubtitleStyle: React.CSSProperties = {
@@ -371,7 +420,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const headlineStyle: React.CSSProperties = {
     fontSize: '48px',
     fontWeight: 700,
-    color: '#111827',
+    color: isDark ? '#F9FAFB' : '#111827',
     lineHeight: 1.2,
     marginBottom: '24px',
   };
@@ -385,7 +434,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
   const descriptionStyle: React.CSSProperties = {
     fontSize: '18px',
-    color: '#6B7280',
+    color: isDark ? '#9CA3AF' : '#6B7280',
     lineHeight: 1.6,
     marginBottom: '32px',
     maxWidth: '480px',
@@ -398,11 +447,11 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     marginBottom: '16px',
   };
 
-  const featureIconBoxStyle = (color: string): React.CSSProperties => ({
+  const featureIconBoxStyle = (color: string, darkColor: string): React.CSSProperties => ({
     width: '40px',
     height: '40px',
     borderRadius: '50%',
-    backgroundColor: color,
+    backgroundColor: isDark ? darkColor : color,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -414,18 +463,20 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   };
 
   const formCardStyle: React.CSSProperties = {
-    backgroundColor: '#ffffff',
+    backgroundColor: isDark ? '#1F2937' : '#ffffff',
     borderRadius: '24px',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
+    boxShadow: isDark
+      ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+      : '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
     padding: isMobile ? '32px' : '40px',
-    border: '1px solid #F3F4F6',
+    border: isDark ? '1px solid #374151' : '1px solid #F3F4F6',
   };
 
   const backButtonStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    color: '#6B7280',
+    color: isDark ? '#9CA3AF' : '#6B7280',
     fontSize: '14px',
     marginBottom: '24px',
     background: 'none',
@@ -444,20 +495,20 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const formTitleStyle: React.CSSProperties = {
     fontSize: '28px',
     fontWeight: 700,
-    color: '#111827',
+    color: isDark ? '#F9FAFB' : '#111827',
     marginBottom: '8px',
   };
 
   const formSubtitleStyle: React.CSSProperties = {
-    color: '#6B7280',
+    color: isDark ? '#9CA3AF' : '#6B7280',
     marginBottom: '32px',
   };
 
   const errorBoxStyle: React.CSSProperties = {
     marginBottom: '24px',
     padding: '16px',
-    backgroundColor: '#FEF2F2',
-    border: '1px solid #FECACA',
+    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2',
+    border: isDark ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid #FECACA',
     borderRadius: '12px',
     display: 'flex',
     alignItems: 'flex-start',
@@ -472,7 +523,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     display: 'block',
     fontSize: '14px',
     fontWeight: 500,
-    color: '#374151',
+    color: isDark ? '#D1D5DB' : '#374151',
     marginBottom: '8px',
   };
 
@@ -494,11 +545,11 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     paddingRight: '16px',
     paddingTop: '14px',
     paddingBottom: '14px',
-    border: '1px solid #D1D5DB',
+    border: isDark ? '1px solid #4B5563' : '1px solid #D1D5DB',
     borderRadius: '12px',
     fontSize: '16px',
-    color: '#111827',
-    backgroundColor: '#F9FAFB',
+    color: isDark ? '#F9FAFB' : '#111827',
+    backgroundColor: isDark ? '#374151' : '#F9FAFB',
     outline: 'none',
     boxSizing: 'border-box',
     transition: 'all 0.2s',
@@ -527,7 +578,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     alignItems: 'center',
     gap: '8px',
     fontSize: '14px',
-    color: '#374151',
+    color: isDark ? '#D1D5DB' : '#374151',
     cursor: 'pointer',
   };
 
@@ -560,13 +611,13 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
   const footerStyle: React.CSSProperties = {
     marginTop: '32px',
     paddingTop: '24px',
-    borderTop: '1px solid #E5E7EB',
+    borderTop: isDark ? '1px solid #374151' : '1px solid #E5E7EB',
   };
 
   const footerTextStyle: React.CSSProperties = {
     textAlign: 'center',
     fontSize: '14px',
-    color: '#4B5563',
+    color: isDark ? '#9CA3AF' : '#4B5563',
     marginBottom: '12px',
   };
 
@@ -582,7 +633,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
     marginTop: '24px',
     textAlign: 'center',
     fontSize: '14px',
-    color: '#9CA3AF',
+    color: isDark ? '#6B7280' : '#9CA3AF',
   };
 
   return (
@@ -616,30 +667,30 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
 
           <div>
             <div style={featureItemStyle}>
-              <div style={featureIconBoxStyle('#DBEAFE')}>
+              <div style={featureIconBoxStyle('#DBEAFE', 'rgba(37, 99, 235, 0.2)')}>
                 <Sparkles style={{ width: 20, height: 20, color: '#2563EB' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>AI-Powered Resume Parsing</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>Automated candidate screening and matching</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>AI-Powered Resume Parsing</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Automated candidate screening and matching</div>
               </div>
             </div>
             <div style={featureItemStyle}>
-              <div style={featureIconBoxStyle('#E0E7FF')}>
+              <div style={featureIconBoxStyle('#E0E7FF', 'rgba(67, 56, 202, 0.2)')}>
                 <Sparkles style={{ width: 20, height: 20, color: '#4338CA' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>Smart Assessment Tools</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>LLM-driven candidate evaluations</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>Smart Assessment Tools</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>LLM-driven candidate evaluations</div>
               </div>
             </div>
             <div style={featureItemStyle}>
-              <div style={featureIconBoxStyle('#EDE9FE')}>
+              <div style={featureIconBoxStyle('#EDE9FE', 'rgba(124, 58, 237, 0.2)')}>
                 <Sparkles style={{ width: 20, height: 20, color: '#7C3AED' }} />
               </div>
               <div>
-                <div style={{ color: '#111827', fontWeight: 500 }}>Centralized Database</div>
-                <div style={{ fontSize: 14, color: '#6B7280' }}>Organize and track all candidates in one place</div>
+                <div style={{ color: isDark ? '#F9FAFB' : '#111827', fontWeight: 500 }}>Centralized Database</div>
+                <div style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Organize and track all candidates in one place</div>
               </div>
             </div>
           </div>
@@ -662,7 +713,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                 <Briefcase style={{ width: 24, height: 24, color: '#ffffff' }} />
               </div>
               <div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: '#111827' }}>TalentFlow</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>TalentFlow</div>
                 <div style={{ fontSize: 12, color: '#2563EB' }}>Recruitment Platform</div>
               </div>
             </div>
@@ -695,15 +746,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                   <p style={{ ...formSubtitleStyle, marginBottom: '8px' }}>
                     Enter the 6-digit code from your authenticator app
                   </p>
-                  <p style={{ fontSize: '14px', color: '#9CA3AF' }}>
-                    Logging in as <strong style={{ color: '#374151' }}>{userEmail2FA}</strong>
+                  <p style={{ fontSize: '14px', color: isDark ? '#6B7280' : '#9CA3AF' }}>
+                    Logging in as <strong style={{ color: isDark ? '#D1D5DB' : '#374151' }}>{userEmail2FA}</strong>
                   </p>
                 </div>
 
                 {error && (
                   <div style={errorBoxStyle}>
                     <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-                    <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
+                    <span style={{ fontSize: 14, color: isDark ? '#FCA5A5' : '#991B1B' }}>{error}</span>
                   </div>
                 )}
 
@@ -726,19 +777,20 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                           textAlign: 'center',
                           fontSize: '24px',
                           fontWeight: 600,
-                          border: '2px solid #D1D5DB',
+                          border: isDark ? '2px solid #4B5563' : '2px solid #D1D5DB',
                           borderRadius: '12px',
-                          backgroundColor: '#F9FAFB',
+                          backgroundColor: isDark ? '#374151' : '#F9FAFB',
+                          color: isDark ? '#F9FAFB' : '#111827',
                           outline: 'none',
                           transition: 'all 0.2s',
                         }}
                         onFocus={(e) => {
                           e.target.style.borderColor = '#2563EB';
-                          e.target.style.backgroundColor = '#ffffff';
+                          e.target.style.backgroundColor = isDark ? '#4B5563' : '#ffffff';
                         }}
                         onBlur={(e) => {
-                          e.target.style.borderColor = '#D1D5DB';
-                          e.target.style.backgroundColor = '#F9FAFB';
+                          e.target.style.borderColor = isDark ? '#4B5563' : '#D1D5DB';
+                          e.target.style.backgroundColor = isDark ? '#374151' : '#F9FAFB';
                         }}
                       />
                     ))}
@@ -767,7 +819,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                   </button>
                 </form>
 
-                <p style={{ marginTop: '24px', textAlign: 'center', fontSize: '14px', color: '#6B7280' }}>
+                <p style={{ marginTop: '24px', textAlign: 'center', fontSize: '14px', color: isDark ? '#9CA3AF' : '#6B7280' }}>
                   Open your authenticator app (Google Authenticator, Authy, etc.) to view your verification code.
                 </p>
               </>
@@ -778,15 +830,15 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                   <div style={{
                     marginBottom: '20px',
                     padding: '10px 14px',
-                    backgroundColor: '#EFF6FF',
-                    border: '1px solid #BFDBFE',
+                    backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : '#EFF6FF',
+                    border: isDark ? '1px solid rgba(37, 99, 235, 0.3)' : '1px solid #BFDBFE',
                     borderRadius: '10px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
                   }}>
                     <Building2 style={{ width: 16, height: 16, color: '#2563EB', flexShrink: 0 }} />
-                    <span style={{ fontSize: '13px', color: '#1D4ED8' }}>
+                    <span style={{ fontSize: '13px', color: isDark ? '#93C5FD' : '#1D4ED8' }}>
                       Signing in to <strong style={{ textTransform: 'capitalize' }}>{subdomain}</strong> workspace
                     </span>
                   </div>
@@ -798,7 +850,7 @@ export default function Login({ onSwitchToSignUp, onBackToPublic }: LoginProps) 
                 {error && (
                   <div style={errorBoxStyle}>
                     <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-                    <span style={{ fontSize: 14, color: '#991B1B' }}>{error}</span>
+                    <span style={{ fontSize: 14, color: isDark ? '#FCA5A5' : '#991B1B' }}>{error}</span>
                   </div>
                 )}
 

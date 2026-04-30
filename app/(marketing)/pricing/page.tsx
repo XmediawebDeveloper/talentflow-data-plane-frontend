@@ -1,5 +1,8 @@
 "use client";
 
+// ⚠️ MIRROR PAGE: This pricing page is mirrored with components/auth/PlanSelectionModal.tsx
+// Any changes to plan display, free-trial logic, or quota rendering MUST be applied to both files.
+
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Check, Sparkles, Building2, Users, Zap, Loader2 } from "lucide-react";
@@ -354,9 +357,9 @@ export default function PricingPage() {
           })
           .filter((plan): plan is DisplayPlan => plan !== null)
           .sort((a, b) => {
-            // Sort by price (monthly price as baseline)
-            const orderA = a.monthlyPrice || 0;
-            const orderB = b.monthlyPrice || 0;
+            const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
+            const orderA = tierOrder[(a.planTier || '').toUpperCase()] ?? 99;
+            const orderB = tierOrder[(b.planTier || '').toUpperCase()] ?? 99;
             return orderA - orderB;
           });
 
@@ -486,7 +489,7 @@ export default function PricingPage() {
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
             {freeTrial ? (
-              <>Start with a {freeTrial.trial_days}-day free trial. No credit card required.</>
+              <>Start with a {freeTrial.trial_days}-{freeTrial.trial_days === 1 ? 'day' : 'days'} free trial. No credit card required.</>
             ) : (
               <>Start with a free trial. No credit card required.</>
             )}
@@ -586,16 +589,16 @@ export default function PricingPage() {
           // Combine free trial card with other plans
           const allPlans = freeTrialCard ? [...plans, freeTrialCard] : plans;
 
-          // Sort plans: ascending order (lowest price first, free trial first)
+          // Sort plans: Free Trial first, then STARTER > PROFESSIONAL > ENTERPRISE
+          const tierOrder: Record<string, number> = { STARTER: 0, PROFESSIONAL: 1, ENTERPRISE: 2 };
           const sortedPlans = [...allPlans].sort((a, b) => {
             const aIsTrial = a.id === 'free-trial';
             const bIsTrial = b.id === 'free-trial';
-            if (aIsTrial) return -1; // Trial goes first
-            if (bIsTrial) return 1; // Trial goes first
-            // Sort by price ascending (lowest first)
-            const priceA = a.yearlyPrice || a.monthlyPrice || 0;
-            const priceB = b.yearlyPrice || b.monthlyPrice || 0;
-            return priceA - priceB;
+            if (aIsTrial) return -1;
+            if (bIsTrial) return 1;
+            const orderA = tierOrder[(a.planTier || '').toUpperCase()] ?? 99;
+            const orderB = tierOrder[(b.planTier || '').toUpperCase()] ?? 99;
+            return orderA - orderB;
           });
 
           // Build Custom plan card with ALL features from paid plans, placed last
@@ -781,7 +784,6 @@ export default function PricingPage() {
                                     { label: 'Resume Scores', value: 'Unlimited' },
                                     { label: 'Assessments', value: 'Unlimited' },
                                     { label: 'AI Interviews', value: 'Unlimited' },
-                                    { label: 'Total Storage', value: 'Unlimited' },
                                   ].map((item) => (
                                     <div key={item.label} className="flex justify-between items-center">
                                       <span className="text-gray-500">{item.label}</span>
@@ -854,14 +856,6 @@ export default function PricingPage() {
                                     <span className="text-gray-500">AI Interviews</span>
                                     <span className="font-semibold text-gray-900 dark:text-white">
                                       {normalizedQuotas.AIU.toLocaleString()}
-                                    </span>
-                                  </div>
-                                )}
-                                {normalizedQuotas.total_resume_storage !== undefined && normalizedQuotas.total_resume_storage >= 1 && (
-                                  <div className="flex justify-between items-center">
-                                    <span className="text-gray-500">Total Storage</span>
-                                    <span className="font-semibold text-gray-900 dark:text-white">
-                                      {normalizedQuotas.total_resume_storage.toLocaleString()}
                                     </span>
                                   </div>
                                 )}

@@ -1,7 +1,9 @@
-import { X, Mail, Plus, Trash2, Send, CheckCircle, FileText, AlertTriangle, Loader2, Sparkles } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { X, Mail, Plus, Trash2, Send, CheckCircle, FileText, AlertTriangle, Loader2, Sparkles, ShieldAlert, Info, Database, FolderOpen, Folder, ChevronRight, ChevronDown, Users, Upload } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
 import { assessmentService } from '@/lib/services/assessmentService';
+import { useAuth } from '@/lib/hooks/useAuth';
+import api from '@/lib/services/api';
 
 interface InviteToAssessmentModalProps {
   onClose: () => void;
@@ -35,10 +37,17 @@ interface Assessment {
 type ModalView = 'loading' | 'no-assessment' | 'invite';
 
 export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, candidate }: InviteToAssessmentModalProps) {
+  const { user } = useAuth();
   const [view, setView] = useState<ModalView>('loading');
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [selectedAssessment, setSelectedAssessment] = useState<string>('');
   const [isLoadingAssessments, setIsLoadingAssessments] = useState(true);
+
+  // Quota stats
+  const [quotaStats, setQuotaStats] = useState<{
+    total_quota: number; consumed: number; pending: number; available: number;
+  } | null>(null);
+  const [quotaStatsLoading, setQuotaStatsLoading] = useState(false);
 
   // Candidate state
   const candidateName = candidate?.name || candidate?.candidateName || '';
@@ -49,13 +58,142 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   );
 
   // Invite state
-  const [expiryDays, setExpiryDays] = useState(7);
+  const [expiryDays, setExpiryDays] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   // Duplicate invitation popup state
   const [showDuplicateError, setShowDuplicateError] = useState(false);
   const [duplicateEmails, setDuplicateEmails] = useState<string[]>([]);
+
+  // Input mode & DB selection state
+  const [inputMode, setInputMode] = useState<'manual' | 'database'>('manual');
+  const [dbTab, setDbTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
+  const [myResumesData, setMyResumesData] = useState<{ id: string; name: string; email: string; position: string; experience: string }[]>([]);
+  const [internalDbData, setInternalDbData] = useState<{ id: string; name: string; email: string; position: string; experience: string }[]>([]);
+  const [myFolders, setMyFolders] = useState<{ id: string; name: string; parentId?: string | null }[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
+  const [dbSearchQuery, setDbSearchQuery] = useState('');
+  const [myResumesLoaded, setMyResumesLoaded] = useState(false);
+  const [internalDbLoaded, setInternalDbLoaded] = useState(false);
+  const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+
+  const hasMyResumesAccess = !!(user?.permissions?.canUploadResumes || user?.permissions?.canViewResumes);
+  const hasInternalDBAccess = !!(user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB);
+
+  const mapResume = (r: any) => ({
+    id: r.id,
+    name: r.candidate_name || 'Unknown',
+    email: r.email || r.candidate_email || '',
+    position: r.current_title || 'Not specified',
+    experience: r.experience_years ? `${r.experience_years} years` : '',
+  });
+
+  const loadMyResumes = async () => {
+    if (myResumesLoaded) return;
+    setIsLoadingResumes(true);
+    try {
+      const [resumeRes, folderRes] = await Promise.all([
+        api.get('/resumes', { params: { source: 'my-resumes', page_size: 200 } }),
+        api.get('/folders'),
+      ]);
+      setMyResumesData((resumeRes.data?.items ?? []).map(mapResume));
+      setMyFolders((folderRes.data ?? []).map((f: any) => ({ id: f.id, name: f.name, parentId: f.parent_id ?? null })));
+      setMyResumesLoaded(true);
+    } catch { toast.error({ title: 'Error', description: 'Failed to load My Resumes' }); }
+    finally { setIsLoadingResumes(false); }
+  };
+
+  const loadInternalDb = async () => {
+    if (internalDbLoaded) return;
+    setIsLoadingResumes(true);
+    try {
+      const res = await api.get('/resumes', { params: { source: 'internal-db', page_size: 200 } });
+      setInternalDbData((res.data?.items ?? []).map(mapResume));
+      setInternalDbLoaded(true);
+    } catch { toast.error({ title: 'Error', description: 'Failed to load Internal Database' }); }
+    finally { setIsLoadingResumes(false); }
+  };
+
+  useEffect(() => {
+    if (inputMode === 'database') {
+      const tab = hasMyResumesAccess ? 'my-resumes' : 'internal-db';
+      setDbTab(tab);
+      if (tab === 'my-resumes') loadMyResumes(); else loadInternalDb();
+    }
+  }, [inputMode]);
+
+  useEffect(() => {
+    if (inputMode !== 'database') return;
+    if (dbTab === 'my-resumes' && !myResumesLoaded) loadMyResumes();
+    if (dbTab === 'internal-db' && !internalDbLoaded) loadInternalDb();
+    setSelectedFolder('all');
+    setSelectedResumes([]);
+    setDbSearchQuery('');
+  }, [dbTab]);
+
+  const toggleExpandFolder = (id: string) => {
+    setExpandedFolders(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
+  };
+
+  const renderFolderTree = (parentId?: string | null, level = 0): React.ReactNode => {
+    const children = myFolders.filter(f => {
+      const isTop = !parentId && (f.parentId === null || f.parentId === undefined);
+      const isChild = parentId && f.parentId === parentId;
+      return isTop || isChild;
+    });
+    return children.map(folder => {
+      const isExpanded = expandedFolders.includes(folder.id);
+      const isSelected = selectedFolder === folder.id;
+      const hasChildren = myFolders.some(f => f.parentId === folder.id);
+      const count = myResumesData.filter(r => (r as any).folderId === folder.id).length;
+      return (
+        <div key={folder.id}>
+          <button
+            onClick={() => setSelectedFolder(folder.id)}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${isSelected ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+            style={{ paddingLeft: `${level * 16 + 12}px` }}
+          >
+            {hasChildren ? (
+              <button onClick={e => { e.stopPropagation(); toggleExpandFolder(folder.id); }} className="p-0.5 hover:bg-gray-200 rounded">
+                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+            ) : <div className="w-5" />}
+            {isExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />}
+            <span className="flex-1 text-left truncate">{folder.name}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">{count}</span>
+          </button>
+          {isExpanded && hasChildren && <div>{renderFolderTree(folder.id, level + 1)}</div>}
+        </div>
+      );
+    });
+  };
+
+  const activeDbResumes = dbTab === 'my-resumes' ? myResumesData : internalDbData;
+  const folderFiltered = dbTab === 'my-resumes' && selectedFolder !== 'all'
+    ? activeDbResumes.filter(r => (r as any).folderId === selectedFolder)
+    : activeDbResumes;
+  const filteredDbResumes = folderFiltered.filter(r =>
+    r.name.toLowerCase().includes(dbSearchQuery.toLowerCase()) ||
+    r.email.toLowerCase().includes(dbSearchQuery.toLowerCase()) ||
+    r.position.toLowerCase().includes(dbSearchQuery.toLowerCase())
+  );
+
+  const handleAddFromDatabase = () => {
+    const selected = activeDbResumes.filter(r => selectedResumes.includes(r.id) && r.email);
+    const newCandidates = selected.map(r => ({
+      id: Date.now().toString() + Math.random(),
+      name: r.name,
+      email: r.email,
+      source: 'database' as const,
+    }));
+    const existing = candidates.filter(c => c.source !== 'database' && (c.name.trim() || c.email.trim()));
+    setCandidates([...existing, ...newCandidates]);
+    setSelectedResumes([]);
+    setInputMode('manual');
+  };
 
   // Note: Assessment creation is now handled by redirecting to /recruitment/assessments/create page
   // No need for inline assessment creation state
@@ -64,6 +202,17 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
   useEffect(() => {
     fetchAssessments();
   }, [jobId]);
+
+  // Fetch quota stats when invite view is shown
+  useEffect(() => {
+    if (view === 'invite') {
+      setQuotaStatsLoading(true);
+      assessmentService.getInvitationStats()
+        .then(stats => setQuotaStats(stats))
+        .catch(() => setQuotaStats(null))
+        .finally(() => setQuotaStatsLoading(false));
+    }
+  }, [view]);
 
   const fetchAssessments = async () => {
     setIsLoadingAssessments(true);
@@ -130,6 +279,18 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
       return;
     }
 
+    // Quota check
+    if (quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < validCandidates.length) {
+      const pendingMsg = quotaStats.pending > 0
+        ? ` ${quotaStats.pending} unit(s) are held by pending invitations (released when links expire).`
+        : '';
+      toast.error({
+        title: 'Insufficient Quota',
+        description: `You have ${quotaStats.available} unit(s) available but need ${validCandidates.length}.${pendingMsg}`,
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const results = await Promise.allSettled(
@@ -138,6 +299,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             candidate_name: candidate.name,
             candidate_email: candidate.email,
             invite_source: 'JD',
+            expiry_days: expiryDays,
           })
         )
       );
@@ -308,7 +470,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
           {/* Header - Grey Theme */}
           <div className="bg-gradient-to-r from-gray-700 to-gray-800 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
             <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="min-w-0">
@@ -365,7 +527,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
         {/* Header */}
         <div className="bg-gradient-to-r from-green-600 to-teal-600 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center flex-shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
               <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div className="min-w-0">
@@ -412,54 +574,245 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             </div>
           </div>
 
+          {/* Quota Banner */}
+          {!quotaStatsLoading && quotaStats !== null && (() => {
+            const isUnlimited = quotaStats.total_quota >= 999999;
+            const isInsufficient = !isUnlimited && quotaStats.available === 0;
+            const isLow = !isUnlimited && !isInsufficient && quotaStats.available <= 5;
+            if (isUnlimited) {
+              return (
+                <div className="rounded-lg p-3 sm:p-4 border bg-blue-50 border-blue-200 flex items-center gap-2">
+                  <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                  <span className="text-xs sm:text-sm font-medium text-blue-800">Unlimited assessment units</span>
+                </div>
+              );
+            }
+            return (
+              <div className={`rounded-lg p-3 sm:p-4 border flex items-start gap-3 ${
+                isInsufficient ? 'bg-red-50 border-red-200' : isLow ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'
+              }`}>
+                {isInsufficient
+                  ? <ShieldAlert className="w-4 h-4 mt-0.5 text-red-500 flex-shrink-0" />
+                  : <Info className="w-4 h-4 mt-0.5 text-blue-500 flex-shrink-0" />
+                }
+                <div className="flex-1 min-w-0">
+                  <p className={`text-xs sm:text-sm font-medium ${
+                    isInsufficient ? 'text-red-800' : isLow ? 'text-amber-800' : 'text-blue-800'
+                  }`}>
+                    Assessment Quota
+                  </p>
+                  <div className={`text-xs mt-1 flex flex-wrap gap-x-4 gap-y-1 ${
+                    isInsufficient ? 'text-red-700' : isLow ? 'text-amber-700' : 'text-blue-700'
+                  }`}>
+                    <span>Total: <strong>{quotaStats.total_quota}</strong></span>
+                    <span>Consumed: <strong>{quotaStats.consumed}</strong></span>
+                    <span>Pending: <strong>{quotaStats.pending}</strong></span>
+                    <span>Available: <strong>{quotaStats.available}</strong></span>
+                  </div>
+                  {isInsufficient && (
+                    <p className="text-xs text-red-600 mt-1">
+                      No units available. {quotaStats.pending > 0 ? `${quotaStats.pending} unit(s) will be released when pending invitations expire.` : 'Contact your administrator to increase quota.'}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Candidates */}
           <div>
-            <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <div className="flex items-center justify-between mb-2 sm:mb-3 flex-wrap gap-2">
               <label className="block text-xs sm:text-sm font-medium text-gray-700">Candidates *</label>
-              <button
-                onClick={addCandidate}
-                className="text-xs sm:text-sm text-green-600 hover:text-green-700 flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                Add Candidate
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setInputMode('manual')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                    inputMode === 'manual' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Type Manually
+                </button>
+                <button
+                  onClick={() => setInputMode('database')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                    inputMode === 'database' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  Select From
+                </button>
+              </div>
             </div>
-            <div className="space-y-2 sm:space-y-3">
-              {candidates.map((cand) => (
-                <div key={cand.id} className="flex items-start sm:items-center gap-2 sm:gap-3 p-2.5 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Full Name</label>
-                      <input
-                        type="text"
-                        value={cand.name}
-                        onChange={(e) => updateCandidate(cand.id, 'name', e.target.value)}
-                        placeholder="John Doe"
-                        className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      />
+
+            {/* Manual Input */}
+            {inputMode === 'manual' && (
+              <>
+                <div className="flex justify-end mb-2">
+                  <button onClick={addCandidate} className="text-xs text-green-600 hover:text-green-700 flex items-center gap-1">
+                    <Plus className="w-3.5 h-3.5" />
+                    Add Candidate
+                  </button>
+                </div>
+                <div className="space-y-2 sm:space-y-3">
+                  {candidates.map((cand) => (
+                    <div key={cand.id} className={`flex items-start sm:items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border ${cand.source === 'database' ? 'bg-gray-50 border-gray-300' : 'bg-gray-50 border-gray-200'}`}>
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                        <div>
+                          <label className="text-xs text-gray-500 mb-1 block">Full Name</label>
+                          <input
+                            type="text"
+                            value={cand.name}
+                            onChange={(e) => updateCandidate(cand.id, 'name', e.target.value)}
+                            placeholder="John Doe"
+                            readOnly={cand.source === 'database'}
+                            className={`w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-green-500 focus:border-transparent ${cand.source === 'database' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-gray-500 mb-1 block">Email Address</label>
+                          <input
+                            type="email"
+                            value={cand.email}
+                            onChange={(e) => updateCandidate(cand.id, 'email', e.target.value)}
+                            placeholder="john.doe@email.com"
+                            readOnly={cand.source === 'database'}
+                            className={`w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-green-500 focus:border-transparent ${cand.source === 'database' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                          />
+                        </div>
+                      </div>
+                      {(candidates.length > 1 || cand.source === 'database') && (
+                        <button
+                          onClick={() => removeCandidate(cand.id)}
+                          className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 mt-5 sm:mt-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
-                    <div>
-                      <label className="text-xs text-gray-500 mb-1 block">Email Address</label>
-                      <input
-                        type="email"
-                        value={cand.email}
-                        onChange={(e) => updateCandidate(cand.id, 'email', e.target.value)}
-                        placeholder="john.doe@email.com"
-                        className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 border border-gray-300 rounded-lg text-sm text-black focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  {candidates.length > 1 && (
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Database Selection */}
+            {inputMode === 'database' && (
+              <div className="border-2 border-gray-200 rounded-lg overflow-hidden">
+                {/* Tabs */}
+                <div className="flex border-b border-gray-200 bg-gray-50">
+                  {hasMyResumesAccess && (
                     <button
-                      onClick={() => removeCandidate(cand.id)}
-                      className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 mt-5 sm:mt-0"
+                      onClick={() => setDbTab('my-resumes')}
+                      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors border-b-2 ${dbTab === 'my-resumes' ? 'border-gray-800 text-gray-900 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      My Resumes
+                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700">{myResumesData.length}</span>
+                    </button>
+                  )}
+                  {(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess)) && (
+                    <button
+                      onClick={() => setDbTab('internal-db')}
+                      className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors border-b-2 ${dbTab === 'internal-db' ? 'border-gray-800 text-gray-900 bg-white' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                      <Database className="w-3.5 h-3.5" />
+                      Internal Database
+                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700">{internalDbData.length}</span>
                     </button>
                   )}
                 </div>
-              ))}
-            </div>
+
+                <div className="flex" style={{ minHeight: '260px', maxHeight: '340px' }}>
+                  {/* Folder Sidebar */}
+                  {dbTab === 'my-resumes' && myFolders.length > 0 && (
+                    <div className="w-40 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0 p-2">
+                      <p className="text-xs font-medium text-gray-500 uppercase mb-1.5 px-1">Folders</p>
+                      <button
+                        onClick={() => setSelectedFolder('all')}
+                        className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs mb-1 ${selectedFolder === 'all' ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}`}
+                      >
+                        <FolderOpen className="w-3.5 h-3.5" />
+                        <span className="flex-1 text-left">All Resumes</span>
+                        <span className="text-xs px-1 rounded-full bg-gray-200 text-gray-600">{myResumesData.length}</span>
+                      </button>
+                      <div className="space-y-0.5">{renderFolderTree(undefined, 0)}</div>
+                    </div>
+                  )}
+
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {/* Search + Select All */}
+                    <div className="flex items-center gap-2 p-2 border-b border-gray-100">
+                      <input
+                        type="text"
+                        value={dbSearchQuery}
+                        onChange={e => setDbSearchQuery(e.target.value)}
+                        placeholder="Search by name, email..."
+                        className="flex-1 px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-green-500"
+                      />
+                      <button
+                        onClick={() => {
+                          if (selectedResumes.length === filteredDbResumes.length && filteredDbResumes.length > 0) {
+                            setSelectedResumes([]);
+                          } else {
+                            setSelectedResumes(filteredDbResumes.map(r => r.id));
+                          }
+                        }}
+                        className="px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 whitespace-nowrap text-gray-700"
+                      >
+                        {selectedResumes.length === filteredDbResumes.length && filteredDbResumes.length > 0 ? 'Deselect All' : 'Select All'}
+                      </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                      {isLoadingResumes ? (
+                        <div className="flex items-center justify-center py-10">
+                          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+                        </div>
+                      ) : filteredDbResumes.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                          <Database className="w-7 h-7 mb-2" />
+                          <p className="text-xs">{dbSearchQuery ? 'No resumes match your search' : 'No resumes found'}</p>
+                        </div>
+                      ) : filteredDbResumes.map(resume => (
+                        <div
+                          key={resume.id}
+                          onClick={() => setSelectedResumes(prev => prev.includes(resume.id) ? prev.filter(id => id !== resume.id) : [...prev, resume.id])}
+                          className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                            selectedResumes.includes(resume.id) ? 'bg-gray-50 border-gray-800' : 'bg-white border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${
+                            selectedResumes.includes(resume.id) ? 'bg-gray-800 border-gray-800' : 'border-gray-300'
+                          }`}>
+                            {selectedResumes.includes(resume.id) && <CheckCircle className="w-3 h-3 text-white" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-medium text-gray-900 truncate">{resume.name}</span>
+                              <span className="text-xs text-gray-400 flex-shrink-0">{resume.experience}</span>
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">{resume.email}</div>
+                            <div className="text-xs text-gray-400 truncate">{resume.position}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200 bg-gray-50">
+                      <span className="text-xs text-gray-500">{selectedResumes.length} selected</span>
+                      <button
+                        onClick={handleAddFromDatabase}
+                        disabled={selectedResumes.length === 0}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-xs transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        Add Selected
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Expiry Settings */}
@@ -497,8 +850,17 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
         {/* Footer */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-stretch sm:items-center sm:justify-between gap-3">
-          <div className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
-            {candidates.filter(c => c.name.trim() && c.email.trim()).length} candidate{candidates.length !== 1 ? 's' : ''} will receive invitations
+          <div className="text-xs sm:text-sm text-center sm:text-left">
+            {(() => {
+              const validCount = candidates.filter(c => c.name.trim() && c.email.trim()).length;
+              const insufficient = quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < validCount && validCount > 0;
+              return (
+                <span className={insufficient ? 'text-red-600 font-medium' : 'text-gray-600'}>
+                  {validCount} candidate{validCount !== 1 ? 's' : ''} will receive invitations
+                  {insufficient && ` — only ${quotaStats!.available} unit(s) available`}
+                </span>
+              );
+            })()}
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <button
@@ -509,7 +871,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             </button>
             <button
               onClick={handleSendInvitations}
-              disabled={!isValid || isSubmitting}
+              disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
               className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white text-sm sm:text-base rounded-lg hover:from-green-700 hover:to-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isSubmitting ? (

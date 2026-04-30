@@ -42,6 +42,7 @@ function JobDetailsContent() {
   const [job, setJob] = useState<ExtendedJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [rawJdData, setRawJdData] = useState<JDResponse | null>(null);
+  const [allJDIds, setAllJDIds] = useState<string[]>([]);
   const [showDisableModal, setShowDisableModal] = useState(false);
   const [jobToDisable, setJobToDisable] = useState<Job | null>(null);
 
@@ -50,6 +51,22 @@ function JobDetailsContent() {
       fetchJobDetails();
     }
   }, [jobId]);
+
+  useEffect(() => {
+    const fetchAllPublished = async () => {
+      const ids: string[] = [];
+      let page = 1;
+      while (true) {
+        const res = await jdService.list({ status: 'published', page_size: 100, page });
+        const items = res.items ?? [];
+        ids.push(...items.map((j: JDResponse) => j.id));
+        if (ids.length >= res.total || items.length < 100) break;
+        page++;
+      }
+      setAllJDIds(ids);
+    };
+    fetchAllPublished().catch(() => {});
+  }, []);
 
   const fetchJobDetails = async () => {
     if (!jobId) return;
@@ -335,13 +352,17 @@ function JobDetailsContent() {
         onDisable={isTenantAdmin || hasPermission('canDisableJD') ? handleDisable : undefined}
         onEnable={isTenantAdmin || hasPermission('canDisableJD') ? handleEnable : undefined}
         onArchive={isTenantAdmin || hasPermission('canArchiveJD') ? handleArchive : undefined}
-        onUnarchive={handleUnarchive}  // Unarchive handler for archived JDs
+        onUnarchive={handleUnarchive}
         onDelete={handleDelete}
         onNavigateToAITalentMatch={handleNavigateToAITalentMatch}
-        onRepublish={handleRepublish}  // JD13: Republish handler
-        isTenantAdmin={isTenantAdmin}  // JD15: Pass role for disable/enable button visibility
-        user={user}  // ✅ PERMISSIONS: Pass user for permission checking
-        tenant={tenant}  // ✅ PERMISSIONS: Pass tenant for feature flag checking
+        onRepublish={handleRepublish}
+        isTenantAdmin={isTenantAdmin}
+        user={user}
+        tenant={tenant}
+        prevId={allJDIds.indexOf(jobId ?? '') > 0 ? allJDIds[allJDIds.indexOf(jobId ?? '') - 1] : null}
+        nextId={allJDIds.indexOf(jobId ?? '') >= 0 && allJDIds.indexOf(jobId ?? '') < allJDIds.length - 1 ? allJDIds[allJDIds.indexOf(jobId ?? '') + 1] : null}
+        currentIndex={allJDIds.indexOf(jobId ?? '')}
+        totalCount={allJDIds.length}
       />
     </>
   );

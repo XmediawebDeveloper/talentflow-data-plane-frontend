@@ -1,6 +1,6 @@
 'use client';
 
-import { Users, Plus, Info, Loader2, BarChart3, Search, ChevronLeft, ChevronRight, Filter, TrendingUp } from 'lucide-react';
+import { Users, Plus, Info, Loader2, BarChart3, Search, ChevronLeft, ChevronRight, Filter, TrendingUp, History } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ import {
   TeamAnalyticsDashboard,
   TeamUsageAnalytics,
 } from '@/components/teams';
+import TeamHistory from '@/components/teams/TeamHistory';
 
 const ITEMS_PER_PAGE = 6;
 
@@ -48,7 +49,7 @@ export default function TeamManagementPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'teams' | 'usage' | 'analytics'>('teams');
+  const [activeTab, setActiveTab] = useState<'teams' | 'usage' | 'analytics' | 'history'>('teams');
 
   // Search, filter, and pagination
   const [searchQuery, setSearchQuery] = useState('');
@@ -167,8 +168,8 @@ export default function TeamManagementPage() {
 
   // Handlers
   const handleOpenCreateModal = async () => {
-    if (currentUser?.role !== 'tenant_admin') {
-      toast.error('Only tenant administrators can create teams');
+    if (!canCreateTeams) {
+      toast.error('You do not have permission to create teams');
       return;
     }
 
@@ -206,7 +207,7 @@ export default function TeamManagementPage() {
       await refreshData();
     } catch (error: any) {
       console.error('Error creating team:', error);
-      toast.error(error.message || 'Failed to create team');
+      toast.error(error.response?.data?.detail || error.message || 'Failed to create team');
     } finally {
       setIsCreating(false);
     }
@@ -292,7 +293,11 @@ export default function TeamManagementPage() {
 
   // Computed values
   const isTenantAdmin = currentUser?.role === 'tenant_admin';
-  const canCreateTeams = isTenantAdmin;
+  const canCreateTeams = isTenantAdmin || !!currentUser?.permissions?.can_create_teams;
+  const canEditTeams = isTenantAdmin || !!currentUser?.permissions?.can_update_teams;
+  const canDeleteTeams = isTenantAdmin || !!currentUser?.permissions?.can_delete_teams;
+  const canViewUsageTab = isTenantAdmin || !!currentUser?.permissions?.can_view_team_usage;
+  const canViewAnalyticsTab = isTenantAdmin || !!currentUser?.permissions?.can_view_team_usage;
 
   if (isLoading) {
     return (
@@ -329,7 +334,7 @@ export default function TeamManagementPage() {
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-2">Team Management</h1>
               <p className="text-gray-600">Manage teams, members, and view usage</p>
             </div>
-            {isTenantAdmin && (
+            {canCreateTeams && (
               <button
                 onClick={handleOpenCreateModal}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl transition-all shadow-lg bg-gray-800 text-white hover:bg-gray-900 hover:shadow-xl"
@@ -341,7 +346,7 @@ export default function TeamManagementPage() {
           </div>
         </div>
 
-        {/* Tabs — Usage and Analytics are admin-only */}
+        {/* Tabs — Usage and Analytics visible based on permissions */}
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => setActiveTab('teams')}
@@ -354,41 +359,56 @@ export default function TeamManagementPage() {
             <Users className="w-4 h-4" />
             Teams
           </button>
+          {canViewUsageTab && (
+            <button
+              onClick={() => setActiveTab('usage')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                activeTab === 'usage'
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              Team Usage
+            </button>
+          )}
+          {canViewAnalyticsTab && (
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                activeTab === 'analytics'
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              Analytics
+            </button>
+          )}
           {isTenantAdmin && (
-            <>
-              <button
-                onClick={() => setActiveTab('usage')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                  activeTab === 'usage'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <BarChart3 className="w-4 h-4" />
-                Team Usage
-              </button>
-              <button
-                onClick={() => setActiveTab('analytics')}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                  activeTab === 'analytics'
-                    ? 'bg-gray-800 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <TrendingUp className="w-4 h-4" />
-                Analytics
-              </button>
-            </>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                activeTab === 'history'
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              Teams History
+            </button>
           )}
         </div>
 
-        {/* Usage Tab Content */}
+        {/* Tab Content */}
         {activeTab === 'usage' ? (
           <TeamUsageAnalytics />
         ) : activeTab === 'analytics' ? (
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <TeamAnalyticsDashboard userRole={currentUser?.role || 'standard_user'} />
           </div>
+        ) : activeTab === 'history' ? (
+          <TeamHistory />
         ) : (
           <>
             {/* Stats Cards */}
@@ -449,7 +469,7 @@ export default function TeamManagementPage() {
                 <TeamCard
                   key={team.id}
                   team={team}
-                  canManage={isTenantAdmin}
+                  canManage={canEditTeams}
                   onViewDetails={handleViewDetails}
                   onManageTeam={handleManageTeam}
                 />
@@ -531,17 +551,19 @@ export default function TeamManagementPage() {
         )}
       </div>
 
-      {/* Create Team Modal */}
+      {/* Create Team Modal — only show users not already in a team */}
       <TeamFormModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSubmit={handleCreateTeam}
         mode="create"
-        availableUsers={availableUsers}
+        availableUsers={availableUsers.filter(u =>
+          !teams.some(t => t.members?.some(m => m.id === u.id))
+        )}
         isSubmitting={isCreating}
       />
 
-      {/* Edit Team Modal */}
+      {/* Edit Team Modal — show current team members + users not in any other team */}
       <TeamFormModal
         isOpen={showEditModal}
         onClose={() => {
@@ -560,9 +582,11 @@ export default function TeamManagementPage() {
               }
             : undefined
         }
-        availableUsers={availableUsers}
+        availableUsers={availableUsers.filter(u =>
+          !teams.filter(t => t.id !== selectedTeam?.id).some(t => t.members?.some(m => m.id === u.id))
+        )}
         isSubmitting={isUpdating}
-        onDelete={handleOpenDeleteDialog}
+        onDelete={canDeleteTeams ? handleOpenDeleteDialog : undefined}
         isDeleting={isDeleting}
       />
 

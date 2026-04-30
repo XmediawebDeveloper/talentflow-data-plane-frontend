@@ -30,13 +30,13 @@ export default function JobOpeningsPage() {
   const [editWarningDialog, setEditWarningDialog] = useState<{
     open: boolean;
     jobTitle: string;
-    usageDetails: string;
-  }>({ open: false, jobTitle: '', usageDetails: '' });
+    usageDetails: string[];
+  }>({ open: false, jobTitle: '', usageDetails: [] });
   const [deleteWarningDialog, setDeleteWarningDialog] = useState<{
     open: boolean;
     jobTitle: string;
-    usageDetails: string;
-  }>({ open: false, jobTitle: '', usageDetails: '' });
+    usageDetails: string[];
+  }>({ open: false, jobTitle: '', usageDetails: [] });
   const [disableDialog, setDisableDialog] = useState<{
     open: boolean;
     job: Job | null;
@@ -92,8 +92,12 @@ export default function JobOpeningsPage() {
   const fetchJobs = async () => {
     setLoading(true);
     try {
-      // Fetch user's jobs - filtering is done client-side in JobsListing
-      const response = await jdService.list({ page_size: 100, source: 'my-jds' });
+      // Fetch user's jobs - filtering is done client-side in JobsListing.
+      // Probe for total then pull every record so the count reflects the DB.
+      const probe = await jdService.list({ page_size: 1, source: 'my-jds' });
+      const response = probe.total > probe.items.length
+        ? await jdService.list({ page_size: probe.total, source: 'my-jds' })
+        : probe;
 
       // Convert API JD to component Job type
       const convertedJobs: Job[] = response.items.map((jd: any) => ({
@@ -201,13 +205,14 @@ export default function JobOpeningsPage() {
         const usageDetails = [
           usageStatus.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
           usageStatus.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
-          usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : ''
-        ].filter(Boolean).join(', ');
+          usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : '',
+          usageStatus.usage?.ai_interview_count ? `AI Interview (${usageStatus.usage.ai_interview_count})` : ''
+        ].filter(Boolean) as string[];
 
         setEditWarningDialog({
           open: true,
           jobTitle: job.title,
-          usageDetails: usageDetails
+          usageDetails
         });
         return;
       }
@@ -306,8 +311,9 @@ export default function JobOpeningsPage() {
         const usageDetails = [
           usageStatus.usage?.resume_scores_count ? `Resume Scoring (${usageStatus.usage.resume_scores_count})` : '',
           usageStatus.usage?.assessments_count ? `Assessments (${usageStatus.usage.assessments_count})` : '',
-          usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : ''
-        ].filter(Boolean).join(', ');
+          usageStatus.usage?.ai_matches_count ? `AI Talent Match (${usageStatus.usage.ai_matches_count})` : '',
+          usageStatus.usage?.ai_interview_count ? `AI Interview (${usageStatus.usage.ai_interview_count})` : ''
+        ].filter(Boolean) as string[];
         setDeleteWarningDialog({ open: true, jobTitle: job.title, usageDetails });
         return;
       }
@@ -355,47 +361,60 @@ export default function JobOpeningsPage() {
 
       {/* Edit Warning Dialog */}
       <AlertDialog open={editWarningDialog.open} onOpenChange={(open) => setEditWarningDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <AlertDialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-amber-100 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-amber-600" />
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-amber-600" />
               </div>
               <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-base sm:text-lg font-semibold text-gray-900">
+                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
                   Cannot Edit Job Description
                 </AlertDialogTitle>
-                <AlertDialogDescription className="mt-2 text-xs sm:text-sm text-gray-600">
-                  <span className="font-medium text-gray-800">&quot;{editWarningDialog.jobTitle}&quot;</span> has been used in:
+                <AlertDialogDescription className="mt-1 text-sm text-gray-500">
+                  This job description is actively used and cannot be modified.
                 </AlertDialogDescription>
               </div>
             </div>
           </AlertDialogHeader>
 
-          <div className="mt-3 sm:mt-4 ml-0 sm:ml-16">
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 sm:p-3">
-              <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                {editWarningDialog.usageDetails.split(', ').map((usage, index) => (
+          <div className="mt-4 space-y-4">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 mb-2.5">Active in</p>
+              <div className="flex flex-wrap gap-2">
+                {editWarningDialog.usageDetails.map((usage, index) => (
                   <span
                     key={index}
-                    className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white border border-amber-300 text-amber-800 shadow-sm"
                   >
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
                     {usage}
                   </span>
                 ))}
               </div>
             </div>
-            <p className="mt-2.5 sm:mt-3 text-xs sm:text-sm text-gray-600">
-              To maintain data integrity, this job description cannot be modified. Please create a new job description instead.
-            </p>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm text-gray-700">
+                <span className="font-medium text-gray-900">&quot;{editWarningDialog.jobTitle}&quot;</span> is linked to active modules above. To maintain data integrity, editing is disabled.
+              </p>
+              <p className="mt-1.5 text-sm text-gray-500">
+                Please create a new job description if changes are needed.
+              </p>
+            </div>
           </div>
 
-          <AlertDialogFooter className="mt-4 sm:mt-6 flex gap-3 sm:justify-end">
+          <AlertDialogFooter className="mt-5 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
             <AlertDialogAction
-              onClick={() => setEditWarningDialog({ open: false, jobTitle: '', usageDetails: '' })}
-              className="bg-gray-900 hover:bg-gray-800 text-white text-sm sm:text-base"
+              onClick={() => setEditWarningDialog({ open: false, jobTitle: '', usageDetails: [] })}
+              className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white text-sm"
             >
               I Understand
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => { setEditWarningDialog({ open: false, jobTitle: '', usageDetails: [] }); router.push('/recruitment/jd-creation'); }}
+              className="w-full sm:w-auto bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 text-sm"
+            >
+              Create New JD
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -403,45 +422,52 @@ export default function JobOpeningsPage() {
 
       {/* Delete Warning Dialog - shown when JD is in use */}
       <AlertDialog open={deleteWarningDialog.open} onOpenChange={(open) => setDeleteWarningDialog(prev => ({ ...prev, open }))}>
-        <AlertDialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <AlertDialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" />
               </div>
               <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-base sm:text-lg font-semibold text-gray-900">
+                <AlertDialogTitle className="text-lg font-semibold text-gray-900">
                   Cannot Delete Job Description
                 </AlertDialogTitle>
-                <AlertDialogDescription className="mt-2 text-xs sm:text-sm text-gray-600">
-                  <span className="font-medium text-gray-800">&quot;{deleteWarningDialog.jobTitle}&quot;</span> has been used in:
+                <AlertDialogDescription className="mt-1 text-sm text-gray-500">
+                  This job description is actively used and cannot be deleted.
                 </AlertDialogDescription>
               </div>
             </div>
           </AlertDialogHeader>
 
-          <div className="mt-3 sm:mt-4 ml-0 sm:ml-16">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 sm:p-3">
-              <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                {deleteWarningDialog.usageDetails.split(', ').map((usage, index) => (
+          <div className="mt-4 space-y-4">
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-red-700 mb-2.5">Active in</p>
+              <div className="flex flex-wrap gap-2">
+                {deleteWarningDialog.usageDetails.map((usage, index) => (
                   <span
                     key={index}
-                    className="inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white border border-red-300 text-red-800 shadow-sm"
                   >
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
                     {usage}
                   </span>
                 ))}
               </div>
             </div>
-            <p className="mt-2.5 sm:mt-3 text-xs sm:text-sm text-gray-600">
-              You have assigned the assessment for this JD. So you will not be able to delete this JD.
-            </p>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm text-gray-700">
+                <span className="font-medium text-gray-900">&quot;{deleteWarningDialog.jobTitle}&quot;</span> is linked to active modules above. Deleting it could affect existing data.
+              </p>
+              <p className="mt-1.5 text-sm text-gray-500">
+                Disable the job description instead to stop new applications while preserving existing data.
+              </p>
+            </div>
           </div>
 
-          <AlertDialogFooter className="mt-4 sm:mt-6 flex gap-3 sm:justify-end">
+          <AlertDialogFooter className="mt-5 flex gap-2 sm:justify-end">
             <AlertDialogAction
-              onClick={() => setDeleteWarningDialog({ open: false, jobTitle: '', usageDetails: '' })}
-              className="bg-gray-900 hover:bg-gray-800 text-white text-sm sm:text-base"
+              onClick={() => setDeleteWarningDialog({ open: false, jobTitle: '', usageDetails: [] })}
+              className="w-full sm:w-auto bg-gray-900 hover:bg-gray-800 text-white text-sm"
             >
               I Understand
             </AlertDialogAction>

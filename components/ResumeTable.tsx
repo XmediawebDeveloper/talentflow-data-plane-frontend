@@ -1,7 +1,7 @@
 'use client'
 
-import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, FileText, Clock, GripVertical } from 'lucide-react';
-import { useState } from 'react';
+import { Eye, Briefcase, Download, MoreHorizontal, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Trash2, Copy, Share2, Mail, Star, Tag, Archive, Clock, GripVertical, FileText } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag } from 'react-dnd';
 import { Resume, Folder } from '@/lib/types/types';
@@ -13,8 +13,6 @@ import VersionHistoryModal from './VersionHistoryModal';
 import ResumeVersionSelector from './ResumeVersionSelector';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
-// ✅ PERMISSION FIX: Import permission hook for CRUD checks
-import { useModulePermissions } from '@/lib/hooks/usePermissions';
 
 // Drag item type for resumes
 const RESUME_DRAG_TYPE = 'RESUME';
@@ -30,9 +28,10 @@ interface DraggableResumeRowProps {
   selectedResumes: string[];
   children: React.ReactNode;
   className?: string;
+  onViewDetails?: (resume: Resume) => void;
 }
 
-function DraggableResumeRow({ resume, selectedResumes, children, className }: DraggableResumeRowProps) {
+function DraggableResumeRow({ resume, selectedResumes, children, className, onViewDetails }: DraggableResumeRowProps) {
   const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>({
     type: RESUME_DRAG_TYPE,
     item: () => ({
@@ -48,7 +47,8 @@ function DraggableResumeRow({ resume, selectedResumes, children, className }: Dr
   return (
     <tr
       ref={preview as unknown as React.Ref<HTMLTableRowElement>}
-      className={`${className} ${isDragging ? 'opacity-50' : ''}`}
+      className={`${className} ${isDragging ? 'opacity-50' : ''} ${onViewDetails ? 'cursor-pointer' : ''}`}
+      onClick={onViewDetails ? () => onViewDetails(resume) : undefined}
     >
       {/* Drag handle */}
       <td className="w-8 px-2 py-4">
@@ -82,6 +82,9 @@ interface ResumeTableProps {
   disablePagination?: boolean;
   isArchivedFolder?: boolean;
   archivedFolderId?: string;
+  canShare?: boolean;
+  canTag?: boolean;
+  canDownload?: boolean;
 }
 
 // Helper function to highlight matching text
@@ -131,11 +134,13 @@ export default function ResumeTable({
   disablePagination = false,
   isArchivedFolder = false,
   archivedFolderId,
+  canShare = false,
+  canTag = false,
+  canDownload = true,
 }: ResumeTableProps) {
   const router = useRouter();
-  // ✅ PERMISSION FIX: Get Resume CRUD permissions
-  const resumePerms = useModulePermissions('resume');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number; openUp: boolean }>({ top: 0, right: 0, openUp: false });
   const [versionHistoryResume, setVersionHistoryResume] = useState<Resume | null>(null);
   const [versionSelectorResume, setVersionSelectorResume] = useState<Resume | null>(null);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
@@ -145,7 +150,6 @@ export default function ResumeTable({
   const [showMoveToFolderModal, setShowMoveToFolderModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [showAddTagsModal, setShowAddTagsModal] = useState(false);
   const [selectedResumeForAction, setSelectedResumeForAction] = useState<Resume | null>(null);
@@ -366,9 +370,10 @@ export default function ResumeTable({
               className={`hover:bg-gray-50 transition-colors ${
                 selectedResumes.includes(resume.id) ? 'bg-blue-50' : ''
               }`}
+              onViewDetails={onViewDetails}
             >
               {!hideCheckboxes && (
-                <td className="px-4 py-4">
+                <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selectedResumes.includes(resume.id)}
@@ -383,7 +388,7 @@ export default function ResumeTable({
                     <div className="flex items-center gap-2">
                       {onViewDetails ? (
                         <button
-                          onClick={() => onViewDetails(resume)}
+                          onClick={(e) => { e.stopPropagation(); onViewDetails(resume); }}
                           className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
                         >
                           {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
@@ -458,7 +463,7 @@ export default function ResumeTable({
               <td className="px-4 py-4">
                 <span className="text-sm text-gray-700">{resume.uploadedBy}</span>
               </td>
-              <td className="px-4 py-4">
+              <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleShowVersionHistory(resume)}
                   disabled={isLoadingVersions}
@@ -477,7 +482,7 @@ export default function ResumeTable({
                   </span>
                 </button>
               </td>
-              <td className="px-4 py-4">
+              <td className="px-4 py-4" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2">
                   {selectionMode ? (
                     <button
@@ -510,34 +515,50 @@ export default function ResumeTable({
                           <Briefcase className="w-4 h-4" />
                         </button>
                       )}
-                      <button
-                        onClick={async () => {
-                          try {
-                            toast.loading('Downloading resume...', { id: 'download' });
-                            const blob = await resumeService.download(resume.id);
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            // Use original filename to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
-                            a.download = resume.fileName || `${resume.name || 'resume'}.${resume.fileType || 'pdf'}`;
-                            document.body.appendChild(a);
-                            a.click();
-                            window.URL.revokeObjectURL(url);
-                            document.body.removeChild(a);
-                            toast.success('Resume downloaded', { id: 'download' });
-                          } catch (error) {
-                            console.error('Download failed:', error);
-                            toast.error('Failed to download resume', { id: 'download' });
-                          }
-                        }}
-                        className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                        title="Download Resume"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
+                      {canDownload && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              toast.loading('Downloading resume...', { id: 'download' });
+                              const blob = await resumeService.download(resume.id);
+                              const url = window.URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              // Use original filename to preserve file extension (pdf, doc, docx, rtf, txt, etc.)
+                              a.download = resume.fileName || `${resume.name || 'resume'}.${resume.fileType || 'pdf'}`;
+                              document.body.appendChild(a);
+                              a.click();
+                              window.URL.revokeObjectURL(url);
+                              document.body.removeChild(a);
+                              toast.success('Resume downloaded', { id: 'download' });
+                            } catch (error) {
+                              console.error('Download failed:', error);
+                              toast.error('Failed to download resume', { id: 'download' });
+                            }
+                          }}
+                          className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                          title="Download Resume"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                      )}
                       <div className="relative">
                         <button
-                          onClick={() => setActiveMenu(activeMenu === resume.id ? null : resume.id)}
+                          onClick={(e) => {
+                            if (activeMenu === resume.id) {
+                              setActiveMenu(null);
+                              return;
+                            }
+                            const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                            const spaceBelow = window.innerHeight - rect.bottom;
+                            const openUp = spaceBelow < 280;
+                            setMenuPosition({
+                              top: openUp ? rect.top : rect.bottom + 4,
+                              right: window.innerWidth - rect.right,
+                              openUp,
+                            });
+                            setActiveMenu(resume.id);
+                          }}
                           className="p-1.5 text-gray-700 hover:bg-gray-100 rounded transition-colors"
                           title="More Options"
                         >
@@ -545,104 +566,69 @@ export default function ResumeTable({
                         </button>
                         {activeMenu === resume.id && (
                           <>
-                            <div 
-                              className="fixed inset-0 z-10" 
+                            <div
+                              className="fixed inset-0 z-[100]"
                               onClick={() => setActiveMenu(null)}
                             />
-                            <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (onViewDetails) onViewDetails(resume);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                              >
-                                <FileText className="w-4 h-4 text-purple-600" />
-                                View Full Details
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedResumeForAction(resume);
-                                  setShowDuplicateModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                              >
-                                <Copy className="w-4 h-4 text-indigo-600" />
-                                Duplicate Resume
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedResumeForAction(resume);
-                                  setShowShareModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                              >
-                                <Share2 className="w-4 h-4 text-green-600" />
-                                Share Resume
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedResumeForAction(resume);
-                                  setShowAddTagsModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
-                              >
-                                <Tag className="w-4 h-4 text-cyan-600" />
-                                Add Tags
-                              </button>
-                              <div className="border-t border-gray-100 my-1"></div>
-                              {/* ✅ PERMISSION FIX: Archive requires delete permission */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (!resumePerms.canDelete) {
-                                    toast.error('You do not have permission to archive resumes');
-                                    setActiveMenu(null);
-                                    return;
-                                  }
-                                  setSelectedResumeForAction(resume);
-                                  setShowArchiveModal(true);
-                                  setActiveMenu(null);
-                                }}
-                                disabled={!resumePerms.canDelete}
-                                title={!resumePerms.canDelete ? 'You do not have permission to archive resumes' : ''}
-                                className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 ${
-                                  !resumePerms.canDelete
-                                    ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                    : 'text-gray-700 hover:bg-gray-50'
-                                }`}
-                              >
-                                <Archive className="w-4 h-4 text-gray-600" />
-                                Archive Resume
-                              </button>
-                              <div className="border-t border-gray-100 my-1"></div>
-                              {/* Delete: requires canDeleteResumes permission AND the parent page must pass onDelete (admins only in internal DB) */}
-                              {resumePerms.canDelete && !!onDelete && (
+                            <div
+                              className="fixed w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-[101]"
+                              style={menuPosition.openUp
+                                ? { bottom: window.innerHeight - menuPosition.top, right: menuPosition.right }
+                                : { top: menuPosition.top, right: menuPosition.right }
+                              }
+                            >
+                              {canShare && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (!resumePerms.canDelete) {
-                                      toast.error('You do not have permission to delete resumes');
-                                      setActiveMenu(null);
-                                      return;
-                                    }
+                                    setSelectedResumeForAction(resume);
+                                    setShowShareModal(true);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                                >
+                                  <Share2 className="w-4 h-4 text-green-600" />
+                                  Share Resume
+                                </button>
+                              )}
+                              {canTag && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedResumeForAction(resume);
+                                    setShowAddTagsModal(true);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3"
+                                >
+                                  <Tag className="w-4 h-4 text-cyan-600" />
+                                  Add Tags
+                                </button>
+                              )}
+                              {!!onArchive && (canShare || canTag) && <div className="border-t border-gray-100 my-1"></div>}
+                              {!!onArchive && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedResumeForAction(resume);
+                                    setShowArchiveModal(true);
+                                    setActiveMenu(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2 text-sm flex items-center gap-3 text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Archive className="w-4 h-4 text-gray-600" />
+                                  Archive Resume
+                                </button>
+                              )}
+                              {!!onDelete && <div className="border-t border-gray-100 my-1"></div>}
+                              {onDelete && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     onDelete?.(resume.id);
                                     setActiveMenu(null);
                                   }}
-                                  disabled={!resumePerms.canDelete}
-                                  title={!resumePerms.canDelete ? 'You do not have permission to delete resumes' : ''}
-                                  className={`w-full text-left px-4 py-2 text-sm flex items-center gap-3 ${
-                                    !resumePerms.canDelete
-                                      ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                      : 'text-red-600 hover:bg-red-50'
-                                  }`}
+                                  className="w-full text-left px-4 py-2 text-sm flex items-center gap-3 text-red-600 hover:bg-red-50"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                   Delete Resume
@@ -731,13 +717,15 @@ export default function ResumeTable({
                 <Eye className="w-4 h-4" />
                 View
               </button>
-              <button
-                onClick={() => handleApplyToJob(resume)}
-                className="flex-1 px-3 py-2 text-sm text-white bg-gray-800 hover:bg-gray-900 rounded-lg flex items-center justify-center gap-1"
-              >
-                <Briefcase className="w-4 h-4" />
-                Apply
-              </button>
+              {onApplyToJob && (
+                <button
+                  onClick={() => handleApplyToJob(resume)}
+                  className="flex-1 px-3 py-2 text-sm text-white bg-gray-800 hover:bg-gray-900 rounded-lg flex items-center justify-center gap-1"
+                >
+                  <Briefcase className="w-4 h-4" />
+                  Apply
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -788,7 +776,7 @@ export default function ResumeTable({
 
       {/* Edit Details Modal */}
       {showEditModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
@@ -886,63 +874,9 @@ export default function ResumeTable({
         </div>
       )}
 
-      {/* Duplicate Resume Modal */}
-      {showDuplicateModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                  <Copy className="w-5 h-5 text-indigo-600" />
-                </div>
-                <h2 className="text-gray-900">Duplicate Resume</h2>
-              </div>
-              <p className="text-sm text-gray-600">
-                Create a copy of {selectedResumeForAction.name}'s resume
-              </p>
-            </div>
-            <div className="p-6">
-              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
-                <p className="text-sm text-indigo-800">
-                  <strong>What will be duplicated?</strong>
-                </p>
-                <ul className="text-sm text-indigo-700 mt-2 space-y-1 ml-4 list-disc">
-                  <li>All candidate information</li>
-                  <li>Skills and experience data</li>
-                  <li>Resume attachments</li>
-                  <li>Tags and metadata</li>
-                </ul>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowDuplicateModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    toast.success('Resume duplicated successfully');
-                    setShowDuplicateModal(false);
-                    setSelectedResumeForAction(null);
-                  }}
-                  className="flex-1 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Copy className="w-4 h-4" />
-                  Duplicate
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Share Resume Modal */}
       {showShareModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
@@ -1001,7 +935,7 @@ export default function ResumeTable({
 
       {/* Add Tags Modal */}
       {showAddTagsModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">
@@ -1066,7 +1000,7 @@ export default function ResumeTable({
 
       {/* Archive Resume Modal */}
       {showArchiveModal && selectedResumeForAction && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center gap-3 mb-2">

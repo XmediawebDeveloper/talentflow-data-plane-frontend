@@ -6,6 +6,8 @@ import { handleUnauthorized } from '@/lib/services/api';
 import { generateRefundReceiptPDF } from '@/lib/utils/pdfInvoice';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/hooks/useAuth';
+import ListPagination from '@/components/ListPagination';
 
 // Use backend proxy instead of direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -70,6 +72,8 @@ const STATUS_OPTIONS = [
 ];
 
 export default function RefundHistoryPage() {
+  const { hasPermission } = useAuth();
+  const canExportRefundHistory = hasPermission('canExportUsage');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refunds, setRefunds] = useState<RefundInvoice[]>([]);
@@ -83,9 +87,18 @@ export default function RefundHistoryPage() {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   useEffect(() => {
     fetchRefundData();
   }, []);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, startDate, endDate]);
 
   const fetchRefundData = async () => {
     setLoading(true);
@@ -172,6 +185,11 @@ export default function RefundHistoryPage() {
       return matchesSearch && matchesStatus && matchesDate;
     });
   }, [refunds, searchQuery, statusFilter, startDate, endDate]);
+
+  const paginatedRefunds = useMemo(
+    () => filteredRefunds.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage),
+    [filteredRefunds, currentPage, itemsPerPage]
+  );
 
   const formatAmount = (amount: number) => {
     return `₹${Math.abs(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -279,14 +297,16 @@ export default function RefundHistoryPage() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={handleExportCSV}
-                disabled={loading || filteredRefunds.length === 0}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" />
-                Export CSV
-              </button>
+              {canExportRefundHistory && (
+                <button
+                  onClick={handleExportCSV}
+                  disabled={loading || filteredRefunds.length === 0}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  Export CSV
+                </button>
+              )}
               <button
                 onClick={fetchRefundData}
                 disabled={loading}
@@ -448,7 +468,7 @@ export default function RefundHistoryPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredRefunds.map((refund, index) => (
+                  {paginatedRefunds.map((refund, index) => (
                     <tr key={refund.id} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
@@ -508,6 +528,18 @@ export default function RefundHistoryPage() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && !error && filteredRefunds.length > 0 && (
+          <ListPagination
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            totalItems={filteredRefunds.length}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={setItemsPerPage}
+            itemLabel="refunds"
+          />
         )}
 
         {/* Refund Detail Modal */}

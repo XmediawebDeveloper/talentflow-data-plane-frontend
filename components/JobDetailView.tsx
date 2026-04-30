@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Mail, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -18,6 +18,7 @@ import VersionHistoryModal from './VersionHistoryModal';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
 import ResumeDetailView from './ResumeDetailView';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
+import CandidateResultDetails from './CandidateResultDetails';
 import { Resume } from '@/lib/types/types';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
@@ -57,10 +58,10 @@ function QuickActionButton({
         onClick={onClick}
         disabled={disabled}
         className={`
-          w-full px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm rounded-md transition-all shadow-sm text-left flex items-center gap-2
+          w-full px-3 py-2.5 text-sm font-medium rounded-md transition-all text-left flex items-center gap-2.5
           ${disabled
-            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            : className || 'bg-gray-700 text-white hover:bg-gray-800'
+            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+            : className || 'bg-gray-800 text-white hover:bg-gray-700 shadow-sm'
           }
         `}
         title={disabled ? disabledTooltip : undefined}
@@ -114,9 +115,13 @@ interface JobDetailViewProps {
   isTenantAdmin?: boolean; // JD15: Whether user is Owner (for disable/enable buttons)
   user?: User; // ✅ PERMISSIONS: User object for permission checking
   tenant?: Tenant; // ✅ PERMISSIONS: Tenant object for feature flag checking
+  prevId?: string | null;
+  nextId?: string | null;
+  currentIndex?: number;
+  totalCount?: number;
 }
 
-export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, initialTab }: JobDetailViewProps) {
+export default function JobDetailView({ job, onBack, onEdit, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, initialTab, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
   const router = useRouter();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
@@ -165,6 +170,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
   // Assessment results state
   const [assessmentResults, setAssessmentResults] = useState<any[]>([]);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
+  const [viewingAssessmentResult, setViewingAssessmentResult] = useState<any | null>(null);
 
   // AI Talent Match state
   const [aiMatchSessions, setAiMatchSessions] = useState<AIMatchSessionResponse[]>([]);
@@ -192,6 +198,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     canReadJD: hasPermission('canReadJD'),
     canViewAssessments: hasPermission('canViewAssessments'),
     canUploadResumes: hasPermission('canUploadResumes'),
+    canRunScoring: hasPermission('canRunScoring'),
   };
 
   // ✅ PERMISSIONS: Get feature flags for Quick Actions
@@ -203,6 +210,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
   // Track Invites modal state
   const [showTrackInvitesModal, setShowTrackInvitesModal] = useState(false);
+
 
   // Fetch JD History when modal opens
   useEffect(() => {
@@ -808,12 +816,64 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
   // Show CandidateScoringDetailPage when viewing a scored resume (same as ResumeScoringPage)
   if (viewingScoredResume) {
+    const _scoredIdx = scoredResumes.findIndex((r: any) => (r.resumeId || r.resume_id) === (viewingScoredResume.resumeId || viewingScoredResume.resume_id));
+    const _goToScoredCandidate = (idx: number) => {
+      const r = scoredResumes[idx];
+      if (!r) return;
+      setViewingScoredResume({
+        ...r,
+        candidateName: r.candidateName || 'Unknown',
+        email: r.email || '',
+        phone: r.phone || '',
+        matchStatus: r.matchStatus || 'No Match',
+        scorePercentage: r.scorePercentage || 0,
+        scoredDate: r.scoredDate || new Date().toISOString(),
+        scoredBy: r.scoredBy || 'System',
+        matchedSkills: r.matchedSkills || r.technicalSkills || r.skills || [],
+        missingSkills: r.missingSkills || [],
+      });
+    };
     return (
       <CandidateScoringDetailPage
         resume={viewingScoredResume}
         jobTitle={job.title}
         jobId={job.id}
         onBack={() => setViewingScoredResume(null)}
+        currentIndex={_scoredIdx >= 0 ? _scoredIdx : undefined}
+        totalCount={scoredResumes.length}
+        onPrev={_scoredIdx > 0 ? () => _goToScoredCandidate(_scoredIdx - 1) : undefined}
+        onNext={_scoredIdx >= 0 && _scoredIdx < scoredResumes.length - 1 ? () => _goToScoredCandidate(_scoredIdx + 1) : undefined}
+      />
+    );
+  }
+
+  // Show CandidateResultDetails inline when viewing an assessment result
+  if (viewingAssessmentResult) {
+    const aId = viewingAssessmentResult.assessmentId || job.id;
+    const _nonPendingResults = assessmentResults.filter((r: any) => {
+      const s = r.status || '';
+      return s.toLowerCase() !== 'pending';
+    });
+    const _arIdx = _nonPendingResults.findIndex((r: any) => r.id === viewingAssessmentResult.id);
+    const _goToResult = (idx: number) => {
+      const r = _nonPendingResults[idx];
+      if (r) setViewingAssessmentResult(r);
+    };
+    return (
+      <CandidateResultDetails
+        onBack={() => setViewingAssessmentResult(null)}
+        assessmentId={aId}
+        assessmentShortId={viewingAssessmentResult.assessmentShortId}
+        candidateId={viewingAssessmentResult.id}
+        candidateDisplayId={viewingAssessmentResult.candidateDisplayId}
+        assessmentTitle={viewingAssessmentResult.assessmentName || job.title}
+        jdTitle={job.title}
+        jdId={job.id}
+        assessmentVersion={viewingAssessmentResult.assessmentVersion}
+        currentIndex={_arIdx >= 0 ? _arIdx : undefined}
+        totalCount={_nonPendingResults.length}
+        onPrev={_arIdx > 0 ? () => _goToResult(_arIdx - 1) : undefined}
+        onNext={_arIdx >= 0 && _arIdx < _nonPendingResults.length - 1 ? () => _goToResult(_arIdx + 1) : undefined}
       />
     );
   }
@@ -822,13 +882,38 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
       {/* Header */}
       <div className="mb-4 sm:mb-6">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-3 sm:mb-4 text-sm sm:text-base"
-        >
-          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-          Back to Jobs
-        </button>
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm sm:text-base"
+          >
+            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+            Back to Jobs
+          </button>
+          {totalCount != null && totalCount > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => prevId && router.push(`/recruitment/job-details?id=${prevId}`)}
+                disabled={!prevId}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </button>
+              <span className="text-xs text-gray-400 whitespace-nowrap">
+                {(currentIndex ?? 0) + 1} / {totalCount}
+              </span>
+              <button
+                onClick={() => nextId && router.push(`/recruitment/job-details?id=${nextId}`)}
+                disabled={!nextId}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Job Details Card */}
         <div className="bg-white rounded-lg shadow-sm border-2 border-blue-200 p-3 sm:p-4 md:p-6">
@@ -1167,7 +1252,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
       {activeTab === 'overview' && (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column - Job Details */}
-        <div className="lg:col-span-10 space-y-4 sm:space-y-6">
+        <div className="lg:col-span-8 space-y-4 sm:space-y-6">
           {/* Complete Job Description */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
             {/* JD Header - COMMENTED OUT
@@ -1309,27 +1394,21 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
         </div>
 
         {/* Right Column - Actions & Activity */}
-        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+        <div className="lg:col-span-4 space-y-4 sm:space-y-6">
           {/* Quick Actions */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Quick Actions</h3>
+            <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 sm:mb-4">Quick Actions</h3>
             <div className="space-y-2">
-              {/* 1. Invite for Assessment - Permission + Plan feature + Feature flag + JD Status */}
-              {permissions.canCreateAssessments && hasPlanFeature('assessment') && (
+              {/* 1. View JD History */}
+              {permissions.canReadJD && (
                 <QuickActionButton
-                  icon={<Mail className="w-4 h-4" />}
-                  label="Invite for Assessment"
-                  onClick={() => setShowInviteToAssessmentModal(true)}
-                  disabled={!features.assessment || job.status === 'Disabled'}
-                  disabledTooltip={
-                    !features.assessment
-                      ? 'Assessments module is not enabled for your organization'
-                      : 'Assessments are not available for disabled JDs'
-                  }
+                  icon={<History className="w-4 h-4" />}
+                  label="View JD History"
+                  onClick={() => setShowJDHistory(true)}
                 />
               )}
 
-              {/* 2. AI Talent Match - runs on-page, shows results in AI Talent Match tab */}
+              {/* 2. AI Talent Match */}
               {permissions.canRunAiMatch && aiTalentMatchAvailable && (
                 <QuickActionButton
                   icon={<Brain className="w-4 h-4" />}
@@ -1344,16 +1423,33 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* 3. View JD History - Permission (always available if user can view JD) */}
-              {permissions.canReadJD && (
+              {/* 3. Score Resumes */}
+              {permissions.canRunScoring && hasPlanFeature('resume_scoring') && (
                 <QuickActionButton
-                  icon={<History className="w-4 h-4" />}
-                  label="View JD History"
-                  onClick={() => setShowJDHistory(true)}
+                  icon={<Target className="w-4 h-4" />}
+                  label="Score Resumes"
+                  onClick={() => setShowSelectSourceModal(true)}
+                  disabled={job.status === 'Disabled'}
+                  disabledTooltip="Resume scoring is not available for disabled JDs"
                 />
               )}
 
-              {/* 4. Assessment Status - Permission + Plan feature + Feature flag */}
+              {/* 4. Invite for Assessment */}
+              {permissions.canCreateAssessments && hasPlanFeature('assessment') && (
+                <QuickActionButton
+                  icon={<Mail className="w-4 h-4" />}
+                  label="Invite for Assessment"
+                  onClick={() => setShowInviteToAssessmentModal(true)}
+                  disabled={!features.assessment || job.status === 'Disabled'}
+                  disabledTooltip={
+                    !features.assessment
+                      ? 'Assessments module is not enabled for your organization'
+                      : 'Assessments are not available for disabled JDs'
+                  }
+                />
+              )}
+
+              {/* 5. Assessment Status */}
               {permissions.canViewAssessments && hasPlanFeature('assessment') && (
                 <QuickActionButton
                   icon={<BarChart className="w-4 h-4" />}
@@ -1364,35 +1460,57 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                 />
               )}
 
-              {/* 5. Resume Scoring - Score resumes in this JD page (shows popup, no navigation) */}
-              {permissions.canUploadResumes && hasPlanFeature('resume_scoring') && (
-                <QuickActionButton
-                  icon={<Target className="w-4 h-4" />}
-                  label="Resume Scoring"
-                  onClick={() => setShowSelectSourceModal(true)}
-                  disabled={job.status === 'Disabled'}
-                  disabledTooltip="Resume scoring is not available for disabled JDs"
-                />
-              )}
-
-              {/* 6. Add Applicants - Permission + Plan feature + Feature flag + JD Status */}
-              {permissions.canUploadResumes && hasPlanFeature('resume_upload') && features.resume_upload && (
-                <QuickActionButton
-                  icon={<UserPlus className="w-4 h-4" />}
-                  label="Add Applicants"
-                  onClick={() => setShowSelectSourceModal(true)}
-                  disabled={job.status === 'Disabled'}
-                  disabledTooltip="Cannot add applicants to disabled JDs"
-                />
-              )}
+              {/* Add Applicants - hidden */}
             </div>
           </div>
 
-          {/* Recent Activity - Show last 5 activities */}
+          {/* Applicant Statistics */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Recent Activity</h3>
+            <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 sm:mb-4">Applicant Statistics</h3>
             <div className="space-y-4">
-              {/* Activity 1: Resume scoring */}
+              <div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-600">Total Scored Resumes</span>
+                  <span className="font-medium text-gray-900">{scoredResumesStats.total}</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-2">
+                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: scoredResumesStats.total > 0 ? '100%' : '0%' }}></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-600">Exact Match</span>
+                  <span className="font-medium text-gray-900">{scoredResumesStats.exactMatch}</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-2">
+                  <div className="bg-green-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.exactMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-600">Partial Match</span>
+                  <span className="font-medium text-gray-900">{scoredResumesStats.partialMatch}</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-2">
+                  <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-600">No Match</span>
+                  <span className="font-medium text-gray-900">{scoredResumesStats.noMatch}</span>
+                </div>
+                <div className="bg-gray-200 rounded-full h-2">
+                  <div className="bg-red-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+            <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-3 sm:mb-4">Recent Activity</h3>
+            <div className="space-y-4">
               {scoredResumesStats.total > 0 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -1402,7 +1520,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               )}
-              {/* Activity 2: Exact matches found */}
               {scoredResumesStats.exactMatch > 0 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -1412,7 +1529,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               )}
-              {/* Activity 3: Partial matches found */}
               {scoredResumesStats.partialMatch > 0 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-yellow-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -1422,7 +1538,6 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               )}
-              {/* Activity 4: JD version update */}
               {job.currentVersion && job.currentVersion > 1 && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -1432,65 +1547,18 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                   </div>
                 </div>
               )}
-              {/* Activity 5: Job published */}
               {job.status === 'Published' && job.postedDate && (
                 <div className="flex gap-3">
                   <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
                     <div className="text-sm text-gray-900">Job published by {job.postedBy || 'System'}</div>
-                    <div className="text-xs text-gray-500">
-                      {formatISTDateTime(job.postedDate)}
-                    </div>
+                    <div className="text-xs text-gray-500">{formatISTDateTime(job.postedDate)}</div>
                   </div>
                 </div>
               )}
-              {/* No activity fallback */}
               {scoredResumesStats.total === 0 && job.status !== 'Published' && !job.currentVersion && (
                 <div className="text-sm text-gray-500 italic">No recent activity</div>
               )}
-            </div>
-          </div>
-
-          {/* Applicant Statistics */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Applicant Statistics</h3>
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Total Scored Resumes</span>
-                  <span className="text-gray-900">{scoredResumesStats.total}</span>
-                </div>
-                <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-600 h-2 rounded-full" style={{ width: scoredResumesStats.total > 0 ? '100%' : '0%' }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Exact Match</span>
-                  <span className="text-gray-900">{scoredResumesStats.exactMatch}</span>
-                </div>
-                <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.exactMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">Partial Match</span>
-                  <span className="text-gray-900">{scoredResumesStats.partialMatch}</span>
-                </div>
-                <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-gray-600">No Match</span>
-                  <span className="text-gray-900">{scoredResumesStats.noMatch}</span>
-                </div>
-                <div className="bg-gray-200 rounded-full h-2">
-                  <div className="bg-red-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1552,10 +1620,9 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             jobTitle={job.title}
             jobId={job.id}
             canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
+            canBatchDownload={isTenantAdmin || (user?.permissions?.canExport ?? false)}
             onViewResultDetail={(result) => {
-              if (onViewAssessmentResult) {
-                onViewAssessmentResult(result, job.title);
-              }
+              setViewingAssessmentResult(result);
             }}
           />
         </div>
@@ -1575,6 +1642,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
             const scoredIds = new Set(scoredResumes.map((r: any) => r.resume_id).filter(Boolean));
             return !scoredIds.has(c.resumeId);
           }))}
+          onViewCandidate={(candidate) => router.push(`/recruitment/resume-view/${candidate.resumeId}`)}
         />
       )}
 
@@ -2012,6 +2080,7 @@ function AIMatchTabContent({
   onRunMatch,
   onScoreSelected,
   onScoreAll,
+  onViewCandidate,
 }: {
   candidates: MatchedCandidate[];
   scoredResumes: any[];
@@ -2021,6 +2090,7 @@ function AIMatchTabContent({
   onRunMatch: () => void;
   onScoreSelected: (selected: MatchedCandidate[]) => void;
   onScoreAll: () => void;
+  onViewCandidate?: (candidate: MatchedCandidate) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -2254,9 +2324,18 @@ function AIMatchTabContent({
                   return (
                     <tr
                       key={candidate.resumeId}
-                      className={`hover:bg-gray-50 transition-colors ${selectedIds.has(candidate.resumeId) ? 'bg-blue-50' : ''}`}
+                      className={`hover:bg-gray-50 transition-colors cursor-pointer ${selectedIds.has(candidate.resumeId) ? 'bg-blue-50' : ''}`}
+                      onClick={() => {
+                        if (onViewCandidate) {
+                          try {
+                            sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidates.map((c) => c.resumeId)));
+                            sessionStorage.setItem('resumeNavSource', 'job-details');
+                          } catch { /* ignore */ }
+                          onViewCandidate(candidate);
+                        }
+                      }}
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedIds.has(candidate.resumeId)}
@@ -2301,7 +2380,7 @@ function AIMatchTabContent({
                       <td className="px-4 py-3 text-sm text-gray-600">{candidate.experience || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{candidate.uploadedByName || candidate.uploadedBy || '—'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{uploadDate}</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 text-gray-900 rounded-lg hover:bg-gray-100 transition-colors border border-gray-200 text-xs font-medium">
                           <Paperclip className="w-3.5 h-3.5" />
                           {candidate.attachmentCount ?? 1}

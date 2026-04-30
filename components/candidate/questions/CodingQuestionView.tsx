@@ -6,17 +6,21 @@ import { MultiLanguageCodeEditor } from './MultiLanguageCodeEditor';
 interface CodingQuestionViewProps {
   question: CurrentQuestion;
   answer: {
+    question_id?: string;
     text_response?: string;
     video_response_url?: string;
     selected_options?: string[];
     code_submission?: string;
+    code_input?: string;
     language?: string;
   };
   onAnswerChange: (answer: {
+    question_id?: string;
     text_response?: string;
     video_response_url?: string;
     selected_options?: string[];
     code_submission?: string;
+    code_input?: string;
     language?: string;
   }) => void;
   allowLanguageChange?: boolean;
