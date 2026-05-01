@@ -80,11 +80,11 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Image
-                  src="/talent_flow_logo.png"
+                  src="/logos/talent_flow_logo.png"
                   alt="TalentFlow"
-                  width={160}
-                  height={40}
-                  className="h-10 w-auto"
+                  width={200}
+                  height={70}
+                  className="h-16 w-auto"
                   priority
                   unoptimized
                 />

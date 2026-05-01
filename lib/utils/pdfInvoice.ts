@@ -118,7 +118,7 @@ let _logoCache: string | null = null;
 async function loadLogoBase64(): Promise<string> {
   if (_logoCache !== null) return _logoCache;
   try {
-    const res = await fetch('/talent_flow_logo.png');
+    const res = await fetch('/logos/talent_flow_logo.png');
     const blob = await res.blob();
     return await new Promise<string>((resolve) => {
       const img = new Image();

@@ -305,7 +305,8 @@ export default function UnitDisputesPage() {
   const formatDate = (dateString: string | null) => formatISTDate(dateString ?? undefined);
   const formatDateTime = (dateString: string | null) => formatIST(dateString ?? undefined);
 
-  const truncateId = (id: string) => {
+  const truncateId = (id: string | null | undefined) => {
+    if (!id) return '—';
     if (id.length <= 12) return id;
     return `${id.slice(0, 8)}...${id.slice(-4)}`;
   };

@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import {
   Briefcase,
   Clock,
@@ -252,7 +254,7 @@ export default function StepJDReview({
                 className={`relative ${!showFullJD && hasLongDescription ? 'max-h-48 overflow-hidden' : ''}`}
               >
                 <div className="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-headings:font-semibold prose-h2:text-base prose-h3:text-sm prose-p:text-sm prose-p:leading-relaxed prose-li:text-sm prose-strong:text-gray-900 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
-                  <ReactMarkdown>{jdDescription}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{jdDescription}</ReactMarkdown>
                 </div>
                 {!showFullJD && hasLongDescription && (
                   <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent" />
