@@ -999,6 +999,78 @@ export const candidateService = {
   },
 
   /**
+   * Persist the candidate's chosen coding language for this attempt.
+   * Used by the pre-assessment language picker (step 2). Server stores the
+   * choice on AssessmentAttempt.browser_info and triggers question generation
+   * when the attempt is in 'pending_lang_choice' status.
+   */
+  async chooseCodingLanguage(
+    token: string,
+    language: string
+  ): Promise<{
+    success: boolean;
+    chosen_coding_language: string;
+    already_set: boolean;
+    attempt_status: string | null;
+  }> {
+    try {
+      const response = await candidateApi.post(
+        `/candidate/assessment/${token}/choose-language`,
+        { language }
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.detail || 'Failed to save language');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Token-based variant for the pre-assessment coding language picker.
+   * The picker doesn't have an attempt id yet (the picker happens at step 2,
+   * before the attempt is fully started); the backend resolves the tenant via
+   * the invitation token. Same response shape as getAvailableLanguages.
+   */
+  async getAvailableLanguagesByToken(
+    token: string
+  ): Promise<{
+    available_languages: Array<{
+      code: string;
+      display_name: string;
+      compiler_info: { language: string; version: string };
+      available: boolean;
+    }>;
+    unavailable_languages: Array<{
+      code: string;
+      display_name: string;
+      available: boolean;
+      reason: string;
+    }>;
+    total_assigned: number;
+    total_available: number;
+  }> {
+    try {
+      const response = await candidateApi.get(
+        `/candidate/assessment/${token}/available-languages-by-token`
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        console.warn('Failed to fetch available languages by token:', error.response?.data?.detail);
+        return {
+          available_languages: [],
+          unavailable_languages: [],
+          total_assigned: 0,
+          total_available: 0,
+        };
+      }
+      throw error;
+    }
+  },
+
+  /**
    * Complete the assessment
    */
   async completeAssessment(token: string): Promise<CompleteAssessmentResponse> {

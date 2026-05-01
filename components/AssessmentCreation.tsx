@@ -689,10 +689,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [isAIGenerationExpanded, setIsAIGenerationExpanded] = useState(false);
   const [isScoringRulesExpanded, setIsScoringRulesExpanded] = useState(false);
 
-  // Available programming languages for selection
+  // Available programming languages for the coding round.
+  // SQL is intentionally excluded — the coding round runs candidate code
+  // against stdin/stdout test cases via Piston, and SQL doesn't fit that
+  // pattern. SQL questions can still be asked in the Technical round as
+  // MCQs / text-based questions when relevant.
   const programmingLanguages = [
     'Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C#', 'Go',
-    'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin', 'Scala', 'R', 'SQL'
+    'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin', 'Scala', 'R'
   ];
 
   // Handle when JD is published from the modal
@@ -1034,6 +1038,28 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     CODING_ALLOWED_PERCENTAGES[0]);
   };
 
+  // Normalize sections whenever Coding is enabled with an off-allowed value
+  // OR Tech + Coding don't sum to 100. Catches state from before the snap
+  // logic existed (e.g., assessments saved with Tech 61 / Coding 9 from the
+  // old HR-redistribution bug) and corrects them on first render.
+  useEffect(() => {
+    const coding = sections.find(s => s.name === 'Coding');
+    const tech = sections.find(s => s.name === 'Technical');
+    if (!coding?.enabled) return;
+
+    const codingValid = (CODING_ALLOWED_PERCENTAGES as readonly number[]).includes(coding.percentage);
+    const techPct = tech?.percentage ?? 0;
+    const sumIsHundred = techPct + coding.percentage === 100;
+    if (codingValid && sumIsHundred) return;
+
+    const snapped = snapCodingPercentage(coding.percentage > 0 ? coding.percentage : 35);
+    setSections(prev => prev.map(s => {
+      if (s.name === 'Coding') return { ...s, percentage: snapped };
+      if (s.name === 'Technical') return { ...s, percentage: 100 - snapped };
+      return s;
+    }));
+  }, [sections]);
+
   const updatePercentage = (sectionName: string, value: number) => {
     const clamped = Math.max(0, Math.min(100, value));
     setSections(prev => {
@@ -1050,13 +1076,23 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       // to the allowed steps {35, 50, 75, 100}. Whether the user is dragging
       // Coding or Technical, we always derive Coding first via the snap,
       // then Technical = 100 - Coding.
+      // At Coding=100%, Technical disappears entirely (auto-disabled, not
+      // shown as 0%). When Coding drops back below 100%, Technical
+      // auto-re-enables with the complement so the round reappears.
       const codingEnabled = prev.some(s => s.name === 'Coding' && s.enabled);
       if (codingEnabled && (sectionName === 'Coding' || sectionName === 'Technical')) {
         const intendedCoding = sectionName === 'Coding' ? clamped : 100 - clamped;
         const snappedCoding = snapCodingPercentage(intendedCoding);
+        const techShouldBeEnabled = snappedCoding < 100;
         return prev.map(s => {
           if (s.name === 'Coding') return { ...s, percentage: snappedCoding };
-          if (s.name === 'Technical') return { ...s, percentage: 100 - snappedCoding };
+          if (s.name === 'Technical') {
+            return {
+              ...s,
+              enabled: techShouldBeEnabled,
+              percentage: techShouldBeEnabled ? 100 - snappedCoding : 0,
+            };
+          }
           return s;
         });
       }
@@ -1234,62 +1270,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         setShowMinRoundPopup(true);
         return;
       }
-
-      // Redistribute HR percentage to other enabled rounds
-      const hrPct = hrSection?.percentage || 0;
-      const techSection = sections.find(s => s.name === 'Technical');
-      const codingSection = sections.find(s => s.name === 'Coding');
-
-      let newTechPct = techSection?.percentage || 0;
-      let newCodingPct = codingSection?.percentage || 0;
-
-      if (techSection?.enabled && codingSection?.enabled && hrPct > 0) {
-        const totalOther = newTechPct + newCodingPct;
-        if (totalOther > 0) {
-          const techRatio = newTechPct / totalOther;
-          newTechPct = Math.round(newTechPct + hrPct * techRatio);
-          newCodingPct = 100 - newTechPct;
-        } else {
-          newTechPct = 50;
-          newCodingPct = 50;
-        }
-      } else if (techSection?.enabled) {
-        newTechPct = 100;
-      } else if (codingSection?.enabled) {
-        newCodingPct = 100;
-      }
-
-      setSections(sections.map(s => {
-        if (s.name === 'HR') return { ...s, enabled: false, percentage: 0 };
-        if (s.name === 'Technical') return { ...s, percentage: newTechPct };
-        if (s.name === 'Coding') return { ...s, percentage: newCodingPct };
-        return s;
-      }));
-    } else {
-      // Enabling HR - give it a default percentage and adjust others
-      const techSection = sections.find(s => s.name === 'Technical');
-      const codingSection = sections.find(s => s.name === 'Coding');
-      const totalCurrent = (techSection?.enabled ? techSection.percentage : 0) + (codingSection?.enabled ? codingSection.percentage : 0);
-
-      // Give HR 30% by default, reduce others proportionally
-      const hrNewPct = 30;
-      const remaining = 100 - hrNewPct;
-
-      let newTechPct = techSection?.percentage || 0;
-      let newCodingPct = codingSection?.percentage || 0;
-
-      if (totalCurrent > 0) {
-        if (techSection?.enabled) newTechPct = Math.round((techSection.percentage / totalCurrent) * remaining);
-        if (codingSection?.enabled) newCodingPct = remaining - (techSection?.enabled ? newTechPct : 0);
-      }
-
-      setSections(sections.map(s => {
-        if (s.name === 'HR') return { ...s, enabled: true, percentage: 0 };
-        if (s.name === 'Technical') return { ...s, percentage: newTechPct };
-        if (s.name === 'Coding') return { ...s, percentage: newCodingPct };
-        return s;
-      }));
     }
+
+    // HR uses a fixed duration sourced from the HR Question Bank — it is
+    // never part of the 30-min Technical + Coding budget. Toggling HR on
+    // or off must leave Technical and Coding percentages untouched (they
+    // always sum to 100% of the timed assessment). The previous logic
+    // reserved 30% of the 30-min budget for HR, which made Tech+Coding
+    // shrink to ~70% combined — visible as e.g. Tech 61% / Coding 9% when
+    // HR was switched on.
+    setSections(sections.map(s =>
+      s.name === 'HR' ? { ...s, enabled: !isCurrentlyEnabled, percentage: 0 } : s,
+    ));
   };
 
   // Handle Technical round toggle with validation
