@@ -711,7 +711,7 @@ export default function CandidateResultDetails({
                       <div className="text-sm text-gray-500">
                         {section.score}/{section.totalScore} correct
                         {!isHR && (
-                          <span className="text-gray-800 ml-2">• Weighted contribution: {section.weightedScore.toFixed(1)}%</span>
+                          <span className="text-gray-800 ml-2">• Weighted contribution: {Math.round(section.weightedScore)}%</span>
                         )}
                       </div>
                     </div>

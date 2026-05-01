@@ -365,7 +365,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                         <div className="text-sm">
                           {assessment.average_score != null ? (
                             <span className="text-gray-900 font-medium">
-                              {assessment.average_score.toFixed(1)}%
+                              {Math.round(assessment.average_score)}%
                             </span>
                           ) : (
                             <span className="text-gray-400">-</span>
@@ -534,7 +534,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                         <p className="text-xs text-gray-500">Avg Score</p>
                         <p className="text-sm font-semibold text-gray-900">
                           {assessment.average_score != null
-                            ? `${assessment.average_score.toFixed(1)}%`
+                            ? `${Math.round(assessment.average_score)}%`
                             : '-'}
                         </p>
                       </div>

@@ -416,7 +416,7 @@ export default function AssessmentAuditTrail() {
                               {activity.score !== null && activity.score !== undefined && (
                                 <span className="flex items-center gap-1">
                                   <Award className="w-3 h-3" />
-                                  Score: {activity.score.toFixed(1)}%
+                                  Score: {Math.round(activity.score)}%
                                 </span>
                               )}
                             </div>

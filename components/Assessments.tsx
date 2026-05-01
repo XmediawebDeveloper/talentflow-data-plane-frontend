@@ -2767,7 +2767,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
                       <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                       <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Timeline</th>
-                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Progress</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
+                      <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
                       <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
@@ -2899,49 +2900,34 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               )}
                             </div>
                           </td>
-                          <td className="py-3 px-4">
-                            {invitation.status === 'completed' ? (
-                              <div>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-gray-600">Score</span>
-                                  <span className={`font-medium ${invitation.passed ? 'text-gray-800' : 'text-red-600'}`}>
-                                    {invitation.overall_score != null ? `${invitation.overall_score.toFixed(1)}%` : '100%'}
-                                  </span>
-                                  {invitation.passed !== null && (
-                                    <span className={`text-xs px-1.5 py-0.5 rounded ${invitation.passed ? 'bg-gray-700 text-white' : 'bg-red-100 text-red-700'}`}>
-                                      {invitation.passed ? 'Passed' : 'Failed'}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="w-24 h-1.5 bg-gray-200 rounded-full mt-1">
-                                  <div className="h-full bg-gray-700 rounded-full" style={{ width: '100%' }} />
-                                </div>
-                                {invitation.time_spent_minutes != null && (
-                                  <p className="text-xs text-gray-400 mt-1">
-                                    Time: {invitation.time_spent_minutes} min
-                                  </p>
-                                )}
+                          {/* Tech Score / Coding Score columns. Same pattern
+                              as the Results page: percent number on top, small
+                              Pass/Fail tag below, both colored against the 70%
+                              threshold. Rounded so the value matches every
+                              other surface (Results list, Detail view, PDF). */}
+                          <td className="py-3 px-4 text-sm">
+                            {invitation.status === 'completed' && invitation.technical_score != null ? (
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {Math.round(invitation.technical_score)}%
+                                </span>
+                                <span className={`text-[10px] font-medium ${invitation.technical_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
+                                </span>
                               </div>
-                            ) : invitation.started_at ? (
-                              <div>
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-gray-600">Progress</span>
-                                  <span className="font-medium text-gray-700">
-                                    {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
-                                  </span>
-                                </div>
-                                <div className="w-24 h-1.5 bg-gray-200 rounded-full mt-1">
-                                  <div
-                                    className="h-full bg-gray-600 rounded-full"
-                                    style={{ width: `${invitation.progress_percent ?? 50}%` }}
-                                  />
-                                </div>
-                                {invitation.current_question != null && invitation.total_questions != null && (
-                                  <p className="text-xs text-gray-400 mt-1">
-                                    Q{invitation.current_question}/{invitation.total_questions}
-                                    {invitation.time_spent_minutes != null && ` • ${invitation.time_spent_minutes} min`}
-                                  </p>
-                                )}
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-sm">
+                            {invitation.status === 'completed' && invitation.coding_score != null ? (
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {Math.round(invitation.coding_score)}%
+                                </span>
+                                <span className={`text-[10px] font-medium ${invitation.coding_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}
+                                </span>
                               </div>
                             ) : (
                               <span className="text-gray-400">—</span>
