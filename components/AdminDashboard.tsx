@@ -440,7 +440,10 @@ export default function AdminDashboard({
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
             {/* Resume Upload Units */}
             {subscriptionUnits.RU && hasPlanFeature('resume_upload') && (
-              <div className="group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 transition-all">
+              <div
+                className="group cursor-pointer bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all"
+                onClick={() => router.push('/recruitment/my-resumes')}
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-gradient-to-br from-brand-blue/15 to-brand-blue-2/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Upload className="w-5 h-5 text-brand-blue" />
@@ -468,7 +471,10 @@ export default function AdminDashboard({
 
             {/* Resume Scoring Units */}
             {subscriptionUnits.RS && hasPlanFeature('resume_scoring') && (
-              <div className="group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-cyan/10 hover:border-brand-cyan/30 transition-all">
+              <div
+                className="group cursor-pointer bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-cyan/10 hover:border-brand-cyan/30 hover:-translate-y-0.5 transition-all"
+                onClick={() => router.push('/recruitment/resume-scoring')}
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-gradient-to-br from-brand-cyan/15 to-brand-teal/10 ring-1 ring-brand-cyan/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Zap className="w-5 h-5 text-brand-cyan" />
@@ -496,7 +502,10 @@ export default function AdminDashboard({
 
             {/* Assessment Units */}
             {subscriptionUnits.AS && hasPlanFeature('assessment') && (
-              <div className="group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-orange/10 hover:border-brand-orange/30 transition-all">
+              <div
+                className="group cursor-pointer bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-orange/10 hover:border-brand-orange/30 hover:-translate-y-0.5 transition-all"
+                onClick={() => router.push('/recruitment/assessments')}
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-gradient-to-br from-brand-orange/15 to-brand-orange-deep/10 ring-1 ring-brand-orange/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <ClipboardCheck className="w-5 h-5 text-brand-orange-deep" />
@@ -524,7 +533,10 @@ export default function AdminDashboard({
 
             {/* AI Interview Units */}
             {subscriptionUnits.AIU && hasPlanFeature('ai_interview') && (
-              <div className="group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue-2/30 transition-all">
+              <div
+                className="group cursor-pointer bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue-2/30 hover:-translate-y-0.5 transition-all"
+                onClick={() => router.push('/recruitment/ai-interviews')}
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-gradient-to-br from-brand-blue-2/15 to-brand-blue/10 ring-1 ring-brand-blue-2/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <Video className="w-5 h-5 text-brand-blue-2" />
@@ -552,7 +564,10 @@ export default function AdminDashboard({
 
             {/* Max Users */}
             {subscriptionUnits.max_seats && (
-              <div className="group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-teal/10 hover:border-brand-teal/30 transition-all">
+              <div
+                className={`group bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-teal/10 hover:border-brand-teal/30 transition-all ${canManageUsers ? 'cursor-pointer hover:-translate-y-0.5' : ''}`}
+                onClick={() => canManageUsers && onNavigateToUsers?.()}
+              >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-gradient-to-br from-brand-teal/15 to-brand-cyan/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <UserCheck className="w-5 h-5 text-brand-teal" />
