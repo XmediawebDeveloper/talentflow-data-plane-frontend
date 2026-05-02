@@ -309,12 +309,12 @@ function DraggableClusterSkill({
         isReadOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
       } ${isDragging ? 'opacity-40' : 'opacity-100'} bg-white border-gray-200 text-gray-700`}
     >
-      {!isReadOnly && <GripVertical className="w-3 h-3 text-gray-300 flex-shrink-0" />}
+      {!isReadOnly && <GripVertical className="w-3 h-3 flex-shrink-0 text-gray-300" />}
       {skillName}
       {!isReadOnly && (
         <button
           onClick={(e) => { e.stopPropagation(); onRemove(skillName, clusterId); }}
-          className="ml-0.5 text-gray-400 hover:text-red-500 transition-colors"
+          className="ml-0.5 text-gray-400 transition-colors hover:text-red-500"
         >
           <X className="w-3 h-3" />
         </button>
@@ -328,7 +328,6 @@ function ClusterRow({
   cluster,
   index,
   category,
-  clusterTime,
   expanded,
   onToggleExpand,
   onUpdate,
@@ -341,7 +340,6 @@ function ClusterRow({
   cluster: Cluster;
   index: number;
   category: 'mth' | 'nth';
-  clusterTime: number;
   expanded: boolean;
   onToggleExpand: (id: string) => void;
   onUpdate: (id: string, updates: Partial<Cluster>) => void;
@@ -423,12 +421,6 @@ function ClusterRow({
         <span className="text-xs text-gray-400">
           {cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}
         </span>
-        {clusterTime > 0 && (
-          <span className="text-xs text-gray-400 flex items-center gap-0.5">
-            <Clock className="w-3 h-3" />
-            {clusterTime} min
-          </span>
-        )}
         {expanded ? (
           <ChevronUp className="w-4 h-4 text-gray-400" />
         ) : (
@@ -542,6 +534,8 @@ function CategorySection({
   skills = [],
   onAddSkill,
   onRemoveSkillFromPool,
+  mainSkillSet,
+  parentGroups,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -561,6 +555,8 @@ function CategorySection({
   skills?: SkillEntry[];
   onAddSkill?: (skillName: string) => void;
   onRemoveSkillFromPool?: (skillName: string) => void;
+  mainSkillSet?: Set<string>;
+  parentGroups?: { parent: string; sub_skills: string[] }[];
 }) {
   const [newSkillInput, setNewSkillInput] = useState('');
   const [skillInputError, setSkillInputError] = useState('');
@@ -630,31 +626,111 @@ function CategorySection({
           <span className="text-xs text-gray-400">{skills.length} skill{skills.length !== 1 ? 's' : ''}</span>
         </div>
 
-        {/* Skill tags */}
-        {skills.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {skills.map(skill => {
-              return (
-                <span
-                  key={skill.name}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-purple-50 text-purple-700 border-purple-200"
-                >
-                  {skill.name}
-                  {!isReadOnly && (
-                    <button
-                      type="button"
-                      onClick={() => onRemoveSkillFromPool?.(skill.name)}
-                      className="ml-0.5 hover:text-red-500 transition-colors"
-                      title="Remove skill"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </span>
-              );
-            })}
-          </div>
-        )}
+        {/* Skill chip — shared between flat and grouped layouts */}
+        {(() => {
+          const renderChip = (name: string, opts?: { isMain?: boolean }) => {
+            const isMain = opts?.isMain ?? (mainSkillSet?.has(name.toLowerCase().trim()) ?? false);
+            return (
+              <span
+                key={name}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                  isMain
+                    ? 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-200'
+                    : 'bg-purple-50 text-purple-700 border-purple-200'
+                }`}
+                title={isMain ? 'Main skill (added by recruiter)' : undefined}
+              >
+                {isMain && (
+                  <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-200 text-amber-900 px-1 py-px rounded leading-none">
+                    Main
+                  </span>
+                )}
+                {name}
+                {!isReadOnly && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveSkillFromPool?.(name)}
+                    className="ml-0.5 hover:text-red-500 transition-colors"
+                    title="Remove skill"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </span>
+            );
+          };
+
+          // Hierarchical layout: each parent main skill heading + its sub-skills
+          // nested below. Driven by /expand-skills' parent_groups response,
+          // restored from special_instructions on load. When unavailable
+          // (legacy drafts before parent_groups was tracked), fall through
+          // to the flat list — a fresh "Regenerate" recovers the grouping.
+          if (skills.length > 0 && parentGroups && parentGroups.length > 0) {
+            // Build name lookups: skills currently in the pool, and skills
+            // already accounted for under their parent. Anything left over
+            // shows in an "Other" bucket so nothing visually disappears.
+            const poolByName = new Map(skills.map(s => [s.name.toLowerCase().trim(), s]));
+            const accounted = new Set<string>();
+            return (
+              <div className="space-y-3 mb-3">
+                {parentGroups.map((group) => {
+                  const parentName = group.parent;
+                  const parentKey = parentName.toLowerCase().trim();
+                  // Parent counts as "the main skill" — show first.
+                  const parentInPool = poolByName.has(parentKey);
+                  if (parentInPool) accounted.add(parentKey);
+                  // Sub-skills filtered to those still in the pool (recruiter
+                  // may have removed some manually).
+                  const subs = (group.sub_skills || []).filter(s => {
+                    const k = s.toLowerCase().trim();
+                    if (poolByName.has(k) && !accounted.has(k)) {
+                      accounted.add(k);
+                      return true;
+                    }
+                    return false;
+                  });
+                  return (
+                    <div key={parentName} className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        {parentInPool ? renderChip(parentName, { isMain: true }) : (
+                          <span className="text-xs font-medium text-gray-500 italic">{parentName} (removed)</span>
+                        )}
+                      </div>
+                      {subs.length > 0 && (
+                        <div className="ml-4 pl-3 border-l-2 border-amber-200 flex flex-wrap gap-1.5">
+                          {subs.map(s => renderChip(s, { isMain: false }))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {/* Skills not in any parent group (recruiter manual additions etc.) */}
+                {(() => {
+                  const others = skills.filter(s => !accounted.has(s.name.toLowerCase().trim()));
+                  if (others.length === 0) return null;
+                  return (
+                    <div className="space-y-1.5 pt-1 border-t border-gray-100">
+                      <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Other</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {others.map(s => renderChip(s.name))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            );
+          }
+
+          // Flat fallback (no parent_groups available).
+          if (skills.length > 0) {
+            return (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {skills.map(s => renderChip(s.name))}
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Add skill input */}
         {!isReadOnly && (
@@ -700,7 +776,6 @@ function CategorySection({
               cluster={cluster}
               index={idx}
               category={category}
-              clusterTime={clusterMinuteMap[cluster.id] ?? 0}
               expanded={expandedIds.has(cluster.id)}
               onToggleExpand={onToggleExpand}
               onUpdate={(id, updates) => onUpdateCluster(category, id, updates)}
@@ -741,6 +816,14 @@ export default function AIInterviewClusters() {
   /* Skills lists (editable — user can add/remove skills on this page) */
   const [mthSkills, setMthSkills] = useState<SkillEntry[]>([]);
   const [nthSkills, setNthSkills] = useState<SkillEntry[]>([]);
+  /* Recruiter-typed "main" skills (lowercased), captured before AI expansion.
+     Used to render a distinct chip style + "Main" label on this page. */
+  const [mthMainSkillSet, setMthMainSkillSet] = useState<Set<string>>(new Set());
+  const [nthMainSkillSet, setNthMainSkillSet] = useState<Set<string>>(new Set());
+  /* Parent → sub_skills bindings (from /expand-skills). When present, the
+     Skills pool renders hierarchically (main + nested sub-skills). */
+  const [mthParentGroupsState, setMthParentGroupsState] = useState<{ parent: string; sub_skills: string[] }[]>([]);
+  const [nthParentGroupsState, setNthParentGroupsState] = useState<{ parent: string; sub_skills: string[] }[]>([]);
   /* Original JD skill names — used to separate new custom skills on save */
   const jdMthSkillNamesRef = useRef<Set<string>>(new Set());
   const jdNthSkillNamesRef = useRef<Set<string>>(new Set());
@@ -919,6 +1002,22 @@ export default function AIInterviewClusters() {
           setSkillWeights(si.skill_weights as Record<string, 'high' | 'medium' | 'low'>);
         }
 
+        // Restore recruiter-typed main-skill set (lowercase for matching).
+        if (Array.isArray(si.mth_main_skills)) {
+          setMthMainSkillSet(new Set(si.mth_main_skills.map((s: string) => s.toLowerCase().trim())));
+        }
+        if (Array.isArray(si.nth_main_skills)) {
+          setNthMainSkillSet(new Set(si.nth_main_skills.map((s: string) => s.toLowerCase().trim())));
+        }
+        // Restore parent → sub_skills bindings — drives the hierarchical
+        // (parent above, sub-skills nested) layout in the Skills pool.
+        if (Array.isArray(si.mth_parent_groups)) {
+          setMthParentGroupsState(si.mth_parent_groups);
+        }
+        if (Array.isArray(si.nth_parent_groups)) {
+          setNthParentGroupsState(si.nth_parent_groups);
+        }
+
         // Flexible mode: read interview_mode, finalization state, and JD description
         if (isFlexibleMode) {
           setIsFinalized(!!si.flexible_finalized);
@@ -1063,63 +1162,120 @@ export default function AIInterviewClusters() {
       let mthSkillNames = sortedMth.map(s => s.name.trim()).filter(Boolean);
       let nthSkillNames = sortedNth.map(s => s.name.trim()).filter(Boolean);
 
+      // Snapshot the recruiter-typed "main" skills BEFORE any AI expansion.
+      // Used by the chip rendering to highlight original recruiter intent.
+      const preExpansionMth = mthSkillNames.slice();
+      const preExpansionNth = nthSkillNames.slice();
+
       if (mthSkillNames.length === 0 && nthSkillNames.length === 0) {
         toast.error('Add at least one skill before generating clusters');
         return;
       }
 
-      // Phase 0: Skill-shortage expansion (timed mode only) — mirrors
-      // Continue-to-Clusters in AIInterviewConfig. When recruiter-supplied
-      // skills are fewer than 2× planned questions for the bucket, expand
-      // them via JD-grounded sub-skills so the AI has enough material to
-      // form distinct clusters with proper High/Med/Low spread.
+      // Capacity bands per spec: each interview question covers 2-3 related skills.
+      //   below   (input < 2Q)   → expand (Phase 0) + refine in preserve-names mode
+      //   within  (2Q ≤ input ≤ 3Q) → no refinement
+      //   exceeds (input > 3Q)  → refine WITHOUT preserve-names (allow merging
+      //                            via equivalent-skill normalization)
       let mthExpanded: SkillEntry[] | null = null;
       let nthExpanded: SkillEntry[] | null = null;
       let applyRefine = false;
+      // When true, refine is allowed to MERGE/RENAME skills (overflow case).
+      // When false (expansion case), refine must preserve recruiter input verbatim.
+      let allowMerge = false;
+      // Capture parent → sub_skills bindings from /expand-skills so the
+      // backend can keep each parent's family in a single cluster (and
+      // repair any LLM mis-routing deterministically). Seed from previously
+      // saved special_instructions so subsequent "Regenerate" clicks (which
+      // skip expansion because skills are already at target count) still
+      // pass the parent grouping to the backend.
+      const savedSi = (() => {
+        try { return JSON.parse(config?.special_instructions || '{}'); }
+        catch { return {}; }
+      })();
+      let mthParentGroups: { parent: string; sub_skills: string[] }[] | undefined =
+        Array.isArray(savedSi.mth_parent_groups) && savedSi.mth_parent_groups.length > 0
+          ? savedSi.mth_parent_groups
+          : undefined;
+      let nthParentGroups: { parent: string; sub_skills: string[] }[] | undefined =
+        Array.isArray(savedSi.nth_parent_groups) && savedSi.nth_parent_groups.length > 0
+          ? savedSi.nth_parent_groups
+          : undefined;
       if (isFixed) {
         const mthQ = timedAllocation.mthQuestions ?? 0;
         const nthQ = nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+        const mthMainList = Array.isArray(savedSi.mth_main_skills) ? (savedSi.mth_main_skills as string[]) : [];
+        const nthMainList = Array.isArray(savedSi.nth_main_skills) ? (savedSi.nth_main_skills as string[]) : [];
+
+        // Floor = 2 × Q (below → expand). Ceiling = 3 × Q (above → merge/refine).
         const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ * 2;
         const nthShort = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length < nthQ * 2;
-        const mthOverflow = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length > mthQ * 2;
-        const nthOverflow = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length > nthQ * 2;
+        const mthOverflow = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length > mthQ * 3;
+        const nthOverflow = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length > nthQ * 3;
 
-        if (mthShort || nthShort) {
-          const [mthFlat, nthFlat] = await Promise.all([
-            mthShort
+        // Recovery trigger: we already have current skills at target (so mthShort
+        // is false), BUT we lack saved parent_groups AND have a smaller main_skills
+        // list. That's the legacy state — re-expand from main_skills to recover
+        // the parent → sub_skills bindings, otherwise the backend can't repair
+        // cross-family mis-routing.
+        const mthRecover = !mthShort && !mthParentGroups && mthMainList.length > 0
+          && mthQ > 0 && mthMainList.length < mthQ * 2;
+        const nthRecover = !nthShort && !nthParentGroups && nthMainList.length > 0
+          && nthQ > 0 && nthMainList.length < nthQ * 2;
+
+        // Pick the right input for each bucket: main_skills for recovery,
+        // current names for fresh expansion.
+        const mthExpandInput = mthRecover ? mthMainList : mthSkillNames;
+        const nthExpandInput = nthRecover ? nthMainList : nthSkillNames;
+
+        if (mthShort || nthShort || mthRecover || nthRecover) {
+          const [mthExpandRes, nthExpandRes] = await Promise.all([
+            (mthShort || mthRecover)
               ? aiInterviewService.expandSkills({
-                  mainSkills: mthSkillNames,
+                  mainSkills: mthExpandInput,
                   targetSkillCount: mthQ * 2,
                   bucket: 'MTH',
                   jdTitle: config?.position,
                   jdDescription: jdDescription || undefined,
-                }).then(r => r.flat_skills)
-              : Promise.resolve(mthSkillNames),
-            nthShort
+                })
+              : Promise.resolve({ flat_skills: mthSkillNames, expanded_skills: [] as { parent: string; sub_skills: string[] }[] }),
+            (nthShort || nthRecover)
               ? aiInterviewService.expandSkills({
-                  mainSkills: nthSkillNames,
+                  mainSkills: nthExpandInput,
                   targetSkillCount: nthQ * 2,
                   bucket: 'NTH',
                   jdTitle: config?.position,
                   jdDescription: jdDescription || undefined,
-                }).then(r => r.flat_skills)
-              : Promise.resolve(nthSkillNames),
+                })
+              : Promise.resolve({ flat_skills: nthSkillNames, expanded_skills: [] as { parent: string; sub_skills: string[] }[] }),
           ]);
           const buildEntries = (existing: SkillEntry[], names: string[]): SkillEntry[] => {
             const byName = new Map(existing.map(e => [e.name.toLowerCase(), e]));
             return names.map(n => byName.get(n.toLowerCase()) ?? { name: n, comment: '', type: 'Skill' as SkillType });
           };
-          if (mthShort && mthFlat.length > 0) {
-            mthExpanded = buildEntries(mthSkills, mthFlat);
+          if ((mthShort || mthRecover) && mthExpandRes.flat_skills.length > 0) {
+            mthExpanded = buildEntries(mthSkills, mthExpandRes.flat_skills);
             mthSkillNames = mthExpanded.map(s => s.name.trim()).filter(Boolean);
+            if (mthExpandRes.expanded_skills?.length) {
+              mthParentGroups = mthExpandRes.expanded_skills;
+            }
           }
-          if (nthShort && nthFlat.length > 0) {
-            nthExpanded = buildEntries(nthSkills, nthFlat);
+          if ((nthShort || nthRecover) && nthExpandRes.flat_skills.length > 0) {
+            nthExpanded = buildEntries(nthSkills, nthExpandRes.flat_skills);
             nthSkillNames = nthExpanded.map(s => s.name.trim()).filter(Boolean);
+            if (nthExpandRes.expanded_skills?.length) {
+              nthParentGroups = nthExpandRes.expanded_skills;
+            }
           }
           applyRefine = true;
+          // Expansion path keeps preserve-names semantics (recruiter expects
+          // their typed skills + AI sub-skills to appear verbatim).
+          allowMerge = false;
         } else if (mthOverflow || nthOverflow) {
           applyRefine = true;
+          // Overflow path: refine should MERGE related skills into canonical
+          // names so we fit within 3Q. Don't preserve verbatim names.
+          allowMerge = true;
         }
       }
 
@@ -1132,6 +1288,8 @@ export default function AIInterviewClusters() {
         nthSkillNames.length > 0 ? fixedNthMin : 0,
         mthMaxClusters,
         nthSkillNames.length > 0 ? nthMaxClusters : 0,
+        mthParentGroups,
+        nthSkillNames.length > 0 ? nthParentGroups : undefined,
       );
       let newMthClusters: Cluster[] = mthSkillNames.length > 0 && result.mth_clusters
         ? (() => {
@@ -1172,7 +1330,11 @@ export default function AIInterviewClusters() {
             nthMaxClusters: nthEnabled ? nthMaxClusters : 0,
             jdTitle: config?.position,
             jdDescription: jdDescription || undefined,
-            preserveSkillNames: true,
+            // Expansion path → preserve recruiter-typed names verbatim.
+            // Overflow path → allow merging via equivalent-skill normalization.
+            preserveSkillNames: !allowMerge,
+            mthParentGroups,
+            nthParentGroups: nthEnabled ? nthParentGroups : undefined,
           });
           if (refineResult.mth_clusters?.length) {
             newMthClusters = refineResult.mth_clusters.map(c => ({
@@ -1206,6 +1368,30 @@ export default function AIInterviewClusters() {
           const si = JSON.parse(config.special_instructions || '{}');
           si.mth_clusters = newMthClusters;
           si.nth_clusters = nthEnabled ? newNthClusters : [];
+          // Backfill recruiter-typed "main" skills if Configure didn't already
+          // capture them. Set ONCE — preserves the original recruiter intent
+          // across regenerations.
+          if (!Array.isArray(si.mth_main_skills) || si.mth_main_skills.length === 0) {
+            si.mth_main_skills = preExpansionMth;
+            setMthMainSkillSet(new Set(preExpansionMth.map(s => s.toLowerCase().trim())));
+          }
+          if (!Array.isArray(si.nth_main_skills) || si.nth_main_skills.length === 0) {
+            si.nth_main_skills = nthEnabled ? preExpansionNth : [];
+            setNthMainSkillSet(new Set((nthEnabled ? preExpansionNth : []).map(s => s.toLowerCase().trim())));
+          }
+          // Persist parent → sub_skills bindings so subsequent "Regenerate"
+          // clicks (which skip expansion when skills are already at target)
+          // can still hand the grouping to the backend for cross-family repair.
+          // Also push to component state so the hierarchical Skills pool
+          // re-renders without a page reload.
+          if (mthParentGroups && mthParentGroups.length > 0) {
+            si.mth_parent_groups = mthParentGroups;
+            setMthParentGroupsState(mthParentGroups);
+          }
+          if (nthEnabled && nthParentGroups && nthParentGroups.length > 0) {
+            si.nth_parent_groups = nthParentGroups;
+            setNthParentGroupsState(nthParentGroups);
+          }
 
           // Also update rounds_config topics/weights using the new cluster data
           const PRIORITY_WEIGHT: Record<number, number> = { 3: 60, 2: 40, 1: 20 };
@@ -1290,6 +1476,26 @@ export default function AIInterviewClusters() {
       setGenerating(false);
     }
   };
+
+  /* ── Auto-trigger generation when arrived from Configure page with autogen=1.
+     Configure page hands off here so the user doesn't wait on a blocked
+     "Generating Clusters…" button — generation runs on this page with its own
+     loading UI. Fires once per mount; the URL param is stripped immediately
+     so refresh / bookmarks don't re-trigger. ─── */
+  const autogenFiredRef = useRef(false);
+  useEffect(() => {
+    if (searchParams.get('autogen') !== '1') return;
+    if (autogenFiredRef.current) return;
+    if (loading || !config || !id) return;
+    // Wait until skills are populated; otherwise generate would just toast.
+    if (mthSkills.length === 0 && nthSkills.length === 0) return;
+
+    autogenFiredRef.current = true;
+    // Strip the autogen flag so a refresh after generation doesn't loop.
+    router.replace(`/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${id}`);
+    void handleGenerateClusters();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, config, id, mthSkills.length, nthSkills.length]);
 
   /* ── Save & Navigate ── */
   /** Build updated rounds_config with topics/topic_weights from clusters */
@@ -1711,6 +1917,8 @@ export default function AIInterviewClusters() {
                 skills={mthDisplaySkills}
                 onAddSkill={name => addSkillToCategory('mth', name)}
                 onRemoveSkillFromPool={name => removeSkillFromPool('mth', name)}
+                mainSkillSet={mthMainSkillSet}
+                parentGroups={mthParentGroupsState}
               />
 
               {/* Nice-To-Have Section */}
@@ -1734,6 +1942,8 @@ export default function AIInterviewClusters() {
                   skills={nthDisplaySkills}
                   onAddSkill={name => addSkillToCategory('nth', name)}
                   onRemoveSkillFromPool={name => removeSkillFromPool('nth', name)}
+                  mainSkillSet={nthMainSkillSet}
+                  parentGroups={nthParentGroupsState}
                 />
               )}
             </>

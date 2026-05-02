@@ -160,7 +160,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
 
     baseColumns.push(
-      { id: 'status', label: 'Status', enabled: true },
+      { id: 'status', label: 'Result Status', enabled: true },
       { id: 'timeline', label: 'Timeline', enabled: true },
       { id: 'completed', label: 'Completed', enabled: true },
       { id: 'duration', label: 'Duration', enabled: true }
@@ -1331,7 +1331,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {assessmentDetails?.technical_enabled && (
                             <div className="rounded-lg bg-gray-50 p-2">
                               <div className="text-gray-500">Tech</div>
-                              <div className={candidate.tech_score !== undefined ? getScoreColor(candidate.tech_score) : 'text-gray-400'}>
+                              <div className={candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}>
                                 {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
                               </div>
                             </div>
@@ -1339,7 +1339,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {assessmentDetails?.coding_enabled && (
                             <div className="rounded-lg bg-gray-50 p-2">
                               <div className="text-gray-500">Coding</div>
-                              <div className={candidate.coding_score !== undefined ? getScoreColor(candidate.coding_score) : 'text-gray-400'}>
+                              <div className={candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}>
                                 {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                               </div>
                             </div>
@@ -1483,7 +1483,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center justify-center gap-1">
-                        Status
+                        Result Status
                         <ArrowUpDown className={`w-3 h-3 ${sortField === 'status' ? 'text-gray-800' : 'text-gray-400'}`} />
                       </div>
                     </th>
@@ -1593,7 +1593,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                         <td className="px-4 py-4 text-center">
                           <div className="flex flex-col items-center gap-1">
-                            <span className={`text-lg font-semibold ${candidate.tech_score !== undefined ? getScoreColor(candidate.tech_score) : 'text-gray-400'}`}>
+                            {/* Tech Score: green when ≥ threshold, red below.
+                                The 4-band gradient (red/yellow/gray/green)
+                                was confusing because 69% rendered gray even
+                                though it failed the 70% threshold. Now color
+                                matches the Pass/Fail outcome consistently. */}
+                            <span className={`text-lg font-semibold ${candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
                               {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
                             </span>
                             {candidate.tech_score !== undefined && (
@@ -1607,7 +1612,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
                         <td className="px-4 py-4 text-center">
                           <div className="flex flex-col items-center gap-1">
-                            <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? getScoreColor(candidate.coding_score) : 'text-gray-400'}`}>
+                            <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
                               {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                             </span>
                             {candidate.coding_score !== undefined && (

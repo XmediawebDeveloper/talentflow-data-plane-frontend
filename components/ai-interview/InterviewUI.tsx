@@ -978,43 +978,69 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
   useEffect(() => { isFollowUpRef.current = isFollowUp; }, [isFollowUp]);
 
-  // Start pending per-question countdown the moment Linda stops speaking.
-  // Always starts from the full duration so the candidate sees the complete
-  // time available to them from the moment they can actually answer.
-  // The backend's TTS_PLAYBACK_BUFFER already accounts for playback lag on
-  // its auto-skip timer, so no client-side subtraction is needed here.
-  useEffect(() => {
-    const timestamp = new Date().toISOString();
-    console.log(`[Timer ${timestamp}] Pending timer useEffect: isAiSpeaking=${isAiSpeaking}, pendingDur=${questionTimerPendingRef.current}`);
-    if (isAiSpeaking) return; // still speaking — nothing to do
-    const pendingDur = questionTimerPendingRef.current;
-    if (pendingDur === null) return; // no pending timer
-    console.log(`[Timer ${timestamp}] Starting pending timer: ${pendingDur}s`);
-    questionTimerPendingRef.current = null;
-    questionTimerReceivedAtRef.current = null; // clear receipt timestamp (no longer used)
-    questionTimerTotalRef.current = pendingDur;
-    // Fix 1: anchor monotonic start time when Linda finishes and the
-    // candidate's window actually opens — not when the WS message arrived.
+  // ==========================================================================
+  // Per-question timer — single source of truth.
+  //
+  // Historically there were 5+ ad-hoc setInterval blocks managing this timer
+  // (anchored / decrement variants scattered across the pending-timer effect,
+  // audio_end inline path, silent_discard resume, audio_end safety-net,
+  // follow-up question_timer_started, and the new-question path). They drifted
+  // apart, used different pause logic, and were the source of two bugs:
+  //   1. Timer "stuck" — a missed WS event left the interval cleared with no
+  //      restart path.
+  //   2. Timer "jumps" 5–15 s — the 1000 ms tick was throttled by event-loop
+  //      pressure (TTS streaming, MediaRecorder, viseme rAF) and the next
+  //      tick snapped the displayed value to wall-clock truth.
+  //
+  // Fixes baked in here:
+  //   - One implementation (`ensureQuestionTimerRunning`). All call sites
+  //     route through this. No setInterval for the timer lives anywhere else.
+  //   - 200 ms tick + monotonic anchor → smooth countdown, still drift-free
+  //     vs. backend.
+  //   - `startQuestionTimerExpiry` collects every "time's up" side effect in
+  //     one place so all expiry paths behave identically.
+  //   - Watchdog effect below restarts the interval if it ever ends up null
+  //     while the candidate still has remaining seconds (no more "stuck"
+  //     state when a WS event is dropped).
+  //   - Clarification-cap effect below force-clears `isClarification` after
+  //     60 s so a missing follow-up event can't perma-pause the countdown.
+  // ==========================================================================
+  const startQuestionTimerExpiry = useCallback(() => {
+    setQuestionTimerExpired(true);
+    questionTimerExpiredRef.current = true;
+    setIsClarification(false);
+    isClarificationRef.current = false;
+    setShowSilenceBanner(false);
+    setSilenceCountdown(null);
+    if (silenceCountdownRef.current) {
+      clearInterval(silenceCountdownRef.current);
+      silenceCountdownRef.current = null;
+    }
+    setStatus("Time's up — moving to the next question...");
+    setIsProcessing(false);
+    isProcessingRef.current = false;
+    clearNoResponseTimer();
+    stopRecordingSilentRef.current();
+    if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
+      wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
+    }
+  }, [clearNoResponseTimer]);
+
+  const ensureQuestionTimerRunning = useCallback((durSeconds: number) => {
+    if (durSeconds <= 0) return;
+    questionTimerTotalRef.current = durSeconds;
     questionTimerStartedAtMsRef.current = performance.now();
     questionTimerPausedMsRef.current = 0;
     questionTimerPausedAtRef.current = null;
-
-    setQuestionTimerSeconds(pendingDur);
-    // Sync ref immediately — don't wait for the useEffect so the global timer's
-    // null-check gate opens at the exact same tick as the per-question timer.
-    questionTimerSecondsRef.current = pendingDur;
-
+    setQuestionTimerSeconds(durSeconds);
+    questionTimerSecondsRef.current = durSeconds;
     if (questionTimerIntervalRef.current) {
       clearInterval(questionTimerIntervalRef.current);
     }
+    // 200 ms tick: keeps the displayed value visibly in sync with wall-clock
+    // remaining even when the event loop is busy. The compute is monotonic
+    // (`computeQuestionRemaining`), so accuracy vs. backend is preserved.
     questionTimerIntervalRef.current = setInterval(() => {
-      // Per-question timer runs CONTINUOUSLY from the moment Linda finishes
-      // speaking the question. The only allowed pause is during a
-      // candidate-initiated clarification — Linda re-explaining the question
-      // should not burn the candidate's answer window. Previously this also
-      // paused during any ack / follow-up / next-question TTS, which drifted
-      // the displayed value away from the backend's monotonic clock and
-      // desynced from the global timer.
       if (isClarificationRef.current || isFullscreenExitedRef.current) {
         if (questionTimerPausedAtRef.current === null) {
           questionTimerPausedAtRef.current = performance.now();
@@ -1028,36 +1054,71 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       const remaining = computeQuestionRemaining();
       if (remaining === null) return;
       setQuestionTimerSeconds(remaining);
+      questionTimerSecondsRef.current = remaining;
       if (remaining <= 0) {
         if (questionTimerIntervalRef.current) {
           clearInterval(questionTimerIntervalRef.current);
           questionTimerIntervalRef.current = null;
         }
-        setTimeout(() => {
-          setQuestionTimerExpired(true);
-          questionTimerExpiredRef.current = true;
-          setIsClarification(false);
-          isClarificationRef.current = false;
-          setShowSilenceBanner(false);
-          setSilenceCountdown(null);
-          if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
-          setStatus("Time's up — moving to the next question...");
-          setIsProcessing(false);
-          isProcessingRef.current = false;
-          clearNoResponseTimer();
-          stopRecordingSilentRef.current();
-          // Tell the backend to skip immediately — don't wait for its phased
-          // silence flow (8s + TTS + 5s) which may not have reached the skip
-          // point yet. The backend's skip_question handler cancels _auto_skip
-          // and calls handle_skip_question, which advances to the next question
-          // and sends question_timer_started for the new timer.
-          if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
-            wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
-          }
-        }, 0);
+        setTimeout(() => startQuestionTimerExpiry(), 0);
+      }
+    }, 200);
+  }, [computeQuestionRemaining, startQuestionTimerExpiry]);
+
+  // Self-healing watchdog: if the interval is null but seconds > 0 and we are
+  // NOT legitimately paused (Linda speaking, clarification, fullscreen exit,
+  // expired, awaiting a pending dispatch), restart from the frozen value.
+  // Catches the "stuck timer" class of bugs caused by missed/dropped WS
+  // events (interrupted without a follow-up question_timer_started, etc.).
+  useEffect(() => {
+    if (!isConnected || isClosing) return;
+    const id = setInterval(() => {
+      const cur = questionTimerSecondsRef.current;
+      if (
+        cur !== null
+        && cur > 0
+        && !questionTimerExpiredRef.current
+        && questionTimerIntervalRef.current === null
+        && !isAiSpeakingRef.current
+        && !isClarificationRef.current
+        && !isFullscreenExitedRef.current
+        && questionTimerPendingRef.current === null
+      ) {
+        console.warn(`[Timer watchdog] Per-question interval was null with ${cur}s remaining — restarting`);
+        ensureQuestionTimerRunning(cur);
       }
     }, 1000);
-  }, [isAiSpeaking, computeQuestionRemaining, questionTimerPendingTick]);
+    return () => clearInterval(id);
+  }, [isConnected, isClosing, ensureQuestionTimerRunning]);
+
+  // Clarification-pause cap: if backend never sends the clearing event,
+  // force-clear after 60 s so the timer cannot be paused indefinitely.
+  useEffect(() => {
+    if (!isClarification) return;
+    const t = setTimeout(() => {
+      console.warn("[Timer watchdog] Clarification pause exceeded 60s — auto-clearing");
+      setIsClarification(false);
+      isClarificationRef.current = false;
+    }, 60_000);
+    return () => clearTimeout(t);
+  }, [isClarification]);
+
+  // Start pending per-question countdown the moment Linda stops speaking.
+  // Always starts from the full duration so the candidate sees the complete
+  // time available to them from the moment they can actually answer.
+  // The backend's TTS_PLAYBACK_BUFFER already accounts for playback lag on
+  // its auto-skip timer, so no client-side subtraction is needed here.
+  useEffect(() => {
+    const timestamp = new Date().toISOString();
+    console.log(`[Timer ${timestamp}] Pending timer useEffect: isAiSpeaking=${isAiSpeaking}, pendingDur=${questionTimerPendingRef.current}`);
+    if (isAiSpeaking) return; // still speaking — nothing to do
+    const pendingDur = questionTimerPendingRef.current;
+    if (pendingDur === null) return; // no pending timer
+    console.log(`[Timer ${timestamp}] Starting pending timer: ${pendingDur}s`);
+    questionTimerPendingRef.current = null;
+    questionTimerReceivedAtRef.current = null;
+    ensureQuestionTimerRunning(pendingDur);
+  }, [isAiSpeaking, ensureQuestionTimerRunning, questionTimerPendingTick]);
 
   // When the per-question timer expires, the client sends skip_question to the
   // backend (see the timer-expiry block above). The backend's handle_skip_question
@@ -1539,44 +1600,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (pendingDur !== null) {
         questionTimerPendingRef.current = null;
         questionTimerReceivedAtRef.current = null;
-        questionTimerTotalRef.current = pendingDur;
-        setQuestionTimerSeconds(pendingDur);
-        // Sync ref immediately so the global timer's null-check gate opens at the
-        // exact same tick — both timers start together the moment Linda stops.
-        questionTimerSecondsRef.current = pendingDur;
-        if (questionTimerIntervalRef.current) clearInterval(questionTimerIntervalRef.current);
-        questionTimerIntervalRef.current = setInterval(() => {
-          // Per-question timer only pauses during clarification — see the
-          // main question_timer_started path for the rationale.
-          if (isClarificationRef.current || isFullscreenExitedRef.current) return;
-          setQuestionTimerSeconds(prev => {
-            if (prev === null || prev <= 1) {
-              if (questionTimerIntervalRef.current) {
-                clearInterval(questionTimerIntervalRef.current);
-                questionTimerIntervalRef.current = null;
-              }
-              setTimeout(() => {
-                setQuestionTimerExpired(true);
-                questionTimerExpiredRef.current = true;
-                setIsClarification(false);
-                isClarificationRef.current = false;
-                setShowSilenceBanner(false);
-                setSilenceCountdown(null);
-                if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
-                setStatus("Time's up — moving to the next question...");
-                setIsProcessing(false);
-                isProcessingRef.current = false;
-                clearNoResponseTimer();
-                stopRecordingSilentRef.current();
-                if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
-                  wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
-                }
-              }, 0);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
+        ensureQuestionTimerRunning(pendingDur);
       }
 
       // 800ms delay before opening mic
@@ -2069,40 +2093,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           && !questionTimerExpiredRef.current
           && questionTimerIntervalRef.current === null
         ) {
-          // The frozen value lives in questionTimerSecondsRef — keep ticking it
-          // down with simple decrement. We do NOT use computeQuestionRemaining()
-          // here because the audio_end path that originally started this timer
-          // doesn't set the monotonic anchor (questionTimerStartedAtMsRef stays
-          // null), and the anchor function would return null → the display
-          // would freeze visibly even though the interval is running.
-          if (questionTimerPausedAtRef.current !== null) {
-            questionTimerPausedAtRef.current = null;
-          }
-          questionTimerIntervalRef.current = setInterval(() => {
-            if (isClarificationRef.current || isFullscreenExitedRef.current) return;
-            setQuestionTimerSeconds(prev => {
-              if (prev === null || prev <= 1) {
-                if (questionTimerIntervalRef.current) {
-                  clearInterval(questionTimerIntervalRef.current);
-                  questionTimerIntervalRef.current = null;
-                }
-                setTimeout(() => {
-                  setQuestionTimerExpired(true);
-                  questionTimerExpiredRef.current = true;
-                  setStatus("Time's up — moving to the next question...");
-                  stopRecordingSilentRef.current();
-                  if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
-                    wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
-                  }
-                }, 0);
-                questionTimerSecondsRef.current = 0;
-                return 0;
-              }
-              const next = prev - 1;
-              questionTimerSecondsRef.current = next;
-              return next;
-            });
-          }, 1000);
+          // Re-anchor from the frozen value as the new total — the original
+          // anchor's pause accounting was torn down at question_timer_stopped.
+          ensureQuestionTimerRunning(questionTimerSecondsRef.current);
         }
         if (!isAiSpeakingRef.current && !isRecordingRef.current && !isFaceBlockedRef.current && !isMutedRef.current) {
           setTimeout(() => {
@@ -2222,29 +2215,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             if (_sfPendingDur !== null) {
               questionTimerPendingRef.current = null;
               questionTimerReceivedAtRef.current = null;
-              questionTimerTotalRef.current = _sfPendingDur;
-              setQuestionTimerSeconds(_sfPendingDur);
-              questionTimerSecondsRef.current = _sfPendingDur; // sync ref immediately
-              if (questionTimerIntervalRef.current) clearInterval(questionTimerIntervalRef.current);
-              questionTimerIntervalRef.current = setInterval(() => {
-                // Per-question timer only pauses during clarification.
-                if (isClarificationRef.current || isFullscreenExitedRef.current) return;
-                setQuestionTimerSeconds(prev => {
-                  if (prev === null || prev <= 1) {
-                    if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
-                    setTimeout(() => {
-                      setQuestionTimerExpired(true); questionTimerExpiredRef.current = true;
-                      setStatus("Time's up — moving to the next question...");
-                      stopRecordingSilentRef.current();
-                      if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
-                        wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
-                      }
-                    }, 0);
-                    return 0;
-                  }
-                  return prev - 1;
-                });
-              }, 1000);
+              ensureQuestionTimerRunning(_sfPendingDur);
             }
             if (startRecordingTimerRef.current) clearTimeout(startRecordingTimerRef.current);
             startRecordingTimerRef.current = setTimeout(() => {
@@ -2354,40 +2325,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
             isClarificationRef.current = true;
             setStatus("Clarifying the question — timer paused");
           } else if (!questionTimerIntervalRef.current && dur > 0) {
-            // Only (re)create an interval if none is running. Don't tear down
-            // the main question's anchored interval — it's already counting
-            // down correctly and jumping to a simple decrement would lose
-            // the monotonic anchor.
-            questionTimerIntervalRef.current = setInterval(() => {
-              if (isClarificationRef.current || isFullscreenExitedRef.current) return;
-              setQuestionTimerSeconds(prev => {
-                if (prev === null || prev <= 1) {
-                  if (questionTimerIntervalRef.current) {
-                    clearInterval(questionTimerIntervalRef.current);
-                    questionTimerIntervalRef.current = null;
-                  }
-                  setTimeout(() => {
-                    setQuestionTimerExpired(true);
-                    questionTimerExpiredRef.current = true;
-                    setIsClarification(false);
-                    isClarificationRef.current = false;
-                    setShowSilenceBanner(false);
-                    setSilenceCountdown(null);
-                    if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
-                    setStatus("Time's up — moving to the next question...");
-                    setIsProcessing(false);
-                    isProcessingRef.current = false;
-                    clearNoResponseTimer();
-                    stopRecordingSilentRef.current();
-                    if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
-                      wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
-                    }
-                  }, 0);
-                  return 0;
-                }
-                return prev - 1;
-              });
-            }, 1000);
+            // Only (re)create an interval if none is running. Re-anchor from
+            // the frozen value so the helper's monotonic compute stays valid.
+            ensureQuestionTimerRunning(_cur ?? dur);
           }
           // Keep active skill highlight — same skill, follow-up question
           // Update is_follow_up flag on the active skill if backend tells us which one
@@ -2482,65 +2422,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           console.log(`[Timer ${timestamp}] Linda not speaking, starting timer immediately: ${dur}s`);
           questionTimerPendingRef.current = null;
           questionTimerReceivedAtRef.current = null;
-          questionTimerTotalRef.current = dur;
-          // Fix 1: anchor this countdown to a monotonic timestamp so it cannot
-          // drift vs. the backend's time.monotonic() timer.
-          questionTimerStartedAtMsRef.current = performance.now();
-          questionTimerPausedMsRef.current = 0;
-          questionTimerPausedAtRef.current = null;
           // User spec: per-question timer ticks throughout the candidate's
-          // turn (including silence nudge), not just when they actually
-          // speak. Awaiting-speech gate removed so the 2-min slot counts
-          // down continuously from the moment Linda stops.
+          // turn (including silence nudge), not just when they actually speak.
           questionTimerAwaitingSpeechRef.current = false;
-          setQuestionTimerSeconds(dur);
-          questionTimerIntervalRef.current = setInterval(() => {
-            // Per-question timer runs CONTINUOUSLY once the question starts.
-            // Allowed pauses:
-            //   - clarification (Linda re-explaining a question)
-            //   - fullscreen exit (interview frozen behind the blocker)
-            // Acks, follow-ups, and next-question TTS all keep the clock
-            // running so the displayed value stays in sync with the
-            // backend's monotonic per-question timer AND the global timer.
-            if (isClarificationRef.current || isFullscreenExitedRef.current || questionTimerAwaitingSpeechRef.current) {
-              // Enter pause bookkeeping once so cumulative paused time is correct.
-              if (questionTimerPausedAtRef.current === null) {
-                questionTimerPausedAtRef.current = performance.now();
-              }
-              return;
-            }
-            // Exiting a pause: fold the pause duration into the accumulator.
-            if (questionTimerPausedAtRef.current !== null) {
-              questionTimerPausedMsRef.current += performance.now() - questionTimerPausedAtRef.current;
-              questionTimerPausedAtRef.current = null;
-            }
-            const remaining = computeQuestionRemaining();
-            if (remaining === null) return;
-            setQuestionTimerSeconds(remaining);
-            if (remaining <= 0) {
-              if (questionTimerIntervalRef.current) {
-                clearInterval(questionTimerIntervalRef.current);
-                questionTimerIntervalRef.current = null;
-              }
-              setTimeout(() => {
-                setQuestionTimerExpired(true);
-                questionTimerExpiredRef.current = true;
-                setIsClarification(false);
-                isClarificationRef.current = false;
-                setShowSilenceBanner(false);
-                setSilenceCountdown(null);
-                if (silenceCountdownRef.current) { clearInterval(silenceCountdownRef.current); silenceCountdownRef.current = null; }
-                setStatus("Time's up — moving to the next question...");
-                setIsProcessing(false);
-                isProcessingRef.current = false;
-                clearNoResponseTimer();
-                stopRecordingSilentRef.current();
-                if (wsRef.current?.readyState === WebSocket.OPEN && !backendExpiredRef.current) {
-                  wsRef.current.send(JSON.stringify({ type: "skip_question", source: "timer_expired" }));
-                }
-              }, 0);
-            }
-          }, 1000);
+          ensureQuestionTimerRunning(dur);
         }
         break;
       }

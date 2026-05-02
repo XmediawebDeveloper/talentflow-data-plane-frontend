@@ -53,13 +53,58 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
 
   const isSelected = (optionId: string) => selectedOptions.includes(optionId);
 
+  // Split a "Scenario: <block>\nQuestion: <prompt>" question into a
+  // structured scenario block and the inline question. Falls back to the
+  // raw text when there's no Scenario/Question split. Either way, newlines
+  // and whitespace are preserved (the previous <h3> collapsed everything
+  // into one line, which mangled scenario-based questions).
+  const renderQuestionText = (raw: string) => {
+    const text = raw || '';
+    const scenarioMatch = /^\s*scenario\s*:/i.test(text);
+    if (scenarioMatch) {
+      // Split on the first "Question:" delimiter (case-insensitive).
+      const idx = text.search(/\n\s*question\s*:/i);
+      if (idx > 0) {
+        const scenarioBody = text
+          .slice(0, idx)
+          .replace(/^\s*scenario\s*:\s*/i, '')
+          .trim();
+        const questionBody = text
+          .slice(idx)
+          .replace(/^\s*\n?\s*question\s*:\s*/i, '')
+          .trim();
+        return (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 sm:p-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-blue-700 mb-1">Scenario</div>
+              <pre className="whitespace-pre-wrap break-words font-sans text-sm sm:text-base leading-6 text-gray-800 m-0">
+                {scenarioBody}
+              </pre>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-600 mb-1">Question</div>
+              <pre className="whitespace-pre-wrap break-words font-sans text-base sm:text-lg leading-7 text-gray-900 m-0">
+                {questionBody}
+              </pre>
+            </div>
+          </div>
+        );
+      }
+    }
+    return (
+      <pre className="whitespace-pre-wrap break-words font-sans text-base sm:text-lg leading-7 text-gray-900 m-0">
+        {text}
+      </pre>
+    );
+  };
+
   // Render Text/Short Answer Question
   if (isTextQuestion || !isMCQ) {
     return (
       <div className="space-y-6">
         {/* Question Text */}
         <div className="prose max-w-none">
-          <h3 className="text-lg font-medium text-gray-800 mb-4">{question.question_text}</h3>
+          {renderQuestionText(question.question_text)}
         </div>
 
         {/* Locked Banner */}
@@ -113,7 +158,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
     <div className="space-y-6">
       {/* Question Text */}
       <div className="prose max-w-none">
-        <h3 className="text-lg font-medium text-gray-800 mb-4">{question.question_text}</h3>
+        {renderQuestionText(question.question_text)}
       </div>
 
       {/* Locked Banner */}

@@ -986,6 +986,14 @@ export default function AIInterviewConfig() {
   const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loadedSiRef = useRef<Record<string, any>>({}); // parsed special_instructions snapshot from last load
+  // Original rounds_config skill arrays from the saved draft. Captured at load
+  // time so auto-save can preserve the AI-expanded skill list when the
+  // recruiter's main_skills are unchanged. Without this, rebuilding rounds
+  // from mth.skills (= 4 main only) would wipe the 12 expansion sub-skills.
+  const loadedRoundsRef = useRef<{
+    mthJd?: string[]; mthCustom?: string[];
+    nthJd?: string[]; nthCustom?: string[];
+  }>({});
 
   /* Interview mode */
   const [mode, setMode] = useState<InterviewMode>('fixed');
@@ -1112,7 +1120,6 @@ export default function AIInterviewConfig() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const isNavigatingRef = useRef(false);
-  const [generatingClusters, setGeneratingClusters] = useState(false);
 
   /* ── Load JD + restore draft if one exists ── */
   useEffect(() => {
@@ -1168,11 +1175,76 @@ export default function AIInterviewConfig() {
           const nthRound = existingDraft.rounds_config.find((r: AIInterviewRoundConfig) => r.type === 'nice_to_have_skills');
           const hrRound  = existingDraft.rounds_config.find((r: AIInterviewRoundConfig) => r.type === 'hr');
 
+          // Parse special_instructions UPFRONT — needed to prefer recruiter-typed
+          // main_skills over the (post-expansion) rounds_config skill list. The
+          // Clusters page expands skills 4→16 and writes them into rounds_config;
+          // the Configure page must keep showing only the original 4.
+          let parsedSi: Record<string, any> = {};
+          try {
+            if ((existingDraft as any).special_instructions) {
+              parsedSi = JSON.parse((existingDraft as any).special_instructions);
+              loadedSiRef.current = parsedSi;
+            }
+          } catch {
+            // Malformed special_instructions — non-critical, treat as empty
+          }
+          // Resolve which list to display as "main" (recruiter-typed) skills:
+          //   1. Use saved si.mth_main_skills when present and not obviously polluted.
+          //      Pollution heuristic: saved length equals the full expanded
+          //      rounds_config skill count and that count is ≥1.5× the JD's
+          //      original must_have count — this happens when the captured list
+          //      was actually the post-expansion list from a legacy draft.
+          //   2. Else when clusters exist (= expansion has happened), use the
+          //      round's jd_skills as a safe legacy fallback (these are the
+          //      original JD skills, never expansion sub-skills).
+          //   3. Else (no expansion yet) fall through and show all rounds_config
+          //      skills — they're all recruiter-typed pre-expansion.
+          const totalMthRoundsSkills = (mthRound?.jd_skills?.length ?? 0) + (mthRound?.custom_skills?.length ?? 0);
+          const totalNthRoundsSkills = (nthRound?.jd_skills?.length ?? 0) + (nthRound?.custom_skills?.length ?? 0);
+          const jdMthCount = jd.must_have_skills?.length ?? 0;
+          const jdNthCount = jd.nice_to_have_skills?.length ?? 0;
+          const isPolluted = (saved?: string[], total = 0, jdCount = 0) =>
+            Array.isArray(saved) && saved.length > 0 && saved.length === total && total > Math.max(2, Math.ceil(jdCount * 1.5));
+          const mthMainPolluted = isPolluted(parsedSi.mth_main_skills, totalMthRoundsSkills, jdMthCount);
+          const nthMainPolluted = isPolluted(parsedSi.nth_main_skills, totalNthRoundsSkills, jdNthCount);
+
+          const mthMainSkills: string[] | null = (() => {
+            const saved = parsedSi.mth_main_skills;
+            if (Array.isArray(saved) && saved.length > 0 && !mthMainPolluted) return saved;
+            if ((parsedSi.mth_clusters?.length ?? 0) > 0) return mthRound?.jd_skills ?? [];
+            return null;
+          })();
+          const nthMainSkills: string[] | null = (() => {
+            const saved = parsedSi.nth_main_skills;
+            if (Array.isArray(saved) && saved.length > 0 && !nthMainPolluted) return saved;
+            if ((parsedSi.nth_clusters?.length ?? 0) > 0) return nthRound?.jd_skills ?? [];
+            return null;
+          })();
+
+          // Seed loadedSiRef with the resolved main_skills (covers both the
+          // pollution-scrubbed case and the legacy fallback to jd_skills).
+          // buildRounds' mainUnchanged check reads from loadedSiRef and must
+          // see the resolved value, otherwise auto-save will rebuild rounds
+          // from mth.skills (= main subset) and silently drop the expansion
+          // sub-skills from the saved rounds_config.
+          if (mthMainSkills) loadedSiRef.current.mth_main_skills = mthMainSkills;
+          if (nthMainSkills) loadedSiRef.current.nth_main_skills = nthMainSkills;
+
           const toSkillEntries = (skills: string[] = []) =>
             skills.map(s => ({ name: s, comment: '', type: 'Skill' as SkillType }));
 
+          // Capture original rounds_config skills so auto-save can preserve
+          // the AI-expanded list when main_skills haven't changed.
+          loadedRoundsRef.current = {
+            mthJd: mthRound?.jd_skills,
+            mthCustom: mthRound?.custom_skills,
+            nthJd: nthRound?.jd_skills,
+            nthCustom: nthRound?.custom_skills,
+          };
+
           if (mthRound) {
-            const draftSkills = [...(mthRound.jd_skills || []), ...(mthRound.custom_skills || [])];
+            // Prefer recruiter-typed main_skills when present — hides AI expansion sub-skills.
+            const draftSkills = mthMainSkills ?? [...(mthRound.jd_skills || []), ...(mthRound.custom_skills || [])];
             setMth({
               skills: draftSkills.length > 0
                 ? toSkillEntries(draftSkills)
@@ -1189,7 +1261,7 @@ export default function AIInterviewConfig() {
           }
 
           if (nthRound) {
-            const draftSkills = [...(nthRound.jd_skills || []), ...(nthRound.custom_skills || [])];
+            const draftSkills = nthMainSkills ?? [...(nthRound.jd_skills || []), ...(nthRound.custom_skills || [])];
             setNth({
               skills: draftSkills.length > 0
                 ? toSkillEntries(draftSkills)
@@ -1216,59 +1288,53 @@ export default function AIInterviewConfig() {
             setHrEnabled(false);
           }
 
-          // Restore clusters, skill comments, and skill types from special_instructions
-          try {
-            const si = (existingDraft as any).special_instructions;
-            if (si) {
-              const parsed = JSON.parse(si);
-              loadedSiRef.current = parsed; // store for skill snapshot comparison
-              const mthComments: Record<string, string> = parsed.skill_comments?.mth || {};
-              const nthComments: Record<string, string> = parsed.skill_comments?.nth || {};
-              const mthTypes: Record<string, string> = parsed.skill_types?.mth || {};
-              const nthTypes: Record<string, string> = parsed.skill_types?.nth || {};
+          // Apply remaining special_instructions fields (clusters, comments, types, etc.)
+          {
+            const parsed = parsedSi;
+            const mthComments: Record<string, string> = parsed.skill_comments?.mth || {};
+            const nthComments: Record<string, string> = parsed.skill_comments?.nth || {};
+            const mthTypes: Record<string, string> = parsed.skill_types?.mth || {};
+            const nthTypes: Record<string, string> = parsed.skill_types?.nth || {};
 
-              // Restore per-question time limit
-              if (parsed.per_question_seconds) {
-                setPerQuestionSeconds(Number(parsed.per_question_seconds));
-              }
-
-              // Restore buffer time toggle
-              if (parsed.buffer_enabled !== undefined) {
-                setBufferEnabled(Boolean(parsed.buffer_enabled));
-              }
-
-              // Restore clusters (only restore NHS clusters if NHS round is present/enabled)
-              if (parsed.mth_clusters?.length) {
-                setMth(prev => ({ ...prev, clusters: parsed.mth_clusters }));
-              }
-              if (parsed.nth_clusters?.length && nthRound) {
-                setNth(prev => ({ ...prev, clusters: parsed.nth_clusters }));
-              }
-
-              // Restore comments and types onto skills
-              if (Object.keys(mthComments).length || Object.keys(mthTypes).length) {
-                setMth(prev => ({
-                  ...prev,
-                  skills: prev.skills.map(s => ({
-                    ...s,
-                    comment: mthComments[s.name] || s.comment,
-                    type: (mthTypes[s.name] as SkillType) || s.type || 'Skill',
-                  })),
-                }));
-              }
-              if (Object.keys(nthComments).length || Object.keys(nthTypes).length) {
-                setNth(prev => ({
-                  ...prev,
-                  skills: prev.skills.map(s => ({
-                    ...s,
-                    comment: nthComments[s.name] || s.comment,
-                    type: (nthTypes[s.name] as SkillType) || s.type || 'Skill',
-                  })),
-                }));
-              }
+            // Restore per-question time limit
+            if (parsed.per_question_seconds) {
+              setPerQuestionSeconds(Number(parsed.per_question_seconds));
             }
-          } catch {
-            // Silent — malformed special_instructions is non-critical
+
+            // Restore buffer time toggle
+            if (parsed.buffer_enabled !== undefined) {
+              setBufferEnabled(Boolean(parsed.buffer_enabled));
+            }
+
+            // Restore clusters (only restore NHS clusters if NHS round is present/enabled)
+            if (parsed.mth_clusters?.length) {
+              setMth(prev => ({ ...prev, clusters: parsed.mth_clusters }));
+            }
+            if (parsed.nth_clusters?.length && nthRound) {
+              setNth(prev => ({ ...prev, clusters: parsed.nth_clusters }));
+            }
+
+            // Restore comments and types onto skills
+            if (Object.keys(mthComments).length || Object.keys(mthTypes).length) {
+              setMth(prev => ({
+                ...prev,
+                skills: prev.skills.map(s => ({
+                  ...s,
+                  comment: mthComments[s.name] || s.comment,
+                  type: (mthTypes[s.name] as SkillType) || s.type || 'Skill',
+                })),
+              }));
+            }
+            if (Object.keys(nthComments).length || Object.keys(nthTypes).length) {
+              setNth(prev => ({
+                ...prev,
+                skills: prev.skills.map(s => ({
+                  ...s,
+                  comment: nthComments[s.name] || s.comment,
+                  type: (nthTypes[s.name] as SkillType) || s.type || 'Skill',
+                })),
+              }));
+            }
           }
 
         } else if (existingDraft) {
@@ -1500,7 +1566,6 @@ export default function AIInterviewConfig() {
   const hrRequiredCount = mode === 'fixed' && hrEnabled ? (timedAllocation.hrQuestions ?? 0) : 0;
   const continueDisabledReason = (() => {
     if (savingDraft) return 'Saving draft…';
-    if (generatingClusters) return 'Generating clusters…';
     if (mode === 'flexible' && !pctValid) return `Scoring weights must total 100% (currently ${totalPct}%).`;
     if (hrPctInvalid) return 'HR weight must be at least 10% in Flexible mode.';
     if (hrEnabled && hrSelectedIds.length === 0) {
@@ -1629,11 +1694,30 @@ export default function AIInterviewConfig() {
       return fixedHrMin;
     };
 
+    // When the recruiter's main_skills haven't changed since the last cluster
+    // generation, preserve the original (AI-expanded) jd_skills + custom_skills
+    // from the saved rounds_config. This stops auto-save from wiping the
+    // expansion sub-skills when Configure is only displaying the main subset.
+    const mainUnchanged = (current: SkillEntry[], main: string[] | undefined): boolean => {
+      if (!Array.isArray(main) || main.length === 0) return false;
+      const currentSet = new Set(current.map(s => s.name.toLowerCase().trim()));
+      const mainSet = new Set(main.map(s => s.toLowerCase().trim()));
+      if (currentSet.size !== mainSet.size) return false;
+      for (const v of currentSet) if (!mainSet.has(v)) return false;
+      return true;
+    };
+    const mthMainUnchanged = mainUnchanged(mthSkillsSrc, loadedSiRef.current.mth_main_skills);
+    const nthMainUnchanged = mainUnchanged(nthSkillsSrc, loadedSiRef.current.nth_main_skills);
+
     // MTH round
     {
       const jdSet = new Set((selectedJd?.must_have_skills || []).map(s => s.toLowerCase()));
-      const jdSkills = mthSkillsSrc.filter(s => jdSet.has(s.name.toLowerCase())).map(s => s.name);
-      const customSkills = mthSkillsSrc.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
+      let jdSkills = mthSkillsSrc.filter(s => jdSet.has(s.name.toLowerCase())).map(s => s.name);
+      let customSkills = mthSkillsSrc.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
+      if (mthMainUnchanged) {
+        jdSkills = loadedRoundsRef.current.mthJd ?? jdSkills;
+        customSkills = loadedRoundsRef.current.mthCustom ?? customSkills;
+      }
       // Clusters → topics + topic_weights + topic_time_minutes + topic_skills
       const topics = mth.clusters.map(c => c.name).filter(Boolean);
       const topicWeights: Record<string, number> = {};
@@ -1665,8 +1749,12 @@ export default function AIInterviewConfig() {
     // NTH round
     if (nth.enabled) {
       const jdSet = new Set((selectedJd?.nice_to_have_skills || []).map(s => s.toLowerCase()));
-      const jdSkills = nthSkillsSrc.filter(s => jdSet.has(s.name.toLowerCase())).map(s => s.name);
-      const customSkills = nthSkillsSrc.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
+      let jdSkills = nthSkillsSrc.filter(s => jdSet.has(s.name.toLowerCase())).map(s => s.name);
+      let customSkills = nthSkillsSrc.filter(s => !jdSet.has(s.name.toLowerCase())).map(s => s.name);
+      if (nthMainUnchanged) {
+        jdSkills = loadedRoundsRef.current.nthJd ?? jdSkills;
+        customSkills = loadedRoundsRef.current.nthCustom ?? customSkills;
+      }
       const topics = nth.clusters.map(c => c.name).filter(Boolean);
       const topicWeights: Record<string, number> = {};
       const topicSkills: Record<string, string[]> = {};
@@ -1729,6 +1817,11 @@ export default function AIInterviewConfig() {
     // Preserve skill snapshots (only updated on cluster generation — don't overwrite here)
     ...(loadedSiRef.current.mth_skills_snapshot !== undefined && { mth_skills_snapshot: loadedSiRef.current.mth_skills_snapshot }),
     ...(loadedSiRef.current.nth_skills_snapshot !== undefined && { nth_skills_snapshot: loadedSiRef.current.nth_skills_snapshot }),
+    // Recruiter-typed "main" skills, captured before AI expansion runs.
+    // Persisted once on first navigate; the Clusters page uses this to
+    // visually distinguish original skills from expansion-added sub-skills.
+    ...(loadedSiRef.current.mth_main_skills !== undefined && { mth_main_skills: loadedSiRef.current.mth_main_skills }),
+    ...(loadedSiRef.current.nth_main_skills !== undefined && { nth_main_skills: loadedSiRef.current.nth_main_skills }),
     skill_comments: {
       mth: Object.fromEntries(mth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
       nth: Object.fromEntries(nth.skills.filter(s => s.comment).map(s => [s.name, s.comment])),
@@ -1813,93 +1906,14 @@ export default function AIInterviewConfig() {
       return;
     }
 
-    // Phase 0: Skill-shortage detection (timed mode only) — runs silently.
-    // When the recruiter-supplied skill list is too small for the planned
-    // question count, expand it via JD-grounded sub-skills and pass the
-    // expanded list as an override into the rest of the pipeline. The
-    // Configure page's visible skill list is NOT modified — expanded skills
-    // surface only on the Clusters page.
-    if (mode === 'fixed') {
-      const mthSkillNames = mth.skills.map(s => s.name.trim()).filter(Boolean);
-      const nthSkillNames = nth.enabled ? nth.skills.map(s => s.name.trim()).filter(Boolean) : [];
-      const mthQ = timedAllocation.mthQuestions ?? 0;
-      const nthQ = nth.enabled ? (timedAllocation.nthQuestions ?? 0) : 0;
-      // target = 2 skills per question. Trigger expansion when input < target,
-      // and trigger refine (preserve-names) when input either expanded OR
-      // input > target (overflow needs trimming via the relevance + budget rules).
-      const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ * 2;
-      const nthShort = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length < nthQ * 2;
-      const mthOverflow = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length > mthQ * 2;
-      const nthOverflow = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length > nthQ * 2;
-
-      if (mthShort || nthShort) {
-        setGeneratingClusters(true);
-        try {
-          const [mthFlat, nthFlat] = await Promise.all([
-            mthShort
-              ? aiInterviewService.expandSkills({
-                  mainSkills: mthSkillNames,
-                  targetSkillCount: mthQ * 2,
-                  bucket: 'MTH',
-                  jdTitle: selectedJd.title,
-                  jdDescription: selectedJd.description,
-                }).then(r => r.flat_skills)
-              : Promise.resolve(mthSkillNames),
-            nthShort
-              ? aiInterviewService.expandSkills({
-                  mainSkills: nthSkillNames,
-                  targetSkillCount: nthQ * 2,
-                  bucket: 'NTH',
-                  jdTitle: selectedJd.title,
-                  jdDescription: selectedJd.description,
-                }).then(r => r.flat_skills)
-              : Promise.resolve(nthSkillNames),
-          ]);
-
-          // Build SkillEntry[] for override; preserve metadata for parents
-          // already in state, default-fill for new sub-skills.
-          const buildEntries = (existing: SkillEntry[], names: string[]): SkillEntry[] => {
-            const byName = new Map(existing.map(e => [e.name.toLowerCase(), e]));
-            return names.map(n => byName.get(n.toLowerCase()) ?? { name: n, comment: '', type: 'Skill' as SkillType });
-          };
-          const mthOverride = mthFlat.length > 0 ? buildEntries(mth.skills, mthFlat) : undefined;
-          const nthOverride = nth.enabled && nthFlat.length > 0 ? buildEntries(nth.skills, nthFlat) : undefined;
-
-          await proceedToClusters({ applyRefine: true, mthOverride, nthOverride });
-        } catch (e: any) {
-          toast.error(e?.message || 'Failed to expand skills');
-          setGeneratingClusters(false);
-        }
-        return;
-      }
-
-      // No shortage but overflow on either bucket → run refine to trim/rebalance.
-      // Skip expansion; pass through input skills untouched, refine handles the rest.
-      if (mthOverflow || nthOverflow) {
-        await proceedToClusters({ applyRefine: true });
-        return;
-      }
-    }
-
-    await proceedToClusters({ applyRefine: false });
+    await proceedToClusters();
   };
 
-  const proceedToClusters = async (
-    opts: { applyRefine?: boolean; mthOverride?: SkillEntry[]; nthOverride?: SkillEntry[] } = {},
-  ) => {
+  const proceedToClusters = async () => {
     if (!selectedJd) return;
-    const { applyRefine = false, mthOverride, nthOverride } = opts;
-    const effMth: SkillEntry[] = mthOverride ?? mth.skills;
-    const effNth: SkillEntry[] = nth.enabled ? (nthOverride ?? nth.skills) : [];
     isNavigatingRef.current = true;
 
-    // 1. Save draft first.
-    // Important: do NOT pass the expansion override into saveDraft. The
-    // recruiter-supplied skills are the source of truth for the Configure
-    // page; the expanded list lives only in `effMth/effNth` for cluster
-    // generation and is persisted (distributed) into `special_instructions
-    // .mth_clusters` after generateClusters runs. This keeps the Configure
-    // page showing only what the recruiter typed.
+    // 1. Save draft first so the Clusters page reads the latest skills.
     const ok = await saveDraft(true);
     if (!ok || !existingDraftIdRef.current) {
       isNavigatingRef.current = false;
@@ -1907,18 +1921,16 @@ export default function AIInterviewConfig() {
       return;
     }
 
-    // 2. Determine if clusters need regeneration.
-    // Rule: only regenerate when skills ACTUALLY changed since last save, or when no clusters exist yet.
-    // Never regenerate just because the user navigated back without making changes.
+    // 2. Determine if clusters need (re)generation.
+    // Rule: regenerate when skills changed since last cluster save OR when no
+    // clusters exist for the active rounds. Mere back-nav with no skill change
+    // must NOT re-trigger generation.
     const currentMthSet = new Set(
-      effMth.map(s => s.name.toLowerCase().trim()).filter(Boolean)
+      mth.skills.map(s => s.name.toLowerCase().trim()).filter(Boolean)
     );
     const currentNthSet = new Set(
-      nth.enabled ? effNth.map(s => s.name.toLowerCase().trim()).filter(Boolean) : []
+      nth.enabled ? nth.skills.map(s => s.name.toLowerCase().trim()).filter(Boolean) : []
     );
-
-    // Snapshot = skills at the time clusters were last generated or saved from the Clusters page.
-    // If no snapshot exists yet (old config), treat existing clusters as valid (no false regeneration).
     const mthSnapshot: string[] = loadedSiRef.current.mth_skills_snapshot ?? [];
     const nthSnapshot: string[] = loadedSiRef.current.nth_skills_snapshot ?? [];
     const mthSnapshotSet = new Set(mthSnapshot.map(s => s.toLowerCase().trim()));
@@ -1927,8 +1939,7 @@ export default function AIInterviewConfig() {
 
     const mthSkillsChanged = hasSnapshot
       ? currentMthSet.size !== mthSnapshotSet.size || [...currentMthSet].some(s => !mthSnapshotSet.has(s))
-      : false; // no snapshot → assume no change, user can always regenerate manually
-
+      : false;
     const nthSkillsChanged = nth.enabled && hasSnapshot
       ? currentNthSet.size !== nthSnapshotSet.size || [...currentNthSet].some(s => !nthSnapshotSet.has(s))
       : false;
@@ -1944,118 +1955,38 @@ export default function AIInterviewConfig() {
         !nthSkillsChanged);
     const needsRegeneration = !mthClustersMatch || !nthClustersMatch;
 
-    // If no snapshot yet, backfill it now (non-blocking) so future visits use snapshot comparison
+    // Backfill snapshot if missing so future visits use snapshot comparison.
     if (!hasSnapshot && !needsRegeneration && existingDraftIdRef.current) {
       const siBackfill = JSON.parse(buildClusterJson());
-      siBackfill.mth_skills_snapshot = effMth.map(s => s.name);
-      siBackfill.nth_skills_snapshot = nth.enabled ? effNth.map(s => s.name) : [];
+      siBackfill.mth_skills_snapshot = mth.skills.map(s => s.name);
+      siBackfill.nth_skills_snapshot = nth.enabled ? nth.skills.map(s => s.name) : [];
       loadedSiRef.current = { ...loadedSiRef.current, ...siBackfill };
       aiInterviewService.update(existingDraftIdRef.current, {
         special_instructions: JSON.stringify(siBackfill),
       }).catch(() => {});
     }
 
-    if (needsRegeneration) {
-      setGeneratingClusters(true);
-      try {
-        const mthSkillNames = effMth
-          .map(s => s.name.trim())
-          .filter(Boolean);
-        const nthSkillNames = nth.enabled
-          ? effNth.map(s => s.name.trim()).filter(Boolean)
-          : [];
-
-        if (mthSkillNames.length > 0 || nthSkillNames.length > 0) {
-          const mthDurationForGeneration = mode === 'flexible' ? flexMthMin : fixedMthMin;
-          const nthDurationForGeneration = mode === 'flexible' ? flexNthMin : fixedNthMin;
-          const result = await aiInterviewService.generateClusters(
-            mthSkillNames,
-            nthSkillNames,
-            selectedJd.title,
-            selectedJd.description,
-            mthDurationForGeneration,
-            nthSkillNames.length > 0 ? nthDurationForGeneration : 0,
-            effectiveMthMax,
-            nthSkillNames.length > 0 ? effectiveNthMax : 0,
-          );
-
-          // Save generated clusters to the draft.
-          // Hard-cap to scenario limits in case backend returns more than allowed.
-          const siObj = JSON.parse(buildClusterJson());
-          const mthMax = effectiveMthMax;
-          const nthMax = effectiveNthMax;
-          const rawMth = mthSkillNames.length > 0 ? result.mth_clusters : [];
-          const rawNth = nthSkillNames.length > 0 ? result.nth_clusters : [];
-          let mthClustersOut = (mthMax > 0 ? rawMth.slice(0, mthMax) : rawMth).map(c => ({
-            ...c,
-            priority: c.priority as Cluster['priority'],
-            reason: c.reason || '',
-          }));
-          let nthClustersOut = (nthMax > 0 ? rawNth.slice(0, nthMax) : rawNth).map(c => ({
-            ...c,
-            priority: c.priority as Cluster['priority'],
-            reason: c.reason || '',
-          }));
-
-          // Phase 2: Refine in PRESERVE-NAMES mode — applies the 2 rules
-          // (skill relevance check + question-limit optimization) but
-          // forbids rename/merge so the input skill names appear verbatim
-          // in the output clusters (1:1 mapping). Triggered after expansion
-          // OR when recruiter input overflows the target (relevance pass
-          // trims over-supplied skills). Best-effort: on failure, keep
-          // raw generated clusters.
-          if (applyRefine) {
-            try {
-              const refineResult = await aiInterviewService.refineClusters({
-                mthClusters: mthClustersOut,
-                nthClusters: nth.enabled ? nthClustersOut : [],
-                mthQuestions: mode === 'fixed' ? (timedAllocation.mthQuestions ?? 0) : 0,
-                nthQuestions: mode === 'fixed' && nth.enabled ? (timedAllocation.nthQuestions ?? 0) : 0,
-                mthMaxClusters: effectiveMthMax,
-                nthMaxClusters: nth.enabled ? effectiveNthMax : 0,
-                jdTitle: selectedJd.title,
-                jdDescription: selectedJd.description,
-                preserveSkillNames: true,
-              });
-              if (refineResult.mth_clusters?.length) {
-                mthClustersOut = refineResult.mth_clusters.map(c => ({
-                  ...c,
-                  priority: c.priority as Cluster['priority'],
-                  reason: c.reason || '',
-                }));
-              }
-              if (nth.enabled && refineResult.nth_clusters?.length) {
-                nthClustersOut = refineResult.nth_clusters.map(c => ({
-                  ...c,
-                  priority: c.priority as Cluster['priority'],
-                  reason: c.reason || '',
-                }));
-              }
-            } catch {
-              // Refine failed — keep raw generated clusters
-            }
-          }
-
-          siObj.mth_clusters = mthClustersOut;
-          siObj.nth_clusters = nthClustersOut;
-          // Save skill snapshot so future visits don't trigger false regeneration
-          siObj.mth_skills_snapshot = effMth.map(s => s.name);
-          siObj.nth_skills_snapshot = nth.enabled ? effNth.map(s => s.name) : [];
-          loadedSiRef.current = { ...loadedSiRef.current, ...siObj };
-          await aiInterviewService.update(existingDraftIdRef.current, {
-            special_instructions: JSON.stringify(siObj),
-          });
-        }
-      } catch {
-        // Clusters generation failed — still navigate, user can generate on clusters page
-        console.warn('Cluster generation failed, navigating without pre-generated clusters');
-      } finally {
-        setGeneratingClusters(false);
-      }
+    // Capture recruiter-typed "main" skills before AI expansion runs on the
+    // Clusters page. Always re-capture from the currently displayed mth.skills
+    // / nth.skills — those are the recruiter's source of truth (the load
+    // logic already filters out AI-expansion sub-skills). Re-capturing each
+    // time also self-heals legacy drafts where main_skills got polluted with
+    // the expanded list under earlier code.
+    if (existingDraftIdRef.current) {
+      loadedSiRef.current.mth_main_skills = mth.skills.map(s => s.name);
+      loadedSiRef.current.nth_main_skills = nth.enabled ? nth.skills.map(s => s.name) : [];
+      const siWithMain = JSON.parse(buildClusterJson());
+      // Fire-and-forget; Clusters page will read on load.
+      aiInterviewService.update(existingDraftIdRef.current, {
+        special_instructions: JSON.stringify(siWithMain),
+      }).catch(() => {});
     }
 
-    // 3. Navigate to clusters page
-    router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${existingDraftIdRef.current}`);
+    // 3. Navigate immediately. Pass autogen=1 when regeneration is needed —
+    // the Clusters page handles the expand → generate → refine pipeline with
+    // its own loading UI so the user doesn't wait on a blocked Configure page.
+    const base = `/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=${existingDraftIdRef.current}`;
+    router.push(needsRegeneration ? `${base}&autogen=1` : base);
   };
 
   const handleBackClick = async () => {
@@ -2822,8 +2753,8 @@ export default function AIInterviewConfig() {
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     }`}
                   >
-                    {(savingDraft || generatingClusters) ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-                    {savingDraft ? 'Saving…' : generatingClusters ? 'Generating Clusters…' : 'Continue to Clusters'}
+                    {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
+                    {savingDraft ? 'Saving…' : 'Continue to Clusters'}
                   </button>
                   {!canContinueToClusters && continueDisabledReason && (
                     <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal w-max max-w-xs z-10">

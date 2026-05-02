@@ -768,7 +768,9 @@ export default function MyResumesPage() {
         sort_by: sortByMap[sortBy] || 'date-desc',
       };
 
-      // Add folder filter if not viewing all
+      // Add folder filter if not viewing all. The 'uncategorized' sentinel
+      // tells the backend to return resumes whose folder isn't in this
+      // user's visible folder list (or is NULL).
       if (folderId && folderId !== 'all') {
         searchParams.folder_id = folderId;
       }
@@ -943,7 +945,26 @@ export default function MyResumesPage() {
         name: 'All Resumes',
         count: nextAllTotal,
       };
-      const convertedFolders: FolderType[] = [allResumesFolder, ...apiFolders];
+
+      // Virtual "Uncategorized" — resumes whose folder isn't in this user's
+      // sidebar (folder_id NULL or pointing at a folder owned by someone
+      // else). Without this, the per-folder counts won't add up to the
+      // All Resumes total. Count = global total - sum of own-folder counts.
+      const sumOfFolderCounts = apiFolders.reduce(
+        (sum, f) => sum + (f.count || 0),
+        0
+      );
+      const uncategorizedCount = Math.max(0, nextAllTotal - sumOfFolderCounts);
+      const uncategorizedFolder: FolderType | null =
+        uncategorizedCount > 0
+          ? { id: 'uncategorized', name: 'Uncategorized', count: uncategorizedCount }
+          : null;
+
+      const convertedFolders: FolderType[] = [
+        allResumesFolder,
+        ...apiFolders,
+        ...(uncategorizedFolder ? [uncategorizedFolder] : []),
+      ];
 
       setResumes(convertedResumes);
       setTotalItems(resumeResponse.total);

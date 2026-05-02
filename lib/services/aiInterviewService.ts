@@ -761,7 +761,21 @@ export const aiInterviewService = {
   /**
    * Generate AI-powered skill clusters
    */
-  async generateClusters(mthSkills: string[], nthSkills: string[], jdTitle?: string, jdDescription?: string, mthTimeMin?: number, nthTimeMin?: number, mthMaxClusters?: number, nthMaxClusters?: number): Promise<{
+  async generateClusters(
+    mthSkills: string[],
+    nthSkills: string[],
+    jdTitle?: string,
+    jdDescription?: string,
+    mthTimeMin?: number,
+    nthTimeMin?: number,
+    mthMaxClusters?: number,
+    nthMaxClusters?: number,
+    /** Optional parent → sub_skills bindings produced by /expand-skills. Passing
+     * these makes the backend keep each parent's family in a single cluster
+     * (and repair any LLM mis-routing deterministically). */
+    mthParentGroups?: { parent: string; sub_skills: string[] }[],
+    nthParentGroups?: { parent: string; sub_skills: string[] }[],
+  ): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
   }> {
@@ -775,6 +789,8 @@ export const aiInterviewService = {
         nth_time_min: nthTimeMin,
         mth_max_clusters: mthMaxClusters,
         nth_max_clusters: nthMaxClusters,
+        mth_parent_groups: mthParentGroups,
+        nth_parent_groups: nthParentGroups,
       });
       return response.data;
     } catch (error) {
@@ -799,6 +815,10 @@ export const aiInterviewService = {
      * irrelevant + rebalance allowed. Used by the silent post-expansion
      * flow so all input skills appear verbatim in the refined clusters. */
     preserveSkillNames?: boolean;
+    /** Same parent → sub_skills bindings as in generateClusters; lets the
+     * backend re-route any sub-skill that ended up in the wrong cluster. */
+    mthParentGroups?: { parent: string; sub_skills: string[] }[];
+    nthParentGroups?: { parent: string; sub_skills: string[] }[];
   }): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
@@ -814,6 +834,8 @@ export const aiInterviewService = {
         jd_title: args.jdTitle,
         jd_description: args.jdDescription,
         preserve_skill_names: args.preserveSkillNames ?? false,
+        mth_parent_groups: args.mthParentGroups,
+        nth_parent_groups: args.nthParentGroups,
       });
       return response.data;
     } catch (error) {

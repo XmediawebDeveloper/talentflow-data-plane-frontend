@@ -694,41 +694,62 @@ export default function CandidateResultDetails({
                     ? 'border-gray-200 bg-gray-50/30'
                     : 'border-green-200 bg-green-50/30'
                 }`}>
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-900">{section.name}</span>
-                        {isHR ? (
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
-                            Not Scored
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
-                            Scored (0-10)
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {section.score}/{section.totalScore} correct
-                        {!isHR && (
-                          <span className="text-gray-800 ml-2">• Weighted contribution: {Math.round(section.weightedScore)}%</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className={`text-2xl ${isHR ? 'text-gray-400' : getScoreColor(section.percentage)}`}>
-                      {isHR ? '—' : `${section.percentage}%`}
-                    </div>
-                  </div>
+                  {/* Hide score / pct / bar until AI scoring is finished.
+                      Mid-evaluation we'd otherwise render "0/10 correct, 0%"
+                      with a green "Scored" pill, which misleads recruiters
+                      into thinking the candidate scored zero. */}
+                  {(() => {
+                    const scoringDone = detailedResult?.scoring_status === 'completed';
+                    return (
+                      <>
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-900">{section.name}</span>
+                              {isHR ? (
+                                <span className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">
+                                  Not Scored
+                                </span>
+                              ) : scoringDone ? (
+                                <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                                  Scored (0-10)
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">
+                                  Processing…
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {scoringDone || isHR ? (
+                                <>
+                                  {section.score}/{section.totalScore} correct
+                                  {!isHR && (
+                                    <span className="text-gray-800 ml-2">• Weighted contribution: {Math.round(section.weightedScore)}%</span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-gray-400">Awaiting scoring…</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className={`text-2xl ${isHR || !scoringDone ? 'text-gray-400' : getScoreColor(section.percentage)}`}>
+                            {isHR || !scoringDone ? '—' : `${section.percentage}%`}
+                          </div>
+                        </div>
 
-                  {/* Score progress bar (non-HR only) */}
-                  {!isHR && (
-                    <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-3">
-                      <div
-                        className={`h-3 rounded-full ${section.percentage >= 80 ? 'bg-green-600' : section.percentage >= 60 ? 'bg-gray-800' : section.percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'}`}
-                        style={{ width: `${Math.min(section.percentage, 100)}%` }}
-                      />
-                    </div>
-                  )}
+                        {/* Score progress bar (non-HR, only after scoring done) */}
+                        {!isHR && scoringDone && (
+                          <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden mb-3">
+                            <div
+                              className={`h-3 rounded-full ${section.percentage >= 80 ? 'bg-green-600' : section.percentage >= 60 ? 'bg-gray-800' : section.percentage >= 40 ? 'bg-yellow-600' : 'bg-red-600'}`}
+                              style={{ width: `${Math.min(section.percentage, 100)}%` }}
+                            />
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {/* Question Attendance Bar */}
                   {totalQ > 0 && (
@@ -737,7 +758,11 @@ export default function CandidateResultDetails({
                         <span className="text-xs font-medium text-gray-600">Question Attendance</span>
                         <span className="text-xs text-gray-400">{totalQ} Total</span>
                       </div>
-                      {/* Stacked bar */}
+                      {/* Stacked bar — Submitted vs Unanswered only.
+                          Skipped was a synthetic third bucket that confused
+                          recruiters; the system already tracks "answered" vs
+                          "no answer" cleanly. Skipped questions roll into
+                          Unanswered so the bar always sums to total. */}
                       <div className="w-full h-2.5 rounded-full overflow-hidden flex bg-gray-100 mb-2">
                         {submittedQ > 0 && (
                           <div
@@ -745,16 +770,10 @@ export default function CandidateResultDetails({
                             style={{ width: `${submittedPct}%` }}
                           />
                         )}
-                        {skippedQ > 0 && (
-                          <div
-                            className="h-full bg-amber-400 transition-all"
-                            style={{ width: `${skippedPct}%` }}
-                          />
-                        )}
-                        {unansweredQ > 0 && (
+                        {(unansweredQ + skippedQ) > 0 && (
                           <div
                             className="h-full bg-red-400 transition-all"
-                            style={{ width: `${unansweredPct}%` }}
+                            style={{ width: `${unansweredPct + skippedPct}%` }}
                           />
                         )}
                       </div>
@@ -765,12 +784,8 @@ export default function CandidateResultDetails({
                           <span className="text-green-700 font-medium">{submittedQ} Submitted</span>
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block flex-shrink-0" />
-                          <span className="text-amber-600 font-medium">{skippedQ} Skipped</span>
-                        </span>
-                        <span className="flex items-center gap-1.5">
                           <span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block flex-shrink-0" />
-                          <span className="text-red-600 font-medium">{unansweredQ} Unanswered</span>
+                          <span className="text-red-600 font-medium">{unansweredQ + skippedQ} Unanswered</span>
                         </span>
                       </div>
                     </div>
@@ -1073,8 +1088,11 @@ export default function CandidateResultDetails({
           {/* Content when loaded */}
           {detailedResult && detailedResult.scoring_status !== 'processing' && (
             <>
-              {/* Tab Navigation */}
-              <div className="border-b border-gray-200 bg-gray-50">
+              {/* Tab Navigation — sticky so the candidate viewer can switch
+                  between HR / Technical / Coding / Violations without
+                  scrolling all the way back up on long question lists.
+                  z-30 keeps it above the question cards but below any modals. */}
+              <div className="sticky top-0 z-30 border-b border-gray-200 bg-gray-50/95 backdrop-blur supports-[backdrop-filter]:bg-gray-50/80 shadow-sm">
                 <div className="flex flex-wrap gap-1 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3">
                   {detailedResult.round_scores.map((round, idx) => {
                     const isActive = activeTab === round.round_type;
@@ -1155,16 +1173,38 @@ export default function CandidateResultDetails({
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-200">
                         <div>
                           <h3 className="text-base sm:text-xl text-gray-900 capitalize">{round.round_type} Round</h3>
-                          <p className="text-sm text-gray-600 mt-1">
-                            {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''} •
-                            <span className="ml-1">
-                              {isHRRound ? 'Informational only' : (
-                                <>
-                                  {displayedSectionPoints}/{displayedSectionPossible} points
-                                </>
-                              )}
-                            </span>
-                          </p>
+                          {(() => {
+                            // Per-type question count for this round so the
+                            // header shows e.g. "13 questions (MCQ - 11, Text
+                            // Input - 2)". Pure-MCQ rounds still display the
+                            // breakdown with "Text Input - 0" so recruiters
+                            // see the split everywhere.
+                            const _mcqTypes = new Set(['single_choice', 'multiple_choice', 'mcq']);
+                            const _textTypes = new Set(['text', 'behavioral', 'scenario', 'conceptual']);
+                            const mcqCount = questionsForRound.filter(
+                              q => _mcqTypes.has(String(q.question_type || '').toLowerCase()),
+                            ).length;
+                            const textCount = questionsForRound.filter(
+                              q => _textTypes.has(String(q.question_type || '').toLowerCase()),
+                            ).length;
+                            const showBreakdown = round.round_type !== 'coding';
+                            return (
+                              <p className="text-sm text-gray-600 mt-1">
+                                {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''}
+                                {showBreakdown && (
+                                  <span className="text-gray-500"> (MCQ - {mcqCount}, Text Input - {textCount})</span>
+                                )}
+                                <span> • </span>
+                                <span>
+                                  {isHRRound ? 'Informational only' : (
+                                    <>
+                                      {displayedSectionPoints}/{displayedSectionPossible} points
+                                    </>
+                                  )}
+                                </span>
+                              </p>
+                            );
+                          })()}
                         </div>
                         <div className="text-left sm:text-right">
                           <div className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1">
@@ -1195,62 +1235,100 @@ export default function CandidateResultDetails({
                                       <span className="px-3 py-1 bg-gray-800 text-white rounded-full text-xs font-medium">
                                         Q{qIdx + 1}
                                       </span>
-                                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                        q.question_type === 'coding'
-                                          ? 'bg-purple-100 text-purple-700'
-                                          : q.question_type === 'mcq' || q.question_type === 'single_choice' || q.question_type === 'multiple_choice'
-                                          ? 'bg-blue-100 text-blue-700'
-                                          : 'bg-gray-100 text-gray-700'
-                                      }`}>
-                                        {q.question_type === 'coding' ? 'Coding'
-                                          : q.question_type === 'mcq' ? 'MCQ'
-                                          : q.question_type === 'single_choice' ? 'Single Choice'
-                                          : q.question_type === 'multiple_choice' ? 'Multiple Choice'
-                                          : 'Text'}
-                                      </span>
+                                      {/* Question-type badge removed —
+                                          recruiters didn't find "Single
+                                          Choice / Multiple Choice / Text"
+                                          useful since the answer block
+                                          already makes the type obvious
+                                          (options grid for MCQ, code block
+                                          for coding, free text otherwise). */}
                                       {!isTextQuestion && (q.is_correct ? (
                                         <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Correct</span>
                                       ) : (
                                         <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">Incorrect</span>
                                       ))}
                                     </div>
-                                    <div className="text-gray-900 leading-relaxed">{q.question_text}</div>
-                                    {q.question_type === 'coding' && (
-                                      <div className="mt-3 space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
-                                        {q.problem_title && (
-                                          <div>
-                                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Problem Title</div>
-                                            <div className="text-sm text-gray-900">{q.problem_title}</div>
+                                    {q.question_type === 'coding' ? (
+                                      // Coding question — mirror the candidate
+                                      // page layout (MultiLanguageCodeEditor):
+                                      // problem title heading, description with
+                                      // whitespace-pre-wrap, then Input/Output
+                                      // Format, Constraints (bulleted), and
+                                      // Example Input / Expected Output blocks.
+                                      <div className="space-y-4">
+                                        <div>
+                                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">
+                                            {q.problem_title || 'Coding Problem'}
+                                          </h3>
+                                          <div className="prose prose-sm max-w-none text-gray-700">
+                                            <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 m-0">
+                                              {q.question_text}
+                                            </pre>
                                           </div>
-                                        )}
+                                        </div>
+
                                         {q.input_format && (
                                           <div>
-                                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Input Format</div>
-                                            <div className="text-sm text-gray-800 whitespace-pre-wrap">{q.input_format}</div>
+                                            <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Input Format</h4>
+                                            <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
+                                              {q.input_format}
+                                            </div>
                                           </div>
                                         )}
+
                                         {q.output_format && (
                                           <div>
-                                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Output Format</div>
-                                            <div className="text-sm text-gray-800 whitespace-pre-wrap">{q.output_format}</div>
+                                            <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Output Format</h4>
+                                            <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
+                                              {q.output_format}
+                                            </div>
                                           </div>
                                         )}
+
+                                        {Array.isArray(q.constraints) && q.constraints.length > 0 && (
+                                          <div>
+                                            <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Constraints</h4>
+                                            <ul className="text-sm text-gray-700 space-y-1 bg-gray-50 p-3 rounded-lg">
+                                              {q.constraints.map((constraint: string, idx: number) => (
+                                                <li key={idx} className="flex items-start gap-2">
+                                                  <span className="text-gray-400">-</span>
+                                                  <code className="text-xs bg-gray-200 px-1 rounded">{constraint}</code>
+                                                </li>
+                                              ))}
+                                            </ul>
+                                          </div>
+                                        )}
+
                                         {(q.sample_input || q.sample_output) && (
-                                          <div className="grid gap-3 md:grid-cols-2">
-                                            <div>
-                                              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Example Input</div>
-                                              <div className="rounded bg-gray-900 p-3 font-mono text-sm text-green-300">
-                                                <pre className="whitespace-pre-wrap">{q.sample_input || 'No example input provided'}</pre>
+                                          <div className="space-y-3">
+                                            <h4 className="font-medium text-gray-800 text-sm">Example</h4>
+                                            {q.sample_input && (
+                                              <div>
+                                                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Input</div>
+                                                <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                                                  {q.sample_input}
+                                                </pre>
                                               </div>
-                                            </div>
-                                            <div>
-                                              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">Example Output</div>
-                                              <div className="rounded bg-gray-900 p-3 font-mono text-sm text-green-300">
-                                                <pre className="whitespace-pre-wrap">{q.sample_output || 'No example output provided'}</pre>
+                                            )}
+                                            {q.sample_output && (
+                                              <div>
+                                                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Expected Output</div>
+                                                <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                                                  {q.sample_output}
+                                                </pre>
                                               </div>
-                                            </div>
+                                            )}
                                           </div>
                                         )}
+                                      </div>
+                                    ) : (
+                                      // Non-coding: preserve any newlines /
+                                      // formatting in the question text the
+                                      // recruiter wrote (or the AI emitted).
+                                      <div className="text-gray-900 leading-relaxed">
+                                        <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 m-0">
+                                          {q.question_text}
+                                        </pre>
                                       </div>
                                     )}
                                   </div>
@@ -1288,37 +1366,168 @@ export default function CandidateResultDetails({
                                 )}
 
                                 {/* Candidate's Answer */}
-                                <div>
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                                      <User className="w-4 h-4 text-gray-800" />
-                                    </div>
-                                    <div className="text-sm font-medium text-gray-800">CANDIDATE'S ANSWER</div>
-                                  </div>
-                                  <div className={`rounded-lg p-4 ${
-                                    q.question_type === 'coding'
-                                      ? 'bg-gray-900 text-green-400 font-mono text-sm overflow-x-auto'
-                                      : 'bg-gray-50 text-gray-800'
-                                  }`}>
-                                    {q.question_type === 'coding' ? (
-                                      <pre className="whitespace-pre-wrap">{q.candidate_code_submission || 'No code submitted'}</pre>
-                                    ) : q.candidate_selected_options && q.candidate_selected_options.length > 0 ? (
+                                {(() => {
+                                  const _mcqTypes = new Set(['single_choice', 'multiple_choice', 'mcq']);
+                                  const isMCQ = _mcqTypes.has(String(q.question_type || '').toLowerCase());
+                                  if (isMCQ && Array.isArray(q.options) && q.options.length > 0) {
+                                    // Show ALL options A/B/C/D inline.
+                                    //   - correct option(s)            → green bg
+                                    //   - candidate's wrong selection  → red bg
+                                    //   - candidate's correct selection → green (selected pill shows green "Your answer")
+                                    //   - everything else              → neutral
+                                    const correctSet = new Set(
+                                      (q.correct_answer || []).map((c: any) => String(c).trim().toLowerCase()),
+                                    );
+                                    const selectedSet = new Set(
+                                      (q.candidate_selected_options || []).map((s: any) => String(s).trim().toLowerCase()),
+                                    );
+                                    // When the AI judged the answer as correct
+                                    // (q.is_correct === true / score === 100 /
+                                    // points_earned >= points_possible), the
+                                    // candidate's selection IS the right one
+                                    // — even if the stored correct_answer is
+                                    // missing OR disagrees (which happens with
+                                    // some AI outputs). Always overlay the
+                                    // selected options into correctSet in that
+                                    // case so the bg renders green, not red.
+                                    const judgedCorrect =
+                                      q.is_correct === true
+                                      || (typeof q.score === 'number' && q.score >= 100)
+                                      || (typeof q.points_earned === 'number'
+                                          && typeof q.points_possible === 'number'
+                                          && q.points_possible > 0
+                                          && q.points_earned >= q.points_possible);
+                                    if (judgedCorrect) {
+                                      for (const s of selectedSet) correctSet.add(s);
+                                    }
+
+                                    // Last-resort: when the AI didn't return a
+                                    // structured correct_answer but did
+                                    // mention the right answer in feedback
+                                    // (e.g., "selected classification instead
+                                    // of regression"), try to recover the
+                                    // correct option by matching feedback
+                                    // text against each option's text. Without
+                                    // this, an incorrectly-answered MCQ would
+                                    // show the candidate's pick in red but
+                                    // never highlight the actual right answer
+                                    // in green — recruiters see only the
+                                    // "wrong" half of the picture.
+                                    if (correctSet.size === 0) {
+                                      const feedbackBlob = (
+                                        (typeof q.feedback === 'string' ? q.feedback : '')
+                                        + ' ' + (q.explanation || '')
+                                      ).toLowerCase();
+                                      if (feedbackBlob.trim()) {
+                                        // Heuristic: pull the phrase after
+                                        // "instead of" or "correct answer is/:".
+                                        const insteadOf = feedbackBlob.match(/instead of\s+([^.;,\n]+)/i);
+                                        const correctIs = feedbackBlob.match(/correct(?:\s+answer)?\s*(?:is|:)\s+([^.;,\n]+)/i);
+                                        const candidates: string[] = [];
+                                        if (insteadOf?.[1]) candidates.push(insteadOf[1].trim());
+                                        if (correctIs?.[1]) candidates.push(correctIs[1].trim());
+                                        for (const phrase of candidates) {
+                                          if (!phrase) continue;
+                                          const matched = (q.options || []).find((o: any) => {
+                                            const t = String(o.text || '').toLowerCase().trim();
+                                            return t && (t === phrase || t.includes(phrase) || phrase.includes(t));
+                                          });
+                                          if (matched) {
+                                            correctSet.add(String(matched.id || '').toLowerCase());
+                                            break;
+                                          }
+                                        }
+                                      }
+                                    }
+                                    return (
                                       <div>
-                                        {q.candidate_selected_options.map((opt, i) => {
-                                          const option = q.options?.find(o => o.id === opt);
-                                          return (
-                                            <div key={i} className="flex items-center gap-2 mb-1">
-                                              <span className="text-gray-500">•</span>
-                                              <span>{option?.text || opt}</span>
-                                            </div>
-                                          );
-                                        })}
+                                        <div className="flex items-center gap-2 mb-3">
+                                          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                            <User className="w-4 h-4 text-gray-800" />
+                                          </div>
+                                          <div className="text-sm font-medium text-gray-800">OPTIONS</div>
+                                        </div>
+                                        <div className="space-y-2">
+                                          {q.options.map((opt: any) => {
+                                            const oid = String(opt.id || '').toLowerCase();
+                                            const isCorrect = correctSet.has(oid);
+                                            const isSelected = selectedSet.has(oid);
+                                            const isWrongSelection = isSelected && !isCorrect;
+                                            const wrap = isCorrect
+                                              ? 'bg-green-50 border-green-300 text-green-900'
+                                              : isWrongSelection
+                                                ? 'bg-red-50 border-red-300 text-red-900'
+                                                : 'bg-gray-50 border-gray-200 text-gray-800';
+                                            const badge = isCorrect
+                                              ? 'bg-green-600 text-white'
+                                              : isWrongSelection
+                                                ? 'bg-red-600 text-white'
+                                                : 'bg-gray-200 text-gray-700';
+                                            return (
+                                              <div
+                                                key={oid}
+                                                className={`flex items-start gap-3 rounded-lg border p-3 ${wrap}`}
+                                              >
+                                                <span className={`flex-shrink-0 w-7 h-7 rounded-full text-xs font-bold flex items-center justify-center uppercase ${badge}`}>
+                                                  {oid}
+                                                </span>
+                                                <div className="flex-1 text-sm">
+                                                  <div>{opt.text}</div>
+                                                  <div className="mt-1 flex items-center gap-2 text-[11px] font-medium">
+                                                    {isCorrect && (
+                                                      <span className="text-green-700">Correct answer</span>
+                                                    )}
+                                                    {isSelected && (
+                                                      <span className={isCorrect ? 'text-green-700' : 'text-red-700'}>
+                                                        • Your answer
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                          {selectedSet.size === 0 && (
+                                            <p className="text-xs text-gray-500 italic mt-1">No answer provided</p>
+                                          )}
+                                        </div>
                                       </div>
-                                    ) : (
-                                      <p>{q.candidate_answer_text || 'No answer provided'}</p>
-                                    )}
-                                  </div>
-                                </div>
+                                    );
+                                  }
+                                  // Non-MCQ render path unchanged: coding shows
+                                  // its source, text/behavioral show the typed
+                                  // response.
+                                  return (
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                                          <User className="w-4 h-4 text-gray-800" />
+                                        </div>
+                                        <div className="text-sm font-medium text-gray-800">CANDIDATE'S ANSWER</div>
+                                      </div>
+                                      <div className={`rounded-lg p-4 ${
+                                        q.question_type === 'coding'
+                                          ? 'bg-gray-900 text-green-400 font-mono text-sm overflow-x-auto'
+                                          : 'bg-gray-50 text-gray-800'
+                                      }`}>
+                                        {q.question_type === 'coding' ? (
+                                          <pre className="whitespace-pre-wrap">{q.candidate_code_submission || 'No code submitted'}</pre>
+                                        ) : q.candidate_answer_text ? (
+                                          // Preserve newlines, runs of spaces, and number formatting
+                                          // exactly as the candidate typed them. The previous <p>
+                                          // collapsed whitespace into single spaces and ignored
+                                          // line breaks, so multi-line answers came out as one
+                                          // run-on paragraph.
+                                          <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 m-0">
+                                            {q.candidate_answer_text}
+                                          </pre>
+                                        ) : (
+                                          <p className="italic text-gray-500">No answer provided</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
 
                                 {q.question_type === 'coding' && (
                                   <>
@@ -1459,8 +1668,13 @@ export default function CandidateResultDetails({
                                 </>
                               )}
 
-                                {/* Correct Answer (for MCQ) */}
-                                {q.correct_answer && q.correct_answer.length > 0 && (
+                                {/* Correct Answer block — only for non-MCQ
+                                    questions (e.g., text-based with sample
+                                    answer). MCQs already show the correct
+                                    option highlighted green inside the
+                                    unified OPTIONS block above; rendering it
+                                    again here would be redundant. */}
+                                {q.correct_answer && q.correct_answer.length > 0 && !(['single_choice', 'multiple_choice', 'mcq'].includes(String(q.question_type || '').toLowerCase())) && (
                                   <div>
                                     <div className="flex items-center gap-2 mb-3">
                                       <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">

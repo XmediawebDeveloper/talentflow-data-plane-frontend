@@ -47,7 +47,9 @@ export function HRQuestionView({ question, answer, onAnswerChange, isLocked = fa
     <div className="space-y-6">
       {/* Question Text */}
       <div className="prose max-w-none">
-        <h3 className="text-lg font-medium text-gray-800 mb-4">{question.question_text}</h3>
+        <pre className="whitespace-pre-wrap break-words font-sans text-base sm:text-lg leading-7 font-medium text-gray-800 m-0 mb-4">
+          {question.question_text}
+        </pre>
       </div>
 
       {/* Locked Banner */}

@@ -71,7 +71,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
   const [invitationStats, setInvitationStats] = useState({
     total: 0,
-    sent: 0,
+    expired: 0,
     started: 0,
     completed: 0,
     failed: 0,
@@ -260,12 +260,31 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const totalPages = Math.max(1, Math.ceil((response.total || 0) / INVITATIONS_PAGE_SIZE));
       setTrackingTotalPages(totalPages);
 
+      // Single-bucket classifier so the five card stats stay mutually
+      // exclusive (each invitation falls into exactly one of: completed,
+      // failed, expired, in-progress, or sent/waiting). Earlier the same
+      // invitation could be counted under both expired and failed because
+      // 'expired' was inside the failed list; recruiters saw inflated
+      // failure counts.
+      const _now = new Date();
+      const _bucket = (inv: any): 'completed' | 'failed' | 'expired' | 'started' | 'sent' => {
+        const s = (inv.status || '').toLowerCase();
+        if (s === 'completed' || inv.completed_at) return 'completed';
+        if (['failed', 'bounced', 'abandoned'].includes(s)) return 'failed';
+        if (s === 'expired') return 'expired';
+        // Clock-based expiry: link expires_at past + candidate didn't start.
+        if (!inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < _now) {
+          return 'expired';
+        }
+        if (s === 'started' || (inv.started_at && !inv.completed_at)) return 'started';
+        return 'sent';
+      };
       const stats = {
         total: response.total || invitations.length,
-        sent: invitations.filter((inv: any) => inv.status === 'sent' || inv.status === 'pending' || inv.status === 'opened').length,
-        started: invitations.filter((inv: any) => inv.status === 'started' || (inv.started_at && inv.status !== 'completed')).length,
-        completed: invitations.filter((inv: any) => inv.status === 'completed' || inv.completed_at).length,
-        failed: invitations.filter((inv: any) => ['expired', 'failed', 'bounced', 'abandoned'].includes(inv.status)).length,
+        expired: invitations.filter((inv: any) => _bucket(inv) === 'expired').length,
+        started: invitations.filter((inv: any) => _bucket(inv) === 'started').length,
+        completed: invitations.filter((inv: any) => _bucket(inv) === 'completed').length,
+        failed: invitations.filter((inv: any) => _bucket(inv) === 'failed').length,
       };
       setInvitationStats(stats);
 
@@ -279,7 +298,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setTrackingTotalPages(1);
       setInvitationStats({
         total: 0,
-        sent: 0,
+        expired: 0,
         started: 0,
         completed: 0,
         failed: 0,
@@ -2678,16 +2697,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-500 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                     <Users className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Total</span>
+                    <span>Total Invited</span>
                   </div>
                   <p className="text-sm sm:text-2xl font-bold text-gray-900">{invitationStats.total}</p>
                 </div>
                 <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
-                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
-                    <Mail className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Sent</span>
+                  <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-amber-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
+                    <Clock className="w-3.5 h-3.5 hidden sm:block" />
+                    <span>Expired</span>
                   </div>
-                  <p className="text-sm sm:text-2xl font-bold text-gray-700">{invitationStats.sent}</p>
+                  <p className="text-sm sm:text-2xl font-bold text-amber-600">{invitationStats.expired}</p>
                 </div>
                 <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-red-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
@@ -2699,21 +2718,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                     <Play className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Active</span>
+                    <span>In Progress</span>
                   </div>
                   <p className="text-sm sm:text-2xl font-bold text-gray-700">{invitationStats.started}</p>
                 </div>
                 <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                     <CheckCircle className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Done</span>
+                    <span>Completed</span>
                   </div>
                   <p className="text-sm sm:text-2xl font-bold text-gray-700">{invitationStats.completed}</p>
                 </div>
                 <div className="bg-white rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-200 text-center sm:text-left">
                   <div className="flex items-center justify-center sm:justify-start gap-1 sm:gap-2 text-gray-600 text-[9px] sm:text-xs mb-0.5 sm:mb-1">
                     <TrendingUp className="w-3.5 h-3.5 hidden sm:block" />
-                    <span>Rate</span>
+                    <span>Completion Rate</span>
                   </div>
                   <p className="text-sm sm:text-2xl font-bold text-gray-700">
                     {invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%
@@ -2764,7 +2783,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           );
                         }
                         if (s === 'failed') {
-                          return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Failed</span>;
+                          return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><X className="w-3 h-3" /> Invite Failed</span>;
                         }
                         if (s === 'bounced' || inv.bounced_at) {
                           return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Bounced</span>;
@@ -2782,7 +2801,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           return <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs flex items-center gap-1"><Eye className="w-3 h-3" /> Link Opened</span>;
                         }
                         if (s === 'sent' || inv.sent_at) {
-                          return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Sent</span>;
+                          return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs flex items-center gap-1"><Mail className="w-3 h-3" /> Invite Sent</span>;
                         }
                         return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs flex items-center gap-1"><Clock className="w-3 h-3" /> Pending</span>;
                       };
@@ -2866,6 +2885,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <span>Completed: {formatIST(invitation.completed_at)}</span>
                                 </div>
                               )}
+                              {/* Expired-at timestamp — shown when the link
+                                  has expired (status='expired' or clock-based
+                                  expiry on a never-started invite). The
+                                  expires_at column holds the deadline; we
+                                  surface it as the moment of expiry. */}
+                              {(() => {
+                                const s = (invitation.status || '').toLowerCase();
+                                const clockExpired = !invitation.started_at
+                                  && !invitation.unit_consumed
+                                  && invitation.expires_at
+                                  && new Date(invitation.expires_at) < new Date();
+                                const isExpired = !invitation.completed_at
+                                  && (s === 'expired' || clockExpired);
+                                if (!isExpired || !invitation.expires_at) return null;
+                                return (
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3 h-3 text-amber-500" />
+                                    <span className="text-amber-600">Expired at: {formatIST(invitation.expires_at)}</span>
+                                  </div>
+                                );
+                              })()}
                               {!invitation.sent_at && !invitation.started_at && (
                                 <div className="flex items-center gap-2">
                                   <Clock className="w-3 h-3 text-gray-400" />
@@ -2878,9 +2918,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               as the Results page: percent number on top, small
                               Pass/Fail tag below, both colored against the 70%
                               threshold. Rounded so the value matches every
-                              other surface (Results list, Detail view, PDF). */}
+                              other surface (Results list, Detail view, PDF).
+                              Show "—" until AI scoring is finished — surfacing
+                              0% / Fail mid-evaluation was misleading because
+                              the candidate's answers haven't been judged yet. */}
                           <td className="py-3 px-4 text-sm">
-                            {invitation.status === 'completed' && invitation.technical_score != null ? (
+                            {invitation.status === 'completed' && invitation.scoring_status === 'completed' && invitation.technical_score != null ? (
                               <div className="flex flex-col items-start gap-0.5">
                                 <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
                                   {Math.round(invitation.technical_score)}%
@@ -2894,7 +2937,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             )}
                           </td>
                           <td className="py-3 px-4 text-sm">
-                            {invitation.status === 'completed' && invitation.coding_score != null ? (
+                            {invitation.status === 'completed' && invitation.scoring_status === 'completed' && invitation.coding_score != null ? (
                               <div className="flex flex-col items-start gap-0.5">
                                 <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-green-600' : 'text-red-600'}`}>
                                   {Math.round(invitation.coding_score)}%

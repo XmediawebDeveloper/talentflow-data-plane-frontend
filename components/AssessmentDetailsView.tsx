@@ -57,26 +57,50 @@ export default function AssessmentDetailsView({
   const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'info'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
+  const [activityPage, setActivityPage] = useState(1);
+  const ACTIVITY_PAGE_SIZE = 10;
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [versionHistory, setVersionHistory] = useState<any[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
 
-  // Fetch recent activity when assessment changes
+  // Fetch recent activity when assessment changes.
+  // Each invitation is expanded into MULTIPLE timeline events (Invited,
+  // Email Sent, Link Opened, Assessment Started, Completed, Bounced,
+  // Expired) so the recruiter sees the full lifecycle, not just the latest
+  // state. The list is then sorted newest-first and paginated client-side
+  // (10 per page).
   useEffect(() => {
     const fetchActivity = async () => {
       if (!assessment?.id) return;
       setActivityLoading(true);
       try {
-        const response = await assessmentService.listInvitations(assessment.id, { page_size: 10 });
-        if (response?.items) {
-          // Sort by most recent activity (completed or created)
-          const sorted = [...response.items].sort((a: any, b: any) => {
-            const dateA = new Date(a.completed_at || a.started_at || a.created_at);
-            const dateB = new Date(b.completed_at || b.started_at || b.created_at);
-            return dateB.getTime() - dateA.getTime();
-          });
-          setRecentActivity(sorted.slice(0, 10)); // Latest 10 activities
+        const response = await assessmentService.listInvitations(assessment.id, { page_size: 200 });
+        const invitations = response?.items || [];
+        const events: any[] = [];
+        const _now = Date.now();
+        for (const inv of invitations) {
+          if (inv.created_at) events.push({ ...inv, _eventType: 'invited', _eventAt: inv.created_at });
+          if (inv.sent_at && inv.sent_at !== inv.created_at) {
+            events.push({ ...inv, _eventType: 'sent', _eventAt: inv.sent_at });
+          }
+          if (inv.opened_at) events.push({ ...inv, _eventType: 'opened', _eventAt: inv.opened_at });
+          if (inv.started_at) events.push({ ...inv, _eventType: 'started', _eventAt: inv.started_at });
+          if (inv.completed_at) events.push({ ...inv, _eventType: 'completed', _eventAt: inv.completed_at });
+          if (inv.bounced_at) events.push({ ...inv, _eventType: 'bounced', _eventAt: inv.bounced_at });
+          // Expired event — clock-based when the link passed its deadline
+          // without the candidate starting (and no unit was consumed).
+          const clockExpired = inv.expires_at
+            && new Date(inv.expires_at).getTime() < _now
+            && !inv.started_at
+            && !inv.completed_at
+            && !inv.unit_consumed;
+          if (clockExpired || (inv.status || '').toLowerCase() === 'expired') {
+            events.push({ ...inv, _eventType: 'expired', _eventAt: inv.expires_at || inv.created_at });
+          }
         }
+        events.sort((a, b) => new Date(b._eventAt).getTime() - new Date(a._eventAt).getTime());
+        setRecentActivity(events);
+        setActivityPage(1);
       } catch (error) {
         console.error('Failed to fetch activity:', error);
       } finally {
@@ -185,20 +209,55 @@ export default function AssessmentDetailsView({
     return `${mins} min`;
   };
 
+  // Same single-bucket classifier as the Track Invites popup so the cards
+  // here stay in sync. recentActivity is now an expanded event list (one
+  // row per lifecycle moment), so we dedupe by invitation id before
+  // bucketing.
+  const _uniqueInvites: any[] = (() => {
+    const seen = new Map<string, any>();
+    for (const ev of recentActivity) {
+      if (ev?.id && !seen.has(ev.id)) seen.set(ev.id, ev);
+    }
+    return Array.from(seen.values());
+  })();
+  const _now = new Date();
+  const _bucket = (inv: any): 'completed' | 'failed' | 'expired' | 'started' | 'sent' => {
+    const s = (inv.status || '').toLowerCase();
+    if (s === 'completed' || inv.completed_at) return 'completed';
+    if (['failed', 'bounced', 'abandoned'].includes(s)) return 'failed';
+    if (s === 'expired') return 'expired';
+    if (!inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < _now) {
+      return 'expired';
+    }
+    if (s === 'started' || (inv.started_at && !inv.completed_at)) return 'started';
+    return 'sent';
+  };
+  const _bucketCounts = {
+    completed: 0,
+    failed: 0,
+    expired: 0,
+    started: 0,
+    sent: 0,
+  };
+  for (const inv of _uniqueInvites) {
+    _bucketCounts[_bucket(inv)] += 1;
+  }
+  const _totalInvites = assessment.candidates || assessment.invitations_count || _uniqueInvites.length || 0;
+  const _completed = _bucketCounts.completed || assessment.completed_count || 0;
   const analyticsData = {
-    totalInvites: assessment.candidates || assessment.invitations_count || 0,
-    sent: recentActivity.filter((a: any) => a.status === 'sent').length,
-    failed: recentActivity.filter((a: any) => a.status === 'failed').length,
-    started: recentActivity.filter((a: any) => a.status === 'in_progress' || a.status === 'started').length,
-    completed: assessment.completed_count || 0,
-    inProgress: assessment.in_progress_count || 0,
+    totalInvites: _totalInvites,
+    expired: _bucketCounts.expired,
+    failed: _bucketCounts.failed,
+    started: _bucketCounts.started || assessment.in_progress_count || 0,
+    completed: _completed,
+    inProgress: _bucketCounts.started || assessment.in_progress_count || 0,
     notStarted: assessment.pending_count || 0,
+    completionRate: _totalInvites > 0 ? Math.round((_completed / _totalInvites) * 100) : 0,
     averageScore: assessment.average_score as number | null,
     averageTime: formatTime(assessment.average_time_seconds),
     passRate: assessment.pass_rate !== null && assessment.pass_rate !== undefined
       ? `${assessment.pass_rate}%`
       : 'N/A',
-    // Section scores
     hrScore: assessment.hr_score as number | null,
     technicalScore: assessment.technical_score as number | null,
     codingScore: assessment.coding_score as number | null,
@@ -748,38 +807,40 @@ export default function AssessmentDetailsView({
               </div>
 
               <div className="p-3 sm:p-4 lg:p-6">
-                {/* Quick Stats */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 lg:gap-4 mb-4 sm:mb-6">
+                {/* Quick Stats — mirrors the Track Invites popup card row:
+                    Total Invited / Expired / Invite Failed / In Progress /
+                    Completed / Completion Rate. */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4 mb-4 sm:mb-6">
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
                     <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
                       <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      <span>Total</span>
+                      <span>Total Invited</span>
                     </div>
                     <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.totalInvites}</div>
                   </div>
 
-                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
-                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
-                      <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      <span>Sent</span>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-amber-600 text-xs mb-1.5 sm:mb-2">
+                      <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <span>Expired</span>
                     </div>
-                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.sent || 0}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-amber-700">{analyticsData.expired}</div>
                   </div>
 
                   <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
                     <div className="flex items-center gap-1.5 sm:gap-2 text-red-600 text-xs mb-1.5 sm:mb-2">
                       <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      <span>Failed</span>
+                      <span>Invite Failed</span>
                     </div>
-                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.failed || 0}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-red-600">{analyticsData.failed}</div>
                   </div>
 
                   <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
                     <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
                       <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      <span>Started</span>
+                      <span>In Progress</span>
                     </div>
-                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.started || 0}</div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.started}</div>
                   </div>
 
                   <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
@@ -788,6 +849,14 @@ export default function AssessmentDetailsView({
                       <span>Completed</span>
                     </div>
                     <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.completed}</div>
+                  </div>
+
+                  <div className="bg-gray-100 border border-gray-200 rounded-lg p-2.5 sm:p-3 lg:p-4">
+                    <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600 text-xs mb-1.5 sm:mb-2">
+                      <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <span>Completion Rate</span>
+                    </div>
+                    <div className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900">{analyticsData.completionRate}%</div>
                   </div>
                 </div>
 
@@ -912,71 +981,117 @@ export default function AssessmentDetailsView({
                 <p className="text-gray-600 mb-1 text-sm">No activity recorded yet</p>
                 <p className="text-xs sm:text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
               </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {recentActivity.map((activity: any) => {
-                  const getActivityInfo = () => {
-                    if (activity.status === 'completed') {
-                      return { icon: CheckCircle, color: 'text-gray-700 bg-gray-100', label: 'Completed assessment' };
-                    } else if (activity.status === 'in_progress') {
-                      return { icon: Play, color: 'text-gray-600 bg-gray-100', label: 'Started assessment' };
-                    } else if (activity.status === 'expired') {
-                      return { icon: XCircle, color: 'text-red-600 bg-red-100', label: 'Assessment expired' };
-                    }
-                    return { icon: Mail, color: 'text-gray-600 bg-gray-100', label: 'Invited to assessment' };
-                  };
+            ) : (() => {
+              const totalPages = Math.max(1, Math.ceil(recentActivity.length / ACTIVITY_PAGE_SIZE));
+              const startIdx = (activityPage - 1) * ACTIVITY_PAGE_SIZE;
+              const pageItems = recentActivity.slice(startIdx, startIdx + ACTIVITY_PAGE_SIZE);
+              return (
+                <>
+                  <div className="divide-y divide-gray-100">
+                    {pageItems.map((activity: any, idx: number) => {
+                      // Per-event icon + label, derived from _eventType so each
+                      // lifecycle moment (invited, sent, opened, started,
+                      // completed, bounced, expired) renders as its own row.
+                      const getActivityInfo = () => {
+                        switch (activity._eventType) {
+                          case 'completed':
+                            return { icon: CheckCircle, color: 'text-green-700 bg-green-100', label: 'Completed assessment' };
+                          case 'started':
+                            return { icon: Play, color: 'text-blue-700 bg-blue-100', label: 'Assessment started' };
+                          case 'opened':
+                            return { icon: Eye, color: 'text-purple-700 bg-purple-100', label: 'Link opened' };
+                          case 'sent':
+                            return { icon: Mail, color: 'text-gray-700 bg-gray-100', label: 'Invitation email sent' };
+                          case 'bounced':
+                            return { icon: XCircle, color: 'text-red-700 bg-red-100', label: 'Email bounced' };
+                          case 'expired':
+                            return { icon: XCircle, color: 'text-amber-700 bg-amber-100', label: 'Invitation expired' };
+                          case 'invited':
+                          default:
+                            return { icon: Mail, color: 'text-gray-600 bg-gray-100', label: 'Invited to assessment' };
+                        }
+                      };
 
-                  const info = getActivityInfo();
-                  const ActivityIcon = info.icon;
-                  const activityDate = activity.completed_at || activity.started_at || activity.created_at;
-                  const formattedDate = activityDate ? formatIST(activityDate) : 'N/A';
+                      const info = getActivityInfo();
+                      const ActivityIcon = info.icon;
+                      const formattedDate = activity._eventAt ? formatIST(activity._eventAt) : 'N/A';
+                      const showScores = activity._eventType === 'completed';
 
-                  return (
-                    <div key={activity.id} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start sm:items-center gap-2 sm:gap-3 lg:gap-4">
-                        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${info.color}`}>
-                          <ActivityIcon className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-0">
-                            <div className="min-w-0">
-                              <span className="font-medium text-gray-900 text-xs sm:text-sm">{activity.candidate_name || 'Unknown'}</span>
-                              <span className="text-gray-500 ml-1 sm:ml-2 text-xs sm:text-sm">{info.label}</span>
+                      return (
+                        <div key={`${activity.id}-${activity._eventType}-${idx}`} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-start sm:items-center gap-2 sm:gap-3 lg:gap-4">
+                            <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${info.color}`}>
+                              <ActivityIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                             </div>
-                            <span className="text-xs sm:text-sm text-gray-500">{formattedDate}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-0">
+                                <div className="min-w-0">
+                                  <span className="font-medium text-gray-900 text-xs sm:text-sm">{activity.candidate_name || 'Unknown'}</span>
+                                  <span className="text-gray-500 ml-1 sm:ml-2 text-xs sm:text-sm">{info.label}</span>
+                                </div>
+                                <span className="text-xs sm:text-sm text-gray-500">{formattedDate}</span>
+                              </div>
+                              <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate">{activity.candidate_email}</p>
+                              {showScores && (
+                                <div className="flex items-center gap-3 mt-2">
+                                  {assessment.technical_enabled && activity.technical_score != null && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs text-gray-600">Tech:</span>
+                                      <span className="text-sm font-semibold text-gray-900">{Math.round(activity.technical_score)}%</span>
+                                    </div>
+                                  )}
+                                  {assessment.coding_enabled && activity.coding_score != null && (
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="text-xs text-gray-600">Coding:</span>
+                                      <span className="text-sm font-semibold text-gray-900">{Math.round(activity.coding_score)}%</span>
+                                    </div>
+                                  )}
+                                  {activity.passed != null && (
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${activity.passed ? 'bg-gray-700 text-white' : 'bg-red-100 text-red-700'}`}>
+                                      {activity.passed ? 'Passed' : 'Failed'}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate">{activity.candidate_email}</p>
-                          {activity.status === 'completed' && (
-                            <div className="flex items-center gap-3 mt-2">
-                              {/* Show Tech Score if technical section is enabled */}
-                              {assessment.technical_enabled && activity.technical_score != null && (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs text-gray-600">Tech:</span>
-                                  <span className="text-sm font-semibold text-gray-900">{Math.round(activity.technical_score)}%</span>
-                                </div>
-                              )}
-                              {/* Show Coding Score if coding section is enabled */}
-                              {assessment.coding_enabled && activity.coding_score != null && (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs text-gray-600">Coding:</span>
-                                  <span className="text-sm font-semibold text-gray-900">{Math.round(activity.coding_score)}%</span>
-                                </div>
-                              )}
-                              {/* Show Passed/Failed badge */}
-                              {activity.passed != null && (
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${activity.passed ? 'bg-gray-700 text-white' : 'bg-red-100 text-red-700'}`}>
-                                  {activity.passed ? 'Passed' : 'Failed'}
-                                </span>
-                              )}
-                            </div>
-                          )}
                         </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Pagination — 10 events per page. */}
+                  {recentActivity.length > ACTIVITY_PAGE_SIZE && (
+                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex items-center justify-between text-xs sm:text-sm text-gray-600">
+                      <span>
+                        Showing {startIdx + 1}–{Math.min(startIdx + ACTIVITY_PAGE_SIZE, recentActivity.length)} of {recentActivity.length}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                          disabled={activityPage <= 1}
+                          className="px-3 py-1 rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          Previous
+                        </button>
+                        <span className="px-2">
+                          Page {activityPage} of {totalPages}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setActivityPage(p => Math.min(totalPages, p + 1))}
+                          disabled={activityPage >= totalPages}
+                          className="px-3 py-1 rounded border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          Next
+                        </button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
