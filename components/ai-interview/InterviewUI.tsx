@@ -492,6 +492,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const webcamStreamRef = useRef<MediaStream | null>(null);
+  // Checkpoint upload refs — periodic flushes protect against tab-throttle/abrupt close
+  const checkpointTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const checkpointInProgressRef = useRef(false);
+  const isFinalizingUploadRef = useRef(false);
+  const uploadCheckpointRef = useRef<() => Promise<void>>(async () => {});
 
   // Avatar state controller
   const avatarState = useAvatarState();
@@ -657,6 +662,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
         recorder.start(5000); // 5-second chunks — fewer objects, same result
         mediaRecorderRef.current = recorder;
         console.log(`[Recording] Started: mimeType=${recorder.mimeType}, videoBps=${opts.videoBitsPerSecond}, audioBps=${opts.audioBitsPerSecond}`);
+
+        // Periodic checkpoint uploads every 30s — make sure SOMETHING reaches the
+        // server even if the tab is later throttled (background) or closed before
+        // the normal completion-time upload path runs. Backend writes to a
+        // deterministic filename keyed on interview id so each checkpoint
+        // overwrites in place.
+        if (checkpointTimerRef.current) clearInterval(checkpointTimerRef.current);
+        checkpointTimerRef.current = setInterval(() => {
+          uploadCheckpointRef.current().catch(() => {});
+        }, 30_000);
       };
       // Use isTypeSupported() to select the best available codec across browsers:
       // - Chrome/Brave: vp9 > vp8 webm
@@ -2313,17 +2328,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
           // Follow-up / clarification: do NOT restart the timer. The main
           // question's 2-min slot is shared between Linda's follow-up and
           // the candidate's answer to it — the countdown must continue from
-          // wherever it was, never jump back to the full duration. Only
-          // sync DOWNWARD if the backend explicitly sends a value less than
-          // what we're currently showing (genuine drift correction).
+          // wherever it was, never jump back to the full duration.
+          //
+          // We deliberately do NOT "drift-correct" toward `data.seconds`
+          // here. The frontend timer ticks ONLY while the candidate is on
+          // the clock (paused during Linda's speech / clarification),
+          // whereas the backend's `remaining` is plain wall-clock from main-Q
+          // start and so always includes Linda's TTS time. Snapping the
+          // frontend to that value made the timer visibly drop on every
+          // follow-up (e.g. 1:00 → 0:45). The frontend countdown is what
+          // the candidate is reading and what the auto-skip is calibrated
+          // to — keep it authoritative.
           if (data.total_questions != null) setTotalQuestions(data.total_questions);
           const _cur = questionTimerSecondsRef.current;
-          if (dur > 0 && _cur != null && dur < _cur) {
-            // Drift correction: backend is ahead of us, jump forward.
-            setQuestionTimerSeconds(dur);
-            questionTimerSecondsRef.current = dur;
-          } else if (dur > 0 && _cur == null) {
-            // Edge case: no running timer (e.g. reconnect). Start one.
+          if (dur > 0 && _cur == null) {
+            // Edge case: no running timer (e.g. reconnect). Start one from
+            // the backend value — that's the only signal we have.
             setQuestionTimerSeconds(dur);
             questionTimerSecondsRef.current = dur;
           }
@@ -2790,12 +2810,88 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
   useEffect(() => { trackPlaybackChunkRef.current = trackPlaybackChunk; }, [trackPlaybackChunk]);
   useEffect(() => { handleMessageRef.current = handleMessage; }, [handleMessage]);
 
+  // Checkpoint upload — flushes the recorder's current buffer and ships
+  // accumulated chunks WITHOUT stopping the recorder. Called on a 30 s
+  // timer and on visibilitychange→hidden so the server has the latest
+  // recording state even if the tab is throttled or closed abruptly.
+  const uploadCheckpoint = useCallback(async (): Promise<void> => {
+    if (isFinalizingUploadRef.current) return; // final upload owns the recorder
+    if (checkpointInProgressRef.current) return; // skip overlap
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || recorder.state !== 'recording') return;
+
+    checkpointInProgressRef.current = true;
+    try {
+      // Force ondataavailable to fire so any buffered frames are emitted now.
+      // We swap in a one-shot handler that ALSO defers to the original handler
+      // (so chunks are still pushed into recordedChunksRef). The native handler
+      // is restored once we resolve.
+      const original = recorder.ondataavailable;
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          recorder.ondataavailable = original;
+          resolve();
+        };
+        recorder.ondataavailable = (e: BlobEvent) => {
+          if (e.data && e.data.size > 0) recordedChunksRef.current.push(e.data);
+          finish();
+        };
+        try {
+          recorder.requestData();
+        } catch {
+          finish();
+          return;
+        }
+        // Safety net — some browsers don't fire on requestData() while throttled
+        setTimeout(finish, 1500);
+      });
+
+      const chunks = recordedChunksRef.current;
+      if (chunks.length === 0) return;
+      const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
+      const blob = new Blob(chunks.slice(), { type: mimeType });
+      if (blob.size < 1024) return; // skip tiny payloads (header-only)
+      try {
+        await candidateAIInterviewService.uploadRecording(token, blob);
+        console.log(`[Recording] Checkpoint uploaded: ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
+      } catch (err: any) {
+        console.warn(`[Recording] Checkpoint upload failed — size: ${(blob.size / 1024 / 1024).toFixed(1)} MB, error: ${err?.message || err}`);
+      }
+    } finally {
+      checkpointInProgressRef.current = false;
+    }
+  }, [token]);
+
+  // Keep ref in sync so the periodic timer scheduled inside startRecorder
+  // (set up before this callback exists in the closure) always sees the latest.
+  useEffect(() => { uploadCheckpointRef.current = uploadCheckpoint; }, [uploadCheckpoint]);
+
+  // Tab-visibility checkpoint — flush before the browser may throttle us
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') {
+        uploadCheckpointRef.current().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
   // Upload recording
   // Waits for MediaRecorder.onstop (all ondataavailable chunks flushed) before
   // uploading — prevents the race-condition where the final chunk was still
   // in the encoder buffer when we read recordedChunksRef.
   const uploadRecording = useCallback((): Promise<void> => {
     const recorder = mediaRecorderRef.current;
+    // Take ownership of the recorder away from the checkpoint path.
+    isFinalizingUploadRef.current = true;
+    if (checkpointTimerRef.current) {
+      clearInterval(checkpointTimerRef.current);
+      checkpointTimerRef.current = null;
+    }
 
     const doUpload = async () => {
       const chunks = recordedChunksRef.current;
@@ -3709,6 +3805,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, faceVer
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (questionTimerIntervalRef.current) { clearInterval(questionTimerIntervalRef.current); questionTimerIntervalRef.current = null; }
       if (audioEndFallbackRef.current) { clearTimeout(audioEndFallbackRef.current); audioEndFallbackRef.current = null; }
+      if (checkpointTimerRef.current) { clearInterval(checkpointTimerRef.current); checkpointTimerRef.current = null; }
       wsRef.current?.close(3001, 'Component unmounted');
       try { audioContextRef.current?.close(); } catch {}
       audioContextRef.current = null;

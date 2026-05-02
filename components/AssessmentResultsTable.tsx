@@ -862,7 +862,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           <td key={col.id} className="py-3 px-4">
                             <div className="flex items-center gap-2">
                               <span className={`text-sm ${getScoreColor(result.scorePercentage)}`}>
-                                {result.scorePercentage}%
+                                {Math.round(result.scorePercentage)}%
                               </span>
                               <span className="text-xs text-gray-400">
                                 ({result.totalScore}/{result.maxScore})
@@ -873,12 +873,12 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       }
                       if (col.id === 'techScore') {
                         const techRound = result.roundScores.find(r => r.roundName === 'Technical');
-                        const techPct = techRound ? Math.round((techRound.score / techRound.maxScore) * 100) : null;
+                        const techPct = techRound && techRound.maxScore > 0 ? (techRound.score / techRound.maxScore) * 100 : null;
                         return (
                           <td key={col.id} className="py-3 px-4 text-center">
                             <div className="flex flex-col items-center gap-1">
                               <span className={`text-lg font-semibold ${techPct !== null ? getScoreColor(techPct) : 'text-gray-400'}`}>
-                                {techPct !== null ? `${techPct}%` : '-'}
+                                {techPct !== null ? `${Math.round(techPct)}%` : '-'}
                               </span>
                               {techPct !== null && (
                                 <span className={`text-xs font-medium ${techPct >= 50 ? 'text-green-600' : 'text-red-600'}`}>
@@ -891,12 +891,12 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       }
                       if (col.id === 'codingScore') {
                         const codingRound = result.roundScores.find(r => r.roundName === 'Coding');
-                        const codingPct = codingRound ? Math.round((codingRound.score / codingRound.maxScore) * 100) : null;
+                        const codingPct = codingRound && codingRound.maxScore > 0 ? (codingRound.score / codingRound.maxScore) * 100 : null;
                         return (
                           <td key={col.id} className="py-3 px-4 text-center">
                             <div className="flex flex-col items-center gap-1">
                               <span className={`text-lg font-semibold ${codingPct !== null ? getScoreColor(codingPct) : 'text-gray-400'}`}>
-                                {codingPct !== null ? `${codingPct}%` : '-'}
+                                {codingPct !== null ? `${Math.round(codingPct)}%` : '-'}
                               </span>
                               {codingPct !== null && (
                                 <span className={`text-xs font-medium ${codingPct >= 50 ? 'text-green-600' : 'text-red-600'}`}>
@@ -1189,21 +1189,21 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     )}
                     {enabledColumns.find(c => c.id === 'techScore') && (() => {
                       const techRound = result.roundScores.find(r => r.roundName === 'Technical');
-                      const techPct = techRound ? Math.round((techRound.score / techRound.maxScore) * 100) : null;
+                      const techPct = techRound && techRound.maxScore > 0 ? (techRound.score / techRound.maxScore) * 100 : null;
                       return techPct !== null ? (
                         <div className="flex items-center gap-1.5 text-xs text-gray-600">
                           <BarChart3 className="w-3 h-3" />
-                          Tech: <span className={getScoreColor(techPct)}>{techPct}%</span>
+                          Tech: <span className={getScoreColor(techPct)}>{Math.round(techPct)}%</span>
                         </div>
                       ) : null;
                     })()}
                     {enabledColumns.find(c => c.id === 'codingScore') && (() => {
                       const codingRound = result.roundScores.find(r => r.roundName === 'Coding');
-                      const codingPct = codingRound ? Math.round((codingRound.score / codingRound.maxScore) * 100) : null;
+                      const codingPct = codingRound && codingRound.maxScore > 0 ? (codingRound.score / codingRound.maxScore) * 100 : null;
                       return codingPct !== null ? (
                         <div className="flex items-center gap-1.5 text-xs text-gray-600">
                           <BarChart3 className="w-3 h-3" />
-                          Coding: <span className={getScoreColor(codingPct)}>{codingPct}%</span>
+                          Coding: <span className={getScoreColor(codingPct)}>{Math.round(codingPct)}%</span>
                         </div>
                       ) : null;
                     })()}

@@ -71,7 +71,7 @@ const DEFAULT_PCT = { mth: 70, nth: 20, hr: 10 } as const;
 
 function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
   if (!nthEnabled && !hrEnabled) {
-    return { mthMinutes: 30, nthMinutes: 0, hrMinutes: 0, mthMaxClusters: 5, nthMaxClusters: 0, mthQuestions: 15, nthQuestions: 0, hrQuestions: 0 };
+    return { mthMinutes: 30, nthMinutes: 0, hrMinutes: 0, mthMaxClusters: 3, nthMaxClusters: 0, mthQuestions: 15, nthQuestions: 0, hrQuestions: 0 };
   }
   if (nthEnabled && !hrEnabled) {
     return { mthMinutes: 20, nthMinutes: 10, hrMinutes: 0, mthMaxClusters: 3, nthMaxClusters: 2, mthQuestions: 10, nthQuestions: 5, hrQuestions: 0 };
@@ -750,7 +750,7 @@ export default function AIInterviewClusters() {
   const [isFixed, setIsFixed] = useState(true);
   const [fixedMthMin, setFixedMthMin] = useState<number>(30);
   const [fixedNthMin, setFixedNthMin] = useState<number>(0);
-  const [mthMaxClusters, setMthMaxClusters] = useState<number>(5);
+  const [mthMaxClusters, setMthMaxClusters] = useState<number>(3);
   const [nthMaxClusters, setNthMaxClusters] = useState<number>(0);
   const [hrEnabled, setHrEnabled] = useState(false);
   const [fixedHrMin, setFixedHrMin] = useState<number>(0);
@@ -873,14 +873,31 @@ export default function AIInterviewClusters() {
         }
 
         // Restore clusters from special_instructions — trim to current scenario max.
-        // Rules:
-        //   MHS fixed: trim to timedAllocation.mthMaxClusters; MHS flexible: trim to 3
-        //   NHS enabled+fixed: trim to timedAllocation.nthMaxClusters; NHS enabled+flexible: trim to 2
-        //   NHS disabled: always clear (regardless of what was saved)
+        // When trimming drops clusters, redistribute their skills to the surviving
+        // cluster with the fewest skills so no skill is silently lost.
+        const trimAndRedistribute = (raw: any[], max: number): any[] => {
+          if (!raw?.length || max <= 0) return [];
+          if (raw.length <= max) return raw;
+          const survivors = raw.slice(0, max).map((c: any) => ({ ...c, skills: [...(c.skills || [])] }));
+          const dropped = raw.slice(max);
+          const orphans: string[] = [];
+          for (const c of dropped) {
+            for (const s of (c.skills || [])) {
+              if (typeof s === 'string' && s.trim()) orphans.push(s);
+            }
+          }
+          for (const s of orphans) {
+            const target = survivors.reduce((min, c) =>
+              (c.skills?.length ?? 0) < (min.skills?.length ?? 0) ? c : min, survivors[0]);
+            if (!(target.skills as string[]).some(x => x.toLowerCase() === s.toLowerCase())) {
+              (target.skills as string[]).push(s);
+            }
+          }
+          return survivors;
+        };
         if (si.mth_clusters?.length) {
           const mthMax = isFlexibleMode ? 3 : timedAllocation.mthMaxClusters;
-          const mthRaw: any[] = si.mth_clusters;
-          const mthTrimmed = mthRaw.slice(0, mthMax);
+          const mthTrimmed = trimAndRedistribute(si.mth_clusters as any[], mthMax);
           setMthClusters(mthTrimmed.map((c: any) => ({
             ...c,
             priority: normalizePriority(c.priority),
@@ -888,11 +905,10 @@ export default function AIInterviewClusters() {
         }
         if (si.nth_clusters?.length) {
           const nthMax = isFlexibleMode ? 2 : timedAllocation.nthMaxClusters;
-          const nthRaw: any[] = si.nth_clusters;
           // nthEnabledForTimed=false means NHS is disabled — always clear saved clusters
           const nthTrimmed = !nthEnabledForTimed
             ? []
-            : nthRaw.slice(0, nthMax);
+            : trimAndRedistribute(si.nth_clusters as any[], nthMax);
           setNthClusters(nthTrimmed.map((c: any) => ({
             ...c,
             priority: normalizePriority(c.priority),
@@ -1044,12 +1060,67 @@ export default function AIInterviewClusters() {
       const sortedNth = [...nthSkills].sort(
         (a, b) => (weightOrder[skillWeights[a.name] ?? 'medium']) - (weightOrder[skillWeights[b.name] ?? 'medium'])
       );
-      const mthSkillNames = sortedMth.map(s => s.name.trim()).filter(Boolean);
-      const nthSkillNames = sortedNth.map(s => s.name.trim()).filter(Boolean);
+      let mthSkillNames = sortedMth.map(s => s.name.trim()).filter(Boolean);
+      let nthSkillNames = sortedNth.map(s => s.name.trim()).filter(Boolean);
 
       if (mthSkillNames.length === 0 && nthSkillNames.length === 0) {
         toast.error('Add at least one skill before generating clusters');
         return;
+      }
+
+      // Phase 0: Skill-shortage expansion (timed mode only) — mirrors
+      // Continue-to-Clusters in AIInterviewConfig. When recruiter-supplied
+      // skills are fewer than 2× planned questions for the bucket, expand
+      // them via JD-grounded sub-skills so the AI has enough material to
+      // form distinct clusters with proper High/Med/Low spread.
+      let mthExpanded: SkillEntry[] | null = null;
+      let nthExpanded: SkillEntry[] | null = null;
+      let applyRefine = false;
+      if (isFixed) {
+        const mthQ = timedAllocation.mthQuestions ?? 0;
+        const nthQ = nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0;
+        const mthShort = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length < mthQ * 2;
+        const nthShort = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length < nthQ * 2;
+        const mthOverflow = mthSkillNames.length > 0 && mthQ > 0 && mthSkillNames.length > mthQ * 2;
+        const nthOverflow = nthSkillNames.length > 0 && nthQ > 0 && nthSkillNames.length > nthQ * 2;
+
+        if (mthShort || nthShort) {
+          const [mthFlat, nthFlat] = await Promise.all([
+            mthShort
+              ? aiInterviewService.expandSkills({
+                  mainSkills: mthSkillNames,
+                  targetSkillCount: mthQ * 2,
+                  bucket: 'MTH',
+                  jdTitle: config?.position,
+                  jdDescription: jdDescription || undefined,
+                }).then(r => r.flat_skills)
+              : Promise.resolve(mthSkillNames),
+            nthShort
+              ? aiInterviewService.expandSkills({
+                  mainSkills: nthSkillNames,
+                  targetSkillCount: nthQ * 2,
+                  bucket: 'NTH',
+                  jdTitle: config?.position,
+                  jdDescription: jdDescription || undefined,
+                }).then(r => r.flat_skills)
+              : Promise.resolve(nthSkillNames),
+          ]);
+          const buildEntries = (existing: SkillEntry[], names: string[]): SkillEntry[] => {
+            const byName = new Map(existing.map(e => [e.name.toLowerCase(), e]));
+            return names.map(n => byName.get(n.toLowerCase()) ?? { name: n, comment: '', type: 'Skill' as SkillType });
+          };
+          if (mthShort && mthFlat.length > 0) {
+            mthExpanded = buildEntries(mthSkills, mthFlat);
+            mthSkillNames = mthExpanded.map(s => s.name.trim()).filter(Boolean);
+          }
+          if (nthShort && nthFlat.length > 0) {
+            nthExpanded = buildEntries(nthSkills, nthFlat);
+            nthSkillNames = nthExpanded.map(s => s.name.trim()).filter(Boolean);
+          }
+          applyRefine = true;
+        } else if (mthOverflow || nthOverflow) {
+          applyRefine = true;
+        }
       }
 
       const result = await aiInterviewService.generateClusters(
@@ -1062,7 +1133,7 @@ export default function AIInterviewClusters() {
         mthMaxClusters,
         nthSkillNames.length > 0 ? nthMaxClusters : 0,
       );
-      const newMthClusters: Cluster[] = mthSkillNames.length > 0 && result.mth_clusters
+      let newMthClusters: Cluster[] = mthSkillNames.length > 0 && result.mth_clusters
         ? (() => {
             const mthRaw = result.mth_clusters;
             const mthFinal = mthMaxClusters > 0 ? mthRaw.slice(0, mthMaxClusters) : mthRaw;
@@ -1074,7 +1145,7 @@ export default function AIInterviewClusters() {
           })()
         : [];
 
-      const newNthClusters: Cluster[] = nthSkillNames.length > 0 && result.nth_clusters
+      let newNthClusters: Cluster[] = nthSkillNames.length > 0 && result.nth_clusters
         ? (() => {
             const nthRaw = result.nth_clusters;
             const nthFinal = nthMaxClusters > 0 ? nthRaw.slice(0, nthMaxClusters) : nthRaw;
@@ -1086,6 +1157,45 @@ export default function AIInterviewClusters() {
           })()
         : [];
 
+      // Phase 2: Refine in PRESERVE-NAMES mode — applies the relevance +
+      // question-limit rules without renaming/merging skills. Triggered
+      // after expansion or input overflow. Best-effort: keep raw clusters
+      // on failure.
+      if (applyRefine && (newMthClusters.length > 0 || newNthClusters.length > 0)) {
+        try {
+          const refineResult = await aiInterviewService.refineClusters({
+            mthClusters: newMthClusters,
+            nthClusters: nthEnabled ? newNthClusters : [],
+            mthQuestions: timedAllocation.mthQuestions ?? 0,
+            nthQuestions: nthEnabled ? (timedAllocation.nthQuestions ?? 0) : 0,
+            mthMaxClusters,
+            nthMaxClusters: nthEnabled ? nthMaxClusters : 0,
+            jdTitle: config?.position,
+            jdDescription: jdDescription || undefined,
+            preserveSkillNames: true,
+          });
+          if (refineResult.mth_clusters?.length) {
+            newMthClusters = refineResult.mth_clusters.map(c => ({
+              ...c,
+              priority: normalizePriority(c.priority),
+              reason: c.reason || '',
+            }));
+          }
+          if (nthEnabled && refineResult.nth_clusters?.length) {
+            newNthClusters = refineResult.nth_clusters.map(c => ({
+              ...c,
+              priority: normalizePriority(c.priority),
+              reason: c.reason || '',
+            }));
+          }
+        } catch {
+          // Non-fatal — keep raw generated clusters
+        }
+      }
+
+      // Commit expanded skills to UI state so the user sees them on the page
+      if (mthExpanded) setMthSkills(mthExpanded);
+      if (nthExpanded) setNthSkills(nthExpanded);
       setMthClusters(newMthClusters);
       setNthClusters(newNthClusters);
 
@@ -1115,20 +1225,49 @@ export default function AIInterviewClusters() {
             });
             return res;
           };
+          // Persist expanded skills into rounds_config (jd_skills stays as
+          // original recruiter input; new sub-skills go into custom_skills).
+          const splitForRound = (entries: SkillEntry[], jdSet: Set<string>) => {
+            const jd: string[] = [];
+            const custom: string[] = [];
+            entries.forEach(s => {
+              if (jdSet.has(s.name.toLowerCase())) jd.push(s.name);
+              else custom.push(s.name);
+            });
+            return { jd_skills: jd, custom_skills: custom };
+          };
           const rounds = [...(config.rounds_config ?? [])];
           const mthIdx = rounds.findIndex((r: any) => r.type === 'must_have_skills' || r.type === 'must_have');
           if (mthIdx >= 0 && newMthClusters.length > 0) {
             const topics = newMthClusters.map(c => c.name);
             const topic_weights: Record<string, number> = {};
             newMthClusters.forEach(c => { topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40; });
-            rounds[mthIdx] = { ...rounds[mthIdx], topics, topic_weights, topic_time_minutes: buildTopicTimeMap(newMthClusters, fixedMthMin) };
+            const mthExtra = mthExpanded
+              ? splitForRound(mthExpanded, jdMthSkillNamesRef.current)
+              : null;
+            rounds[mthIdx] = {
+              ...rounds[mthIdx],
+              topics,
+              topic_weights,
+              topic_time_minutes: buildTopicTimeMap(newMthClusters, fixedMthMin),
+              ...(mthExtra ? { jd_skills: mthExtra.jd_skills, custom_skills: mthExtra.custom_skills } : {}),
+            };
           }
           const nthIdx = rounds.findIndex((r: any) => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have');
           if (nthIdx >= 0 && nthEnabled && newNthClusters.length > 0) {
             const topics = newNthClusters.map(c => c.name);
             const topic_weights: Record<string, number> = {};
             newNthClusters.forEach(c => { topic_weights[c.name] = PRIORITY_WEIGHT[c.priority] || 40; });
-            rounds[nthIdx] = { ...rounds[nthIdx], topics, topic_weights, topic_time_minutes: buildTopicTimeMap(newNthClusters, fixedNthMin) };
+            const nthExtra = nthExpanded
+              ? splitForRound(nthExpanded, jdNthSkillNamesRef.current)
+              : null;
+            rounds[nthIdx] = {
+              ...rounds[nthIdx],
+              topics,
+              topic_weights,
+              topic_time_minutes: buildTopicTimeMap(newNthClusters, fixedNthMin),
+              ...(nthExtra ? { jd_skills: nthExtra.jd_skills, custom_skills: nthExtra.custom_skills } : {}),
+            };
           }
 
           await aiInterviewService.update(id, {
@@ -1140,7 +1279,11 @@ export default function AIInterviewClusters() {
         }
       }
 
-      toast.success('Clusters generated!');
+      toast.success(
+        mthExpanded || nthExpanded
+          ? 'Clusters generated! Skills expanded to fill the question budget.'
+          : 'Clusters generated!'
+      );
     } catch {
       toast.error('Failed to generate clusters');
     } finally {
@@ -1522,7 +1665,31 @@ export default function AIInterviewClusters() {
             </div>
           )}
 
-          {!generating && (
+          {!generating && (() => {
+            // Display-only union of cluster skills (does NOT mutate state, so it
+            // never flows back into rounds_config). When clusters exist with
+            // expanded skills, the Skills panel shows the full distributed set;
+            // otherwise falls back to the recruiter-input list from rounds_config.
+            const unionFromClusters = (clusters: typeof mthClusters): SkillEntry[] => {
+              const seen = new Set<string>();
+              const out: SkillEntry[] = [];
+              for (const c of clusters) {
+                for (const s of (c.skills || [])) {
+                  const name = typeof s === 'string' ? s : (s as any)?.name;
+                  if (typeof name === 'string' && name.trim()) {
+                    const k = name.toLowerCase();
+                    if (!seen.has(k)) {
+                      seen.add(k);
+                      out.push({ name, comment: '', type: 'Skill' });
+                    }
+                  }
+                }
+              }
+              return out;
+            };
+            const mthDisplaySkills = mthClusters.length > 0 ? unionFromClusters(mthClusters) : mthSkills;
+            const nthDisplaySkills = nthClusters.length > 0 ? unionFromClusters(nthClusters) : nthSkills;
+            return (
             <>
               {/* Must-To-Have Section */}
               <CategorySection
@@ -1541,7 +1708,7 @@ export default function AIInterviewClusters() {
                 onAddCluster={addCluster}
                 maxClusters={mthMaxClusters}
                 isReadOnly={true}
-                skills={mthSkills}
+                skills={mthDisplaySkills}
                 onAddSkill={name => addSkillToCategory('mth', name)}
                 onRemoveSkillFromPool={name => removeSkillFromPool('mth', name)}
               />
@@ -1564,13 +1731,14 @@ export default function AIInterviewClusters() {
                   onAddCluster={addCluster}
                   maxClusters={nthMaxClusters}
                   isReadOnly={true}
-                  skills={nthSkills}
+                  skills={nthDisplaySkills}
                   onAddSkill={name => addSkillToCategory('nth', name)}
                   onRemoveSkillFromPool={name => removeSkillFromPool('nth', name)}
                 />
               )}
             </>
-          )}
+            );
+          })()}
 
           {/* Time Allocation Summary */}
           {!generating && (
@@ -1636,14 +1804,14 @@ export default function AIInterviewClusters() {
                       <tr className="border-b border-gray-50">
                         <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
                         <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthQuestions}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{mthMaxClusters}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-gray-900">{mthClusters.length > 0 ? mthClusters.length : mthMaxClusters}</td>
                         <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
                       </tr>
                       {nthEnabled && (
                         <tr className="border-b border-gray-50">
                           <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
                           <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthQuestions}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{nthMaxClusters}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{nthClusters.length > 0 ? nthClusters.length : nthMaxClusters}</td>
                           <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
                         </tr>
                       )}

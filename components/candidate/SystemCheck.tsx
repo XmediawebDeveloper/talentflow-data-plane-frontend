@@ -525,7 +525,7 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Image
-                  src="/talent_flow_logo.png"
+                  src="/logos/talent_flow_logo.png"
                   alt="TalentFlow"
                   width={160}
                   height={40}
@@ -693,12 +693,23 @@ export function SystemCheck({ token, onComplete, onBack }: SystemCheckProps) {
                 </div>
               )}
 
-              {!allChecksComplete && cameraCheck.status !== 'pending' && (
-                <div className="mt-6 p-5 bg-amber-50 rounded-xl flex items-center gap-4">
-                  <AlertCircle className="w-6 h-6 text-amber-600" />
-                  <p className="text-amber-700 font-medium">Some checks failed. Please resolve the issues above.</p>
-                </div>
-              )}
+              {(() => {
+                // Show "Some checks failed" only when ALL checks have settled
+                // into a terminal state AND at least one is in error. The
+                // previous condition fired while Camera/Microphone were still
+                // in 'checking' (e.g., showing "Detecting face..."), making
+                // the warning appear before any check had actually failed.
+                const checks = [cameraCheck, micCheck, internetCheck, browserCheck];
+                const inProgress = checks.some(c => c.status === 'pending' || c.status === 'checking');
+                const anyError = checks.some(c => c.status === 'error');
+                if (inProgress || !anyError) return null;
+                return (
+                  <div className="mt-6 p-5 bg-amber-50 rounded-xl flex items-center gap-4">
+                    <AlertCircle className="w-6 h-6 text-amber-600" />
+                    <p className="text-amber-700 font-medium">Some checks failed. Please resolve the issues above.</p>
+                  </div>
+                );
+              })()}
 
               {browserWarning && browserCheck.status === 'success' && (
                 <div className="mt-6 p-5 bg-blue-50 rounded-xl flex items-start gap-4">

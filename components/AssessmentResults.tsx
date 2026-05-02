@@ -299,7 +299,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               status = scoringStatus === 'completed' ? 'Completed' : 'In Progress';
             }
 
-            // Hide scores while AI scoring is still running
+            // Hide scores while AI scoring is still running.
+            // Round at the data source so every render site (table cells,
+            // mobile card view, hover popovers, exports) shows the same
+            // whole-number percentage. Recruiters were seeing 69.23% on the
+            // Results page and 69% in the Track Invites popup; rounding here
+            // keeps it consistent everywhere.
             const scoringDone = scoringStatus === 'completed';
             const tech_score = scoringDone && item.technical_score != null ? Math.round(Number(item.technical_score)) : undefined;
             const coding_score = scoringDone && item.coding_score != null ? Math.round(Number(item.coding_score)) : undefined;
@@ -329,9 +334,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               email: item.candidate_email || '',
               phone: item.candidate_phone || '',
               inviteSource: item.invite_source || 'Manual',
-              score: scoringDone ? Math.round(Number(item.overall_score) || 0) : 0,
+              score: scoringDone ? Number(item.overall_score) || 0 : 0,
               totalScore: 100,
-              percentage: scoringDone ? Math.round(Number(item.overall_score) || 0) : 0,
+              percentage: scoringDone ? Number(item.overall_score) || 0 : 0,
               tech_score,
               coding_score,
               hr_score,

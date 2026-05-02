@@ -329,7 +329,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                               <div className="flex items-center gap-1 text-[10px]">
                                 <span className="text-gray-600">Score:</span>
                                 <span className={`font-medium ${invitation.passed ? 'text-green-600' : 'text-red-600'}`}>
-                                  {invitation.overall_score != null ? `${invitation.overall_score.toFixed(1)}%` : 'N/A'}
+                                  {invitation.overall_score != null ? `${Math.round(invitation.overall_score)}%` : 'N/A'}
                                 </span>
                                 {invitation.passed !== null && (
                                   <span className={`text-[9px] px-1 py-0.5 rounded ${invitation.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -499,7 +499,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle }: Tr
                                 <div className="flex items-center gap-2 text-sm">
                                   <span className="text-gray-600">Score</span>
                                   <span className={`font-medium ${invitation.passed ? 'text-green-600' : 'text-red-600'}`}>
-                                    {invitation.overall_score != null ? `${invitation.overall_score.toFixed(1)}%` : 'N/A'}
+                                    {invitation.overall_score != null ? `${Math.round(invitation.overall_score)}%` : 'N/A'}
                                   </span>
                                   {invitation.passed !== null && (
                                     <span className={`text-xs px-1.5 py-0.5 rounded ${invitation.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>

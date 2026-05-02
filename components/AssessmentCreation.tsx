@@ -347,6 +347,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           setSelectedCodingLanguages(assessment.coding_languages);
         }
 
+        // We can't recover whether the original creator enabled Coding
+        // automatically or manually, so for an existing assessment treat
+        // anything currently enabled as "auto" — closest to what was
+        // displayed before, and the recruiter can flip it off & on again
+        // to flip the label.
+        setCodingEnabledSource(assessment.coding_enabled ? 'auto' : null);
+
         console.log('[TalentFlow] Assessment loaded for editing:', assessment.title);
       } catch (error) {
         console.error('Failed to load assessment for edit:', error);
@@ -412,6 +419,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [showCodingConfirm, setShowCodingConfirm] = useState(false);
   const [codingPopupMode, setCodingPopupMode] = useState<'enable' | 'disable'>('enable');
   const [selectedCodingLanguages, setSelectedCodingLanguages] = useState<string[]>([]);
+  // Tracks how the Coding section ended up enabled so the section header can
+  // show a truthful label. "auto" = JD-driven (skills/title detection set it
+  // on at JD-select time); "manual" = recruiter flipped the toggle. Stays
+  // null when Coding is disabled.
+  const [codingEnabledSource, setCodingEnabledSource] = useState<'auto' | 'manual' | null>(null);
 
   // HR Question Bank - loaded from the live question bank API for this tenant
   const [hrQuestionBank, setHrQuestionBank] = useState<HRBankQuestion[]>([]);
@@ -677,10 +689,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [isAIGenerationExpanded, setIsAIGenerationExpanded] = useState(false);
   const [isScoringRulesExpanded, setIsScoringRulesExpanded] = useState(false);
 
-  // Available programming languages for selection
+  // Available programming languages for the coding round.
+  // SQL is intentionally excluded — the coding round runs candidate code
+  // against stdin/stdout test cases via Piston, and SQL doesn't fit that
+  // pattern. SQL questions can still be asked in the Technical round as
+  // MCQs / text-based questions when relevant.
   const programmingLanguages = [
     'Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C#', 'Go',
-    'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin', 'Scala', 'R', 'SQL'
+    'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin', 'Scala', 'R'
   ];
 
   // Handle when JD is published from the modal
@@ -983,13 +999,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
     if (hasValidLanguages) {
       const split = calculateTimeSplit(job, true);
+      // Coding round time must land on one of the allowed steps so the
+      // round always has ≥10 min (≥1 in-depth coding question).
+      const snappedCoding = snapCodingPercentage(split.coding);
       setSections([
         { name: 'HR', percentage: 0, topics: [], enabled: true },
-        { name: 'Technical', percentage: split.technical, topics: [], enabled: true },
-        { name: 'Coding', percentage: split.coding, topics: [], enabled: true },
+        { name: 'Technical', percentage: 100 - snappedCoding, topics: [], enabled: true },
+        { name: 'Coding', percentage: snappedCoding, topics: [], enabled: true },
       ]);
       setSelectedCodingLanguages(codingLanguages);
-      console.log(`[TalentFlow] Coding auto-enabled: Technical ${split.technical}%, Coding ${split.coding}%`);
+      setCodingEnabledSource('auto');
+      console.log(`[TalentFlow] Coding auto-enabled: Technical ${100 - snappedCoding}%, Coding ${snappedCoding}%`);
     } else {
       setSections([
         { name: 'HR', percentage: 0, topics: [], enabled: true },
@@ -997,15 +1017,91 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         { name: 'Coding', percentage: 0, topics: [], enabled: false },
       ]);
       setSelectedCodingLanguages([]);
+      setCodingEnabledSource(null);
       console.log('[TalentFlow] No supported languages detected - coding disabled');
     }
     setStep('configure', job.id);
   };
 
+  // Coding round must be one of these four allocations so the round always
+  // has at least 10 minutes (≥1 in-depth coding question) of a 30-min
+  // assessment. 35% → 10.5min (1 Q), 50% → 15min (1 deep or 2 short),
+  // 75% → 22.5min, 100% → 30min. The recruiter can drag either slider; the
+  // value is snapped to the nearest allowed step and Technical takes the
+  // complement.
+  const CODING_ALLOWED_PERCENTAGES = [35, 50, 75, 100] as const;
+
+  const snapCodingPercentage = (raw: number): number => {
+    const clamped = Math.max(0, Math.min(100, raw));
+    return CODING_ALLOWED_PERCENTAGES.reduce((best, candidate) =>
+      Math.abs(candidate - clamped) < Math.abs(best - clamped) ? candidate : best,
+    CODING_ALLOWED_PERCENTAGES[0]);
+  };
+
+  // Normalize sections whenever Coding is enabled with an off-allowed value
+  // OR Tech + Coding don't sum to 100. Catches state from before the snap
+  // logic existed (e.g., assessments saved with Tech 61 / Coding 9 from the
+  // old HR-redistribution bug) and corrects them on first render.
+  useEffect(() => {
+    const coding = sections.find(s => s.name === 'Coding');
+    const tech = sections.find(s => s.name === 'Technical');
+    if (!coding?.enabled) return;
+
+    const codingValid = (CODING_ALLOWED_PERCENTAGES as readonly number[]).includes(coding.percentage);
+    const techPct = tech?.percentage ?? 0;
+    const sumIsHundred = techPct + coding.percentage === 100;
+    if (codingValid && sumIsHundred) return;
+
+    const snapped = snapCodingPercentage(coding.percentage > 0 ? coding.percentage : 35);
+    setSections(prev => prev.map(s => {
+      if (s.name === 'Coding') return { ...s, percentage: snapped };
+      if (s.name === 'Technical') return { ...s, percentage: 100 - snapped };
+      return s;
+    }));
+  }, [sections]);
+
   const updatePercentage = (sectionName: string, value: number) => {
-    setSections(sections.map(s =>
-      s.name === sectionName ? { ...s, percentage: Math.max(0, Math.min(100, value)) } : s
-    ));
+    const clamped = Math.max(0, Math.min(100, value));
+    setSections(prev => {
+      // Technical + Coding must always sum to 100%. HR is excluded — it uses
+      // fixed duration from the Question Bank, not a percentage. When the
+      // user drags one slider, the other one auto-adjusts so the total stays
+      // at 100. If only one of the two is enabled, no balancing partner
+      // exists and that section just absorbs the value.
+      const partner = prev.find(
+        s => s.enabled && s.name !== 'HR' && s.name !== sectionName,
+      );
+
+      // When Coding is one of the two adjustable sections, snap its share
+      // to the allowed steps {35, 50, 75, 100}. Whether the user is dragging
+      // Coding or Technical, we always derive Coding first via the snap,
+      // then Technical = 100 - Coding.
+      // At Coding=100%, Technical disappears entirely (auto-disabled, not
+      // shown as 0%). When Coding drops back below 100%, Technical
+      // auto-re-enables with the complement so the round reappears.
+      const codingEnabled = prev.some(s => s.name === 'Coding' && s.enabled);
+      if (codingEnabled && (sectionName === 'Coding' || sectionName === 'Technical')) {
+        const intendedCoding = sectionName === 'Coding' ? clamped : 100 - clamped;
+        const snappedCoding = snapCodingPercentage(intendedCoding);
+        const techShouldBeEnabled = snappedCoding < 100;
+        return prev.map(s => {
+          if (s.name === 'Coding') return { ...s, percentage: snappedCoding };
+          if (s.name === 'Technical') {
+            return {
+              ...s,
+              enabled: techShouldBeEnabled,
+              percentage: techShouldBeEnabled ? 100 - snappedCoding : 0,
+            };
+          }
+          return s;
+        });
+      }
+      return prev.map(s => {
+        if (s.name === sectionName) return { ...s, percentage: clamped };
+        if (partner && s.name === partner.name) return { ...s, percentage: 100 - clamped };
+        return s;
+      });
+    });
   };
 
   const handleDurationChange = (value: number) => {
@@ -1048,20 +1144,17 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     const isCurrentlyEnabled = codingSection?.enabled || false;
 
     if (!isCurrentlyEnabled) {
-      // Enabling Coding — split with Technical using skill-based calculation
-      if (jdExtractedLanguages.length > 0) {
+      // Enabling Coding — must pick at least one language. Open the
+      // confirmation popup which contains the language picker. The actual
+      // section toggle happens in handleConfirmCodingAction once the user
+      // confirms with a non-empty selection.
+      // Pre-seed from JD-extracted languages if available, but the popup is
+      // still shown so the user can review/adjust.
+      if (jdExtractedLanguages.length > 0 && selectedCodingLanguages.length === 0) {
         setSelectedCodingLanguages(jdExtractedLanguages);
       }
-
-      const techSection = sections.find(s => s.name === 'Technical');
-      const split = selectedJob ? calculateTimeSplit(selectedJob, true) : { technical: 80, coding: 20 };
-
-      setSections(sections.map(s => {
-        if (s.name === 'HR') return { ...s, percentage: 0 };
-        if (s.name === 'Technical') return { ...s, percentage: techSection?.enabled ? split.technical : 0 };
-        if (s.name === 'Coding') return { ...s, enabled: true, percentage: techSection?.enabled ? split.coding : 100 };
-        return s;
-      }));
+      setCodingPopupMode('enable');
+      setShowCodingConfirm(true);
     } else {
       // Disabling Coding — Technical must be enabled
       const techSection = sections.find(s => s.name === 'Technical');
@@ -1069,14 +1162,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         setShowMinRoundPopup(true);
         return;
       }
-
-      // Technical gets 100%
-      setSections(sections.map(s => {
-        if (s.name === 'HR') return { ...s, percentage: 0 };
-        if (s.name === 'Technical') return { ...s, percentage: 100 };
-        if (s.name === 'Coding') return { ...s, enabled: false, percentage: 0 };
-        return s;
-      }));
+      // Show confirmation popup before disabling so the user knows the
+      // already-selected languages will be cleared.
+      setCodingPopupMode('disable');
+      setShowCodingConfirm(true);
     }
   };
 
@@ -1089,24 +1178,26 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         return;
       }
 
-      // Restore previous percentages if available, otherwise use defaults
+      // Restore previous percentages if available (snap to allowed Coding
+      // step), otherwise default to the lowest allowed: 35% Coding / 65% Tech.
       if (savedPercentagesBeforeCodingDisable) {
+        const restoredCoding = snapCodingPercentage(savedPercentagesBeforeCodingDisable.coding);
         setSections(sections.map(s => {
           if (s.name === 'HR') return { ...s, percentage: 0 };
-          if (s.name === 'Technical') return { ...s, percentage: savedPercentagesBeforeCodingDisable.technical };
-          if (s.name === 'Coding') return { ...s, enabled: true, percentage: savedPercentagesBeforeCodingDisable.coding };
+          if (s.name === 'Technical') return { ...s, percentage: 100 - restoredCoding };
+          if (s.name === 'Coding') return { ...s, enabled: true, percentage: restoredCoding };
           return s;
         }));
         setSavedPercentagesBeforeCodingDisable(null); // Clear saved state
       } else {
-        // Default: HR 20%, Technical 70%, Coding 10%
         setSections(sections.map(s => {
           if (s.name === 'HR') return { ...s, percentage: 0 };
-          if (s.name === 'Technical') return { ...s, percentage: 70 };
-          if (s.name === 'Coding') return { ...s, enabled: true, percentage: 10 };
+          if (s.name === 'Technical') return { ...s, percentage: 65 };
+          if (s.name === 'Coding') return { ...s, enabled: true, percentage: 35 };
           return s;
         }));
       }
+      setCodingEnabledSource('manual');
     } else {
       // Disabling coding - save current percentages, redistribute, clear languages
       const hrSection = sections.find(s => s.name === 'HR');
@@ -1156,6 +1247,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         if (s.name === 'Coding') return { ...s, enabled: false, percentage: 0 };
         return s;
       }));
+      setCodingEnabledSource(null);
     }
     setShowCodingConfirm(false);
   };
@@ -1178,62 +1270,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         setShowMinRoundPopup(true);
         return;
       }
-
-      // Redistribute HR percentage to other enabled rounds
-      const hrPct = hrSection?.percentage || 0;
-      const techSection = sections.find(s => s.name === 'Technical');
-      const codingSection = sections.find(s => s.name === 'Coding');
-
-      let newTechPct = techSection?.percentage || 0;
-      let newCodingPct = codingSection?.percentage || 0;
-
-      if (techSection?.enabled && codingSection?.enabled && hrPct > 0) {
-        const totalOther = newTechPct + newCodingPct;
-        if (totalOther > 0) {
-          const techRatio = newTechPct / totalOther;
-          newTechPct = Math.round(newTechPct + hrPct * techRatio);
-          newCodingPct = 100 - newTechPct;
-        } else {
-          newTechPct = 50;
-          newCodingPct = 50;
-        }
-      } else if (techSection?.enabled) {
-        newTechPct = 100;
-      } else if (codingSection?.enabled) {
-        newCodingPct = 100;
-      }
-
-      setSections(sections.map(s => {
-        if (s.name === 'HR') return { ...s, enabled: false, percentage: 0 };
-        if (s.name === 'Technical') return { ...s, percentage: newTechPct };
-        if (s.name === 'Coding') return { ...s, percentage: newCodingPct };
-        return s;
-      }));
-    } else {
-      // Enabling HR - give it a default percentage and adjust others
-      const techSection = sections.find(s => s.name === 'Technical');
-      const codingSection = sections.find(s => s.name === 'Coding');
-      const totalCurrent = (techSection?.enabled ? techSection.percentage : 0) + (codingSection?.enabled ? codingSection.percentage : 0);
-
-      // Give HR 30% by default, reduce others proportionally
-      const hrNewPct = 30;
-      const remaining = 100 - hrNewPct;
-
-      let newTechPct = techSection?.percentage || 0;
-      let newCodingPct = codingSection?.percentage || 0;
-
-      if (totalCurrent > 0) {
-        if (techSection?.enabled) newTechPct = Math.round((techSection.percentage / totalCurrent) * remaining);
-        if (codingSection?.enabled) newCodingPct = remaining - (techSection?.enabled ? newTechPct : 0);
-      }
-
-      setSections(sections.map(s => {
-        if (s.name === 'HR') return { ...s, enabled: true, percentage: 0 };
-        if (s.name === 'Technical') return { ...s, percentage: newTechPct };
-        if (s.name === 'Coding') return { ...s, percentage: newCodingPct };
-        return s;
-      }));
     }
+
+    // HR uses a fixed duration sourced from the HR Question Bank — it is
+    // never part of the 30-min Technical + Coding budget. Toggling HR on
+    // or off must leave Technical and Coding percentages untouched (they
+    // always sum to 100% of the timed assessment). The previous logic
+    // reserved 30% of the 30-min budget for HR, which made Tech+Coding
+    // shrink to ~70% combined — visible as e.g. Tech 61% / Coding 9% when
+    // HR was switched on.
+    setSections(sections.map(s =>
+      s.name === 'HR' ? { ...s, enabled: !isCurrentlyEnabled, percentage: 0 } : s,
+    ));
   };
 
   // Handle Technical round toggle with validation
@@ -1684,18 +1732,35 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
                         {/* Right side - Coding badge and Select button */}
                         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                          {job.coding_required === true ? (
-                            <span className="px-2 sm:px-2.5 py-1 bg-green-100 text-green-700 rounded text-xs flex items-center gap-1">
-                              <Code className="w-3 h-3" />
-                              Coding
-                            </span>
-                          ) : (
-                            <span className="px-2 sm:px-2.5 py-1 bg-gray-100 text-gray-500 rounded text-xs flex items-center gap-1">
-                              <Code className="w-3 h-3" />
-                              <span className="hidden sm:inline">No Coding</span>
-                              <span className="sm:hidden">N/A</span>
-                            </span>
-                          )}
+                          {(() => {
+                            // Mirror the same detection that handleJobSelect
+                            // uses, so the badge matches what configuration
+                            // will actually do. A "Test Engineer" JD listing
+                            // Java as a required skill ended up flagged
+                            // No Coding because the AI extractor set
+                            // coding_required=false based on the title bias,
+                            // but the skill-based detection on selection
+                            // would still auto-enable the coding round.
+                            let codingDetected = job.coding_required === true;
+                            if (!codingDetected && job.skills && job.skills.length > 0) {
+                              const detected = detectProgrammingLanguagesFromSkills(job.skills);
+                              if (detected.length > 0 && isCodingRole(job)) {
+                                codingDetected = true;
+                              }
+                            }
+                            return codingDetected ? (
+                              <span className="px-2 sm:px-2.5 py-1 bg-green-100 text-green-700 rounded text-xs flex items-center gap-1">
+                                <Code className="w-3 h-3" />
+                                Coding
+                              </span>
+                            ) : (
+                              <span className="px-2 sm:px-2.5 py-1 bg-gray-100 text-gray-500 rounded text-xs flex items-center gap-1">
+                                <Code className="w-3 h-3" />
+                                <span className="hidden sm:inline">No Coding</span>
+                                <span className="sm:hidden">N/A</span>
+                              </span>
+                            );
+                          })()}
                           {hasExistingAssessment ? (
                             <span className="px-2 sm:px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-xs flex items-center gap-1">
                               <CheckCircle2 className="w-3 h-3" />
@@ -2196,30 +2261,38 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           {section.name === 'Coding' && <Code className="w-4 h-4 text-gray-600" />}
                           <span className="text-sm sm:text-base font-medium text-gray-900">{section.name} Section</span>
                         </div>
-                        {section.name === 'Coding' && requiresCoding(selectedJob!) && (
+                        {section.name === 'Coding' && codingEnabledSource === 'auto' && (
                           <span className="text-xs text-gray-500">Auto-enabled (coding required)</span>
+                        )}
+                        {section.name === 'Coding' && codingEnabledSource === 'manual' && (
+                          <span className="text-xs text-gray-500">Manually enabled</span>
                         )}
                       </div>
 
                       {/* Percentage Allocation */}
                       <div className="mb-3 sm:mb-4">
-                        <label className="text-xs text-gray-600 mb-2 block">Percentage Allocation</label>
+                        <label className="text-xs text-gray-600 mb-2 block">
+                          Percentage Allocation
+                          {section.name === 'Coding' && (
+                            <span className="ml-2 text-[11px] text-gray-400 font-normal">
+                              Allowed: 35% / 50% / 75% / 100%
+                            </span>
+                          )}
+                        </label>
                         <div className="flex items-center gap-2 sm:gap-3">
                           <input
                             type="range"
                             min="0"
                             max="100"
+                            step={section.name === 'Coding' || sections.some(s => s.name === 'Coding' && s.enabled) ? 1 : 1}
                             value={section.percentage}
                             onChange={(e) => updatePercentage(section.name, Number(e.target.value))}
                             className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-800"
                           />
                           <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              value={section.percentage}
-                              onChange={(e) => updatePercentage(section.name, Number(e.target.value))}
-                              className="w-14 px-2 py-1.5 border border-gray-300 rounded-lg text-center text-sm text-black"
-                            />
+                            <span className="w-14 px-2 py-1.5 border border-gray-200 bg-gray-50 rounded-lg text-center text-sm text-gray-700 select-none">
+                              {section.percentage}
+                            </span>
                             <span className="text-xs sm:text-sm text-gray-600">%</span>
                           </div>
                         </div>

@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { jdService, JDVersion, JDUsageStatus } from '@/lib/services/jdService';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeScoring from './ResumeScoring';
@@ -1308,7 +1310,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                     </h2>
                     <div className="h-px bg-gray-200 mb-3 sm:mb-4"></div>
                     <div className="markdown-content prose prose-sm max-w-none text-gray-700">
-                      <ReactMarkdown>{job.description
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{job.description
                         .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
                           match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
                         )
@@ -1842,7 +1844,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
                       if (isV1 || !prevDesc) {
                         return (
                           <div className="markdown-content prose prose-sm max-w-none text-gray-700">
-                            <ReactMarkdown>{currentDesc}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{currentDesc}</ReactMarkdown>
                           </div>
                         );
                       }
@@ -1901,7 +1903,7 @@ export default function JobDetailView({ job, onBack, onEdit, resumes = [], onSco
 
                       return (
                         <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed markdown-content">
-                          <ReactMarkdown components={diffComponents}>{currentDesc}</ReactMarkdown>
+                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={diffComponents}>{currentDesc}</ReactMarkdown>
                         </div>
                       );
                     })()}

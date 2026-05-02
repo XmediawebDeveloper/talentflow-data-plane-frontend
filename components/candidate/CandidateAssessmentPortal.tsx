@@ -20,6 +20,7 @@ import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
 import { CompletedScreen } from './CompletedScreen';
 import { IdentityVerificationScreen } from './IdentityVerificationScreen';
+import CodingLanguagePickerStep from './CodingLanguagePickerStep';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
 import { useProctoringMonitor } from '@/hooks/useProctoringMonitor';
 import { ProctoringWarningModal } from './ProctoringWarningModal';
@@ -118,6 +119,7 @@ type AssessmentStep =
   | 'consent'
   | 'system_check'
   | 'hr_questions'
+  | 'choose_coding_language'  // Pre-assessment language pick when 2+ compilable languages
   | 'fullscreen_prompt'
   | 'generating_questions'
   | 'assessment'
@@ -457,6 +459,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       }
 
       // Determine initial step based on status
+
+      // Pre-assessment language picker (step 2 only). When the candidate
+      // returns to a link whose attempt is still awaiting a language pick,
+      // route them straight back to the picker instead of leaving them on
+      // the loading screen.
+      if (info.attempt_status === 'pending_lang_choice') {
+        console.log('[DEBUG] Attempt awaiting coding language pick — routing to picker');
+        setStepSafe('choose_coding_language');
+        return;
+      }
+
       if (info.attempt_status === 'completed') {
         console.log('[DEBUG] Attempt status is COMPLETED');
         // Already completed - show completed screen or results
@@ -613,8 +626,19 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       console.log('[PORTAL] Triggering background question generation...');
       const prepareResponse = await candidateService.prepareAssessment(token);
       console.log('[PORTAL] Prepare response:', prepareResponse);
-      console.log('[PORTAL] Question generation started successfully, proceeding to system check');
 
+      // ASK FOR LANGUAGE AT STEP 2 (Assessment Details), BEFORE System Check.
+      // The picker is the only place the candidate is asked to pick — only
+      // when the JD has 2+ compilable languages (backend signals via
+      // status='pending_lang_choice'). After they pick, question generation
+      // is triggered server-side and the candidate moves on to System Check.
+      if (prepareResponse?.status === 'pending_lang_choice') {
+        console.log('[PORTAL] Multi-language coding round — routing to language picker (step 2)');
+        setStepSafe('choose_coding_language');
+        return;
+      }
+
+      console.log('[PORTAL] Question generation started successfully, proceeding to system check');
       // Proceed to system check while questions generate in parallel
       setStepSafe('system_check');
     } catch (err) {
@@ -1261,6 +1285,23 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         <LandingScreen
           assessmentInfo={assessmentInfo!}
           onBegin={handleBeginClick}
+        />
+      );
+
+    case 'choose_coding_language':
+      return (
+        <CodingLanguagePickerStep
+          token={token}
+          attemptId={assessmentInfo?.attempt_id || ''}
+          onPicked={() => {
+            // After the candidate picks, the backend has stored the choice
+            // and triggered background question generation. The picker is
+            // step 2 (Assessment Details) — proceed to System Check (step
+            // 3). When the candidate finishes System Check, the existing
+            // post-fullscreen polling will pick up the now-generating
+            // questions and start the assessment when ready.
+            setStepSafe('system_check');
+          }}
         />
       );
 

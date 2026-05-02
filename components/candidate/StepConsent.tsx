@@ -2,6 +2,8 @@
 
 import React, { useState, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import {
   Video, Mic, Eye, Shield, Clock, Trash2, CheckCircle, AlertTriangle,
   Circle, Briefcase, MapPin, Building2, Award, ExternalLink, X,
@@ -266,7 +268,7 @@ export default function StepConsent({
                 .jd-prose pre { background-color: #f9fafb !important; color: #374151 !important; border: 1px solid #e5e7eb !important; }
               `}</style>
               <div className="jd-prose">
-                <ReactMarkdown>{descToShow || ''}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{descToShow || ''}</ReactMarkdown>
               </div>
             </div>
             {isLongDesc && (

@@ -253,18 +253,23 @@ export function buildDashboardData(params: {
     mustHaveClusters.length + 1,
   );
 
-  // Section scores = Σ (clusterScore × weight/100) — computed from displayed math
-  // so the EvaluationBreakdown's per-cluster contributions ALWAYS sum to the
-  // shown category score. Fall back to backend section_scores only when this
-  // side has no clusters in config at all.
+  // Section scores: prefer backend `section_question_avg` (simple average of
+  // per-question scores, 0-10 — drives the recruiter Pass/Fail per spec).
+  // Fall back to cluster-weighted derivation when backend hasn't supplied it.
+  const mthQAvg = eval_?.section_question_avg?.mth;
+  const nthQAvg = eval_?.section_question_avg?.nth;
   const mthBackend = eval_?.section_scores?.mth?.score;
   const nthBackend = eval_?.section_scores?.nth?.score;
-  const mustHaveAvg = mustHaveClusters.length > 0
-    ? Math.round(mustHaveClusters.reduce((a, c) => a + c.clusterScore * c.weight / 100, 0) * 100) / 100
-    : (typeof mthBackend === 'number' && mthBackend > 0 ? Math.round(mthBackend) / 10 : 0);
-  const niceToHaveAvg = niceToHaveClusters.length > 0
-    ? Math.round(niceToHaveClusters.reduce((a, c) => a + c.clusterScore * c.weight / 100, 0) * 100) / 100
-    : (typeof nthBackend === 'number' && nthBackend > 0 ? Math.round(nthBackend) / 10 : 0);
+  const mustHaveAvg = (typeof mthQAvg === 'number')
+    ? Math.round(mthQAvg * 100) / 100
+    : (mustHaveClusters.length > 0
+        ? Math.round(mustHaveClusters.reduce((a, c) => a + c.clusterScore * c.weight / 100, 0) * 100) / 100
+        : (typeof mthBackend === 'number' && mthBackend > 0 ? Math.round(mthBackend) / 10 : 0));
+  const niceToHaveAvg = (typeof nthQAvg === 'number')
+    ? Math.round(nthQAvg * 100) / 100
+    : (niceToHaveClusters.length > 0
+        ? Math.round(niceToHaveClusters.reduce((a, c) => a + c.clusterScore * c.weight / 100, 0) * 100) / 100
+        : (typeof nthBackend === 'number' && nthBackend > 0 ? Math.round(nthBackend) / 10 : 0));
   const hr = hrScoreFromEval(eval_);
 
   // Determine which sections actually exist in this interview
@@ -299,7 +304,15 @@ export function buildDashboardData(params: {
 
   const summary = eval_?.interview_summary || {};
   const rawRec = summary?.hiring_recommendation;
-  const recommendation = recommendationFromString(rawRec, finalScore);
+  // Backend now emits `final_result: "Pass" | "Fail"` derived from MHS section
+  // average (≥6.0 → Pass). Treat it as the authoritative gate when available
+  // and map onto the existing recommendation enum (Pass → Hire, Fail → No Hire)
+  // so downstream UI/PDF rendering keep working without schema churn.
+  const backendFinal = (eval_?.final_result || '').toString().toLowerCase();
+  const recommendation: Recommendation =
+    backendFinal === 'pass' ? 'Hire'
+    : backendFinal === 'fail' ? 'No Hire'
+    : recommendationFromString(rawRec, finalScore);
 
   const strengths: string[] = Array.isArray(summary?.key_strengths)
     ? summary.key_strengths

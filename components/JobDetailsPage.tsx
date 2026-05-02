@@ -44,6 +44,8 @@ import {
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { User, Tenant } from '@/lib/types/tenant';
 import AssessmentsForJD from './AssessmentsForJD';
 
@@ -419,7 +421,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Description</h2>
                   <div className="markdown-content text-gray-700 leading-relaxed">
-                    <ReactMarkdown>{job.description || ''}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{job.description || ''}</ReactMarkdown>
                   </div>
                 </div>
 

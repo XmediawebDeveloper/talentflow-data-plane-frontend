@@ -110,7 +110,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Image
-                  src="/talent_flow_logo.png"
+                  src="/logos/talent_flow_logo.png"
                   alt="TalentFlow"
                   width={160}
                   height={40}

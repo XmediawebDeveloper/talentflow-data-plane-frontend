@@ -193,7 +193,7 @@ function getTimedModeAllocation(nthEnabled: boolean, hrEnabled: boolean) {
       mthQuestions: 15,
       nthQuestions: 0,
       hrQuestions: 0,
-      mthMaxClusters: 5,
+      mthMaxClusters: 3,
       nthMaxClusters: 0,
     };
   }
@@ -1893,9 +1893,14 @@ export default function AIInterviewConfig() {
     const effNth: SkillEntry[] = nth.enabled ? (nthOverride ?? nth.skills) : [];
     isNavigatingRef.current = true;
 
-    // 1. Save draft first (with overrides if expansion ran, so rounds_config
-    //    contains expanded skills before the Clusters page reads them).
-    const ok = await saveDraft(true, mthOverride || nthOverride ? { mth: mthOverride, nth: nthOverride } : undefined);
+    // 1. Save draft first.
+    // Important: do NOT pass the expansion override into saveDraft. The
+    // recruiter-supplied skills are the source of truth for the Configure
+    // page; the expanded list lives only in `effMth/effNth` for cluster
+    // generation and is persisted (distributed) into `special_instructions
+    // .mth_clusters` after generateClusters runs. This keeps the Configure
+    // page showing only what the recruiter typed.
+    const ok = await saveDraft(true);
     if (!ok || !existingDraftIdRef.current) {
       isNavigatingRef.current = false;
       toast.error('Please save your configuration first');

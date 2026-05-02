@@ -538,8 +538,23 @@ export function AssessmentInterface({
           pauseStartWallTimeRef.current = null;
           console.log(`[NETWORK] Connection restored - excluded ${Math.round(offlineMs / 1000)}s offline from timer`);
         }
-        // Reload to re-sync with server (server is the source of truth for remaining time)
-        window.location.reload();
+        // Soft resume — clear pause flags and let the wall-clock tick continue.
+        // Previously we did window.location.reload() to re-sync from server,
+        // but the reload destroys the document and forcibly exits fullscreen
+        // (browsers won't restore fullscreen across navigations). Candidates
+        // were getting kicked out of fullscreen on every transient network
+        // blip. The wall-clock anchor we just shifted above keeps the timer
+        // accurate; the next heartbeat will reconcile with server state.
+        immediateNetworkPauseRef.current = false;
+        isTimerPausedRef.current = false;
+        setShowNetworkBanner(false);
+        setAutoSaveStatus('idle');
+        if (queueSize > 0) {
+          setAutoSaveStatus('retrying');
+          processQueue().then(() => {
+            if (queueSize === 0) setAutoSaveStatus('idle');
+          });
+        }
         return;
       }
       console.log('[NETWORK] Connection restored - processing retry queue');
@@ -562,8 +577,18 @@ export function AssessmentInterface({
 
     const handleCandidateNetworkRestored = () => {
       if (!immediateNetworkPauseRef.current) return;
-      console.log('[NETWORK] Candidate API recovered - reloading assessment to resume timer');
-      window.location.reload();
+      // Soft resume (no reload) so the candidate stays in fullscreen.
+      // Wall-clock anchor adjustment + retry queue handles re-sync.
+      console.log('[NETWORK] Candidate API recovered - soft-resuming (no reload)');
+      if (pauseStartWallTimeRef.current !== null) {
+        const offlineMs = Date.now() - pauseStartWallTimeRef.current;
+        assessmentStartTimeRef.current += offlineMs;
+        pauseStartWallTimeRef.current = null;
+      }
+      immediateNetworkPauseRef.current = false;
+      isTimerPausedRef.current = false;
+      setShowNetworkBanner(false);
+      setAutoSaveStatus('idle');
     };
 
     window.addEventListener('candidate-network-failure', handleCandidateNetworkFailure);
@@ -1249,6 +1274,34 @@ export function AssessmentInterface({
     }
   };
 
+  // Question-grid jump: same draft-save semantics as Next/Previous so the
+  // candidate's current answer isn't lost when they click a number at the
+  // bottom of the screen. Previously the grid called onNavigate directly,
+  // bypassing the auto-save and discarding any unsubmitted typing.
+  const handleJumpToQuestion = async (targetNumber: number) => {
+    if (isNavigating || isSubmitting) return;
+    if (targetNumber === currentQuestion.question_number) return;
+    cancelPendingAutoSave();
+    setIsNavigating(true);
+
+    try {
+      const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
+      if (hasAnswer && !isCurrentAnswerLocked) {
+        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+        setAnswerStatuses(prev => {
+          const newMap = new Map(prev);
+          newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });
+          return newMap;
+        });
+      }
+      await onNavigate(targetNumber);
+    } catch (error) {
+      console.error('Failed to jump to question:', error);
+    } finally {
+      setIsNavigating(false);
+    }
+  };
+
   // Handle final submit - save current answer first, THEN check for unanswered
   const handleFinalSubmit = async () => {
     if (isSubmitting) return;
@@ -1278,12 +1331,24 @@ export function AssessmentInterface({
       }
     }
 
-    // ── STEP 2: Check unanswered questions (skip current — handled above) ──
-    // Unanswered includes both visited-without-answer and never-visited questions.
+    // ── STEP 2: Check unanswered questions (include current too) ──
+    // The current question is included: STEP 1 above only locks it when
+    // hasCurrentAnswer is true. If the candidate clicks Submit & Confirm
+    // on a coding question they never wrote any code for, the current Q
+    // has no draft and must count as Unanswered. Previously we skipped
+    // the current question, so a candidate on Q14 with no answer would
+    // see "Unanswered: 0" even though Q14 was empty.
     const unanswered: number[] = [];
     for (let i = 1; i <= currentQuestion.total_questions; i++) {
-      if (i === currentQuestion.question_number) continue;
       const status = answerStatuses.get(`question_${i}`);
+      // For the current question, STEP 1 may have locked it just now;
+      // re-check via hasCurrentAnswer (state isn't synchronously read-back).
+      if (i === currentQuestion.question_number) {
+        if (!hasCurrentAnswer && !(status && status.hasDraft)) {
+          unanswered.push(i);
+        }
+        continue;
+      }
       if (!status || !status.hasDraft) {
         unanswered.push(i);
       }
@@ -1987,7 +2052,7 @@ export function AssessmentInterface({
                     disabled={isCurrent || isNavigating || isSubmitting}
                     onClick={() => {
                       if (!isCurrent && !isNavigating && !isSubmitting) {
-                        onNavigate(num);
+                        void handleJumpToQuestion(num);
                       }
                     }}
                     className={`w-10 h-10 rounded-lg text-sm font-medium flex items-center justify-center transition-transform ${colorClass} ${
@@ -2011,7 +2076,24 @@ export function AssessmentInterface({
       {/* REMOVED: Separate unanswered popup - now combined with Complete Confirmation Modal */}
 
       {/* Complete Confirmation Modal - Combined with Unanswered Questions Warning */}
-      {showCompleteConfirm && (
+      {showCompleteConfirm && (() => {
+        // Derive counts from the local answerStatuses map — that's the
+        // freshest source for both drafts and locked answers. Using the
+        // parent-provided `progress.answered` was wrong because the
+        // submit-draft response returns a server-side LOCKED-only count
+        // (= 0 here), so a candidate with 13 drafted-but-unlocked MCQs
+        // saw "0 of 14" even though the Draft cell read 13.
+        const totalCount = currentQuestion.total_questions || 0;
+        let lockedCount = 0;
+        let draftCount = 0;
+        for (let i = 1; i <= totalCount; i++) {
+          const s = answerStatuses.get(`question_${i}`);
+          if (!s) continue;
+          if (s.isLocked) lockedCount += 1;
+          else if (s.hasDraft) draftCount += 1;
+        }
+        const answeredCount = lockedCount + draftCount; // anything with content
+        return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
             {/* Close Button */}
@@ -2034,9 +2116,9 @@ export function AssessmentInterface({
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Complete Assessment?</h3>
                 <p className="text-sm text-gray-500">
-                  {progress.answered === progress.total
+                  {answeredCount === totalCount
                     ? "You've answered all questions"
-                    : `You've answered ${progress.answered} of ${progress.total} questions`
+                    : `You've answered ${answeredCount} of ${totalCount} questions`
                   }
                 </p>
               </div>
@@ -2067,7 +2149,7 @@ export function AssessmentInterface({
             <div className="bg-gray-50 rounded-xl p-4 mb-4">
               <div className="grid grid-cols-3 gap-3 text-center mb-3">
                 <div>
-                  <div className="text-lg font-bold text-green-600">{progress.answered}</div>
+                  <div className="text-lg font-bold text-green-600">{answeredCount}</div>
                   <div className="text-xs text-gray-500">Answered</div>
                 </div>
                 <div>
@@ -2076,15 +2158,15 @@ export function AssessmentInterface({
                 </div>
                 <div>
                   <div className="text-lg font-bold text-orange-600">
-                    {Array.from(answerStatuses.values()).filter(status => status.hasDraft && !status.isLocked).length}
+                    {draftCount}
                   </div>
                   <div className="text-xs text-gray-500">Draft</div>
                 </div>
               </div>
               <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className={`h-full ${progress.percent === 100 ? 'bg-green-500' : 'bg-amber-500'}`}
-                  style={{ width: `${progress.percent}%` }}
+                  className={`h-full ${answeredCount === totalCount ? 'bg-green-500' : 'bg-amber-500'}`}
+                  style={{ width: `${totalCount > 0 ? Math.round((answeredCount / totalCount) * 100) : 0}%` }}
                 />
               </div>
             </div>
@@ -2117,7 +2199,8 @@ export function AssessmentInterface({
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

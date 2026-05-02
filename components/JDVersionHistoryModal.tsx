@@ -6,6 +6,8 @@ import { jdService, JDVersion, JDVersionHistoryResponse } from '@/lib/services/j
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 
 interface JDVersionHistoryModalProps {
   isOpen: boolean;
@@ -222,7 +224,7 @@ export default function JDVersionHistoryModal({
                   if (isV1 || !prevDesc) {
                     return (
                       <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed markdown-content">
-                        <ReactMarkdown>{currentDesc}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{currentDesc}</ReactMarkdown>
                       </div>
                     );
                   }
@@ -281,7 +283,7 @@ export default function JDVersionHistoryModal({
 
                   return (
                     <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed markdown-content">
-                      <ReactMarkdown components={diffComponents}>{currentDesc}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={diffComponents}>{currentDesc}</ReactMarkdown>
                     </div>
                   );
                 })()}

@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import Image from 'next/image';
+import { CheckCircle, ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
 
 const STEP_LABELS = [
   'Job Details & Consent',
@@ -51,6 +52,32 @@ export default function PreInterviewLayout({
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50 !bg-gray-50 [color-scheme:light]">
+      {/* Header with logo */}
+      <header className="w-full bg-white border-b border-gray-200">
+        <div className="w-full px-6 lg:px-12 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Image
+                src="/logos/talent_flow_logo.png"
+                alt="TalentFlow"
+                width={200}
+                height={70}
+                className="h-16 w-auto"
+                priority
+                unoptimized
+              />
+            </div>
+            <a
+              href="mailto:support@talentflow.com"
+              className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors"
+            >
+              <HelpCircle className="w-4 h-4" />
+              Need help?
+            </a>
+          </div>
+        </div>
+      </header>
+
       {/* Progress Stepper */}
       <nav className="bg-white/90 backdrop-blur-sm border-b border-gray-200 px-4 py-4 sm:px-8 sm:py-5 !bg-white/90 !border-gray-200">
         <div className="w-full max-w-6xl mx-auto">
