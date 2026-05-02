@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User, Tenant, Permission, FeatureFlags, UserRole } from '@/lib/types/tenant';
 import { authService, clearTokens } from '@/lib/services';
+import { handleUnauthorized } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { mockTenant } from '@/lib/mockData/tenantData';
 import { useRouter } from 'next/navigation';
@@ -528,10 +529,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Only clear tokens for actual auth failures (401), not temporary errors
           const apiError = error as { status?: number };
           if (apiError?.status === 401) {
-            console.log('[AUTH] Token invalid (401), clearing session');
-            clearTokens();
-            clearUserFromStorage();
-            clearTenantFromStorage();
+            console.log('[AUTH] Token invalid (401), showing session-expired modal');
+            // Don't clear tokens here — performSessionLogout() (called when the
+            // user clicks OK on the modal) will do the cleanup and redirect.
+            // Clearing here would let the dashboard layout's not-authenticated
+            // effect race the modal and redirect to /login first.
+            handleUnauthorized();
           } else {
             console.warn('[AUTH] Keeping tokens - error may be temporary:', apiError?.status);
             // Don't clear tokens for 403, 500, network errors, etc.

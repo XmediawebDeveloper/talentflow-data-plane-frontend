@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { ScoringProgressProvider } from "@/contexts/ScoringProgressContext";
 import { Toaster } from "sonner";
 import SubscriptionInactiveModal from "@/components/SubscriptionInactiveModal";
+import SessionExpiredModal from "@/components/SessionExpiredModal";
 import GlobalScoringProgressIndicator from "@/components/GlobalScoringProgressIndicator";
 import { GlobalDialogProvider } from "@/components/providers/GlobalDialogProvider";
 
@@ -114,6 +115,9 @@ export default function RootLayout({
                   <Toaster position="top-right" richColors closeButton />
                   {/* Global subscription inactive modal - catches events from API interceptor */}
                   <SubscriptionInactiveModal />
+                  {/* Global session-expired modal - shown on 401 from any API call.
+                      Mounted at the root so it persists across loading-state transitions. */}
+                  <SessionExpiredModal />
                   {/* Global scoring progress indicator - floating bottom-right widget */}
                   <GlobalScoringProgressIndicator />
                 </ScoringProgressProvider>

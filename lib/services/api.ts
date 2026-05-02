@@ -174,42 +174,61 @@ export const clearTokens = () => {
   clearPermissionVersion();
 };
 
-// Handle 401 Unauthorized - clear tokens and redirect to login
-// Can be called from any component using fetch directly
-export const handleUnauthorized = () => {
-  console.log('[API] 401 Unauthorized - logging out user');
-  if (typeof window !== 'undefined') {
-    // Import getLoginUrl inline to avoid circular dependency
-    // (api.ts is imported by authService.ts which defines getLoginUrl)
-    const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
-    const hostname = window.location.hostname;
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+// Custom event for session expired - shows the global modal
+// Tokens are NOT cleared here. They are cleared only when the user clicks "OK"
+// in the modal (via performSessionLogout below). This keeps the user on the
+// page (frozen behind the modal) until they explicitly acknowledge.
+export const SESSION_EXPIRED_EVENT = 'session-expired';
 
-    let loginUrl = '/login';
-    try {
-      if (isLocalhost) {
-        // Read subdomain from stored user data first (most reliable source)
-        const storedUser = localStorage.getItem('talentflow_user');
-        if (storedUser) {
-          const user = JSON.parse(storedUser);
-          if (user?.tenantSubdomain) loginUrl = `/login?org=${user.tenantSubdomain}`;
-        }
-        if (loginUrl === '/login') {
-          const sub = localStorage.getItem('talentflow_subdomain');
-          if (sub) loginUrl = `/login?org=${sub}`;
-        }
-      } else if (hostname.endsWith(`.${BASE_DOMAIN}`)) {
-        // Production subdomain: myorg.talentflow.data.mo.vc → https://myorg.talentflow.data.mo.vc/login
-        const subdomain = hostname.slice(0, -(BASE_DOMAIN.length + 1));
-        if (subdomain) loginUrl = `https://${subdomain}.${BASE_DOMAIN}/login`;
+// Internal guard: prevent multiple modal dispatches if many requests fail at once
+let sessionExpiredDispatched = false;
+
+const computeLoginUrl = (): string => {
+  const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+  let loginUrl = '/login';
+  try {
+    if (isLocalhost) {
+      const storedUser = localStorage.getItem('talentflow_user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        if (user?.tenantSubdomain) loginUrl = `/login?org=${user.tenantSubdomain}`;
       }
-    } catch {}
+      if (loginUrl === '/login') {
+        const sub = localStorage.getItem('talentflow_subdomain');
+        if (sub) loginUrl = `/login?org=${sub}`;
+      }
+    } else if (hostname.endsWith(`.${BASE_DOMAIN}`)) {
+      const subdomain = hostname.slice(0, -(BASE_DOMAIN.length + 1));
+      if (subdomain) loginUrl = `https://${subdomain}.${BASE_DOMAIN}/login`;
+    }
+  } catch {}
+  return loginUrl;
+};
 
-    clearTokens();
-    localStorage.removeItem('user');
-    sessionStorage.clear();
-    window.location.href = loginUrl;
-  }
+// Handle 401 Unauthorized - dispatch session-expired event so the modal can show.
+// The actual logout happens only when the user clicks OK on the modal.
+export const handleUnauthorized = () => {
+  console.log('[API] 401 Unauthorized - dispatching session-expired event');
+  if (typeof window === 'undefined') return;
+
+  if (sessionExpiredDispatched) return;
+  sessionExpiredDispatched = true;
+
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+};
+
+// Called by the SessionExpiredModal when the user clicks "OK".
+// Performs the real cleanup and redirects to the login page.
+export const performSessionLogout = () => {
+  if (typeof window === 'undefined') return;
+  const loginUrl = computeLoginUrl();
+  clearTokens();
+  localStorage.removeItem('user');
+  sessionStorage.clear();
+  window.location.href = loginUrl;
 };
 
 // Helper to check response and handle 401 automatically

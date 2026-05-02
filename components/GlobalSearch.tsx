@@ -124,7 +124,14 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
         <input
           ref={inputRef}
-          type="text"
+          type="search"
+          name="global-search"
+          autoComplete="off"
+          role="searchbox"
+          aria-autocomplete="list"
+          data-form-type="other"
+          data-lpignore="true"
+          data-1p-ignore="true"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -134,7 +141,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
             if (query.trim()) setIsOpen(true);
           }}
           placeholder="Search candidates, jobs, assessments, interviews or IDs (JD-001, AS-1, AIU-7)..."
-          className="w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400 focus:border-transparent bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
+          className="w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400 focus:border-transparent bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 [&::-webkit-search-cancel-button]:hidden"
         />
         {isLoading && (
           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />

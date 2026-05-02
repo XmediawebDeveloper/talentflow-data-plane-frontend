@@ -309,6 +309,10 @@ export default function SecurityPage() {
                   value={passwordForm.currentPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
                   placeholder="Enter current password"
+                  autoComplete="new-password"
+                  data-form-type="other"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none text-black text-xs sm:text-sm md:text-base"
                 />
                 <button
@@ -328,6 +332,10 @@ export default function SecurityPage() {
                   value={passwordForm.newPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
                   placeholder="Enter new password"
+                  autoComplete="new-password"
+                  data-form-type="other"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none transition-colors text-black text-xs sm:text-sm md:text-base ${
                     passwordForm.newPassword
                       ? passwordStrength === 5
@@ -355,6 +363,10 @@ export default function SecurityPage() {
                   value={passwordForm.confirmPassword}
                   onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
                   placeholder="Confirm new password"
+                  autoComplete="new-password"
+                  data-form-type="other"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
                   className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-gray-500 focus:outline-none transition-colors text-black text-xs sm:text-sm md:text-base ${
                     passwordForm.confirmPassword
                       ? passwordsMatch

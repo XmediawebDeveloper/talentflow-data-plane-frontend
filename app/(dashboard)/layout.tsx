@@ -14,7 +14,7 @@ import { QuotaProvider } from '@/contexts/QuotaContext';
 import { PlanFeaturesProvider } from '@/components/providers/PlanFeaturesProvider';
 import { TermsProvider } from '@/components/providers/TermsProvider';
 import { PlanChangeProvider, usePlanChange } from '@/components/providers/PlanChangeProvider';
-import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail, PAYMENT_PENDING_EVENT, PaymentPendingDetail, redirectToPaymentPage } from '@/lib/services/api';
+import { SUBSCRIPTION_INACTIVE_EVENT, SubscriptionInactiveDetail, PAYMENT_PENDING_EVENT, PaymentPendingDetail, redirectToPaymentPage, SESSION_EXPIRED_EVENT } from '@/lib/services/api';
 import SuspendedAccountBlock from '@/components/subscription/SuspendedAccountBlock';
 import ExpiredAccountBlock from '@/components/subscription/ExpiredAccountBlock';
 import TermsReminderBanner from '@/components/terms/TermsReminderBanner';
@@ -132,6 +132,17 @@ export default function DashboardLayout({
   // Mobile menu state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Track whether the session-expired modal is showing.
+  // While true, the dashboard's "redirect to login if not authenticated" effect
+  // is suppressed — the user must click OK on the modal to log out.
+  const [sessionExpiredVisible, setSessionExpiredVisible] = useState(false);
+
+  useEffect(() => {
+    const handleSessionExpired = () => setSessionExpiredVisible(true);
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+  }, []);
+
   const hasRoutePermission = useCallback((permission: string) => {
     if (isTenantAdmin) return true;
     const permissions = user?.permissions as Record<string, boolean | undefined> | undefined;
@@ -238,8 +249,11 @@ export default function DashboardLayout({
     }
   }, [subscriptionExpired, accountSuspended, hasRoutePermission, pathname, router]);
 
-  // Redirect to login if not authenticated
+  // Redirect to login if not authenticated.
+  // Skipped while the session-expired modal is showing — the modal will
+  // perform the actual logout/redirect when the user clicks OK.
   useEffect(() => {
+    if (sessionExpiredVisible) return;
     if (!isLoading && !isAuthenticated) {
       console.log('[DASHBOARD] Not authenticated, redirecting to login');
       const loginUrl = getLoginUrl();
@@ -249,7 +263,7 @@ export default function DashboardLayout({
         router.push(loginUrl);
       }
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, router, sessionExpiredVisible]);
 
   // Client-side authorization check for admin routes
   useEffect(() => {
@@ -402,6 +416,7 @@ export default function DashboardLayout({
             </div>
           </div>
         </div>
+
       </div>
     );
   }
